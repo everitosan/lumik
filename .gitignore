@@ -1,0 +1,126 @@
+# ============================================================================
+# Node.js
+# ============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/install-state.gz
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+
+# ============================================================================
+# Rust
+# ============================================================================
+target/
+Cargo.lock
+**/*.rs.bk
+
+# ============================================================================
+# Tauri
+# ============================================================================
+src-tauri/target/
+src-tauri/Cargo.lock
+
+# ============================================================================
+# Swift / Xcode
+# ============================================================================
+# Build generated
+build/
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.resolved
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# ============================================================================
+# IDEs and Editors
+# ============================================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# ============================================================================
+# OS Generated
+# ============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ============================================================================
+# Environment and Secrets
+# ============================================================================
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# ============================================================================
+# Logs and Databases
+# ============================================================================
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+
+# ============================================================================
+# Testing
+# ============================================================================
+coverage/
+.nyc_output/
+*.lcov
+
+# ============================================================================
+# Misc
+# ============================================================================
+*.tmp
+*.temp
+.cache/
+.turbo/

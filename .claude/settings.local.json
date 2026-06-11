@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__stitch__generate_screen_from_text",
+      "mcp__stitch__edit_screens",
+      "mcp__stitch__get_screen",
+      "mcp__stitch__list_screens",
+      "WebFetch(domain:contribution.usercontent.google.com)",
+      "mcp__stitch__list_projects"
+    ]
+  }
+}

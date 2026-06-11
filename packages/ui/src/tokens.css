@@ -1,0 +1,75 @@
+:root {
+  /* Colors - Dark Theme */
+  --lumik-background: #131313;
+  --lumik-surface: #131313;
+  --lumik-surface-dim: #131313;
+  --lumik-surface-bright: #393939;
+  --lumik-surface-container-lowest: #0e0e0e;
+  --lumik-surface-container-low: #1c1b1b;
+  --lumik-surface-container: #201f1f;
+  --lumik-surface-container-high: #2a2a2a;
+  --lumik-surface-container-highest: #353534;
+
+  --lumik-on-surface: #e5e2e1;
+  --lumik-on-surface-variant: #c2c6d7;
+  --lumik-outline: #8c90a0;
+  --lumik-outline-variant: #424654;
+
+  --lumik-primary: #b0c6ff;
+  --lumik-primary-container: #558dff;
+  --lumik-on-primary: #002d6e;
+
+  --lumik-secondary: #e9c349;
+  --lumik-secondary-container: #af8d11;
+  --lumik-on-secondary: #3c2f00;
+
+  --lumik-tertiary: #ffb690;
+  --lumik-tertiary-container: #e86d17;
+  --lumik-on-tertiary: #542100;
+
+  --lumik-error: #ffb4ab;
+  --lumik-error-container: #93000a;
+  --lumik-on-error: #690005;
+
+  /* Typography */
+  --lumik-font-primary: 'Inter', system-ui, sans-serif;
+  --lumik-font-mono: 'JetBrains Mono', monospace;
+
+  /* Font Sizes */
+  --lumik-text-display-lg: 48px;
+  --lumik-text-headline-lg: 32px;
+  --lumik-text-headline-md: 24px;
+  --lumik-text-body-lg: 18px;
+  --lumik-text-body-md: 16px;
+  --lumik-text-label-md: 14px;
+  --lumik-text-label-sm: 12px;
+
+  /* Spacing */
+  --lumik-spacing-unit: 8px;
+  --lumik-spacing-xs: 4px;
+  --lumik-spacing-sm: 8px;
+  --lumik-spacing-md: 16px;
+  --lumik-spacing-lg: 24px;
+  --lumik-spacing-xl: 32px;
+
+  /* Border Radius */
+  --lumik-radius-sm: 4px;
+  --lumik-radius-md: 8px;
+  --lumik-radius-lg: 12px;
+  --lumik-radius-full: 9999px;
+
+  /* Shadows */
+  --lumik-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --lumik-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --lumik-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+  /* Glass Effect */
+  --lumik-glass-bg: rgba(32, 31, 31, 0.6);
+  --lumik-glass-border: rgba(66, 70, 84, 0.3);
+  --lumik-glass-blur: 12px;
+
+  /* Transitions */
+  --lumik-transition-fast: 150ms ease;
+  --lumik-transition-normal: 250ms ease;
+  --lumik-transition-slow: 350ms ease;
+}

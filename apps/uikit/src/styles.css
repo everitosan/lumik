@@ -1,0 +1,16 @@
+/* Global styles for Storybook */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--lumik-font-primary, 'Inter', system-ui, sans-serif);
+  background-color: var(--lumik-background, #131313);
+  color: var(--lumik-on-surface, #e5e2e1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

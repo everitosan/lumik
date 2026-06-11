@@ -1,0 +1,79 @@
+ALCANCE ACTUAL (MVP)
+El trabajo esta acotado a dos fases unicamente:
+Fase 1 - Importacion:
+
+Montar tarjeta SD con archivos RAW
+Seleccionar proyecto (crear nuevo o elegir existente)
+Elegir destino de archivos (SSD externo, disco local u otro medio)
+Leer RAW del SD directamente en memoria (sin copiar al sistema)
+Convertir a DNG en memoria usando libraw
+Escribir metadatos XMP (datos del fotografo y proyecto) en el DNG
+Guardar el DNG en el destino elegido
+Fase 2 - Organizacion y seleccion (culling):
+
+Previsualizar, etiquetar y seleccionar ocurren en UNA SOLA VISTA de galeria
+El fotografo navega las fotos, asigna estrellas, colores y tags
+Marca las fotos candidatas a edición
+Al terminar, presiona un boton de confirmacion
+El botón dispara el movimiento fisico de las fotos marcadas a la subcarpeta _culled/ del proyecto
+Lo que NO esta en el alcance actual:
+
+Edicion de fotos (se hace en apps externas como darktable, RawTherapee, GIMP)
+Vinculacion de JPG editado
+Respaldo via API
+Conversion a WebP
+Portal web para clientes
+Generacion o almacenamiento de thumbnails
+DETALLES TECNICOS ACORDADOS
+Conversion RAW a DNG
+
+Se lee el RAW directamente del SD externo, sin copiarlo al sistema
+La conversion ocurre en memoria usando libraw (o bindings Rust equivalentes)
+El DNG resultante se escribe al destino elegido por el usuario
+No hay duplicidad de espacio en disco: SD es lectura, destino es escritura
+Un RAW de 60MB puede ocupar 150-200MB en memoria al decodificar
+Procesar de UNO EN UNO para no reventar la RAM
+Los formatos RAW no son secuenciales (tienen offsets internos), asi que no se puede hacer streaming puro. Se lee el archivo completo a un buffer en memoria, se pasa al conversor, se recibe el DNG, se escribe a disco
+Manejo de dispositivos y paths
+
+Todos los paths en BD son RELATIVOS al mount point del dispositivo
+El path completo se reconstruye en runtime:
+
+Buscar device_uuid en dispositivos montados
+Obtener mount point actual
+path_completo = mount_point + "/" + dng_path
+Esto evita que los paths se rompan si el mount point cambia
+Al abrir la app, listar UUIDs montados. Fotos cuyo device_uuid no este montado se muestran como no disponibles con el aviso: "Conecta el dispositivo: [device_name]"
+No se guardan thumbnails de momento, solo el aviso de no disponible
+Importacion robusta
+
+Procesar foto por foto como unidad atomica de trabajo
+Si una foto falla (archivo corrupto, formato no soportado), continuar con las demas y reportar errores al final
+Guardar progreso en BD para poder resumir si la app se cierra
+Detectar duplicados por file_hash antes de importar
+Manejar desconexion inesperada del SD: la foto en proceso se descarta, las ya convertidas estan a salvo, al reconectar se retoma
+Mostrar barra de progreso, conteo de fotos, estimacion de tiempo, opcion de cancelar
+Escritura de metadatos
+
+Los metadatos del fotografo (Artist, Copyright, etc) y del proyecto se escriben en el XMP del DNG al momento de la conversion
+Los campos cacheados en BD (stars, color_label, tags) se actualizan con escritura doble: XMP del DNG + cache en BD simultaneamente
+El DNG es siempre la fuente de verdad
+Movimiento a _culled/
+
+El movimiento es atomico por foto: mover archivo, verificar existencia en destino, actualizar dng_path en BD, marcar culled=true
+Si falla una foto, no se toca su registro, se reporta al final
+Si el fotografo de-selecciona, se mueve de vuelta a la raiz del proyecto, se actualiza path, culled=false
+La subcarpeta se llama _culled/ (con guion bajo al inicio)
+Estructura de carpetas resultante
+ /[mount_point]/lumik/[nombre-proyecto]/ IMG_0001.dng IMG_0002.dng IMG_0003.dng culled/ IMG0047.dng IMG_0132.dng
+PENDIENTES PARA FUTURAS SESIONES
+
+Arquitectura tecnica de Tauri (estructura del proyecto, crates de Rust, frontend framework, base de datos local)
+Diseno de la UI de la galeria de organizacion
+Flujo de vinculacion del JPG editado (match por nombre, seleccion manual)
+Respaldo via API (cola offline-first, reintentos, WebP opcional)
+Diseno del API pensando en que el portal web de clientes lo consumira
+Modelo de Metadatos (campos XMP estandar vs custom)
+Resolver si creador/dueno en Proyecto son necesarios o redundantes
+Portal web de entrega al cliente (la funcionalidad que monetiza)
+Migracion futura a iPad con Swift/SwiftUI cuando se tenga una Mac EOF
