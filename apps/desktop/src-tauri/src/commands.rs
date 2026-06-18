@@ -13,7 +13,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 
 /// Application state
 pub struct AppState {
@@ -86,17 +86,10 @@ pub fn refresh_open_projects(
 
 /// Scan for connected devices and refresh the open project map.
 #[tauri::command]
-pub fn scan_connected_devices(app: tauri::AppHandle, state: State<AppState>) -> Vec<DetectedDevice> {
+pub fn scan_connected_devices(state: State<AppState>) -> Vec<DetectedDevice> {
     debug!("scan_connected_devices called");
     refresh_open_projects(&state.global_db, &state.open_projects);
     let devices = scan_mounted_devices();
-    let scope = app.asset_protocol_scope();
-    for device in &devices {
-        let mount = std::path::Path::new(&device.mount_point);
-        if let Err(e) = scope.allow_directory(mount, true) {
-            warn!("Could not register asset scope for {}: {}", device.mount_point, e);
-        }
-    }
     debug!("scan_connected_devices returning {} devices", devices.len());
     devices
 }
