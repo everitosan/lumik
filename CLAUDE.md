@@ -55,13 +55,24 @@ Ver `docs/schema.sql` para el esquema completo.
 ## Estructura de carpetas en destino (discos externos)
 
 ```
-/[mount_point]/lumik/[nombre-proyecto]/
-  IMG_0001.dng
-  IMG_0002.dng
+{mount_point}/lumik/{año}/{mes}/{día}_{nombre-proyecto}/
+  project.db
+  _media/
+    IMG_0001.dng
+    IMG_0002.dng
   _culled/
     IMG_0047.dng
-    IMG_0132.dng
+  _video/
+    CLIP_001.mp4
+  .thumbs/
+    {photo_id}.jpg       # JPEG 480px, rotación física aplicada
+  .previews/
+    {photo_id}.jpg       # JPEG full-res extraído del DNG, Orientation=1
 ```
+
+- Las fotos (DNG) van en `_media/`. Al cullarse, se mueven a `_culled/` (hermana de `_media/`).
+- Los videos se copian directamente a `_video/` sin conversión ni metadatos XMP.
+- `dng_path` en BD es relativo al mount point, p.ej. `lumik/2025/06/12_sesion/_media/IMG_0001.dng`.
 
 ## Vision a futuro
 

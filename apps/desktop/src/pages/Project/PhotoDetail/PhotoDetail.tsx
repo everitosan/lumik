@@ -212,10 +212,16 @@ export function PhotoDetail({
       if (matchesKey(e, kb['photo_detail.rotate_left']))   { viewerRef.current?.rotateLeft(); return; }
       if (matchesKey(e, kb['photo_detail.rotate_right']))  { viewerRef.current?.rotateRight(); return; }
       if (matchesKey(e, kb['photo_detail.cull']))          { handleCulledChange(!localCulled); return; }
+      if (matchesKey(e, kb['photo_detail.stars_0']))       { handleStarsChange(0); return; }
+      if (matchesKey(e, kb['photo_detail.stars_1']))       { handleStarsChange(1); return; }
+      if (matchesKey(e, kb['photo_detail.stars_2']))       { handleStarsChange(2); return; }
+      if (matchesKey(e, kb['photo_detail.stars_3']))       { handleStarsChange(3); return; }
+      if (matchesKey(e, kb['photo_detail.stars_4']))       { handleStarsChange(4); return; }
+      if (matchesKey(e, kb['photo_detail.stars_5']))       { handleStarsChange(5); return; }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [kb, onClose, goPrev, goNext, localCulled, handleCulledChange]);
+  }, [kb, onClose, goPrev, goNext, localCulled, handleCulledChange, localColorLabels, localTags]);
 
   return (
     <div style={rootStyle}>

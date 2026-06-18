@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT, type ColorLabel } from '@lumik/ui';
 import type { Photo } from '../../../lib/types';
 import { useProjectPhotos, useProjectThumbnails, useContextKeybindings, matchesKey } from '../../../lib/hooks';
+import * as api from '../../../lib/api';
 import { ProjectDetailHeader, type SortOption } from './ProjectDetailHeader';
 import { ProjectDetailFooter } from './ProjectDetailFooter';
 import { ImportPage } from '../../ImportPage';
@@ -51,6 +52,43 @@ const gridScrollStyles: CSSProperties = {
   overflowY: 'auto',
   padding: '24px 32px',
 };
+
+interface LazyPhotoCardProps {
+  projectId: string;
+  photo: Photo;
+  hasThumbnail: boolean;
+  cache: { current: Map<string, string> };
+  onClick: () => void;
+}
+
+function LazyPhotoCard({ projectId, photo, hasThumbnail, cache, onClick }: LazyPhotoCardProps) {
+  const cached = cache.current.get(photo.id) ?? null;
+  const [url, setUrl] = useState<string | null>(cached);
+
+  useEffect(() => {
+    if (!hasThumbnail || cached) return;
+    let cancelled = false;
+    api.getThumbnail(projectId, photo.id).then((data: string | null) => {
+      if (!cancelled && data) {
+        cache.current.set(photo.id, data);
+        setUrl(data);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [projectId, photo.id, hasThumbnail, cached, cache]);
+
+  return (
+    <PhotoCard
+      filename={photo.dng_path}
+      thumbnailUrl={url ?? undefined}
+      stars={photo.stars}
+      culled={photo.culled}
+      captureDate={photo.capture_date ?? undefined}
+      colorLabels={parseColorLabels(photo.color_label)}
+      onClick={onClick}
+    />
+  );
+}
 
 // Layout constants — must match PhotoCard dimensions
 const CARD_MIN_WIDTH = 200;
@@ -114,7 +152,8 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
   }, [selectedPhotoId, showImport, kb]);
 
   const { data: photos, loading, error, refetch: refetchPhotos } = useProjectPhotos(projectId);
-  const { thumbnails, refetch: refetchThumbnails } = useProjectThumbnails(projectId);
+  const { thumbnailIds, refetch: refetchThumbnails } = useProjectThumbnails(projectId);
+  const thumbnailCache = useRef<Map<string, string>>(new Map());
 
   // Optimistic overrides: merged on top of the DB-loaded photos array so that
   // edits made in PhotoDetailView are reflected immediately when navigating back.
@@ -329,14 +368,12 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
                     const photo = item.photos[col];
                     if (!photo) return <div key={col} />;
                     return (
-                      <PhotoCard
+                      <LazyPhotoCard
                         key={photo.id}
-                        filename={photo.dng_path}
-                        thumbnailUrl={thumbnails[photo.id]}
-                        stars={photo.stars}
-                        culled={photo.culled}
-                        captureDate={photo.capture_date ?? undefined}
-                        colorLabels={parseColorLabels(photo.color_label)}
+                        projectId={projectId}
+                        photo={photo}
+                        hasThumbnail={thumbnailIds.has(photo.id)}
+                        cache={thumbnailCache}
                         onClick={() => setSelectedPhotoId(photo.id)}
                       />
                     );
@@ -351,6 +388,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
       <ProjectDetailFooter
         totalPhotos={photos?.length ?? 0}
         culledCount={culledCount}
+        projectId={projectId}
         onImport={() => setShowImport(true)}
       />
     </div>

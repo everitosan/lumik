@@ -1,9 +1,12 @@
 import type { CSSProperties } from 'react';
+import { useState } from 'react';
 import { Button, Icon } from '@lumik/ui';
+import { regenerateProjectThumbnails } from '../../../lib/api';
 
 export interface ProjectDetailFooterProps {
   totalPhotos: number;
   culledCount: number;
+  projectId: string;
   onImport?: () => void;
 }
 
@@ -42,8 +45,16 @@ const culledValueStyles: CSSProperties = {
 export function ProjectDetailFooter({
   totalPhotos,
   culledCount,
+  projectId,
   onImport,
 }: ProjectDetailFooterProps) {
+  const [regenerating, setRegenerating] = useState(false);
+
+  const handleRegenerate = async () => {
+    setRegenerating(true);
+    await regenerateProjectThumbnails(projectId).finally(() => setRegenerating(false));
+  };
+
   return (
     <footer style={footerStyles}>
       <div style={statsStyles}>
@@ -54,14 +65,24 @@ export function ProjectDetailFooter({
         <span>culled</span>
       </div>
 
-      <Button
-        variant="primary"
-        size="sm"
-        leftIcon={<Icon name="import" size="sm" />}
-        onClick={onImport}
-      >
-        Import
-      </Button>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleRegenerate}
+          disabled={regenerating}
+        >
+          {regenerating ? 'Regenerating...' : 'Regenerate Thumbnails'}
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          leftIcon={<Icon name="import" size="sm" />}
+          onClick={onImport}
+        >
+          Import
+        </Button>
+      </div>
     </footer>
   );
 }

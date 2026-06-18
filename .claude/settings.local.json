@@ -6,7 +6,8 @@
       "mcp__stitch__get_screen",
       "mcp__stitch__list_screens",
       "WebFetch(domain:contribution.usercontent.google.com)",
-      "mcp__stitch__list_projects"
+      "mcp__stitch__list_projects",
+      "Bash(sqlite3 /media/evesan/KINGSTON/lumik/2024/11/02_Argentina/project.db \"SELECT dng_path, culled FROM photo WHERE culled = 1;\")"
     ]
   }
 }

@@ -133,8 +133,8 @@ export const ALLOWED_RAW_EXTENSIONS = [
   '.dng',
   // Generic RAW
   '.raw',
-  // JPEG (copied as-is, no conversion)
-  '.jpg', '.jpeg',
+  // JPEG / TIFF (copied as-is, no conversion)
+  '.jpg', '.jpeg', '.tif', '.tiff',
   // Video (copied as-is to _video/)
   '.mp4', '.mov', '.avi', '.mts', '.m2ts', '.mkv', '.mxf',
 ];
@@ -156,7 +156,7 @@ export function isAllowedRawFile(filename: string, extensions: string[] = ALLOWE
   return extensions.some((ext) => lowerName.endsWith(ext.toLowerCase()));
 }
 
-const DEFAULT_HINT = 'Compatible con CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG, MP4, MOV y más';
+const DEFAULT_HINT = 'Compatible con CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG, TIFF, MP4, MOV y más';
 
 export function DropZone({
   onFilesAdded,

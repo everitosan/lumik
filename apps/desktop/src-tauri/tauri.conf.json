@@ -26,7 +26,16 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "/media/**",
+          "/mnt/**",
+          "/run/media/**",
+          "/Volumes/**"
+        ]
+      }
     }
   },
   "bundle": {

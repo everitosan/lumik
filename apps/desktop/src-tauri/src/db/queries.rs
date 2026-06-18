@@ -222,10 +222,16 @@ impl GlobalDatabase {
             ("photo_detail.next",         "ArrowRight", "Siguiente foto"),
             ("photo_detail.zoom_in",      "+",          "Acercar"),
             ("photo_detail.zoom_out",     "-",          "Alejar"),
-            ("photo_detail.fit",          "0",          "Ajustar a pantalla"),
+            ("photo_detail.fit",          "f",          "Ajustar a pantalla"),
             ("photo_detail.rotate_left",  "[",          "Rotar izquierda"),
             ("photo_detail.rotate_right", "]",          "Rotar derecha"),
             ("photo_detail.cull",         " ",          "Seleccionar para culling"),
+            ("photo_detail.stars_0",      "0",          "Sin estrellas"),
+            ("photo_detail.stars_1",      "1",          "1 estrella"),
+            ("photo_detail.stars_2",      "2",          "2 estrellas"),
+            ("photo_detail.stars_3",      "3",          "3 estrellas"),
+            ("photo_detail.stars_4",      "4",          "4 estrellas"),
+            ("photo_detail.stars_5",      "5",          "5 estrellas"),
             ("project.show_culled",        "Ctrl+c",     "Mostrar solo fotos culled"),
         ];
         {

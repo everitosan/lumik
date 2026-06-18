@@ -47,10 +47,15 @@ export async function getProjectPhotos(projectId: string): Promise<Photo[]> {
   return invoke('get_project_photos', { projectId });
 }
 
-export async function getProjectThumbnails(
-  projectId: string
-): Promise<Record<string, string>> {
+export async function getProjectThumbnails(projectId: string): Promise<string[]> {
   return invoke('get_project_thumbnails', { projectId });
+}
+
+export async function getThumbnail(
+  projectId: string,
+  photoId: string
+): Promise<string | null> {
+  return invoke('get_thumbnail', { projectId, photoId });
 }
 
 export interface PhotoPreviewResult {

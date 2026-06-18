@@ -55,8 +55,8 @@ pub fn pipeline_copy_files(
             warn!("Skipping unsupported format: {}", path.display());
             continue;
         }
-        // JPEG files bypass dnglab: copy straight to dng_dir
-        let dest_dir = if matches!(ext.as_str(), "jpg" | "jpeg") {
+        // JPEG and TIFF files bypass dnglab: copy straight to dng_dir
+        let dest_dir = if matches!(ext.as_str(), "jpg" | "jpeg" | "tif" | "tiff") {
             &workspace.dng_dir
         } else {
             &workspace.raw_dir

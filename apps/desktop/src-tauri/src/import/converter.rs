@@ -13,6 +13,7 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "rw2",        // Panasonic
     "dng",        // Already DNG
     "jpg", "jpeg", // JPEG (copied as-is, no conversion)
+    "tif", "tiff", // TIFF (copied as-is, no conversion)
 ];
 
 /// Supported video file extensions (lowercase) — copied as-is, no conversion or metadata

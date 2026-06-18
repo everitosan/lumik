@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+
 import * as api from './api';
 import type {
   AppSettings,
@@ -124,16 +125,16 @@ export function useProjectPhotos(projectId: string) {
 }
 
 export function useProjectThumbnails(projectId: string) {
-  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+  const [thumbnailIds, setThumbnailIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.getProjectThumbnails(projectId);
-      setThumbnails(data);
+      const ids = await api.getProjectThumbnails(projectId);
+      setThumbnailIds(new Set(ids));
     } catch {
-      setThumbnails({});
+      setThumbnailIds(new Set());
     } finally {
       setLoading(false);
     }
@@ -143,7 +144,22 @@ export function useProjectThumbnails(projectId: string) {
     refetch();
   }, [refetch]);
 
-  return { thumbnails, loading, refetch };
+  return { thumbnailIds, loading, refetch };
+}
+
+export function useThumbnail(projectId: string, photoId: string, enabled: boolean) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    api.getThumbnail(projectId, photoId).then((data) => {
+      if (!cancelled) setUrl(data);
+    });
+    return () => { cancelled = true; };
+  }, [projectId, photoId, enabled]);
+
+  return url;
 }
 
 export function useCoverThumbnails(projects: ProjectDashboard[] | null): Record<string, string> {
@@ -271,10 +287,16 @@ const DEFAULT_KEYBINDINGS: KeybindingMap = {
   'photo_detail.next':         'ArrowRight',
   'photo_detail.zoom_in':      '+',
   'photo_detail.zoom_out':     '-',
-  'photo_detail.fit':          '0',
+  'photo_detail.fit':          'f',
   'photo_detail.rotate_left':  '[',
   'photo_detail.rotate_right': ']',
   'photo_detail.cull':         ' ',
+  'photo_detail.stars_0':      '0',
+  'photo_detail.stars_1':      '1',
+  'photo_detail.stars_2':      '2',
+  'photo_detail.stars_3':      '3',
+  'photo_detail.stars_4':      '4',
+  'photo_detail.stars_5':      '5',
   'project.show_culled':       'Ctrl+c',
 };
 

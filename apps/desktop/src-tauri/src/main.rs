@@ -8,9 +8,11 @@ mod import;
 
 use commands::{AppState, refresh_open_projects};
 use db::GlobalDatabase;
+use devices::scan_mounted_devices;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tauri::Manager;
 
 fn get_system_username() -> String {
     std::env::var("USER")
@@ -75,6 +77,18 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .setup(|app| {
+            // Register currently mounted device paths in the asset protocol scope
+            // so thumbnails can be served via convertFileSrc() without hardcoding paths.
+            let scope = app.asset_protocol_scope();
+            for device in scan_mounted_devices() {
+                let mount = std::path::Path::new(&device.mount_point);
+                if let Err(e) = scope.allow_directory(mount, true) {
+                    warn!("Could not register asset scope for {}: {}", device.mount_point, e);
+                }
+            }
+            Ok(())
+        })
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             // Device commands
@@ -89,6 +103,7 @@ fn main() {
             // Photo commands
             commands::get_project_photos,
             commands::get_project_thumbnails,
+            commands::get_thumbnail,
             commands::get_photo_preview,
             commands::save_photo_rotation,
             commands::save_photo_rating,

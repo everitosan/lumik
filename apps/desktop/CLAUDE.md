@@ -79,10 +79,13 @@ src-tauri/src/
 ```
 {mount_point}/lumik/{año}/{mes}/{día}_{nombre-proyecto}/
   project.db
-  IMG_0001.dng
-  IMG_0002.dng
+  _media/
+    IMG_0001.dng
+    IMG_0002.dng
   _culled/
     IMG_0047.dng
+  _video/
+    CLIP_001.mp4
   .thumbs/
     {photo_id}.jpg           # JPEG 480px, rotación física aplicada
   .previews/
@@ -94,7 +97,11 @@ src-tauri/src/
 - **Paths siempre relativos**: `dng_path` en BD es relativo al mount point. El path
   absoluto se reconstruye en runtime con `{mount_point}/{dng_path}`.
 - **`dng_path` refleja la ubicación real**: cuando una foto se cullea, `dng_path` se
-  actualiza a `{parent}/_culled/{filename}`. No hay campo separado "culled_path".
+  actualiza a `_culled/{filename}`. No hay campo separado "culled_path".
+- **`_media/` y `_culled/` son hermanas**: ambas viven directamente bajo el directorio
+  del proyecto. Al cullarse, el archivo pasa de `_media/` a `_culled/`; al descullear, vuelve a `_media/`.
+- **`_video/`**: carpeta donde van los videos. Se copian directamente sin conversión ni
+  escritura de metadatos XMP.
 - **exiftool es requerido en runtime**: thumbnails, previews, EXIF batch, orientación
   y metadata XMP dependen de él. Sin exiftool, la importación y el visor fallan.
 - **Orientación**: el DNG guarda `IFD0:Orientation`. Los thumbnails tienen la
