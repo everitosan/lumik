@@ -1,0 +1,408 @@
+---
+import { useTranslations, type Lang } from '../i18n/ui';
+
+interface Props { lang: Lang; }
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+const base    = lang === 'en' ? '' : `/${lang}`;
+const altLang = lang === 'en' ? 'es' : 'en';
+const altBase = lang === 'en' ? '/es' : '';
+---
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={t('meta.description')} />
+    <title>{t('meta.title')}</title>
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="alternate" hreflang="en"       href="https://lumik.evesan.rocks/" />
+    <link rel="alternate" hreflang="es"       href="https://lumik.evesan.rocks/es/" />
+    <link rel="alternate" hreflang="x-default" href="https://lumik.evesan.rocks/" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      @import "@lumik/ui/tokens.css";
+      @import "../styles/base.css";
+
+      .nav {
+        position: sticky; top: 0; z-index: 100;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 48px; height: 60px;
+        background: var(--lumik-background);
+        border-bottom: 1px solid var(--lumik-outline-variant);
+        backdrop-filter: blur(12px);
+      }
+      .nav-brand { display: flex; align-items: center; gap: 10px; }
+      .nav-brand img { width: 28px; height: 28px; }
+      .nav-brand span { font-size: 18px; font-weight: 600; color: var(--lumik-primary); letter-spacing: -0.3px; }
+      .nav-links { display: flex; gap: 32px; list-style: none; }
+      .nav-links a { font-size: 14px; color: var(--lumik-on-surface-variant); transition: color var(--lumik-transition-fast); }
+      .nav-links a:hover { color: var(--lumik-on-surface); }
+
+      .btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 8px 20px; border-radius: var(--lumik-radius-md);
+        font-size: 14px; font-weight: 500; font-family: var(--lumik-font-primary);
+        cursor: pointer; border: none; text-decoration: none;
+        transition: opacity var(--lumik-transition-fast), background var(--lumik-transition-fast);
+      }
+      .btn-primary { background: var(--lumik-primary-container); color: #fff; }
+      .btn-primary:hover { opacity: 0.88; }
+      .btn-ghost { background: transparent; color: var(--lumik-on-surface-variant); border: 1px solid var(--lumik-outline-variant); }
+      .btn-ghost:hover { background: var(--lumik-surface-container-low); color: var(--lumik-on-surface); }
+
+      section { padding: 96px 48px; max-width: 1200px; margin: 0 auto; }
+      .section-label { font-size: 12px; font-family: var(--lumik-font-mono); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; color: var(--lumik-primary); margin-bottom: 16px; text-align: center; }
+      .section-title { font-size: 36px; font-weight: 700; color: var(--lumik-on-surface); letter-spacing: -0.5px; line-height: 1.2; margin-bottom: 16px; text-align: center; }
+      .section-sub { font-size: 18px; color: var(--lumik-on-surface-variant); max-width: 560px; margin-left: auto; margin-right: auto; text-align: center; }
+
+      .hero { padding-top: 120px; padding-bottom: 80px; text-align: center; }
+      .hero-brand { display: flex; flex-direction: column; align-items: center; gap: 16px; margin: 0 auto 36px; }
+      .hero-logo { width: 96px; height: 96px; border-radius: 24px; display: block; filter: drop-shadow(0 0 32px rgba(85, 141, 255, 0.25)); }
+      .hero-wordmark { font-size: 48px; font-weight: 700; color: var(--lumik-on-surface); letter-spacing: -2px; line-height: 1; font-family: var(--lumik-font-primary); }
+      .hero-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; background: var(--lumik-surface-container-low); border: 1px solid var(--lumik-outline-variant); border-radius: var(--lumik-radius-full); font-size: 12px; font-family: var(--lumik-font-mono); color: var(--lumik-secondary); }
+      .hero h1 { font-size: clamp(36px, 5vw, 64px); font-weight: 700; color: var(--lumik-on-surface); letter-spacing: -1.5px; line-height: 1.1; max-width: 780px; margin: 0 auto 20px; }
+      .hero p { font-size: 20px; color: var(--lumik-on-surface-variant); max-width: 560px; margin: 0 auto 40px; line-height: 1.6; }
+      .hero-ctas { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; margin-bottom: 64px; }
+      .hero-ctas .btn { padding: 12px 28px; font-size: 15px; }
+      .hero-screenshot { border-radius: var(--lumik-radius-xl); overflow: hidden; border: 1px solid var(--lumik-outline-variant); box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(176,198,255,0.06); background: var(--lumik-surface-container-low); }
+      .hero-screenshot img { width: 100%; height: auto; display: block; }
+
+      .workflow { text-align: center; border-top: 1px solid var(--lumik-outline-variant); }
+      .workflow-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 56px; position: relative; }
+      .workflow-step { display: flex; flex-direction: column; align-items: center; padding: 0 24px; position: relative; }
+      .workflow-step:not(:last-child)::after { content: ''; position: absolute; top: 28px; right: -1px; width: calc(50% + 1px); height: 1px; background: linear-gradient(to right, var(--lumik-outline-variant), transparent); }
+      .workflow-step:not(:first-child)::before { content: ''; position: absolute; top: 28px; left: -1px; width: calc(50% + 1px); height: 1px; background: linear-gradient(to right, transparent, var(--lumik-outline-variant)); }
+      .workflow-icon { width: 56px; height: 56px; border-radius: var(--lumik-radius-lg); background: var(--lumik-surface-container-low); border: 1px solid var(--lumik-outline-variant); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; font-size: 22px; position: relative; z-index: 1; }
+      .workflow-step-num { font-size: 11px; font-family: var(--lumik-font-mono); color: var(--lumik-primary); font-weight: 500; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
+      .workflow-step h3 { font-size: 16px; font-weight: 600; color: var(--lumik-on-surface); margin-bottom: 8px; }
+      .workflow-step p { font-size: 14px; color: var(--lumik-on-surface-variant); line-height: 1.5; }
+
+      .features { border-top: 1px solid var(--lumik-outline-variant); }
+      .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 56px; }
+      .feature-card { background: var(--lumik-surface-container-low); border: 1px solid var(--lumik-outline-variant); border-radius: var(--lumik-radius-lg); padding: 28px; transition: border-color var(--lumik-transition-normal); }
+      .feature-card:hover { border-color: var(--lumik-primary); }
+      .feature-card-title { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+      .feature-icon { font-size: 22px; flex-shrink: 0; }
+      .feature-card h3 { font-size: 17px; font-weight: 600; color: var(--lumik-on-surface); margin: 0; }
+      .feature-card p { font-size: 14px; color: var(--lumik-on-surface-variant); line-height: 1.6; }
+
+      .screenshots { border-top: 1px solid var(--lumik-outline-variant); }
+      .screenshots-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 56px; }
+      .screenshots-grid--3 { grid-template-columns: repeat(3, 1fr); }
+      .screenshot-frame { border-radius: var(--lumik-radius-lg); overflow: hidden; border: 1px solid var(--lumik-outline-variant); box-shadow: 0 8px 32px rgba(0,0,0,0.4); cursor: zoom-in; }
+      .screenshot-frame img { width: 100%; height: auto; display: block; }
+      .screenshot-caption { margin-top: 10px; font-size: 13px; color: var(--lumik-outline); font-family: var(--lumik-font-mono); text-align: center; }
+
+      .platforms { border-top: 1px solid var(--lumik-outline-variant); text-align: center; }
+      .platforms-grid { display: flex; justify-content: center; gap: 40px; margin-top: 56px; }
+      .platform-item { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+      .platform-icon { width: 64px; height: 64px; border-radius: var(--lumik-radius-lg); display: flex; align-items: center; justify-content: center; border: 1px solid; }
+      .platform-icon img { width: 32px; height: 32px; }
+      .platform-icon.available { background: rgba(85,141,255,0.1); border-color: var(--lumik-primary-container); box-shadow: 0 0 24px rgba(85,141,255,0.2); }
+      .platform-icon.soon { background: var(--lumik-surface-container-low); border-color: var(--lumik-outline-variant); opacity: 0.4; }
+      .platform-name { font-size: 15px; font-weight: 500; color: var(--lumik-on-surface); }
+      .platform-badge { font-size: 11px; font-family: var(--lumik-font-mono); padding: 3px 10px; border-radius: var(--lumik-radius-full); }
+      .platform-badge.available { background: rgba(85,141,255,0.15); color: var(--lumik-primary); }
+      .platform-badge.soon { background: var(--lumik-surface-container-high); color: var(--lumik-outline); }
+
+      .roadmap { border-top: 1px solid var(--lumik-outline-variant); }
+      .roadmap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 56px; }
+      .roadmap-card { background: var(--lumik-surface-container-low); border: 1px solid var(--lumik-outline-variant); border-radius: var(--lumik-radius-lg); padding: 28px; }
+      .roadmap-card h3 { font-size: 15px; font-weight: 600; font-family: var(--lumik-font-mono); margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--lumik-outline-variant); }
+      .roadmap-card.now h3 { color: #4ade80; }
+      .roadmap-card.soon h3 { color: var(--lumik-secondary); }
+      .roadmap-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+      .roadmap-list li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--lumik-on-surface-variant); }
+      .roadmap-list li .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+      .roadmap-card.now .dot { background: #4ade80; }
+      .roadmap-card.soon .dot { background: var(--lumik-secondary); }
+
+      footer { background: var(--lumik-surface-container-lowest); border-top: 1px solid var(--lumik-outline-variant); padding: 32px 48px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+      .footer-brand { display: flex; align-items: center; gap: 8px; }
+      .footer-brand img { width: 22px; height: 22px; }
+      .footer-brand span { font-size: 15px; font-weight: 600; color: var(--lumik-primary); }
+      .footer-copy { font-size: 13px; color: var(--lumik-outline); }
+      .footer-links { display: flex; gap: 24px; }
+      .footer-links a { font-size: 13px; color: var(--lumik-outline); transition: color var(--lumik-transition-fast); }
+      .footer-links a:hover { color: var(--lumik-on-surface-variant); }
+
+      .lightbox { display: none; position: fixed; inset: 0; z-index: 999; background: rgba(0,0,0,0.88); backdrop-filter: blur(8px); align-items: center; justify-content: center; }
+      .lightbox.open { display: flex; }
+      .lightbox-inner { position: relative; max-width: 90vw; max-height: 90vh; display: flex; align-items: center; gap: 20px; }
+      .lightbox-img { max-width: 80vw; max-height: 88vh; border-radius: var(--lumik-radius-lg); border: 1px solid var(--lumik-outline-variant); box-shadow: 0 24px 80px rgba(0,0,0,0.7); object-fit: contain; display: block; }
+      .lightbox-btn { background: var(--lumik-surface-container-high); border: 1px solid var(--lumik-outline-variant); color: var(--lumik-on-surface); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; flex-shrink: 0; transition: background var(--lumik-transition-fast), border-color var(--lumik-transition-fast); }
+      .lightbox-btn:hover { background: var(--lumik-surface-bright); border-color: var(--lumik-primary); }
+      .lightbox-close { position: absolute; top: -52px; right: 0; font-size: 16px; }
+      .lightbox-caption { position: absolute; bottom: -36px; left: 0; right: 0; text-align: center; font-size: 13px; font-family: var(--lumik-font-mono); color: var(--lumik-outline); }
+      .lightbox-counter { position: absolute; top: -52px; left: 0; font-size: 12px; font-family: var(--lumik-font-mono); color: var(--lumik-outline); }
+
+      .lang-switch { font-size: 13px; color: var(--lumik-outline); text-decoration: none; transition: color var(--lumik-transition-fast); }
+      .lang-switch:hover { color: var(--lumik-on-surface-variant); }
+
+      @media (max-width: 900px) {
+        .nav { padding: 0 24px; }
+        .nav-links { display: none; }
+        section { padding: 64px 24px; }
+        .workflow-steps { grid-template-columns: 1fr 1fr; gap: 32px; }
+        .workflow-step::before, .workflow-step::after { display: none; }
+        .features-grid { grid-template-columns: 1fr; }
+        .screenshots-grid, .screenshots-grid--3 { grid-template-columns: 1fr; }
+        .roadmap-grid { grid-template-columns: 1fr; }
+        footer { flex-direction: column; text-align: center; padding: 24px; }
+      }
+      @media (max-width: 600px) {
+        .workflow-steps { grid-template-columns: 1fr; }
+        .platforms-grid { flex-direction: column; align-items: center; }
+      }
+    </style>
+  </head>
+  <body>
+
+    <nav class="nav">
+      <a class="nav-brand" href={`${base}/`}>
+        <img src="/icon.svg" alt="Lumik icon" />
+        <span>Lumik</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href={`${base}/#workflow`}>{t('nav.workflow')}</a></li>
+        <li><a href={`${base}/#features`}>{t('nav.features')}</a></li>
+        <li><a href={`${base}/#roadmap`}>{t('nav.roadmap')}</a></li>
+      </ul>
+      <div style="display:flex;align-items:center;gap:16px">
+        <a class="lang-switch" href={`${altBase}/`}>{altLang === 'es' ? 'ES' : 'EN'}</a>
+        <a class="btn btn-primary" href={`${base}/downloads`}>{t('nav.download')}</a>
+      </div>
+    </nav>
+
+    <section class="hero">
+      <div class="hero-brand">
+        <img src="/icon.svg" alt="Lumik" class="hero-logo" />
+        <span class="hero-wordmark">Lumik</span>
+      </div>
+      <h1>{t('hero.h1')}</h1>
+      <p>{t('hero.sub')}</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href={`${base}/downloads`}>{t('hero.cta.primary')}</a>
+        <a class="btn btn-ghost" href="https://github.com/everitosan/lumik" target="_blank" rel="noopener">{t('hero.cta.github')}</a>
+      </div>
+      <div class="hero-screenshot">
+        <img src="/screenshot-dashboard.png" alt="Lumik dashboard" />
+      </div>
+    </section>
+
+    <section class="workflow" id="workflow">
+      <p class="section-label">{t('workflow.label')}</p>
+      <h2 class="section-title">{t('workflow.title')}</h2>
+      <p class="section-sub">{t('workflow.sub')}</p>
+      <div class="workflow-steps">
+        <div class="workflow-step">
+          <div class="workflow-icon">📂</div>
+          <div class="workflow-step-num">01</div>
+          <h3>{t('workflow.s1.title')}</h3>
+          <p>{t('workflow.s1.desc')}</p>
+        </div>
+        <div class="workflow-step">
+          <div class="workflow-icon">🖼️</div>
+          <div class="workflow-step-num">02</div>
+          <h3>{t('workflow.s2.title')}</h3>
+          <p>{t('workflow.s2.desc')}</p>
+        </div>
+        <div class="workflow-step">
+          <div class="workflow-icon">⭐</div>
+          <div class="workflow-step-num">03</div>
+          <h3>{t('workflow.s3.title')}</h3>
+          <p>{t('workflow.s3.desc')}</p>
+        </div>
+        <div class="workflow-step">
+          <div class="workflow-icon">✅</div>
+          <div class="workflow-step-num">04</div>
+          <h3>{t('workflow.s4.title')}</h3>
+          <p>{t('workflow.s4.desc')}</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="features" id="features">
+      <p class="section-label">{t('features.label')}</p>
+      <h2 class="section-title">{t('features.title')}</h2>
+      <p class="section-sub">{t('features.sub')}</p>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-card-title">
+            <span class="feature-icon">🔭</span>
+            <h3>{t('features.viewer.title')}</h3>
+          </div>
+          <p>{t('features.viewer.desc')}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">
+            <span class="feature-icon">⚡</span>
+            <h3>{t('features.keyboard.title')}</h3>
+          </div>
+          <p>{t('features.keyboard.desc')}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">
+            <span class="feature-icon">🔌</span>
+            <h3>{t('features.projects.title')}</h3>
+          </div>
+          <p>{t('features.projects.desc')}</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="screenshots">
+      <p class="section-label">{t('screenshots.label')}</p>
+      <h2 class="section-title">{t('screenshots.title')}</h2>
+      <div class="screenshots-grid screenshots-grid--3">
+        <div>
+          <div class="screenshot-frame" data-lightbox="0">
+            <img src="/screenshot-dashboard.png" alt={t('screenshots.cap1')} />
+          </div>
+          <p class="screenshot-caption">{t('screenshots.cap1')}</p>
+        </div>
+        <div>
+          <div class="screenshot-frame" data-lightbox="1">
+            <img src="/screenshot-grid.png" alt={t('screenshots.cap2')} />
+          </div>
+          <p class="screenshot-caption">{t('screenshots.cap2')}</p>
+        </div>
+        <div>
+          <div class="screenshot-frame" data-lightbox="2">
+            <img src="/screenshot-viewer.png" alt={t('screenshots.cap3')} />
+          </div>
+          <p class="screenshot-caption">{t('screenshots.cap3')}</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="platforms">
+      <p class="section-label">{t('platforms.label')}</p>
+      <h2 class="section-title">{t('platforms.title')}</h2>
+      <p class="section-sub">{t('platforms.sub')}</p>
+      <div class="platforms-grid">
+        <div class="platform-item">
+          <div class="platform-icon available">
+            <img src="https://cdn.simpleicons.org/linux/b0c6ff" alt="Linux" />
+          </div>
+          <span class="platform-name">Linux</span>
+          <span class="platform-badge available">{t('platforms.available')}</span>
+        </div>
+        <div class="platform-item">
+          <div class="platform-icon soon">
+            <img src="https://cdn.simpleicons.org/windows11/8c90a0" alt="Windows" />
+          </div>
+          <span class="platform-name">Windows</span>
+          <span class="platform-badge soon">{t('platforms.soon')}</span>
+        </div>
+        <div class="platform-item">
+          <div class="platform-icon soon">
+            <img src="https://cdn.simpleicons.org/apple/8c90a0" alt="macOS" />
+          </div>
+          <span class="platform-name">macOS</span>
+          <span class="platform-badge soon">{t('platforms.soon')}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="roadmap" id="roadmap">
+      <p class="section-label">{t('roadmap.label')}</p>
+      <h2 class="section-title">{t('roadmap.title')}</h2>
+      <p class="section-sub">{t('roadmap.sub')}</p>
+      <div class="roadmap-grid">
+        <div class="roadmap-card now">
+          <h3>{t('roadmap.now')}</h3>
+          <ul class="roadmap-list">
+            <li><span class="dot"></span>{t('roadmap.now.i1')}</li>
+            <li><span class="dot"></span>{t('roadmap.now.i2')}</li>
+            <li><span class="dot"></span>{t('roadmap.now.i3')}</li>
+            <li><span class="dot"></span>{t('roadmap.now.i4')}</li>
+            <li><span class="dot"></span>{t('roadmap.now.i5')}</li>
+            <li><span class="dot"></span>{t('roadmap.now.i6')}</li>
+          </ul>
+        </div>
+        <div class="roadmap-card soon">
+          <h3>{t('roadmap.next')}</h3>
+          <ul class="roadmap-list">
+            <li><span class="dot"></span>{t('roadmap.next.i1')}</li>
+            <li><span class="dot"></span>{t('roadmap.next.i2')}</li>
+            <li><span class="dot"></span>{t('roadmap.next.i3')}</li>
+          </ul>
+          <h3 style="margin-top:24px">{t('roadmap.later')}</h3>
+          <ul class="roadmap-list">
+            <li><span class="dot"></span>{t('roadmap.later.i1')}</li>
+            <li><span class="dot"></span>{t('roadmap.later.i2')}</li>
+            <li><span class="dot"></span>{t('roadmap.later.i3')}</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <a class="footer-brand" href={`${base}/`}>
+        <img src="/icon.svg" alt="Lumik" />
+        <span>Lumik</span>
+      </a>
+      <p class="footer-copy">
+        {t('footer.copy')} <a href="https://mx.linkedin.com/in/everitosan" target="_blank" rel="noopener" style="color:var(--lumik-primary);text-decoration:none">Eve San</a>.
+      </p>
+      <div class="footer-links">
+        <a href="https://github.com/everitosan/lumik" target="_blank" rel="noopener">GitHub</a>
+        <a href={`${base}/docs`}>{t('footer.docs')}</a>
+      </div>
+    </footer>
+
+    <div class="lightbox" id="lightbox" role="dialog" aria-modal="true">
+      <div class="lightbox-inner">
+        <span class="lightbox-counter" id="lb-counter"></span>
+        <button class="lightbox-btn lightbox-close" id="lb-close">✕</button>
+        <button class="lightbox-btn" id="lb-prev">←</button>
+        <img class="lightbox-img" id="lb-img" src="" alt="" />
+        <button class="lightbox-btn" id="lb-next">→</button>
+        <span class="lightbox-caption" id="lb-caption"></span>
+      </div>
+    </div>
+
+    <script define:vars={{ cap1: t('screenshots.cap1'), cap2: t('screenshots.cap2'), cap3: t('screenshots.cap3') }}>
+      const slides = [
+        { src: '/screenshot-dashboard.png', caption: cap1 },
+        { src: '/screenshot-grid.png',      caption: cap2 },
+        { src: '/screenshot-viewer.png',    caption: cap3 },
+      ];
+      const lightbox  = document.getElementById('lightbox');
+      const lbImg     = document.getElementById('lb-img');
+      const lbCaption = document.getElementById('lb-caption');
+      const lbCounter = document.getElementById('lb-counter');
+      let current = 0;
+
+      function show(i) {
+        current = (i + slides.length) % slides.length;
+        lbImg.src = slides[current].src;
+        lbImg.alt = slides[current].caption;
+        lbCaption.textContent = slides[current].caption;
+        lbCounter.textContent = `${current + 1} / ${slides.length}`;
+      }
+      function open(i) { show(i); lightbox.classList.add('open'); document.body.style.overflow = 'hidden'; }
+      function close() { lightbox.classList.remove('open'); document.body.style.overflow = ''; }
+
+      document.querySelectorAll('[data-lightbox]').forEach(el =>
+        el.addEventListener('click', () => open(Number(el.dataset.lightbox)))
+      );
+      document.getElementById('lb-close').addEventListener('click', close);
+      document.getElementById('lb-prev').addEventListener('click', () => show(current - 1));
+      document.getElementById('lb-next').addEventListener('click', () => show(current + 1));
+      lightbox.addEventListener('click', e => { if (e.target === lightbox) close(); });
+      document.addEventListener('keydown', e => {
+        if (!lightbox.classList.contains('open')) return;
+        if (e.key === 'Escape') close();
+        if (e.key === 'ArrowLeft') show(current - 1);
+        if (e.key === 'ArrowRight') show(current + 1);
+      });
+    </script>
+
+  </body>
+</html>
