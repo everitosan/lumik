@@ -57,6 +57,11 @@ jobs:
       - name: Install Node dependencies
         run: pnpm install
 
+      # ── Build de paquetes internos ───────────────────────────────────────────
+      # @lumik/ui debe compilarse antes que el desktop para generar dist/
+      - name: Build @lumik/ui
+        run: pnpm build:ui
+
       # ── Versión desde el tag ─────────────────────────────────────────────────
       # Extrae la versión del tag (v1.2.3 → 1.2.3) y la escribe en Cargo.toml.
       # tauri.conf.json no tiene version, así que Tauri la lee de Cargo.toml.
