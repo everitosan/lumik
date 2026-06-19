@@ -29,16 +29,9 @@ pub fn scan_mounted_devices() -> Vec<DetectedDevice> {
             None => continue,
         };
 
-        let name = disk
-            .name()
-            .to_string_lossy()
-            .trim()
-            .to_string();
-        let name = if name.is_empty() {
-            generate_device_name(&mount_point)
-        } else {
-            name
-        };
+        let name = get_volume_label(disk)
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| generate_device_name(&mount_point));
 
         devices.push(DetectedDevice {
             uuid,
@@ -271,8 +264,110 @@ fn get_device_uuid_macos(disk: &sysinfo::Disk) -> Option<String> {
     None
 }
 
+/// Get the volume label for a disk (platform-specific).
+fn get_volume_label(disk: &sysinfo::Disk) -> Option<String> {
+    #[cfg(target_os = "linux")]
+    { get_volume_label_linux(disk) }
+    #[cfg(target_os = "windows")]
+    { get_volume_label_windows(disk) }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    { let _ = disk; None }
+}
+
+#[cfg(target_os = "linux")]
+fn get_volume_label_linux(disk: &sysinfo::Disk) -> Option<String> {
+    use std::fs;
+    use std::path::Path;
+    use std::process::Command;
+
+    let device_path = disk.name().to_string_lossy().to_string();
+
+    // Reverse-lookup in /dev/disk/by-label/
+    let label_dir = Path::new("/dev/disk/by-label");
+    if let Ok(entries) = fs::read_dir(label_dir) {
+        for entry in entries.flatten() {
+            if let Ok(target) = fs::read_link(entry.path()) {
+                let resolved = target
+                    .file_name()
+                    .map(|n| format!("/dev/{}", n.to_string_lossy()))
+                    .unwrap_or_default();
+                if resolved == device_path {
+                    // udev encodes some chars (e.g. spaces as \x20); decode the common ones
+                    let raw = entry.file_name().to_string_lossy().to_string();
+                    let label = raw.replace("\\x20", " ");
+                    if !label.is_empty() {
+                        return Some(label);
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: blkid -s LABEL
+    let output = Command::new("blkid")
+        .args(["-s", "LABEL", "-o", "value", &device_path])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let label = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !label.is_empty() {
+            return Some(label);
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn get_volume_label_windows(disk: &sysinfo::Disk) -> Option<String> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::GetVolumeInformationW;
+
+    let mount = disk.mount_point();
+    let mut root: Vec<u16> = OsStr::new(mount).encode_wide().collect();
+    if root.last().copied() != Some(b'\\' as u16) {
+        root.push(b'\\' as u16);
+    }
+    root.push(0);
+
+    let mut name_buf = vec![0u16; 256];
+    let result = unsafe {
+        GetVolumeInformationW(
+            root.as_ptr(),
+            name_buf.as_mut_ptr(),
+            name_buf.len() as u32,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+
+    if result != 0 {
+        let len = name_buf.iter().position(|&c| c == 0).unwrap_or(0);
+        let label = String::from_utf16_lossy(&name_buf[..len]);
+        if !label.is_empty() {
+            return Some(label);
+        }
+    }
+
+    None
+}
+
 /// Generate a friendly name from mount point path as fallback.
 fn generate_device_name(mount_point: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        // Windows mount points are "E:\" — show "Drive E" instead of the raw path
+        if mount_point.len() >= 2 && mount_point.as_bytes().get(1) == Some(&b':') {
+            let drive_letter = &mount_point[..1];
+            return format!("Drive {}", drive_letter.to_uppercase());
+        }
+    }
+
     std::path::Path::new(mount_point)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())

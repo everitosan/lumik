@@ -352,7 +352,7 @@ export function SettingsPage() {
         <h1 style={titleStyles}>Settings</h1>
       </div>
 
-      <section style={sectionStyles}>
+      <section style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div style={sectionHeaderStyles}>
           <h2 style={sectionTitleStyles}>Metadata</h2>
           <p style={sectionDescriptionStyles}>
@@ -368,8 +368,7 @@ export function SettingsPage() {
           </div>
         )}
 
-        <div style={formStyles}>
-
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
           <Input
             label="Artist"
             placeholder="Your name or studio name"
@@ -388,14 +387,16 @@ export function SettingsPage() {
             disabled={saving || !embedMetadata}
           />
 
-          <Input
-            label="Creator URL"
-            placeholder="https://yourwebsite.com"
-            value={creatorUrl}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setCreatorUrl(e.target.value)}
-            fullWidth
-            disabled={saving || !embedMetadata}
-          />
+          <div style={{ gridColumn: '1 / -1' }}>
+            <Input
+              label="Creator URL"
+              placeholder="https://yourwebsite.com"
+              value={creatorUrl}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setCreatorUrl(e.target.value)}
+              fullWidth
+              disabled={saving || !embedMetadata}
+            />
+          </div>
 
           <label style={checkboxContainerStyles}>
             <input
@@ -423,7 +424,7 @@ export function SettingsPage() {
             </span>
           </label>
 
-          <div style={actionsStyles}>
+          <div style={{ gridColumn: '1 / -1', ...actionsStyles, justifyContent: 'flex-end' }}>
             <Button
               variant="primary"
               onClick={handleSave}
@@ -439,6 +440,7 @@ export function SettingsPage() {
         const CONTEXT_LABELS: Record<string, string> = {
           photo_detail: 'Photo Detail',
           project: 'Project',
+          projects: 'Projects',
         };
 
         const groups = keybindings.reduce<Record<string, typeof keybindings>>((acc, kb) => {
@@ -451,7 +453,7 @@ export function SettingsPage() {
           setKeybindings((prev) => prev.map((b) => (b.action === action ? { ...b, key } : b)));
 
         return (
-          <section style={sectionStyles}>
+          <section style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={sectionHeaderStyles}>
               <h2 style={sectionTitleStyles}>Keyboard shortcuts</h2>
               <p style={sectionDescriptionStyles}>
@@ -459,24 +461,33 @@ export function SettingsPage() {
               </p>
             </div>
 
-            {Object.entries(groups).map(([ctx, rows]) => (
-              <div key={ctx} style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-                <span style={{
-                  fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
-                  fontSize: '10px',
-                  fontWeight: 600,
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  color: 'var(--lumik-outline, #8c90a0)',
-                  padding: '16px 0 4px',
-                }}>
-                  {CONTEXT_LABELS[ctx] ?? ctx}
-                </span>
-                {rows.map((kb) => (
-                  <KeybindingRow key={kb.action} binding={kb} onSaved={onSaved} />
-                ))}
-              </div>
-            ))}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '0 48px',
+              alignItems: 'start',
+            }}>
+              {(['projects', 'project', 'photo_detail'] as const)
+                .filter((ctx) => groups[ctx])
+                .map((ctx) => { const rows = groups[ctx]; return (
+                <div key={ctx} style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{
+                    fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase' as const,
+                    color: 'var(--lumik-outline, #8c90a0)',
+                    padding: '16px 0 4px',
+                  }}>
+                    {CONTEXT_LABELS[ctx] ?? ctx}
+                  </span>
+                  {rows.map((kb) => (
+                    <KeybindingRow key={kb.action} binding={kb} onSaved={onSaved} />
+                  ))}
+                </div>
+              ); })}
+            </div>
           </section>
         );
       })()}

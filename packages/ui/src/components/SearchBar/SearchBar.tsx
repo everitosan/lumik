@@ -1,3 +1,4 @@
+import { useState, forwardRef } from 'react';
 import type { InputHTMLAttributes, CSSProperties } from 'react';
 import { Icon } from '../Icon';
 
@@ -32,17 +33,25 @@ const iconStyles: CSSProperties = {
   pointerEvents: 'none',
 };
 
-export function SearchBar({
+export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(function SearchBar({
   placeholder = 'Buscar proyectos...',
   onSearch,
   onChange,
+  onFocus,
+  onBlur,
   style,
   ...props
-}: SearchBarProps) {
+}, ref) {
+  const [focused, setFocused] = useState(false);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange?.(e);
     onSearch?.(e.target.value);
   };
+
+  const focusStyles: CSSProperties = focused
+    ? { borderColor: 'var(--lumik-primary, #aac0f0)', boxShadow: '0 0 0 2px color-mix(in srgb, var(--lumik-primary, #aac0f0) 25%, transparent)' }
+    : {};
 
   return (
     <div style={containerStyles}>
@@ -53,12 +62,15 @@ export function SearchBar({
         style={iconStyles}
       />
       <input
+        ref={ref}
         type="search"
         placeholder={placeholder}
         onChange={handleChange}
-        style={{ ...inputStyles, ...style }}
+        onFocus={(e) => { setFocused(true); onFocus?.(e); }}
+        onBlur={(e) => { setFocused(false); onBlur?.(e); }}
+        style={{ ...inputStyles, ...focusStyles, ...style }}
         {...props}
       />
     </div>
   );
-}
+});

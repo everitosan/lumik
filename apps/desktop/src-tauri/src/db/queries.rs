@@ -233,6 +233,10 @@ impl GlobalDatabase {
             ("photo_detail.stars_4",      "4",          "4 estrellas"),
             ("photo_detail.stars_5",      "5",          "5 estrellas"),
             ("project.show_culled",        "Ctrl+c",     "Mostrar solo fotos culled"),
+            ("projects.new_project",        "n",          "Crear nuevo proyecto"),
+            ("projects.focus_search",       "s",          "Enfocar barra de búsqueda"),
+            ("project.back",               "Escape",     "Volver a la lista de proyectos"),
+            ("project.import",             "i",          "Ir a importación"),
         ];
         {
             let conn = self.conn();

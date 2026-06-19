@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { SearchBar, ProjectCard, Button, Icon } from '@lumik/ui';
-import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails } from '../../../lib/hooks';
+import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, matchesKey } from '../../../lib/hooks';
 import { createProject } from '../../../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../../../components/CreateProjectModal';
 import type { ProjectDashboard } from '../../../lib/types';
@@ -125,6 +125,26 @@ export function Projects({ onProjectClick }: ProjectsProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const kb = useContextKeybindings('projects');
+
+  useEffect(() => {
+    if (showCreateModal) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (matchesKey(e, kb['projects.new_project'])) {
+        e.preventDefault();
+        setShowCreateModal(true);
+      }
+      if (matchesKey(e, kb['projects.focus_search'])) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showCreateModal, kb]);
 
   const { data: projects, loading, error, refetch } = useProjectsDashboard();
   const { data: photographer } = useActivePhotographer();
@@ -226,6 +246,7 @@ export function Projects({ onProjectClick }: ProjectsProps) {
         </div>
         <div style={headerCenterStyles}>
           <SearchBar
+            ref={searchRef}
             placeholder="Search projects..."
             onSearch={setSearchQuery}
           />

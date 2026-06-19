@@ -146,10 +146,18 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         e.preventDefault();
         setShowCulledOnly((v) => !v);
       }
+      if (matchesKey(e, kb['project.back'])) {
+        e.preventDefault();
+        onBack?.();
+      }
+      if (matchesKey(e, kb['project.import'])) {
+        e.preventDefault();
+        setShowImport(true);
+      }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [selectedPhotoId, showImport, kb]);
+  }, [selectedPhotoId, showImport, kb, onBack]);
 
   const { data: photos, loading, error, refetch: refetchPhotos } = useProjectPhotos(projectId);
   const { thumbnailIds, refetch: refetchThumbnails } = useProjectThumbnails(projectId);
