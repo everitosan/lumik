@@ -93,3 +93,50 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-windows:
+    runs-on: windows-latest
+    needs: build-linux  # el release ya existe; este job solo sube el .exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Update Rust to stable
+        run: |
+          rustup update stable
+          rustup default stable
+          rustup show
+
+      - name: Enable pnpm via corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@latest --activate
+
+      - name: Install Node dependencies
+        run: pnpm install
+
+      - name: Build @lumik/ui
+        run: pnpm build:ui
+
+      - name: Set version from tag
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          $cargoToml = "apps/desktop/src-tauri/Cargo.toml"
+          $content = Get-Content $cargoToml -Raw
+          $content = $content -replace '(?m)^version = .*', "version = `"$version`""
+          # Solo la primera ocurrencia (la del [package])
+          Set-Content $cargoToml -Value $content -Encoding utf8 -NoNewline
+          Write-Output "Building version $version"
+
+      - name: Build Tauri — Windows
+        run: pnpm --filter @lumik/desktop tauri build --config src-tauri/tauri.windows.conf.json
+
+      - name: Upload Windows installer to release
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
+          gh release upload "${{ github.ref_name }}" $exe.FullName
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
