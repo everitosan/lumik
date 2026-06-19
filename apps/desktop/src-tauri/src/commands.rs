@@ -635,6 +635,9 @@ pub fn save_photo_rotation(
 
     let dng_full = Path::new(&mount).join(&photo.dng_path);
 
+    // Read current orientation before overwriting, so we can apply only the delta to the thumbnail
+    let old_rotation = read_exif_rotation(&dng_full);
+
     // Map degrees → EXIF Orientation value
     let orientation = match rotation {
         90  => 6,
@@ -659,8 +662,11 @@ pub fn save_photo_rotation(
         return Err(format!("exiftool error: {}", stderr));
     }
 
-    // Regenerate thumbnail with rotated pixels so the grid shows correct orientation
-    regenerate_rotated_thumbnail(&dng_full, &project_db.project_dir, &photo_id, rotation);
+    // Apply only the delta so the thumbnail pixels don't accumulate multiple rotations
+    let delta = (rotation - old_rotation + 360) % 360;
+    if delta != 0 {
+        regenerate_rotated_thumbnail(&dng_full, &project_db.project_dir, &photo_id, delta);
+    }
 
     // Invalidate preview cache — it will be re-extracted on next open
     if let Some(dir) = previews_dir_for(&project_db.project_dir) {

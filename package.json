@@ -9,7 +9,9 @@
     "build:ui": "pnpm --filter @lumik/ui build",
     "build:uikit": "pnpm --filter @lumik/uikit build",
     "tauri:dev": "pnpm --filter @lumik/desktop tauri dev",
-    "tauri:build": "pnpm --filter @lumik/desktop tauri build"
+    "tauri:build": "pnpm --filter @lumik/desktop tauri build",
+    "dev:landing": "pnpm --filter @lumik/landing dev",
+    "build:landing": "pnpm --filter @lumik/landing build"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

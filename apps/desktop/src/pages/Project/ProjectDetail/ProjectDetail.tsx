@@ -291,7 +291,10 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         coverPhotoPath={coverPhotoPath}
         onClose={() => setSelectedPhotoId(null)}
         onNavigate={(idx) => setSelectedPhotoId(sortedPhotos[idx].id)}
-        onThumbnailChanged={refetchThumbnails}
+        onThumbnailChanged={(photoIds) => {
+            for (const id of photoIds) thumbnailCache.current.delete(id);
+            refetchThumbnails();
+          }}
         onPhotoChanged={handlePhotoChanged}
         onCoverPhotoChange={onCoverPhotoChange}
       />

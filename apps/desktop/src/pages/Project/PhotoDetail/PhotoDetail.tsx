@@ -15,7 +15,7 @@ export interface PhotoDetailProps {
   coverPhotoPath: string | null;
   onClose: () => void;
   onNavigate: (index: number) => void;
-  onThumbnailChanged?: () => void;
+  onThumbnailChanged?: (photoIds: string[]) => void;
   onPhotoChanged?: (photoId: string, updates: Partial<Pick<Photo, 'stars' | 'color_label' | 'tags' | 'culled'>>) => void;
   onCoverPhotoChange?: (photoId: string | null) => void;
 }
@@ -87,7 +87,7 @@ export function PhotoDetail({
   const viewerRef = useRef<PhotoViewerHandle>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const thumbnailDirtyRef = useRef(false);
+  const thumbnailDirtyRef = useRef(new Set<string>());
   const onThumbnailChangedRef = useRef(onThumbnailChanged);
   onThumbnailChangedRef.current = onThumbnailChanged;
 
@@ -110,7 +110,7 @@ export function PhotoDetail({
   // Flush thumbnail refetch when leaving detail view
   useEffect(() => {
     return () => {
-      if (thumbnailDirtyRef.current) onThumbnailChangedRef.current?.();
+      if (thumbnailDirtyRef.current.size > 0) onThumbnailChangedRef.current?.([...thumbnailDirtyRef.current]);
     };
   }, []);
 
@@ -138,7 +138,7 @@ export function PhotoDetail({
         .then(() => {
           setSaveState('saved');
           saveTimerRef.current = setTimeout(() => setSaveState('idle'), 2000);
-          thumbnailDirtyRef.current = true;
+          thumbnailDirtyRef.current.add(photo.id);
         })
         .catch(() => setSaveState('error'));
     },

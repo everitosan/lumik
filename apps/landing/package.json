@@ -1,0 +1,14 @@
+{
+  "name": "@lumik/landing",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@lumik/ui": "workspace:*",
+    "astro": "^6.4.8"
+  }
+}
