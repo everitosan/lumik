@@ -15,11 +15,11 @@ pub struct PipelineWorkspace {
 }
 
 impl PipelineWorkspace {
-    /// Create a new workspace in /tmp
+    /// Create a new workspace in the system temp directory
     pub fn create(project_name: &str) -> Result<Self, ConvertError> {
         let timestamp = Local::now().format("%Y_%m_%d__%H_%M_%S");
         let temp_name = format!("{}_{}", sanitize_name(project_name), timestamp);
-        let temp_dir = PathBuf::from("/tmp").join(&temp_name);
+        let temp_dir = std::env::temp_dir().join(&temp_name);
         let raw_dir = temp_dir.join("raw");
         let dng_dir = temp_dir.join("dng");
 

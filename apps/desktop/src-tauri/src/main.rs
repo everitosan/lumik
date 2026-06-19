@@ -13,9 +13,14 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 fn get_system_username() -> String {
-    std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "photographer".to_string())
+    #[cfg(target_os = "windows")]
+    let vars = ["USERNAME", "USER"];
+    #[cfg(not(target_os = "windows"))]
+    let vars = ["USER", "USERNAME"];
+
+    vars.iter()
+        .find_map(|v| std::env::var(v).ok())
+        .unwrap_or_else(|| "photographer".to_string())
 }
 
 fn main() {

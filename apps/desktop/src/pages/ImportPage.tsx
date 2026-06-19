@@ -21,6 +21,8 @@ import { createProject } from '../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../components/CreateProjectModal';
 import type { ImportPhase, FailedFile } from '../lib/types';
 
+const pathBasename = (p: string) => p.replace(/\\/g, '/').split('/').pop() || p;
+
 const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mts', '.m2ts', '.mkv', '.mxf'];
 const isVideoFile = (filename: string) =>
   VIDEO_EXTENSIONS.some((ext) => filename.toLowerCase().endsWith(ext));
@@ -358,7 +360,7 @@ export function ImportPage({
 
       const paths: string[] = event.payload.paths;
       const validPaths = paths.filter((filePath) => {
-        const name = filePath.split('/').pop() || filePath;
+        const name = pathBasename(filePath);
         return isAllowedRawFile(name);
       });
       if (validPaths.length === 0) return;
@@ -367,7 +369,7 @@ export function ImportPage({
         const newFiles: SourceFile[] = await Promise.all(
           validPaths.map(async (filePath) => {
             const fileInfo = await stat(filePath);
-            const name = filePath.split('/').pop() || filePath;
+            const name = pathBasename(filePath);
             return { name, sizeBytes: fileInfo.size, path: filePath };
           })
         );
@@ -529,7 +531,7 @@ export function ImportPage({
 
       // Filter only valid RAW files and get file info
       const validPaths = selected.filter((filePath: string) => {
-        const name = filePath.split('/').pop() || filePath;
+        const name = pathBasename(filePath);
         return isAllowedRawFile(name);
       });
 
@@ -538,7 +540,7 @@ export function ImportPage({
       const newFiles: SourceFile[] = await Promise.all(
         validPaths.map(async (filePath: string) => {
           const fileInfo = await stat(filePath);
-          const name = filePath.split('/').pop() || filePath;
+          const name = pathBasename(filePath);
           return {
             name,
             sizeBytes: fileInfo.size,

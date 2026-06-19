@@ -94,11 +94,18 @@ pub fn find_dnglab() -> Option<String> {
         return Some("dnglab".to_string());
     }
 
-    // Check common locations
+    // Check common locations per platform
+    #[cfg(not(target_os = "windows"))]
     let locations = [
         dirs::home_dir().map(|h| h.join(".local/bin/dnglab")),
         Some(std::path::PathBuf::from("/usr/local/bin/dnglab")),
         Some(std::path::PathBuf::from("/usr/bin/dnglab")),
+    ];
+    #[cfg(target_os = "windows")]
+    let locations = [
+        dirs::data_local_dir().map(|h| h.join("Programs\\dnglab\\dnglab.exe")),
+        Some(std::path::PathBuf::from("C:\\Program Files\\dnglab\\dnglab.exe")),
+        Some(std::path::PathBuf::from("C:\\Program Files (x86)\\dnglab\\dnglab.exe")),
     ];
 
     for location in locations.into_iter().flatten() {

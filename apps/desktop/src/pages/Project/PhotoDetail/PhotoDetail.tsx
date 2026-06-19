@@ -36,7 +36,7 @@ function parseTags(raw: string | null): string[] {
 }
 
 function basename(path: string): string {
-  return path.split('/').pop() ?? path;
+  return path.replace(/\\/g, '/').split('/').pop() ?? path;
 }
 
 const rootStyle: CSSProperties = {

@@ -1,6 +1,15 @@
 use crate::db::models::*;
 use crate::db::{GlobalDatabase, ProjectDatabase, discover_projects_on_device};
 use crate::devices::{scan_mounted_devices, DetectedDevice};
+
+/// Serialize a Path to a string with forward slashes so dng_path in the DB
+/// is always portable across Linux, macOS and Windows.
+fn path_to_slash(path: &std::path::Path) -> String {
+    path.components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join("/")
+}
 use crate::import::{
     pipeline_copy_files, pipeline_convert, pipeline_passthrough,
     pipeline_metadata, pipeline_move_to_dest, pipeline_copy_videos,
@@ -749,10 +758,7 @@ pub fn save_photo_culled(
     std::fs::rename(&current_path, &target_path)
         .map_err(|e| format!("Error al mover archivo: {}", e))?;
 
-    let new_dng_path_str = new_dng_path
-        .to_str()
-        .ok_or("Path resultante no es UTF-8")?
-        .to_string();
+    let new_dng_path_str = path_to_slash(&new_dng_path);
 
     project_db
         .update_photo_culled(&photo_id, culled, &new_dng_path_str)
@@ -1100,12 +1106,12 @@ pub async fn start_import(
 
             let file_size = std::fs::metadata(dng_path).map(|m| m.len() as i64).ok();
             let meta = exif_map.get(dng_path).cloned().unwrap_or_default();
-            let relative_path = dest_folder
-                .strip_prefix(&request.mount_point)
-                .unwrap_or(&dest_folder)
-                .join(&file_name)
-                .to_string_lossy()
-                .into_owned();
+            let relative_path = path_to_slash(
+                &dest_folder
+                    .strip_prefix(&request.mount_point)
+                    .unwrap_or(&dest_folder)
+                    .join(&file_name),
+            );
 
             let original_format = if settings.convert_to_dng {
                 Some("DNG".to_string())
