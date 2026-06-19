@@ -2,9 +2,10 @@ use chrono::Local;
 use log::{debug, info, warn};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use crate::db::models::PhotographerMetadata;
+use crate::exiftool;
+use crate::util::silent_command;
 use super::converter::{find_dnglab, ConvertError, SUPPORTED_EXTENSIONS, VIDEO_EXTENSIONS};
 
 /// Temporary workspace for the import pipeline
@@ -156,7 +157,7 @@ fn run_dnglab_convert(source: &Path, dest: &Path) -> Result<usize, ConvertError>
         ConvertError::DngError("dnglab not found. Please install dnglab.".to_string())
     })?;
 
-    let output = Command::new(&dnglab_cmd)
+    let output = silent_command(&dnglab_cmd)
         .args([
             "convert",
             source.to_str().unwrap_or_default(),
@@ -245,18 +246,8 @@ fn rename_and_embed_metadata(
 
     debug!("exiftool rename args: {:?}", args);
 
-    let output = Command::new("exiftool")
-        .args(&args)
-        .output()
-        .map_err(|e| ConvertError::DngError(format!("exiftool failed: {}", e)))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        warn!("exiftool rename failed: {}", stderr);
-        return Err(ConvertError::DngError(format!("exiftool rename failed: {}", stderr)));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = exiftool::run_text(&args)
+        .map_err(|e| ConvertError::DngError(format!("exiftool rename failed: {}", e)))?;
     debug!("exiftool output: {}", stdout);
 
     // Count output files after rename

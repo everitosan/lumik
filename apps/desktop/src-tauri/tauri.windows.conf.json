@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "targets": ["nsis"],
+    "externalBin": [
+      "binaries/dnglab",
+      "binaries/exiftool"
+    ],
+    "resources": [
+      "exiftool_files/**/*"
+    ]
+  }
+}

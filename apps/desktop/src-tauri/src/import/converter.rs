@@ -1,7 +1,8 @@
 use log::{debug, info, warn};
 use std::path::Path;
-use std::process::Command;
 use thiserror::Error;
+
+use crate::util::silent_command;
 
 /// Supported photo file extensions (lowercase)
 pub const SUPPORTED_EXTENSIONS: &[&str] = &[
@@ -49,7 +50,7 @@ pub fn convert_directory_to_dng(
         ConvertError::DngError("dnglab not found. Please install dnglab.".to_string())
     })?;
 
-    let output = Command::new(&dnglab_cmd)
+    let output = silent_command(&dnglab_cmd)
         .args([
             "convert",
             "-v",
@@ -90,7 +91,7 @@ pub fn convert_directory_to_dng(
 /// Find dnglab binary - checks PATH and common locations
 pub fn find_dnglab() -> Option<String> {
     // Check if dnglab is in PATH
-    if Command::new("dnglab").arg("--version").output().is_ok() {
+    if silent_command("dnglab").arg("--version").output().is_ok() {
         return Some("dnglab".to_string());
     }
 

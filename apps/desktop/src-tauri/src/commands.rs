@@ -1,6 +1,8 @@
 use crate::db::models::*;
 use crate::db::{GlobalDatabase, ProjectDatabase, discover_projects_on_device};
 use crate::devices::{scan_mounted_devices, DetectedDevice};
+use crate::exiftool;
+use crate::util::silent_command;
 
 /// Serialize a Path to a string with forward slashes so dng_path in the DB
 /// is always portable across Linux, macOS and Windows.
@@ -299,7 +301,7 @@ fn cache_thumbnail(dng_full_path: &Path, photo_id: &str) {
     let path_str = dng_full_path.to_str().unwrap_or_default();
     let mut raw_bytes: Option<Vec<u8>> = None;
     for tag in &["-PreviewImage", "-ThumbnailImage"] {
-        let output = match std::process::Command::new("exiftool")
+        let output = match silent_command("exiftool")
             .args(["-b", tag, path_str])
             .output()
         {
@@ -440,7 +442,7 @@ fn ensure_preview_cached(dng_full_path: &Path, project_dir: &Path, photo_id: &st
     // PreviewImage — medium preview
     // OtherImage — last resort
     for tag in &["-JpgFromRaw", "-LargeImage", "-PreviewImage", "-OtherImage"] {
-        let output = match std::process::Command::new("exiftool")
+        let output = match silent_command("exiftool")
             .args(["-b", tag, path_str])
             .output()
         {
@@ -451,10 +453,12 @@ fn ensure_preview_cached(dng_full_path: &Path, project_dir: &Path, photo_id: &st
             if std::fs::write(&dest, &output.stdout).is_ok() {
                 // Strip EXIF Orientation from the extracted JPEG so Chrome/WebView does not
                 // auto-rotate pixels before the canvas applies the DNG's rotation manually.
-                let _ = std::process::Command::new("exiftool")
-                    .args(["-Orientation=1", "-n", "-overwrite_original",
-                           dest.to_str().unwrap_or_default()])
-                    .output();
+                let _ = exiftool::run_text(&[
+                    "-Orientation=1".to_string(),
+                    "-n".to_string(),
+                    "-overwrite_original".to_string(),
+                    dest.to_string_lossy().to_string(),
+                ]);
                 debug!("Cached preview ({}) for {} → {:?}", tag, photo_id, dest);
                 return Some(dest);
             }
@@ -466,10 +470,12 @@ fn ensure_preview_cached(dng_full_path: &Path, project_dir: &Path, photo_id: &st
     // Fallback for JPEG source files: the file itself is the preview.
     if matches!(ext.as_str(), "jpg" | "jpeg") {
         if std::fs::copy(dng_full_path, &dest).is_ok() {
-            let _ = std::process::Command::new("exiftool")
-                .args(["-Orientation=1", "-n", "-overwrite_original",
-                       dest.to_str().unwrap_or_default()])
-                .output();
+            let _ = exiftool::run_text(&[
+                "-Orientation=1".to_string(),
+                "-n".to_string(),
+                "-overwrite_original".to_string(),
+                dest.to_string_lossy().to_string(),
+            ]);
             debug!("Cached preview (JPEG passthrough) for {} → {:?}", photo_id, dest);
             return Some(dest);
         }
@@ -497,20 +503,17 @@ fn ensure_preview_cached(dng_full_path: &Path, project_dir: &Path, photo_id: &st
 /// Uses IFD0: prefix to read the outer TIFF tag, not the embedded JPEG's own tag.
 /// Returns 0 if tag is absent or unrecognized.
 fn read_exif_rotation(dng_full_path: &Path) -> i32 {
-    let output = match std::process::Command::new("exiftool")
-        .args(["-IFD0:Orientation", "-n", dng_full_path.to_str().unwrap_or_default()])
-        .output()
-    {
-        Ok(o) => o,
+    let args = vec![
+        "-IFD0:Orientation".to_string(),
+        "-n".to_string(),
+        dng_full_path.to_string_lossy().to_string(),
+    ];
+    let text = match exiftool::run_text(&args) {
+        Ok(t) => t,
         Err(_) => return 0,
     };
 
-    if !output.status.success() {
-        return 0;
-    }
-
     // Output: "Orientation                     : 6\n"
-    let text = String::from_utf8_lossy(&output.stdout);
     let orientation: i32 = text
         .split(':')
         .nth(1)
@@ -563,10 +566,12 @@ pub fn get_photo_preview(
     // which would double-rotate the image when the canvas also applies the DNG rotation.
     // After stripping here, subsequent opens skip this branch.
     if read_exif_rotation(&preview_path) != 0 {
-        let _ = std::process::Command::new("exiftool")
-            .args(["-Orientation=1", "-n", "-overwrite_original",
-                   preview_path.to_str().unwrap_or_default()])
-            .output();
+        let _ = exiftool::run_text(&[
+            "-Orientation=1".to_string(),
+            "-n".to_string(),
+            "-overwrite_original".to_string(),
+            preview_path.to_string_lossy().to_string(),
+        ]);
     }
 
     let bytes = std::fs::read(&preview_path)
@@ -656,20 +661,13 @@ pub fn save_photo_rotation(
     };
 
     // Use IFD0: prefix to write the outer TIFF Orientation, not the embedded JPEG's tag
-    let output = std::process::Command::new("exiftool")
-        .args([
-            &format!("-IFD0:Orientation={}", orientation),
-            "-n",
-            "-overwrite_original",
-            dng_full.to_str().unwrap_or_default(),
-        ])
-        .output()
-        .map_err(|e| format!("exiftool failed: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("exiftool error: {}", stderr));
-    }
+    exiftool::run_text(&[
+        format!("-IFD0:Orientation={}", orientation),
+        "-n".to_string(),
+        "-overwrite_original".to_string(),
+        dng_full.to_string_lossy().to_string(),
+    ])
+    .map_err(|e| format!("exiftool error: {}", e))?;
 
     // Apply only the delta so the thumbnail pixels don't accumulate multiple rotations
     let delta = (rotation - old_rotation + 360) % 360;
@@ -844,7 +842,10 @@ pub fn regenerate_project_thumbnails(
     let pairs: Vec<(PathBuf, String)> = photos
         .iter()
         .filter_map(|photo| {
-            let mount = device_map.get(photo.device_uuid.as_str())?;
+            let mount = devices
+                .iter()
+                .find(|d| d.uuid == photo.device_uuid)
+                .map(|d| d.mount_point.as_str())?;
             let dng_full = Path::new(mount).join(&photo.dng_path);
             Some((dng_full, photo.id.clone()))
         })
@@ -1219,12 +1220,11 @@ fn extract_exif_metadata_batch(paths: &[PathBuf]) -> HashMap<PathBuf, FileMetada
         args.push(p.to_string_lossy().to_string());
     }
 
-    let output = match std::process::Command::new("exiftool").args(&args).output() {
-        Ok(o) if o.status.success() => o,
-        _ => return HashMap::new(),
+    let stdout = match exiftool::run_text(&args) {
+        Ok(s) => s,
+        Err(_) => return HashMap::new(),
     };
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let mut lines = stdout.lines();
     let _ = lines.next(); // skip CSV header
 

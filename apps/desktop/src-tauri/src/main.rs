@@ -4,7 +4,9 @@
 mod commands;
 mod db;
 mod devices;
+mod exiftool;
 mod import;
+mod util;
 
 use commands::{AppState, refresh_open_projects};
 use db::GlobalDatabase;

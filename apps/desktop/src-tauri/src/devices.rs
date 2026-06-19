@@ -227,8 +227,9 @@ fn get_device_uuid_windows(disk: &sysinfo::Disk) -> Option<String> {
     };
 
     if result != 0 && serial != 0 {
-        // Format serial as a UUID-like string so it's compatible with our DB schema
-        Some(format!("win-vol-{:08X}", serial))
+        // Match the FAT/exFAT short-serial format Linux exposes via /dev/disk/by-uuid
+        // ("XXXX-XXXX") so the same device gets the same UUID across platforms.
+        Some(format!("{:04X}-{:04X}", serial >> 16, serial & 0xFFFF))
     } else {
         None
     }

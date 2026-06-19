@@ -1,7 +1,7 @@
 use crate::db::models::PhotographerMetadata;
-use log::{debug, info, warn};
+use crate::exiftool;
+use log::{debug, info};
 use std::path::Path;
-use std::process::Command;
 
 /// Embed photographer metadata into a file using exiftool
 /// This is the reliable way to write XMP metadata to RAW/DNG files
@@ -59,21 +59,8 @@ pub fn embed_metadata_with_exiftool(
 
     debug!("Running exiftool with args: {:?}", args);
 
-    let output = Command::new("exiftool")
-        .args(&args)
-        .output()
-        .map_err(|e| format!("Failed to run exiftool: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        warn!("exiftool failed: {}", stderr);
-        return Err(format!("exiftool failed: {}", stderr));
-    }
-
-    debug!(
-        "exiftool success: {}",
-        String::from_utf8_lossy(&output.stdout)
-    );
+    let stdout = exiftool::run_text(&args)?;
+    debug!("exiftool success: {}", stdout);
     Ok(())
 }
 
@@ -136,18 +123,7 @@ pub fn embed_metadata_in_directory(
     info!("Running exiftool batch on directory: {:?}", dir_path);
     debug!("exiftool args: {:?}", args);
 
-    let output = Command::new("exiftool")
-        .args(&args)
-        .output()
-        .map_err(|e| format!("Failed to run exiftool: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        warn!("exiftool batch failed: {}", stderr);
-        return Err(format!("exiftool batch failed: {}", stderr));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = exiftool::run_text(&args)?;
     info!("exiftool batch success: {}", stdout);
 
     // Count updated files from output (e.g., "17 image files updated")
