@@ -1,9 +1,10 @@
-import { useState, forwardRef } from 'react';
-import type { InputHTMLAttributes, CSSProperties } from 'react';
+import { useState } from 'react';
+import type { InputHTMLAttributes, CSSProperties, Ref } from 'react';
 import { Icon } from '../Icon';
 
 export interface SearchBarProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   onSearch?: (value: string) => void;
+  ref?: Ref<HTMLInputElement>;
 }
 
 const containerStyles: CSSProperties = {
@@ -33,15 +34,16 @@ const iconStyles: CSSProperties = {
   pointerEvents: 'none',
 };
 
-export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(function SearchBar({
+export function SearchBar({
   placeholder = 'Buscar proyectos...',
   onSearch,
   onChange,
   onFocus,
   onBlur,
+  ref,
   style,
   ...props
-}, ref) {
+}: SearchBarProps) {
   const [focused, setFocused] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,4 +75,4 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(function S
       />
     </div>
   );
-});
+}
