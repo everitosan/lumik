@@ -5,41 +5,45 @@ on:
     tags:
       - 'v*'
 
-# Principio de mínimo privilegio: solo write en contents para crear el release.
-# Todos los demás scopes quedan denegados por defecto.
 permissions:
   contents: write
 
 jobs:
+  # ── Crea el release vacío primero ──────────────────────────────────────────
+  # Los jobs de build corren en paralelo y suben sus artefactos a este release.
+  create-release:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Create GitHub Release
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "Lumik ${{ github.ref_name }}" \
+            --generate-notes \
+            --draft=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+
+  # ── Build Linux ────────────────────────────────────────────────────────────
   build-linux:
     runs-on: ubuntu-22.04  # glibc 2.35 — cubre Debian 12, Ubuntu 22.04+ y la mayoría de distros modernas
+    needs: create-release
 
     steps:
-      # ── Checkout ────────────────────────────────────────────────────────────
-      # Pinado por hash inmutable, no por tag (los tags pueden ser reasignados).
-      # Hash corresponde a actions/checkout v4.2.2 — verificar en:
-      # https://github.com/actions/checkout/commits/main
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      # ── Rust ─────────────────────────────────────────────────────────────────
-      # Usamos rustup directamente (pre-instalado en el runner) en lugar de
-      # una acción de terceros como dtolnay/rust-toolchain para evitar
-      # dependencia en código externo.
       - name: Update Rust to stable
         run: |
           rustup update stable
           rustup default stable
           rustup show
 
-      # ── Node / pnpm ──────────────────────────────────────────────────────────
-      # corepack viene con Node.js (pre-instalado en el runner) — sin acciones externas.
       - name: Enable pnpm via corepack
         run: |
           corepack enable
           corepack prepare pnpm@latest --activate
 
-      # ── Dependencias del sistema para Tauri v2 en Linux ─────────────────────
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -53,18 +57,9 @@ jobs:
             patchelf \
             libfuse2
 
-      # ── Dependencias del proyecto ────────────────────────────────────────────
       - name: Install Node dependencies
         run: pnpm install
 
-      # ── Build de paquetes internos ───────────────────────────────────────────
-      # @lumik/ui debe compilarse antes que el desktop para generar dist/
-      - name: Build @lumik/ui
-        run: pnpm build:ui
-
-      # ── Versión desde el tag ─────────────────────────────────────────────────
-      # Extrae la versión del tag (v1.2.3 → 1.2.3) y la escribe en Cargo.toml.
-      # tauri.conf.json no tiene version, así que Tauri la lee de Cargo.toml.
       - name: Set version from tag
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -72,31 +67,22 @@ jobs:
             apps/desktop/src-tauri/Cargo.toml
           echo "Building version $VERSION"
 
-      # ── Build ────────────────────────────────────────────────────────────────
-      # Genera .deb (para Debian/Ubuntu) y AppImage (universal).
-      # El AppImage compilado en ubuntu-22.04 (glibc 2.35) corre en cualquier
-      # distro con glibc >= 2.35, incluyendo Debian 12 y 13.
       - name: Build Tauri — Linux
         run: pnpm --filter @lumik/desktop tauri build --bundles deb,appimage
 
-      # ── Crear release en GitHub ──────────────────────────────────────────────
-      # Usamos la CLI `gh` (pre-instalada en todos los runners de GitHub) en lugar
-      # de softprops/action-gh-release u otras acciones de terceros.
-      # GITHUB_TOKEN es el token efímero generado por GitHub para este job —
-      # no es un secret manual y expira al terminar el workflow.
-      - name: Create GitHub Release
+      - name: Upload Linux artifacts to release
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "Lumik ${{ github.ref_name }}" \
-            --generate-notes \
+          gh release upload "${{ github.ref_name }}" \
             apps/desktop/src-tauri/target/release/bundle/deb/*.deb \
             apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
 
+  # ── Build Windows ──────────────────────────────────────────────────────────
   build-windows:
     runs-on: windows-latest
-    needs: build-linux  # el release ya existe; este job solo sube el .exe
+    needs: create-release
 
     steps:
       - name: Checkout
@@ -116,9 +102,6 @@ jobs:
       - name: Install Node dependencies
         run: pnpm install
 
-      - name: Build @lumik/ui
-        run: pnpm build:ui
-
       - name: Set version from tag
         shell: pwsh
         run: |
@@ -126,7 +109,6 @@ jobs:
           $cargoToml = "apps/desktop/src-tauri/Cargo.toml"
           $content = Get-Content $cargoToml -Raw
           $content = $content -replace '(?m)^version = .*', "version = `"$version`""
-          # Solo la primera ocurrencia (la del [package])
           Set-Content $cargoToml -Value $content -Encoding utf8 -NoNewline
           Write-Output "Building version $version"
 
@@ -140,3 +122,4 @@ jobs:
           gh release upload "${{ github.ref_name }}" $exe.FullName
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
