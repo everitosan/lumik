@@ -20,13 +20,15 @@ body {
 body::before {
   content: '';
   position: fixed;
-  inset: 0;
+  inset: -100px;
   z-index: 0;
   pointer-events: none;
+  filter: blur(60px);
   background: radial-gradient(
-    ellipse 70% 60% at 50% 50%,
-    rgba(85, 141, 255, 0.07) 0%,
-    transparent 70%
+    ellipse 60% 55% at 50% 35%,
+    rgba(85, 141, 255, 0.14) 0%,
+    rgba(85, 141, 255, 0.05) 55%,
+    transparent 80%
   );
 }
 

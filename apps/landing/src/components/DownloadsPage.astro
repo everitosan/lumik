@@ -48,8 +48,8 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
       .os-tab.active { color: var(--lumik-primary); border-bottom-color: var(--lumik-primary-container); }
       .os-tab:disabled { opacity: 0.4; cursor: not-allowed; }
       .os-tab .soon { font-size: 10px; font-family: var(--lumik-font-mono); background: var(--lumik-surface-container-high); color: var(--lumik-outline); padding: 2px 6px; border-radius: 4px; }
-      .os-tab img { width: 16px; height: 16px; opacity: 0.7; }
-      .os-tab.active img { opacity: 1; }
+      .os-tab img, .os-tab svg { width: 16px; height: 16px; opacity: 0.7; }
+      .os-tab.active img, .os-tab.active svg { opacity: 1; }
 
       .state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 64px 0; color: var(--lumik-on-surface-variant); font-size: 15px; }
       .state-icon { font-size: 32px; }
@@ -121,8 +121,8 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
         <button class="os-tab" role="tab" data-os="linux" id="tab-linux">
           <img src="https://cdn.simpleicons.org/linux/8c90a0" alt="" /> Linux
         </button>
-        <button class="os-tab" role="tab" data-os="windows" disabled>
-          <img src="https://cdn.simpleicons.org/windows11/8c90a0" alt="" /> Windows <span class="soon">soon</span>
+        <button class="os-tab" role="tab" data-os="windows" id="tab-windows">
+          <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="#8c90a0" aria-hidden="true"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg> Windows
         </button>
         <button class="os-tab" role="tab" data-os="macos" disabled>
           <img src="https://cdn.simpleicons.org/apple/8c90a0" alt="" /> macOS <span class="soon">soon</span>
@@ -142,11 +142,15 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
       </div>
 
       <div id="panel-windows" style="display:none">
-        <div class="coming-soon">
-          <div class="icon"><img src="https://cdn.simpleicons.org/windows11/8c90a0" alt="Windows" /></div>
-          <h3>{t('dl.coming.windows.title')}</h3>
-          <p>{t('dl.coming.sub')} <a href="https://github.com/everitosan/lumik" target="_blank" rel="noopener" style="color:var(--lumik-primary)">{t('dl.coming.sub2')}</a> {t('dl.coming.sub3')}</p>
+        <div class="state" id="state-loading-win">
+          <div class="spinner"></div>
+          <span>{t('dl.loading')}</span>
         </div>
+        <div class="state" id="state-error-win" style="display:none">
+          <span class="state-icon">⚠️</span>
+          <span>{t('dl.error')} <a href="https://github.com/everitosan/lumik/releases" target="_blank" rel="noopener" style="color:var(--lumik-primary)">{t('dl.error.link')}</a></span>
+        </div>
+        <div id="releases-list-win" style="display:none"></div>
       </div>
       <div id="panel-macos" style="display:none">
         <div class="coming-soon">
@@ -158,18 +162,19 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
     </div>
 
     <script define:vars={{
-      hintLinux:   t('dl.hint.linux'),
-      hintWindows: t('dl.hint.windows'),
-      hintMacos:   t('dl.hint.macos'),
-      txtNoAssets: t('dl.no.assets'),
-      txtNotes:    t('dl.release.notes'),
-      txtDownload: t('dl.btn'),
-      descDeb:     t('dl.desc.deb'),
-      descAppImg:  t('dl.desc.appimage'),
-      descRpm:     t('dl.desc.rpm'),
-      descExe:     t('dl.desc.exe'),
-      descMsi:     t('dl.desc.msi'),
-      descDmg:     t('dl.desc.dmg'),
+      hintLinux:      t('dl.hint.linux'),
+      hintWindows:    t('dl.hint.windows'),
+      hintMacos:      t('dl.hint.macos'),
+      txtNoAssets:    t('dl.no.assets'),
+      txtNoAssetsWin: t('dl.no.assets.windows'),
+      txtNotes:       t('dl.release.notes'),
+      txtDownload:    t('dl.btn'),
+      descDeb:        t('dl.desc.deb'),
+      descAppImg:     t('dl.desc.appimage'),
+      descRpm:        t('dl.desc.rpm'),
+      descExe:        t('dl.desc.exe'),
+      descMsi:        t('dl.desc.msi'),
+      descDmg:        t('dl.desc.dmg'),
       dateLocale,
     }}>
       const REPO = 'everitosan/lumik';
@@ -184,19 +189,20 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
 
       const panels = { linux: 'panel-linux', windows: 'panel-windows', macos: 'panel-macos' };
 
-      function activateTab(os) {
-        document.querySelectorAll('.os-tab').forEach(t => t.classList.remove('active'));
-        const tab = document.querySelector(`[data-os="${os}"]`);
-        if (tab) tab.classList.add('active');
-        Object.entries(panels).forEach(([key, id]) => {
-          const el = document.getElementById(id);
-          if (el) el.style.display = key === os ? '' : 'none';
-        });
-      }
+      let cachedReleases = null;
+      let dataLoaded = false;
+      let dataError = false;
+      const rendered = { linux: false, windows: false };
 
-      document.querySelectorAll('.os-tab:not(:disabled)').forEach(tab => {
-        tab.addEventListener('click', () => activateTab(tab.dataset.os));
-      });
+      function isLinuxAsset(name) {
+        return name.endsWith('.deb') || name.endsWith('.AppImage') || name.endsWith('.rpm');
+      }
+      function isWindowsAsset(name) {
+        return name.endsWith('.exe') || name.endsWith('.msi');
+      }
+      function assetFilter(name, os) {
+        return os === 'windows' ? isWindowsAsset(name) : isLinuxAsset(name);
+      }
 
       function assetIcon(name) {
         if (name.endsWith('.deb'))      return '📦';
@@ -223,26 +229,38 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
         return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
       }
 
-      function isLinuxAsset(name) {
-        return name.endsWith('.deb') || name.endsWith('.AppImage') || name.endsWith('.rpm');
-      }
-
       function formatDate(iso) {
         return new Date(iso).toLocaleDateString(dateLocale, { year: 'numeric', month: 'short', day: 'numeric' });
       }
 
-      function renderReleases(releases) {
-        const list = document.getElementById('releases-list');
-        const filtered = releases.filter(r => !r.draft);
+      function renderOSReleases(os) {
+        if (!dataLoaded || rendered[os]) return;
+        rendered[os] = true;
+
+        const isWin    = os === 'windows';
+        const listId   = isWin ? 'releases-list-win' : 'releases-list';
+        const loadId   = isWin ? 'state-loading-win' : 'state-loading';
+        const errId    = isWin ? 'state-error-win'   : 'state-error';
+        const noTxt    = isWin ? txtNoAssetsWin       : txtNoAssets;
+
+        document.getElementById(loadId).style.display = 'none';
+
+        if (dataError) {
+          document.getElementById(errId).style.display = '';
+          return;
+        }
+
+        const list     = document.getElementById(listId);
+        const filtered = cachedReleases.filter(r => !r.draft);
 
         if (!filtered.length) {
-          list.innerHTML = `<div class="state"><span class="state-icon">📭</span><span>${txtNoAssets}</span></div>`;
+          list.innerHTML = `<div class="state"><span class="state-icon">📭</span><span>${noTxt}</span></div>`;
           list.style.display = '';
           return;
         }
 
         list.innerHTML = filtered.map((release, i) => {
-          const assets = release.assets.filter(a => isLinuxAsset(a.name));
+          const assets   = release.assets.filter(a => assetFilter(a.name, os));
           const isLatest = i === 0;
 
           const assetsHtml = assets.length
@@ -256,7 +274,7 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
                   <span class="asset-size">${formatSize(asset.size)}</span>
                   <a class="btn-download" href="${asset.browser_download_url}" download>${txtDownload}</a>
                 </div>`).join('')
-            : `<div class="no-assets">${txtNoAssets}</div>`;
+            : `<div class="no-assets">${noTxt}</div>`;
 
           return `
             <div class="release-card">
@@ -277,22 +295,38 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
         list.style.display = '';
       }
 
+      function activateTab(os) {
+        document.querySelectorAll('.os-tab').forEach(t => t.classList.remove('active'));
+        const tab = document.querySelector(`[data-os="${os}"]`);
+        if (tab) tab.classList.add('active');
+        Object.entries(panels).forEach(([key, id]) => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = key === os ? '' : 'none';
+        });
+        if (os === 'linux' || os === 'windows') renderOSReleases(os);
+      }
+
+      document.querySelectorAll('.os-tab:not(:disabled)').forEach(tab => {
+        tab.addEventListener('click', () => activateTab(tab.dataset.os));
+      });
+
       async function loadReleases() {
         try {
           const res = await fetch(API);
           if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-          const releases = await res.json();
-          document.getElementById('state-loading').style.display = 'none';
-          renderReleases(releases);
+          cachedReleases = await res.json();
+          dataLoaded = true;
         } catch {
-          document.getElementById('state-loading').style.display = 'none';
-          document.getElementById('state-error').style.display = '';
+          dataLoaded = true;
+          dataError = true;
         }
+        const activeTab = document.querySelector('.os-tab.active');
+        if (activeTab) renderOSReleases(activeTab.dataset.os);
       }
 
       const detectedOS = detectOS();
       const hint = document.getElementById('os-hint');
-      activateTab('linux');
+      activateTab(detectedOS === 'windows' ? 'windows' : 'linux');
 
       if (detectedOS === 'linux')        hint.textContent = hintLinux;
       else if (detectedOS === 'windows') hint.textContent = hintWindows;
