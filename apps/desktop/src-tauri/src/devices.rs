@@ -14,35 +14,101 @@ pub struct DetectedDevice {
 
 /// Scan for mounted removable/external devices, cross-platform.
 pub fn scan_mounted_devices() -> Vec<DetectedDevice> {
+    #[cfg(target_os = "android")]
+    return scan_mounted_devices_android();
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let mut devices = Vec::new();
+
+        let disks = Disks::new_with_refreshed_list();
+        for disk in disks.list() {
+            if should_skip_disk(disk) {
+                continue;
+            }
+
+            let mount_point = disk.mount_point().to_string_lossy().to_string();
+
+            let uuid = match get_device_uuid(disk) {
+                Some(u) => u,
+                None => continue,
+            };
+
+            let name = get_volume_label(disk)
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| generate_device_name(&mount_point));
+
+            devices.push(DetectedDevice {
+                uuid,
+                name,
+                mount_point,
+                total_bytes: Some(disk.total_space()),
+                available_bytes: Some(disk.available_space()),
+                fs_type: disk.file_system().to_string_lossy().to_string(),
+            });
+        }
+
+        devices
+    }
+}
+
+/// Android: external storage volumes are mounted under /storage/.
+/// The subdirectory name IS the filesystem UUID (e.g. "1A2B-3C4D" for SD cards).
+/// Internal storage (/storage/emulated/) is excluded — projects live on removable media.
+#[cfg(target_os = "android")]
+fn scan_mounted_devices_android() -> Vec<DetectedDevice> {
+    use log::{debug, warn};
     let mut devices = Vec::new();
 
-    let disks = Disks::new_with_refreshed_list();
-    for disk in disks.list() {
-        if should_skip_disk(disk) {
+    // /proc/mounts is readable without special permissions and lists all mounted filesystems.
+    // External SD cards appear as vfat/exfat mounted under /storage/<UUID>.
+    let mounts = match std::fs::read_to_string("/proc/mounts") {
+        Ok(m) => m,
+        Err(e) => {
+            warn!("scan_mounted_devices_android: cannot read /proc/mounts: {}", e);
+            return devices;
+        }
+    };
+
+    for line in mounts.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 3 {
+            continue;
+        }
+        let mount_point = parts[1];
+        let fs_type = parts[2];
+
+        // Only external removable volumes: vfat/exfat under /storage/ (not /storage/emulated)
+        if !matches!(fs_type, "vfat" | "exfat" | "fuse") {
+            continue;
+        }
+        if !mount_point.starts_with("/storage/") {
+            continue;
+        }
+        if mount_point.starts_with("/storage/emulated") || mount_point == "/storage/self" {
             continue;
         }
 
-        let mount_point = disk.mount_point().to_string_lossy().to_string();
+        // The last path component is the volume UUID on Android (e.g. "1A2B-3C4D")
+        let uuid = std::path::Path::new(mount_point)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| mount_point.to_string());
 
-        let uuid = match get_device_uuid(disk) {
-            Some(u) => u,
-            None => continue,
-        };
+        debug!("scan_mounted_devices_android: found volume {} at {}", uuid, mount_point);
 
-        let name = get_volume_label(disk)
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| generate_device_name(&mount_point));
-
+        let (total_bytes, available_bytes) = statvfs_space(mount_point);
         devices.push(DetectedDevice {
-            uuid,
-            name,
-            mount_point,
-            total_bytes: Some(disk.total_space()),
-            available_bytes: Some(disk.available_space()),
-            fs_type: disk.file_system().to_string_lossy().to_string(),
+            uuid: uuid.clone(),
+            name: format!("SD Card ({})", uuid),
+            mount_point: mount_point.to_string(),
+            total_bytes,
+            available_bytes,
+            fs_type: fs_type.to_string(),
         });
     }
 
+    debug!("scan_mounted_devices_android: found {} device(s)", devices.len());
     devices
 }
 
@@ -373,6 +439,23 @@ fn generate_device_name(mount_point: &str) -> String {
         .map(|n| n.to_string_lossy().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| mount_point.to_string())
+}
+
+/// Get total and available bytes for a mount point using statvfs (POSIX).
+#[cfg(target_os = "android")]
+fn statvfs_space(mount_point: &str) -> (Option<u64>, Option<u64>) {
+    let c_path = match std::ffi::CString::new(mount_point) {
+        Ok(p) => p,
+        Err(_) => return (None, None),
+    };
+    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+    let ret = unsafe { libc::statvfs(c_path.as_ptr(), &mut stat) };
+    if ret == 0 {
+        let bs = stat.f_frsize as u64;
+        (Some(stat.f_blocks as u64 * bs), Some(stat.f_bavail as u64 * bs))
+    } else {
+        (None, None)
+    }
 }
 
 #[cfg(test)]

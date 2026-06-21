@@ -253,6 +253,18 @@ pub fn slug_from_name(name: &str) -> String {
 }
 
 pub fn get_default_db_path() -> DbResult<PathBuf> {
-    let data_dir = dirs::data_local_dir().ok_or(DbError::NoAppDataDir)?;
-    Ok(data_dir.join("com.lumik.app").join("lumik.db"))
+    #[cfg(target_os = "android")]
+    {
+        // Android private app data dir. HOME may not be set in all environments,
+        // so we fall back to the standard /data/data/<package>/ path.
+        let base = std::env::var("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("/data/data/com.lumik.desktop"));
+        return Ok(base.join("lumik.db"));
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let data_dir = dirs::data_local_dir().ok_or(DbError::NoAppDataDir)?;
+        Ok(data_dir.join("com.lumik.app").join("lumik.db"))
+    }
 }
