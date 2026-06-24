@@ -98,6 +98,12 @@ export interface AppSettings {
   embed_metadata_on_import: boolean;
 }
 
+// Per-project UI and workflow settings
+export interface ProjectSettings {
+  sidebar_open: boolean;
+  show_culled: boolean;
+}
+
 // ============================================================================
 // IMPORT TYPES
 // ============================================================================

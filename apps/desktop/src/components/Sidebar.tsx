@@ -5,18 +5,32 @@ import type { Section } from './Layout';
 interface SidebarProps {
   activeSection: Section;
   onSectionChange: (section: Section) => void;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  isMobile?: boolean;
 }
 
-const sidebarStyles: React.CSSProperties = {
+const sidebarStyles = (collapsed: boolean, isMobile: boolean): React.CSSProperties => ({
   display: 'flex',
   flexDirection: 'column',
-  width: '260px',
+  width: collapsed ? '0px' : '260px',
+  minWidth: collapsed ? '0px' : '260px',
   height: '100%',
   backgroundColor: 'var(--lumik-surface-container-low, #1c1b1b)',
-  borderRight: '1px solid var(--lumik-outline-variant, #424654)',
-  padding: '24px 16px',
+  borderRight: collapsed ? 'none' : '1px solid var(--lumik-outline-variant, #424654)',
+  padding: collapsed ? '0' : '24px 16px',
   gap: '24px',
-};
+  overflow: 'hidden',
+  transition: 'width 0.2s ease, min-width 0.2s ease, padding 0.2s ease',
+  // On mobile, sidebar overlays the content
+  ...(isMobile && !collapsed ? {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    zIndex: 50,
+    height: '100vh',
+  } : {}),
+});
 
 const logoContainerStyles: React.CSSProperties = {
   padding: '0 8px',
@@ -54,7 +68,23 @@ const emptyStorageStyles: React.CSSProperties = {
   opacity: 0.7,
 };
 
-export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
+const closeBtnStyles: React.CSSProperties = {
+  alignSelf: 'flex-end',
+  width: '36px',
+  height: '36px',
+  borderRadius: '8px',
+  border: '1px solid var(--lumik-outline-variant, #424654)',
+  background: 'transparent',
+  color: 'var(--lumik-on-surface, #e3e2e9)',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '18px',
+  flexShrink: 0,
+};
+
+export function Sidebar({ activeSection, onSectionChange, collapsed = false, onToggle, isMobile = false }: SidebarProps) {
   const { data: devices, loading } = useConnectedDevices();
 
   const getUsedBytes = (device: { total_bytes: number | null; available_bytes: number | null }) => {
@@ -63,9 +93,14 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
   };
 
   return (
-    <aside style={sidebarStyles}>
-      <div style={logoContainerStyles}>
-        <Logo size="md" />
+    <aside style={sidebarStyles(collapsed, isMobile)}>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div style={{ ...logoContainerStyles, flex: 1 }}>
+          <Logo size="md" />
+        </div>
+        {isMobile && onToggle && (
+          <button style={closeBtnStyles} onClick={onToggle} aria-label="Cerrar menú">✕</button>
+        )}
       </div>
 
       <nav style={navStyles}>

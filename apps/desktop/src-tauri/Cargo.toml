@@ -36,6 +36,7 @@ env_logger = "0.11"
 # RAW image processing and DNG conversion
 rawler = "0.6"
 image = "0.25"
+kamadak-exif = "0.5"
 
 # Hashing
 sha2 = "0.10"

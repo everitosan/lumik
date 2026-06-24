@@ -16,7 +16,7 @@ import {
 import { open } from '@tauri-apps/plugin-dialog';
 import { stat } from '@tauri-apps/plugin-fs';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { useConnectedDevices, useProjectsDashboard, useActivePhotographer, useImport, useAppSettings, usePlatform } from '../lib/hooks';
+import { useConnectedDevices, useProjectsDashboard, useActivePhotographer, useImport, usePlatform } from '../lib/hooks';
 import { createProject } from '../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../components/CreateProjectModal';
 import type { FailedFile } from '../lib/types';
@@ -351,7 +351,6 @@ export function ImportPage({
   const IMPORT_STEPS = embedded ? EMBEDDED_STEPS : ALL_STEPS;
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [debugLog, setDebugLog] = useState<string[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
   const [importState, setImportState] = useState<ImportState>({
     sourceFiles: [],
@@ -370,7 +369,6 @@ export function ImportPage({
   const { data: devices, loading: devicesLoading } = useConnectedDevices();
   const { data: projects, loading: projectsLoading, refetch: refetchProjects } = useProjectsDashboard();
   const { data: photographer } = useActivePhotographer();
-  const { data: settings } = useAppSettings();
   const { progress, importLog, result, isImporting, error: importError, startImport, reset: resetImport } = useImport();
   const platform = usePlatform();
 
@@ -564,10 +562,7 @@ export function ImportPage({
         // instead of the Photo Picker, which doesn't show RAW files.
       });
 
-      setDebugLog([`platform=${platform}`, `selected=${JSON.stringify(selected)}`]);
-
       if (!selected || selected.length === 0) {
-        setDebugLog(d => [...d, 'open() returned empty/null']);
         return;
       }
 
@@ -578,18 +573,13 @@ export function ImportPage({
         ? selected.map((p: string) => resolveContentUri(p) ?? p)
         : selected;
 
-      setDebugLog(d => [...d, `resolved=${JSON.stringify(resolvedPaths)}`]);
-
       // Filter only valid RAW files and get file info
       const validPaths = resolvedPaths.filter((filePath: string) => {
         const name = pathBasename(filePath);
-        setDebugLog(d => [...d, `basename="${name}" allowed=${isAllowedRawFile(name)}`]);
         return isAllowedRawFile(name);
       });
 
-      setDebugLog(d => [...d, `validPaths.length=${validPaths.length}`]);
       if (validPaths.length === 0) {
-        setDebugLog(d => [...d, 'ALL FILTERED OUT']);
         return;
       }
 
@@ -598,10 +588,9 @@ export function ImportPage({
           try {
             const fileInfo = await stat(filePath);
             const name = pathBasename(filePath);
-            setDebugLog(d => [...d, `stat OK: ${name} ${fileInfo.size}b`]);
             return { name, sizeBytes: fileInfo.size, path: filePath };
           } catch (e) {
-            setDebugLog(d => [...d, `stat FAILED: ${filePath} | ${e}`]);
+            console.error(`stat FAILED: ${filePath}`, e);
             return null;
           }
         })
@@ -630,16 +619,7 @@ export function ImportPage({
   };
 
   const handleStartImport = async () => {
-    setDebugLog([
-      `handleStartImport`,
-      `selectedProject=${JSON.stringify(selectedProject?.id)}`,
-      `selectedDrive=${JSON.stringify(selectedDrive?.uuid)}`,
-      `files=${importState.sourceFiles.length}`,
-      `settings=${JSON.stringify(settings)}`,
-    ]);
-
     if (!selectedProject || !selectedDrive) {
-      setDebugLog(d => [...d, 'BLOCKED: selectedProject or selectedDrive is null']);
       return;
     }
 
@@ -656,9 +636,8 @@ export function ImportPage({
         mount_point: selectedDrive.mountPath!,
         project_name: selectedProject.name,
       });
-      setDebugLog(d => [...d, 'startImport OK']);
     } catch (e) {
-      setDebugLog(d => [...d, `startImport ERROR: ${e}`]);
+      console.error('startImport error:', e);
     }
 
     setElapsedTime(Date.now() - startTime);
@@ -703,12 +682,6 @@ export function ImportPage({
           hint="Compatible con RAW, CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG"
         />
       </div>
-
-      {debugLog.length > 0 && (
-        <div style={{ background: '#111', color: '#0f0', fontFamily: 'monospace', fontSize: 10, padding: 8, marginTop: 8, borderRadius: 4, maxHeight: 200, overflowY: 'auto' }}>
-          {debugLog.map((line, i) => <div key={i}>{line}</div>)}
-        </div>
-      )}
 
       <FileList
         title="Archivos seleccionados"

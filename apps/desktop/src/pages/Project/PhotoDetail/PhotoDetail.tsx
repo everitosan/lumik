@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, type CSSProperties } from 're
 import { Icon } from '@lumik/ui';
 import type { ColorLabel } from '@lumik/ui';
 import type { Photo } from '../../../lib/types';
-import { usePhotoPreview, useContextKeybindings, matchesKey } from '../../../lib/hooks';
+import { usePhotoPreview, useContextKeybindings, matchesKey, usePlatform } from '../../../lib/hooks';
 import * as api from '../../../lib/api';
 import { PhotoViewer, type PhotoViewerHandle, type HistogramBins } from './PhotoViewer';
 import { PhotoSidebar } from './PhotoSidebar';
@@ -13,6 +13,8 @@ export interface PhotoDetailProps {
   currentIndex: number;
   projectName: string;
   coverPhotoPath: string | null;
+  sidebarOpen?: boolean;
+  onSidebarToggle?: (open: boolean) => void;
   onClose: () => void;
   onNavigate: (index: number) => void;
   onThumbnailChanged?: (photoIds: string[]) => void;
@@ -77,12 +79,19 @@ export function PhotoDetail({
   currentIndex,
   projectName,
   coverPhotoPath,
+  sidebarOpen = true,
+  onSidebarToggle,
   onClose,
   onNavigate,
   onThumbnailChanged,
   onPhotoChanged,
   onCoverPhotoChange,
 }: PhotoDetailProps) {
+  const platform = usePlatform();
+  const isMobile = platform === 'android' || platform === 'ios';
+  const [infoPanelCollapsed, setInfoPanelCollapsed] = useState(!sidebarOpen);
+  const infoCollapsed = isMobile && infoPanelCollapsed;
+
   const kb = useContextKeybindings('photo_detail');
   const viewerRef = useRef<PhotoViewerHandle>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -97,6 +106,11 @@ export function PhotoDetail({
   const [localColorLabels, setLocalColorLabels] = useState<ColorLabel[]>(() => parseColorLabels(photo.color_label));
   const [localTags, setLocalTags] = useState<string[]>(() => parseTags(photo.tags));
   const [localCulled, setLocalCulled] = useState(photo.culled);
+
+  // Sync panel state when the project preference is loaded from DB
+  useEffect(() => {
+    setInfoPanelCollapsed(!sidebarOpen);
+  }, [sidebarOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset editable state and histogram when navigating to a different photo
   useEffect(() => {
@@ -266,7 +280,7 @@ export function PhotoDetail({
           <span style={{
             fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
             fontSize: '11px',
-            color: saveState === 'error' ? 'var(--lumik-error, #ffb4ab)' : saveState === 'saved' ? '#27AE60' : 'var(--lumik-outline, #8c90a0)',
+            color: saveState === 'error' ? 'var(--lumik-error, #ffb4ab)' : saveState === 'saved' ? '#27AE60' : saveState === 'saving' ? 'var(--lumik-secondary, #e9c349)' : 'var(--lumik-outline, #8c90a0)',
             flexShrink: 0,
           }}>
             {saveState === 'saving' && '↻ Guardando…'}
@@ -277,7 +291,7 @@ export function PhotoDetail({
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
         <PhotoViewer
           ref={viewerRef}
           photoId={photo.id}
@@ -291,18 +305,51 @@ export function PhotoDetail({
           onRotationChange={handleRotationChange}
           onHistogramReady={setHistogramBins}
         />
-        <PhotoSidebar
-          photo={photo}
-          histogramBins={histogramBins}
-          localStars={localStars}
-          localColorLabels={localColorLabels}
-          localTags={localTags}
-          localCulled={localCulled}
-          onStarsChange={handleStarsChange}
-          onColorChange={handleColorChange}
-          onTagsChange={handleTagsChange}
-          onCulledChange={handleCulledChange}
-        />
+
+        {/* Tab to open info panel when collapsed */}
+        {infoCollapsed && (
+          <button
+            onClick={() => { setInfoPanelCollapsed(false); onSidebarToggle?.(true); }}
+            aria-label="Mostrar info"
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: '8px',
+              zIndex: 10,
+              width: '20px',
+              height: '56px',
+              border: '1px solid var(--lumik-outline-variant, #424654)',
+              borderRight: 'none',
+              borderRadius: '10px 0 0 10px',
+              background: 'var(--lumik-surface-container-low, #1c1b1b)',
+              color: 'var(--lumik-on-surface, #e3e2e9)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '14px',
+              padding: 0,
+            }}
+          >
+            ‹
+          </button>
+        )}
+
+        {!infoCollapsed && (
+          <PhotoSidebar
+            photo={photo}
+            histogramBins={histogramBins}
+            localStars={localStars}
+            localColorLabels={localColorLabels}
+            localTags={localTags}
+            localCulled={localCulled}
+            onStarsChange={handleStarsChange}
+            onColorChange={handleColorChange}
+            onTagsChange={handleTagsChange}
+            onCulledChange={handleCulledChange}
+            onCollapse={isMobile ? () => { setInfoPanelCollapsed(true); onSidebarToggle?.(false); } : undefined}
+          />
+        )}
       </div>
     </div>
   );

@@ -99,6 +99,8 @@ pub fn run() {
             commands::save_photo_culled,
             commands::get_project_cover_thumbnail,
             commands::set_project_cover_photo,
+            commands::get_project_settings,
+            commands::update_project_settings,
             commands::regenerate_project_thumbnails,
             commands::get_active_photographer,
             commands::ensure_default_photographer,

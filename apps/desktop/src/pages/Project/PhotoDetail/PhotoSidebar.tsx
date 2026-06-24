@@ -3,6 +3,7 @@ import { Icon } from '@lumik/ui';
 import type { ColorLabel } from '@lumik/ui';
 import type { Photo } from '../../../lib/types';
 import type { HistogramBins } from './PhotoViewer';
+import { usePlatform } from '../../../lib/hooks';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -176,6 +177,11 @@ function CameraSpecRow({ label, value }: { label: string; value: string | null }
 // ─── Star input ───────────────────────────────────────────────────────────────
 
 function StarInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const platform = usePlatform();
+  const isMobile = platform === 'android' || platform === 'ios';
+  const btnSize = isMobile ? 44 : 32;
+  const iconSize = isMobile ? 26 : 20;
+
   return (
     <div style={{ display: 'flex', gap: '2px' }}>
       {Array.from({ length: MAX_STARS }, (_, i) => (
@@ -185,13 +191,13 @@ function StarInput({ value, onChange }: { value: number; onChange: (v: number) =
           title={`${i + 1} estrellas`}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: '32px', height: '32px', padding: 0,
+            width: `${btnSize}px`, height: `${btnSize}px`, padding: 0,
             background: 'transparent', border: 'none',
             borderRadius: 'var(--lumik-radius, 4px)', cursor: 'pointer',
             color: i < value ? 'var(--lumik-secondary, #e9c349)' : 'var(--lumik-outline-variant, #424654)',
           }}
         >
-          <Icon name={i < value ? 'star-filled' : 'star'} size={20} />
+          <Icon name={i < value ? 'star-filled' : 'star'} size={iconSize} />
         </button>
       ))}
     </div>
@@ -201,12 +207,17 @@ function StarInput({ value, onChange }: { value: number; onChange: (v: number) =
 // ─── Color input ──────────────────────────────────────────────────────────────
 
 function ColorInput({ selected, onChange }: { selected: ColorLabel[]; onChange: (v: ColorLabel[]) => void }) {
+  const platform = usePlatform();
+  const isMobile = platform === 'android' || platform === 'ios';
   const ALL_COLORS = [1, 2, 3, 4, 5] as ColorLabel[];
   const toggle = (label: ColorLabel) => {
     onChange(selected.includes(label) ? selected.filter((l) => l !== label) : [...selected, label]);
   };
+  const dotSize = isMobile ? 28 : 24;
+  const hitSize = isMobile ? 44 : 28;
+
   return (
-    <div style={{ display: 'flex', gap: '10px' }}>
+    <div style={{ display: 'flex', gap: '4px' }}>
       {ALL_COLORS.map((label) => {
         const active = selected.includes(label);
         return (
@@ -215,14 +226,21 @@ function ColorInput({ selected, onChange }: { selected: ColorLabel[]; onChange: 
             onClick={() => toggle(label)}
             title={`Color ${label}`}
             style={{
-              width: '24px', height: '24px', borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: `${hitSize}px`, height: `${hitSize}px`,
+              background: 'transparent', border: 'none',
+              cursor: 'pointer', padding: 0, flexShrink: 0,
+            }}
+          >
+            <span style={{
+              display: 'block',
+              width: `${dotSize}px`, height: `${dotSize}px`, borderRadius: '50%',
               backgroundColor: COLOR_MAP[label],
               border: active ? '2px solid var(--lumik-on-surface, #e5e2e1)' : '2px solid transparent',
               outline: active ? '1px solid rgba(255,255,255,0.3)' : 'none',
-              cursor: 'pointer', padding: 0, flexShrink: 0,
               boxSizing: 'border-box' as const,
-            }}
-          />
+            }} />
+          </button>
         );
       })}
     </div>
@@ -317,29 +335,41 @@ function TagManager({ tags, onChange }: { tags: string[]; onChange: (tags: strin
 // ─── Cull input ───────────────────────────────────────────────────────────────
 
 function CullInput({ culled, onChange }: { culled: boolean; onChange: (v: boolean) => void }) {
+  const platform = usePlatform();
+  const isMobile = platform === 'android' || platform === 'ios';
+  // Hit area 44px on mobile; visual circle smaller
+  const hitSize = isMobile ? 44 : 24;
+  const circleSize = isMobile ? 24 : 22;
+  const checkSize = isMobile ? 13 : 12;
+
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+    <label onClick={() => onChange(!culled)} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
       <span
-        onClick={() => onChange(!culled)}
         role="checkbox"
         aria-checked={culled}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          width: '22px', height: '22px', borderRadius: '50%',
-          border: `2px solid ${culled ? 'var(--lumik-primary, #b0c6ff)' : 'var(--lumik-outline-variant, #424654)'}`,
-          backgroundColor: culled ? 'var(--lumik-primary, #b0c6ff)' : 'transparent',
-          flexShrink: 0,
-          transition: 'background-color 0.15s, border-color 0.15s',
-          cursor: 'pointer',
+          width: `${hitSize}px`, height: `${hitSize}px`,
+          flexShrink: 0, cursor: 'pointer',
         }}
       >
-        {culled && (
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 6l3 3 5-5" stroke="var(--lumik-on-primary, #001a41)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
+        <span
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: `${circleSize}px`, height: `${circleSize}px`, borderRadius: '50%',
+            border: `2px solid ${culled ? 'var(--lumik-primary, #b0c6ff)' : 'var(--lumik-outline-variant, #424654)'}`,
+            backgroundColor: culled ? 'var(--lumik-primary, #b0c6ff)' : 'transparent',
+            transition: 'background-color 0.15s, border-color 0.15s',
+          }}
+        >
+          {culled && (
+            <svg width={checkSize} height={checkSize} viewBox="0 0 12 12" fill="none">
+              <path d="M2 6l3 3 5-5" stroke="var(--lumik-on-primary, #001a41)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </span>
       </span>
-      <span style={{ fontFamily: 'var(--lumik-font-primary, Inter)', fontSize: '13px', color: 'var(--lumik-on-surface, #e5e2e1)' }}>
+      <span style={{ fontFamily: 'var(--lumik-font-primary, Inter)', fontSize: isMobile ? '15px' : '13px', color: 'var(--lumik-on-surface, #e5e2e1)' }}>
         Select photo
       </span>
     </label>
@@ -359,6 +389,7 @@ export interface PhotoSidebarProps {
   onColorChange: (labels: ColorLabel[]) => void;
   onTagsChange: (tags: string[]) => void;
   onCulledChange: (culled: boolean) => void;
+  onCollapse?: () => void;
 }
 
 export function PhotoSidebar({
@@ -372,9 +403,30 @@ export function PhotoSidebar({
   onColorChange,
   onTagsChange,
   onCulledChange,
+  onCollapse,
 }: PhotoSidebarProps) {
   return (
     <div style={panelStyle}>
+
+      {/* Collapse button */}
+      {onCollapse && (
+        <button
+          onClick={onCollapse}
+          aria-label="Ocultar panel"
+          style={{
+            alignSelf: 'flex-start',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: '28px', height: '28px', padding: 0, flexShrink: 0,
+            background: 'transparent',
+            border: '1px solid var(--lumik-outline-variant, #424654)',
+            borderRadius: 'var(--lumik-radius, 4px)',
+            color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+            cursor: 'pointer', fontSize: '14px',
+          }}
+        >
+          ›
+        </button>
+      )}
 
       {/* Histogram */}
       <div style={sectionStyle}>

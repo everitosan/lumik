@@ -85,7 +85,11 @@ impl ProjectDatabase {
     /// Open an existing project.db, applying schema migrations (idempotent).
     pub fn open(path: PathBuf, device_uuid: &str, mount_point: PathBuf) -> DbResult<Self> {
         let conn = Connection::open(&path)?;
-        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = NORMAL;
+             PRAGMA foreign_keys = ON;"
+        )?;
         conn.execute_batch(schema::PROJECT_SCHEMA)?;
 
         // Migrate cover_photo_id → cover_photo_path (idempotent)
@@ -110,6 +114,12 @@ impl ProjectDatabase {
             "ALTER TABLE photo ADD COLUMN rotation INTEGER NOT NULL DEFAULT 0",
             [],
         );
+
+        // Ensure the single project_settings row exists (idempotent)
+        conn.execute(
+            "INSERT OR IGNORE INTO project_settings (id) VALUES (1)",
+            [],
+        )?;
 
         let project_id: String = conn.query_row(
             "SELECT id FROM project LIMIT 1",
@@ -151,7 +161,11 @@ impl ProjectDatabase {
         }
 
         let conn = Connection::open(&path)?;
-        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = NORMAL;
+             PRAGMA foreign_keys = ON;"
+        )?;
         conn.execute_batch(schema::PROJECT_SCHEMA)?;
 
         let now = chrono::Utc::now().to_rfc3339();
@@ -160,6 +174,7 @@ impl ProjectDatabase {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![project_id, name, description, now, session_date, creator_id],
         )?;
+        conn.execute("INSERT INTO project_settings (id) VALUES (1)", [])?;
 
         let project_dir = path.parent()
             .unwrap_or_else(|| Path::new("."))

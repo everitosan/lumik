@@ -154,13 +154,15 @@ export const PhotoViewer = forwardRef<PhotoViewerHandle, PhotoViewerProps>(
     const rotateLeft = useCallback(() => {
       rotationRef.current = (rotationRef.current - 90 + 360) % 360;
       fitToScreen();
-      onRotationChange(rotationRef.current);
+      // Defer the save until after the canvas has painted so the rotation
+      // is visible before any backend latency starts.
+      requestAnimationFrame(() => onRotationChange(rotationRef.current));
     }, [fitToScreen, onRotationChange]);
 
     const rotateRight = useCallback(() => {
       rotationRef.current = (rotationRef.current + 90) % 360;
       fitToScreen();
-      onRotationChange(rotationRef.current);
+      requestAnimationFrame(() => onRotationChange(rotationRef.current));
     }, [fitToScreen, onRotationChange]);
 
     const zoomIn = useCallback(() => {
@@ -262,6 +264,99 @@ export const PhotoViewer = forwardRef<PhotoViewerHandle, PhotoViewerProps>(
       c.addEventListener('wheel', onWheel, { passive: false });
       return () => c.removeEventListener('wheel', onWheel);
     }, [scheduleRedraw]);
+
+    // Touch gestures: pinch-to-zoom and swipe navigation
+    useEffect(() => {
+      const c = canvasRef.current;
+      if (!c) return;
+
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchStartTime = 0;
+      let pinchStartDist = 0;
+      let pinchStartScale = 1;
+      let pinchMidX = 0;
+      let pinchMidY = 0;
+
+      function getTouchDist(t: TouchList) {
+        const dx = t[0].clientX - t[1].clientX;
+        const dy = t[0].clientY - t[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+      }
+
+      function onTouchStart(e: TouchEvent) {
+        if (e.touches.length === 1) {
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+          touchStartTime = Date.now();
+          isDraggingRef.current = true;
+          dragRef.current = {
+            startX: e.touches[0].clientX,
+            startY: e.touches[0].clientY,
+            startOX: offsetRef.current.x,
+            startOY: offsetRef.current.y,
+          };
+        } else if (e.touches.length === 2) {
+          isDraggingRef.current = false;
+          pinchStartDist = getTouchDist(e.touches);
+          pinchStartScale = scaleRef.current;
+          pinchMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+          pinchMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          e.preventDefault();
+        }
+      }
+
+      function onTouchMove(e: TouchEvent) {
+        if (!c) return;
+        if (e.touches.length === 1 && isDraggingRef.current) {
+          offsetRef.current = {
+            x: dragRef.current.startOX + (e.touches[0].clientX - dragRef.current.startX),
+            y: dragRef.current.startOY + (e.touches[0].clientY - dragRef.current.startY),
+          };
+          scheduleRedraw();
+        } else if (e.touches.length === 2) {
+          e.preventDefault();
+          const dist = getTouchDist(e.touches);
+          const newScale = Math.min(Math.max(pinchStartScale * (dist / pinchStartDist), 0.05), 30);
+          const rect = c.getBoundingClientRect();
+          const cx = c.width / 2;
+          const cy = c.height / 2;
+          const ratio = newScale / scaleRef.current;
+          const mx = pinchMidX - rect.left;
+          const my = pinchMidY - rect.top;
+          offsetRef.current = {
+            x: (mx - cx) * (1 - ratio) + offsetRef.current.x * ratio,
+            y: (my - cy) * (1 - ratio) + offsetRef.current.y * ratio,
+          };
+          scaleRef.current = newScale;
+          setDisplayScale(Math.round(newScale * 100));
+          scheduleRedraw();
+        }
+      }
+
+      function onTouchEnd(e: TouchEvent) {
+        if (e.changedTouches.length === 1 && isDraggingRef.current) {
+          isDraggingRef.current = false;
+          const dx = e.changedTouches[0].clientX - touchStartX;
+          const dy = e.changedTouches[0].clientY - touchStartY;
+          const dt = Date.now() - touchStartTime;
+          // Horizontal swipe: fast, mostly horizontal, distance > 60px
+          if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 400) {
+            if (dx < 0) onNext();
+            else onPrev();
+          }
+        }
+      }
+
+      c.addEventListener('touchstart', onTouchStart, { passive: false });
+      c.addEventListener('touchmove', onTouchMove, { passive: false });
+      c.addEventListener('touchend', onTouchEnd);
+      return () => {
+        c.removeEventListener('touchstart', onTouchStart);
+        c.removeEventListener('touchmove', onTouchMove);
+        c.removeEventListener('touchend', onTouchEnd);
+      };
+    }, [scheduleRedraw, onPrev, onNext]);
 
     // Mouse drag pan
     const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {

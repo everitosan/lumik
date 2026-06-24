@@ -416,7 +416,10 @@ pub fn get_thumbnail(
 
 fn previews_dir_for(project_dir: &Path) -> Option<PathBuf> {
     let dir = project_dir.join(".previews");
-    std::fs::create_dir_all(&dir).ok()?;
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        debug!("previews_dir_for: cannot create {:?}: {}", dir, e);
+        return None;
+    }
     Some(dir)
 }
 
@@ -519,6 +522,37 @@ pub struct PhotoPreviewResult {
     pub rotation: i32,
 }
 
+/// Returns preview bytes for a JPEG source file without creating a permanent cache.
+/// On desktop: copies to a temp file, strips EXIF Orientation so the WebView doesn't
+/// auto-rotate (the canvas applies rotation from DB instead), then discards the temp.
+/// On Android: reads the original bytes directly.
+fn jpeg_preview_bytes_no_cache(src: &Path) -> Result<Vec<u8>, String> {
+    #[cfg(target_os = "android")]
+    {
+        return std::fs::read(src).map_err(|e| format!("Failed to read JPEG: {}", e));
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let tmp = std::env::temp_dir()
+            .join(format!("lumik_prev_{}.jpg", uuid::Uuid::new_v4().as_simple()));
+        std::fs::copy(src, &tmp)
+            .map_err(|e| format!("Failed to copy JPEG to temp: {}", e))?;
+        if read_exif_rotation(&tmp) != 0 {
+            let _ = exiftool::run_text(&[
+                "-Orientation=1".to_string(),
+                "-n".to_string(),
+                "-overwrite_original".to_string(),
+                tmp.to_string_lossy().to_string(),
+            ]);
+        }
+        let bytes = std::fs::read(&tmp)
+            .map_err(|e| format!("Failed to read JPEG temp preview: {}", e))?;
+        let _ = std::fs::remove_file(&tmp);
+        Ok(bytes)
+    }
+}
+
 #[tauri::command]
 pub fn get_photo_preview(
     state: State<AppState>,
@@ -536,13 +570,28 @@ pub fn get_photo_preview(
 
     let mount = project_db.mount_point.to_string_lossy().to_string();
     let dng_full = Path::new(&mount).join(&photo.dng_path);
+    debug!("get_photo_preview: dng_full={:?} exists={}", dng_full, dng_full.exists());
 
+    // JPEGs are already viewable — no permanent preview cache needed.
+    let ext = dng_full.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+    if matches!(ext.as_str(), "jpg" | "jpeg") {
+        let bytes = jpeg_preview_bytes_no_cache(&dng_full)?;
+        let rotation = read_exif_rotation(&dng_full);
+        return Ok(PhotoPreviewResult {
+            url: format!("data:image/jpeg;base64,{}", STANDARD.encode(&bytes)),
+            rotation,
+        });
+    }
+
+    // RAW files: extract and cache the embedded JPEG preview in .previews/.
     let preview_path = ensure_preview_cached(&dng_full, &project_db.project_dir, &photo_id)
         .ok_or_else(|| format!("Could not extract preview for {}", photo_id))?;
 
-    // On desktop: strip EXIF Orientation from cached preview so WebView doesn't
+    // Strip EXIF Orientation from the cached preview so the WebView doesn't
     // auto-rotate before the canvas applies its own rotation.
-    // On Android: skipped — exif_android::extract_preview already outputs clean JPEG.
     #[cfg(not(target_os = "android"))]
     if read_exif_rotation(&preview_path) != 0 {
         let _ = exiftool::run_text(&[
@@ -556,9 +605,6 @@ pub fn get_photo_preview(
     let bytes = std::fs::read(&preview_path)
         .map_err(|e| format!("Failed to read preview: {}", e))?;
 
-    // Read orientation from the source DNG's IFD0:Orientation.
-    // The preview JPEG now has Orientation=1, so Chrome won't auto-rotate and the
-    // canvas applies exactly this rotation once.
     let rotation = read_exif_rotation(&dng_full);
 
     Ok(PhotoPreviewResult {
@@ -802,6 +848,27 @@ pub fn set_project_cover_photo(
     let path = photo_id.map(|id| format!(".thumbs/{}.jpg", id));
     project_db
         .set_cover_photo(path.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_project_settings(
+    state: State<AppState>,
+    project_id: String,
+) -> Result<crate::db::models::ProjectSettings, String> {
+    let project_db = state.project_db(&project_id)?;
+    project_db.get_project_settings().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn update_project_settings(
+    state: State<AppState>,
+    project_id: String,
+    settings: crate::db::models::ProjectSettings,
+) -> Result<(), String> {
+    let project_db = state.project_db(&project_id)?;
+    project_db
+        .update_project_settings(&settings)
         .map_err(|e| e.to_string())
 }
 
@@ -1241,43 +1308,65 @@ fn extract_exif_metadata_batch(paths: &[PathBuf]) -> HashMap<PathBuf, FileMetada
         };
 
         let mut lines = stdout.lines();
-        let _ = lines.next();
+
+        // exiftool -csv omits columns with no value across the entire batch, so
+        // column positions can shift. Parse the header to look up by field name.
+        let header_line = match lines.next() {
+            Some(h) => h,
+            None => return HashMap::new(),
+        };
+        let headers: Vec<String> = parse_csv_line(header_line)
+            .into_iter()
+            .map(|s| s.trim().to_lowercase())
+            .collect();
+        let col = |name: &str| -> Option<usize> {
+            headers.iter().position(|h| h == name)
+        };
 
         let mut map = HashMap::new();
         for line in lines {
             let f = parse_csv_line(line);
             if f.is_empty() { continue; }
 
-            let opt = |i: usize| -> Option<String> {
-                f.get(i).map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+            let get = |name: &str| -> Option<String> {
+                col(name)
+                    .and_then(|i| f.get(i))
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
             };
 
-            let capture_date = opt(3).or_else(|| opt(4));
-            let camera = match (opt(5), opt(6)) {
+            let capture_date = get("datetimeoriginal").or_else(|| get("createdate"));
+            let camera = match (get("make"), get("model")) {
                 (Some(make), Some(model)) => Some(format!("{} {}", make, model)),
                 (Some(make), None)        => Some(make),
                 _                         => None,
             };
-            let aperture = opt(8)
+            let aperture = get("fnumber")
                 .and_then(|s| s.parse::<f64>().ok())
                 .map(|n| format!("f/{:.1}", n));
 
-            let rotation = opt(13)
+            // exiftool normalizes "IFD0:Orientation" → "orientation" in the CSV header
+            let rotation = get("orientation")
                 .and_then(|s| s.parse::<i32>().ok())
                 .map(|o| match o { 6 => 90, 3 => 180, 8 => 270, _ => 0 })
                 .unwrap_or(0);
 
             let meta = FileMetadata {
-                width:                 opt(1).and_then(|s| s.parse().ok()),
-                height:                opt(2).and_then(|s| s.parse().ok()),
+                width:                 get("imagewidth").and_then(|s| s.parse().ok()),
+                height:                get("imageheight").and_then(|s| s.parse().ok()),
                 capture_date,
                 camera,
-                iso:                   opt(7).and_then(|s| s.parse().ok()),
+                iso:                   get("iso").and_then(|s| s.parse().ok()),
                 aperture,
-                shutter_speed:         opt(9),
-                exposure_compensation: opt(10).and_then(|s| s.parse().ok()),
-                focal_length:          opt(11),
-                lens_model:            opt(12),
+                shutter_speed:         get("exposuretime").map(|s| {
+                    if let Ok(v) = s.parse::<f64>() {
+                        if v >= 1.0 { format!("{:.0}s", v) }
+                        else { format!("1/{}", (1.0 / v).round() as u32) }
+                    } else { s }
+                }),
+                exposure_compensation: get("exposurecompensation").and_then(|s| s.parse().ok()),
+                focal_length:          get("focallength"),
+                lens_model:            get("lensmodel"),
                 rotation,
             };
 

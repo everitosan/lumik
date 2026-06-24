@@ -23,9 +23,11 @@ const headerStyles: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '16px',
-  padding: '16px 32px',
+  height: '52px',
+  padding: '0 32px',
   borderBottom: '1px solid var(--lumik-outline-variant, #424654)',
   flexShrink: 0,
+  boxSizing: 'border-box',
 };
 
 const breadcrumbStyles: CSSProperties = {

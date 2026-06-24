@@ -207,3 +207,20 @@ impl Default for AppSettings {
         }
     }
 }
+
+/// Per-project UI and workflow settings (single row in project_settings).
+/// Add new fields with a Default impl so existing code stays valid.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectSettings {
+    pub sidebar_open: bool,
+    pub show_culled: bool,
+}
+
+impl Default for ProjectSettings {
+    fn default() -> Self {
+        Self {
+            sidebar_open: true,
+            show_culled: false,
+        }
+    }
+}

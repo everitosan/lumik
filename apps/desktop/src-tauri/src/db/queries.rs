@@ -304,6 +304,30 @@ impl ProjectDatabase {
         Ok(result)
     }
 
+    pub fn get_project_settings(&self) -> DbResult<ProjectSettings> {
+        let conn = self.conn();
+        let result = conn.query_row(
+            "SELECT sidebar_open, show_culled FROM project_settings WHERE id = 1",
+            [],
+            |row| {
+                Ok(ProjectSettings {
+                    sidebar_open: row.get::<_, i32>(0)? != 0,
+                    show_culled: row.get::<_, i32>(1)? != 0,
+                })
+            },
+        );
+        Ok(result.unwrap_or_default())
+    }
+
+    pub fn update_project_settings(&self, settings: &ProjectSettings) -> DbResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE project_settings SET sidebar_open = ?1, show_culled = ?2 WHERE id = 1",
+            params![settings.sidebar_open as i32, settings.show_culled as i32],
+        )?;
+        Ok(())
+    }
+
     /// Returns the dashboard entry for this project (with photo count + workflow status).
     /// Returns None if the project is archived or deleted.
     pub fn get_project_dashboard_entry(&self) -> DbResult<Option<ProjectDashboard>> {

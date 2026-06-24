@@ -93,3 +93,16 @@ CREATE INDEX IF NOT EXISTS idx_photo_stars    ON photo(project_id, stars) WHERE 
 CREATE INDEX IF NOT EXISTS idx_photo_color    ON photo(project_id, color_label) WHERE deleted = 0;
 CREATE INDEX IF NOT EXISTS idx_photo_backup   ON photo(backup_status) WHERE deleted = 0;
 CREATE INDEX IF NOT EXISTS idx_photo_workflow ON photo(project_id, workflow_status) WHERE deleted = 0;
+
+
+-- ============================================================================
+-- PROJECT SETTINGS (single row per database, id always = 1)
+-- UI and workflow preferences that persist per project.
+-- Add new settings as columns with DEFAULT so existing DBs migrate automatically.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS project_settings (
+    id           INTEGER PRIMARY KEY DEFAULT 1 CHECK(id = 1),
+    sidebar_open INTEGER NOT NULL DEFAULT 1,   -- 1 = metadata panel open in PhotoDetail
+    show_culled  INTEGER NOT NULL DEFAULT 0    -- 1 = show culled filter active in ProjectDetail
+);

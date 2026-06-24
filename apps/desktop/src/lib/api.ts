@@ -9,6 +9,7 @@ import type {
   PhotographerMetadata,
   Project,
   ProjectDashboard,
+  ProjectSettings,
   CreateProject,
   UpdatePhotographerMetadata,
   ImportRequest,
@@ -50,6 +51,14 @@ export async function getProject(id: string): Promise<Project | null> {
 
 export async function createProject(project: CreateProject): Promise<Project> {
   return invoke('create_project', { project });
+}
+
+export async function getProjectSettings(projectId: string): Promise<ProjectSettings> {
+  return invoke('get_project_settings', { projectId });
+}
+
+export async function updateProjectSettings(projectId: string, settings: ProjectSettings): Promise<void> {
+  return invoke('update_project_settings', { projectId, settings });
 }
 
 export async function getProjectPhotos(projectId: string): Promise<Photo[]> {

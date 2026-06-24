@@ -135,7 +135,26 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
   const [showImport, setShowImport] = useState(false);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [showCulledOnly, setShowCulledOnly] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const kb = useContextKeybindings('project');
+
+  // Load project settings from DB on mount
+  useEffect(() => {
+    api.getProjectSettings(projectId).then((s) => {
+      setSidebarOpen(s.sidebar_open);
+      setShowCulledOnly(s.show_culled);
+    });
+  }, [projectId]);
+
+  const handleSidebarToggle = useCallback((open: boolean) => {
+    setSidebarOpen(open);
+    api.updateProjectSettings(projectId, { sidebar_open: open, show_culled: showCulledOnly });
+  }, [projectId, showCulledOnly]);
+
+  const handleShowCulledChange = useCallback((value: boolean) => {
+    setShowCulledOnly(value);
+    api.updateProjectSettings(projectId, { sidebar_open: sidebarOpen, show_culled: value });
+  }, [projectId, sidebarOpen]);
 
   // Grid-level keyboard shortcuts (only active when grid is visible)
   useEffect(() => {
@@ -144,7 +163,11 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (matchesKey(e, kb['project.show_culled'])) {
         e.preventDefault();
-        setShowCulledOnly((v) => !v);
+        setShowCulledOnly((v) => {
+          const next = !v;
+          api.updateProjectSettings(projectId, { sidebar_open: sidebarOpen, show_culled: next });
+          return next;
+        });
       }
       if (matchesKey(e, kb['project.back'])) {
         e.preventDefault();
@@ -157,7 +180,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [selectedPhotoId, showImport, kb, onBack]);
+  }, [selectedPhotoId, showImport, kb, onBack, projectId, sidebarOpen]);
 
   const { data: photos, loading, error, refetch: refetchPhotos } = useProjectPhotos(projectId);
   const { thumbnailIds, refetch: refetchThumbnails } = useProjectThumbnails(projectId);
@@ -306,6 +329,8 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         currentIndex={selectedPhotoIndex}
         projectName={projectName}
         coverPhotoPath={coverPhotoPath}
+        sidebarOpen={sidebarOpen}
+        onSidebarToggle={handleSidebarToggle}
         onClose={() => setSelectedPhotoId(null)}
         onNavigate={(idx) => setSelectedPhotoId(sortedPhotos[idx].id)}
         onThumbnailChanged={(photoIds) => {
@@ -326,7 +351,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         sortBy={sortBy}
         onSortChange={setSortBy}
         showCulledOnly={showCulledOnly}
-        onShowCulledOnlyChange={setShowCulledOnly}
+        onShowCulledOnlyChange={handleShowCulledChange}
       />
 
       <div ref={setScrollEl} style={gridScrollStyles}>
