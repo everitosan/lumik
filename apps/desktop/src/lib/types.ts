@@ -96,7 +96,6 @@ export type KeybindingMap = Record<string, string>;
 // Application settings
 export interface AppSettings {
   embed_metadata_on_import: boolean;
-  convert_to_dng: boolean;
 }
 
 // ============================================================================
@@ -146,6 +145,11 @@ export interface ImportResult {
   videos_copied: number;
 }
 
+export interface ImportLogEntry {
+  session_id: string;
+  message: string;
+}
+
 // ============================================================================
 // PHOTO TYPE
 // ============================================================================
@@ -180,4 +184,5 @@ export interface Photo {
   exposure_compensation: number | null;
   focal_length: string | null;
   lens_model: string | null;
+  rotation: number;
 }

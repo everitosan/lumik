@@ -1,7 +1,9 @@
 use crate::db::models::*;
 use crate::db::{GlobalDatabase, ProjectDatabase, discover_projects_on_device};
 use crate::devices::{scan_mounted_devices, DetectedDevice};
+#[cfg(not(target_os = "android"))]
 use crate::exiftool;
+#[cfg(not(target_os = "android"))]
 use crate::util::silent_command;
 
 /// Serialize a Path to a string with forward slashes so dng_path in the DB
@@ -13,10 +15,10 @@ fn path_to_slash(path: &std::path::Path) -> String {
         .join("/")
 }
 use crate::import::{
-    pipeline_copy_files, pipeline_convert, pipeline_passthrough,
+    pipeline_passthrough,
     pipeline_metadata, pipeline_move_to_dest, pipeline_copy_videos,
     is_video_file,
-    FailedFile, ImportPhase, ImportProgress, ImportResult, PipelineWorkspace,
+    FailedFile, ImportLogEntry, ImportPhase, ImportProgress, ImportResult, PipelineWorkspace,
 };
 use chrono::Utc;
 use log::{debug, error, info, warn};
@@ -84,31 +86,38 @@ pub fn refresh_open_projects(
         }
     }
 
-    debug!(
-        "refresh_open_projects: {} project(s) open across {} mounted device(s)",
-        map.len(),
-        mounted_uuids.len()
-    );
+    // debug!(
+    //     "refresh_open_projects: {} project(s) open across {} mounted device(s)",
+    //     map.len(),
+    //     mounted_uuids.len()
+    // );
 }
 
 // ============================================================================
 // DEVICE COMMANDS
 // ============================================================================
 
+/// Return the current OS/platform identifier.
+/// Values: "linux" | "windows" | "macos" | "android" | "ios"
+#[tauri::command]
+pub fn get_platform() -> &'static str {
+    std::env::consts::OS
+}
+
 /// Scan for connected devices and refresh the open project map.
 #[tauri::command]
 pub fn scan_connected_devices(state: State<AppState>) -> Vec<DetectedDevice> {
-    debug!("scan_connected_devices called");
+    // debug!("scan_connected_devices called");
     refresh_open_projects(&state.global_db, &state.open_projects);
     let devices = scan_mounted_devices();
-    debug!("scan_connected_devices returning {} devices", devices.len());
+    // debug!("scan_connected_devices returning {} devices", devices.len());
     devices
 }
 
 /// Return all devices previously seen (from the global registry).
 #[tauri::command]
 pub fn get_known_devices(state: State<AppState>) -> Result<Vec<KnownDevice>, String> {
-    debug!("get_known_devices called");
+    // debug!("get_known_devices called");
     state.global_db.get_known_devices().map_err(|e| {
         error!("get_known_devices error: {}", e);
         e.to_string()
@@ -208,6 +217,7 @@ pub fn create_project(state: State<AppState>, project: CreateProject) -> Result<
         project.description.as_deref(),
         project.session_date.as_deref(),
         &project.device_uuid,
+        std::path::PathBuf::from(&device.mount_point),
     )
     .map_err(|e| {
         error!("create_project DB error: {}", e);
@@ -271,89 +281,75 @@ fn thumbs_dir_for(project_dir: &Path) -> Option<std::path::PathBuf> {
     Some(thumbs)
 }
 
-fn cache_thumbnail(dng_full_path: &Path, photo_id: &str) {
-    use image::ImageFormat;
-    use std::io::Cursor;
-
-    let file_parent = match dng_full_path.parent() {
-        Some(p) => p,
-        None => return,
-    };
-    // .thumbs/ lives in the project root; step up from _media/ or _culled/
+fn cache_thumbnail(dng_full_path: &Path, photo_id: &str, log_ctx: Option<(&AppHandle, &str)>) {
+    let file_parent = match dng_full_path.parent() { Some(p) => p, None => return };
     let project_dir = if file_parent.file_name().map(|n| n == "_media" || n == "_culled").unwrap_or(false) {
-        match file_parent.parent() {
-            Some(p) => p,
-            None => file_parent,
-        }
-    } else {
-        file_parent
-    };
-    let dir = match thumbs_dir_for(project_dir) {
-        Some(d) => d,
-        None => return,
-    };
-    let dest = dir.join(format!("{}.webp", photo_id));
-    if dest.exists() {
+        file_parent.parent().unwrap_or(file_parent)
+    } else { file_parent };
+    let dir = match thumbs_dir_for(project_dir) { Some(d) => d, None => return };
+    let dest = dir.join(format!("{}.jpg", photo_id));
+    if dest.exists() { return; }
+
+    #[cfg(target_os = "android")]
+    {
+        crate::exif_android::cache_thumbnail(dng_full_path, &dest);
         return;
     }
 
-    // Extract raw bytes: prefer PreviewImage (higher res) over ThumbnailImage.
-    let path_str = dng_full_path.to_str().unwrap_or_default();
-    let mut raw_bytes: Option<Vec<u8>> = None;
-    for tag in &["-PreviewImage", "-ThumbnailImage"] {
-        let output = match silent_command("exiftool")
-            .args(["-b", tag, path_str])
-            .output()
-        {
-            Ok(o) => o,
-            Err(_) => continue,
-        };
-        if output.status.success() && !output.stdout.is_empty() {
-            raw_bytes = Some(output.stdout);
-            break;
-        }
-    }
+    #[cfg(not(target_os = "android"))]
+    {
+        use image::ImageFormat;
+        use std::io::Cursor;
 
-    let raw_bytes = match raw_bytes {
-        Some(b) => b,
-        None => {
-            // Fallback for JPEG/TIFF source files: create thumbnail from the file itself.
-            let ext = dng_full_path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).unwrap_or_default();
-            if !matches!(ext.as_str(), "jpg" | "jpeg" | "tif" | "tiff") { return; }
-            let full_img = match image::open(dng_full_path) {
-                Ok(img) => img,
-                Err(_) => return,
+        let path_str = dng_full_path.to_str().unwrap_or_default();
+        let mut raw_bytes: Option<Vec<u8>> = None;
+        for tag in &["-PreviewImage", "-ThumbnailImage"] {
+            let output = match silent_command("exiftool").args(["-b", tag, path_str]).output() {
+                Ok(o) => o,
+                Err(_) => continue,
             };
-            let thumb = full_img.thumbnail(320, 320);
-            let mut buf = std::io::Cursor::new(Vec::new());
-            if thumb.write_to(&mut buf, ImageFormat::WebP).is_err() { return; }
-            buf.into_inner()
-        }
-    };
-
-    // Decode, resize to 320px, apply EXIF rotation, re-encode as WebP.
-    let rotation = read_exif_rotation(dng_full_path);
-    let final_bytes = match image::load_from_memory(&raw_bytes) {
-        Ok(img) => {
-            let resized = img.thumbnail(320, 320);
-            let rotated = match rotation {
-                90  => resized.rotate90(),
-                180 => resized.rotate180(),
-                270 => resized.rotate270(),
-                _   => resized,
-            };
-            let mut buf = Cursor::new(Vec::new());
-            if rotated.write_to(&mut buf, ImageFormat::WebP).is_ok() {
-                buf.into_inner()
-            } else {
-                raw_bytes
+            if output.status.success() && !output.stdout.is_empty() {
+                raw_bytes = Some(output.stdout);
+                break;
             }
         }
-        Err(_) => raw_bytes,
-    };
 
-    let _ = std::fs::write(&dest, &final_bytes);
-    debug!("Cached thumbnail for photo {} (rotation={}°) → {:?}", photo_id, rotation, dest);
+        let raw_bytes = match raw_bytes {
+            Some(b) => b,
+            None => {
+                let ext = dng_full_path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).unwrap_or_default();
+                if !matches!(ext.as_str(), "jpg" | "jpeg" | "tif" | "tiff") { return; }
+                let full_img = match image::open(dng_full_path) { Ok(img) => img, Err(_) => return };
+                let thumb = full_img.thumbnail(320, 320);
+                let mut buf = std::io::Cursor::new(Vec::new());
+                if thumb.write_to(&mut buf, ImageFormat::Jpeg).is_err() { return; }
+                buf.into_inner()
+            }
+        };
+
+        let rotation = read_exif_rotation(dng_full_path);
+        let final_bytes = match image::load_from_memory(&raw_bytes) {
+            Ok(img) => {
+                let resized = img.thumbnail(320, 320);
+                let rotated = match rotation {
+                    90 => resized.rotate90(), 180 => resized.rotate180(),
+                    270 => resized.rotate270(), _ => resized,
+                };
+                let mut buf = Cursor::new(Vec::new());
+                if rotated.write_to(&mut buf, ImageFormat::Jpeg).is_ok() { buf.into_inner() } else { raw_bytes }
+            }
+            Err(_) => raw_bytes,
+        };
+
+        let _ = std::fs::write(&dest, &final_bytes);
+        debug!("Cached thumbnail for photo {} (rotation={}°) → {:?}", photo_id, rotation, dest);
+        if let Some((app, session_id)) = log_ctx {
+            let file_name = dng_full_path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(photo_id);
+            emit_log(app, session_id, &format!("Miniatura: {} (rot {}°)", file_name, rotation));
+        }
+    }
 }
 
 // ============================================================================
@@ -390,7 +386,7 @@ pub fn get_project_thumbnails(
     let thumbs_dir = project_db.project_dir.join(".thumbs");
     let ids: Vec<String> = photos
         .iter()
-        .filter(|p| thumbs_dir.join(format!("{}.webp", p.id)).exists())
+        .filter(|p| thumbs_dir.join(format!("{}.jpg", p.id)).exists())
         .map(|p| p.id.clone())
         .collect();
 
@@ -407,9 +403,9 @@ pub fn get_thumbnail(
     use base64::{Engine, engine::general_purpose::STANDARD};
 
     let project_db = state.project_db(&project_id)?;
-    let thumb_path = project_db.project_dir.join(".thumbs").join(format!("{}.webp", photo_id));
+    let thumb_path = project_db.project_dir.join(".thumbs").join(format!("{}.jpg", photo_id));
     match std::fs::read(&thumb_path) {
-        Ok(bytes) => Ok(Some(format!("data:image/webp;base64,{}", STANDARD.encode(&bytes)))),
+        Ok(bytes) => Ok(Some(format!("data:image/jpeg;base64,{}", STANDARD.encode(&bytes)))),
         Err(_) => Ok(None),
     }
 }
@@ -424,9 +420,7 @@ fn previews_dir_for(project_dir: &Path) -> Option<PathBuf> {
     Some(dir)
 }
 
-/// Try to extract a full-resolution JPEG preview from a DNG/RAW file using exiftool.
-/// Caches the result in `.previews/{photo_id}.jpg` alongside the source file.
-/// Returns the path to the cached file, or None if extraction fails.
+/// Extract a full-resolution JPEG preview from a RAW file and cache it.
 fn ensure_preview_cached(dng_full_path: &Path, project_dir: &Path, photo_id: &str) -> Option<PathBuf> {
     let dir = previews_dir_for(project_dir)?;
     let dest = dir.join(format!("{}.jpg", photo_id));
@@ -434,97 +428,88 @@ fn ensure_preview_cached(dng_full_path: &Path, project_dir: &Path, photo_id: &st
         return Some(dest);
     }
 
-    let path_str = dng_full_path.to_str()?;
-
-    // Try tags from highest to lowest quality:
-    // JpgFromRaw — full-res embedded JPEG (dnglab preserves this)
-    // LargeImage — some formats embed a separate large preview
-    // PreviewImage — medium preview
-    // OtherImage — last resort
-    for tag in &["-JpgFromRaw", "-LargeImage", "-PreviewImage", "-OtherImage"] {
-        let output = match silent_command("exiftool")
-            .args(["-b", tag, path_str])
-            .output()
-        {
-            Ok(o) => o,
-            Err(_) => continue,
-        };
-        if output.status.success() && output.stdout.len() > 4096 {
-            if std::fs::write(&dest, &output.stdout).is_ok() {
-                // Strip EXIF Orientation from the extracted JPEG so Chrome/WebView does not
-                // auto-rotate pixels before the canvas applies the DNG's rotation manually.
-                let _ = exiftool::run_text(&[
-                    "-Orientation=1".to_string(),
-                    "-n".to_string(),
-                    "-overwrite_original".to_string(),
-                    dest.to_string_lossy().to_string(),
-                ]);
-                debug!("Cached preview ({}) for {} → {:?}", tag, photo_id, dest);
-                return Some(dest);
-            }
-        }
-    }
-
-    let ext = dng_full_path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).unwrap_or_default();
-
-    // Fallback for JPEG source files: the file itself is the preview.
-    if matches!(ext.as_str(), "jpg" | "jpeg") {
-        if std::fs::copy(dng_full_path, &dest).is_ok() {
-            let _ = exiftool::run_text(&[
-                "-Orientation=1".to_string(),
-                "-n".to_string(),
-                "-overwrite_original".to_string(),
-                dest.to_string_lossy().to_string(),
-            ]);
-            debug!("Cached preview (JPEG passthrough) for {} → {:?}", photo_id, dest);
+    #[cfg(target_os = "android")]
+    {
+        if crate::exif_android::extract_preview(dng_full_path, &dest) {
             return Some(dest);
         }
+        return None;
     }
 
-    // Fallback for TIFF source files: decode with image crate and re-encode as JPEG.
-    if matches!(ext.as_str(), "tif" | "tiff") {
-        use image::ImageFormat;
-        if let Ok(img) = image::open(dng_full_path) {
-            let mut buf = std::io::Cursor::new(Vec::new());
-            if img.write_to(&mut buf, ImageFormat::Jpeg).is_ok() {
-                let bytes = buf.into_inner();
-                if std::fs::write(&dest, &bytes).is_ok() {
-                    debug!("Cached preview (TIFF→JPEG) for {} → {:?}", photo_id, dest);
+    #[cfg(not(target_os = "android"))]
+    {
+        let path_str = dng_full_path.to_str()?;
+        for tag in &["-JpgFromRaw", "-LargeImage", "-PreviewImage", "-OtherImage"] {
+            let output = match silent_command("exiftool").args(["-b", tag, path_str]).output() {
+                Ok(o) => o,
+                Err(_) => continue,
+            };
+            if output.status.success() && output.stdout.len() > 4096 {
+                if std::fs::write(&dest, &output.stdout).is_ok() {
+                    let _ = exiftool::run_text(&[
+                        "-Orientation=1".to_string(), "-n".to_string(),
+                        "-overwrite_original".to_string(), dest.to_string_lossy().to_string(),
+                    ]);
+                    debug!("Cached preview ({}) for {} → {:?}", tag, photo_id, dest);
                     return Some(dest);
                 }
             }
         }
-    }
 
-    None
+        let ext = dng_full_path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).unwrap_or_default();
+        if matches!(ext.as_str(), "jpg" | "jpeg") {
+            if std::fs::copy(dng_full_path, &dest).is_ok() {
+                let _ = exiftool::run_text(&[
+                    "-Orientation=1".to_string(), "-n".to_string(),
+                    "-overwrite_original".to_string(), dest.to_string_lossy().to_string(),
+                ]);
+                return Some(dest);
+            }
+        }
+        if matches!(ext.as_str(), "tif" | "tiff") {
+            use image::ImageFormat;
+            if let Ok(img) = image::open(dng_full_path) {
+                let mut buf = std::io::Cursor::new(Vec::new());
+                if img.write_to(&mut buf, ImageFormat::Jpeg).is_ok() {
+                    if std::fs::write(&dest, buf.into_inner()).is_ok() {
+                        return Some(dest);
+                    }
+                }
+            }
+        }
+        None
+    }
 }
 
 /// Read IFD0:Orientation from the DNG TIFF header and convert to degrees.
 /// Uses IFD0: prefix to read the outer TIFF tag, not the embedded JPEG's own tag.
 /// Returns 0 if tag is absent or unrecognized.
 fn read_exif_rotation(dng_full_path: &Path) -> i32 {
-    let args = vec![
-        "-IFD0:Orientation".to_string(),
-        "-n".to_string(),
-        dng_full_path.to_string_lossy().to_string(),
-    ];
-    let text = match exiftool::run_text(&args) {
-        Ok(t) => t,
-        Err(_) => return 0,
-    };
+    #[cfg(target_os = "android")]
+    return crate::exif_android::read_exif_rotation(dng_full_path);
 
-    // Output: "Orientation                     : 6\n"
-    let orientation: i32 = text
-        .split(':')
-        .nth(1)
-        .and_then(|s| s.trim().parse().ok())
-        .unwrap_or(1);
-
-    match orientation {
-        6 => 90,
-        3 => 180,
-        8 => 270,
-        _ => 0,
+    #[cfg(not(target_os = "android"))]
+    {
+        let args = vec![
+            "-IFD0:Orientation".to_string(),
+            "-n".to_string(),
+            dng_full_path.to_string_lossy().to_string(),
+        ];
+        let text = match exiftool::run_text(&args) {
+            Ok(t) => t,
+            Err(_) => return 0,
+        };
+        let orientation: i32 = text
+            .split(':')
+            .nth(1)
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(1);
+        match orientation {
+            6 => 90,
+            3 => 180,
+            8 => 270,
+            _ => 0,
+        }
     }
 }
 
@@ -549,22 +534,16 @@ pub fn get_photo_preview(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Photo {} not found", photo_id))?;
 
-    let devices = scan_mounted_devices();
-    let mount = devices
-        .iter()
-        .find(|d| d.uuid == photo.device_uuid)
-        .map(|d| d.mount_point.clone())
-        .ok_or_else(|| format!("Device {} is not mounted", photo.device_uuid))?;
-
+    let mount = project_db.mount_point.to_string_lossy().to_string();
     let dng_full = Path::new(&mount).join(&photo.dng_path);
 
     let preview_path = ensure_preview_cached(&dng_full, &project_db.project_dir, &photo_id)
         .ok_or_else(|| format!("Could not extract preview for {}", photo_id))?;
 
-    // Migrate legacy cache files that still have a non-trivial Orientation tag.
-    // Chrome/WebView auto-applies EXIF Orientation when drawing a JPEG to canvas,
-    // which would double-rotate the image when the canvas also applies the DNG rotation.
-    // After stripping here, subsequent opens skip this branch.
+    // On desktop: strip EXIF Orientation from cached preview so WebView doesn't
+    // auto-rotate before the canvas applies its own rotation.
+    // On Android: skipped — exif_android::extract_preview already outputs clean JPEG.
+    #[cfg(not(target_os = "android"))]
     if read_exif_rotation(&preview_path) != 0 {
         let _ = exiftool::run_text(&[
             "-Orientation=1".to_string(),
@@ -588,7 +567,7 @@ pub fn get_photo_preview(
     })
 }
 
-/// Rotate the cached thumbnail in-place. Loads the existing .webp from disk,
+/// Rotate the cached thumbnail in-place. Loads the existing .jpg from disk,
 /// applies the rotation, and overwrites it — no exiftool call needed.
 fn regenerate_rotated_thumbnail(_dng_full_path: &Path, project_dir: &Path, photo_id: &str, rotation: i32) {
     use image::ImageFormat;
@@ -598,7 +577,7 @@ fn regenerate_rotated_thumbnail(_dng_full_path: &Path, project_dir: &Path, photo
         Some(d) => d,
         None => return,
     };
-    let dest = thumb_dir.join(format!("{}.webp", photo_id));
+    let dest = thumb_dir.join(format!("{}.jpg", photo_id));
 
     let raw_bytes = match std::fs::read(&dest) {
         Ok(b) => b,
@@ -616,7 +595,7 @@ fn regenerate_rotated_thumbnail(_dng_full_path: &Path, project_dir: &Path, photo
         _   => return,
     };
     let mut buf = Cursor::new(Vec::new());
-    if rotated.write_to(&mut buf, ImageFormat::WebP).is_err() {
+    if rotated.write_to(&mut buf, ImageFormat::Jpeg).is_err() {
         return;
     }
     let _ = std::fs::write(&dest, buf.into_inner());
@@ -634,53 +613,68 @@ pub fn save_photo_rotation(
         return Err(format!("Rotación inválida: {}", rotation));
     }
 
+    let t_total = std::time::Instant::now();
+
+    let t = std::time::Instant::now();
     let project_db = state.project_db(&project_id)?;
     let photo = project_db
         .get_photo(&photo_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Photo {} not found", photo_id))?;
+    info!("[rotation] get_photo: {}ms", t.elapsed().as_millis());
 
-    let devices = scan_mounted_devices();
-    let mount = devices
-        .iter()
-        .find(|d| d.uuid == photo.device_uuid)
-        .map(|d| d.mount_point.clone())
-        .ok_or_else(|| format!("Device {} not mounted", photo.device_uuid))?;
+    // Delta from DB value — no file read needed
+    let old_rotation = photo.rotation;
+    let delta = (rotation - old_rotation + 360) % 360;
 
+    let t = std::time::Instant::now();
+    project_db
+        .update_photo_rotation(&photo_id, rotation)
+        .map_err(|e| e.to_string())?;
+    info!("[rotation] update DB: {}ms", t.elapsed().as_millis());
+
+    let mount = project_db.mount_point.to_string_lossy().to_string();
     let dng_full = Path::new(&mount).join(&photo.dng_path);
 
-    // Read current orientation before overwriting, so we can apply only the delta to the thumbnail
-    let old_rotation = read_exif_rotation(&dng_full);
-
-    // Map degrees → EXIF Orientation value
-    let orientation = match rotation {
-        90  => 6,
-        180 => 3,
-        270 => 8,
-        _   => 1, // 0° = normal
-    };
-
-    // Use IFD0: prefix to write the outer TIFF Orientation, not the embedded JPEG's tag
-    exiftool::run_text(&[
-        format!("-IFD0:Orientation={}", orientation),
-        "-n".to_string(),
-        "-overwrite_original".to_string(),
-        dng_full.to_string_lossy().to_string(),
-    ])
-    .map_err(|e| format!("exiftool error: {}", e))?;
-
-    // Apply only the delta so the thumbnail pixels don't accumulate multiple rotations
-    let delta = (rotation - old_rotation + 360) % 360;
     if delta != 0 {
+        let t = std::time::Instant::now();
         regenerate_rotated_thumbnail(&dng_full, &project_db.project_dir, &photo_id, delta);
+        info!("[rotation] regenerate_rotated_thumbnail: {}ms", t.elapsed().as_millis());
     }
 
-    // Invalidate preview cache — it will be re-extracted on next open
-    if let Some(dir) = previews_dir_for(&project_db.project_dir) {
-        let _ = std::fs::remove_file(dir.join(format!("{}.jpg", photo_id)));
+    // Write orientation to file in background (non-blocking)
+    #[cfg(not(target_os = "android"))]
+    {
+        let orientation = match rotation { 90 => 6, 180 => 3, 270 => 8, _ => 1 };
+        let dng_for_thread = dng_full.to_string_lossy().to_string();
+        std::thread::spawn(move || {
+            let t = std::time::Instant::now();
+            match exiftool::run_text(&[
+                format!("-IFD0:Orientation={}", orientation),
+                "-n".to_string(),
+                "-overwrite_original".to_string(),
+                dng_for_thread,
+            ]) {
+                Ok(_)  => info!("[rotation] exiftool write (background): {}ms", t.elapsed().as_millis()),
+                Err(e) => error!("[rotation] exiftool write failed: {}", e),
+            }
+        });
     }
 
-    debug!("save_photo_rotation: photo={} rotation={}°", photo_id, rotation);
+    #[cfg(target_os = "android")]
+    {
+        let dng_for_thread = dng_full.clone();
+        let rotation_for_thread = rotation;
+        std::thread::spawn(move || {
+            let t = std::time::Instant::now();
+            match crate::import::xmp::update_xmp_orientation(&dng_for_thread, rotation_for_thread) {
+                Ok(_)  => info!("[rotation] XMP sidecar updated (background): {}ms", t.elapsed().as_millis()),
+                Err(e) => error!("[rotation] XMP sidecar update failed: {}", e),
+            }
+        });
+    }
+
+    info!("[rotation] TOTAL percibido: {}ms", t_total.elapsed().as_millis());
     Ok(())
 }
 
@@ -722,12 +716,7 @@ pub fn save_photo_culled(
         return Ok(());
     }
 
-    let devices = scan_mounted_devices();
-    let mount = devices
-        .iter()
-        .find(|d| d.uuid == photo.device_uuid)
-        .map(|d| d.mount_point.clone())
-        .ok_or_else(|| format!("Device {} not mounted", photo.device_uuid))?;
+    let mount = project_db.mount_point.to_string_lossy().to_string();
 
     // dng_path always reflects the actual file location, so current_path is direct.
     let dng_rel = Path::new(&photo.dng_path);
@@ -755,6 +744,13 @@ pub fn save_photo_culled(
 
     std::fs::rename(&current_path, &target_path)
         .map_err(|e| format!("Error al mover archivo: {}", e))?;
+
+    // Move XMP sidecar alongside the RAW if it exists
+    let xmp_src = current_path.with_extension("xmp");
+    if xmp_src.exists() {
+        let xmp_dest = target_path.with_extension("xmp");
+        let _ = std::fs::rename(&xmp_src, &xmp_dest);
+    }
 
     let new_dng_path_str = path_to_slash(&new_dng_path);
 
@@ -787,16 +783,11 @@ pub fn get_project_cover_thumbnail(
 
     let thumb_path = project_db.project_dir.join(&rel_path);
 
-    // Try the stored path first, then fallback to .webp for legacy .jpg entries
-    let final_path = if thumb_path.exists() {
-        thumb_path
-    } else {
-        let webp = thumb_path.with_extension("webp");
-        if webp.exists() { webp } else { return Ok(None); }
-    };
+    if !thumb_path.exists() { return Ok(None); }
+    let final_path = thumb_path;
 
     match std::fs::read(&final_path) {
-        Ok(bytes) => Ok(Some(format!("data:image/webp;base64,{}", STANDARD.encode(&bytes)))),
+        Ok(bytes) => Ok(Some(format!("data:image/jpeg;base64,{}", STANDARD.encode(&bytes)))),
         Err(_) => Ok(None),
     }
 }
@@ -808,7 +799,7 @@ pub fn set_project_cover_photo(
     photo_id: Option<String>,
 ) -> Result<(), String> {
     let project_db = state.project_db(&project_id)?;
-    let path = photo_id.map(|id| format!(".thumbs/{}.webp", id));
+    let path = photo_id.map(|id| format!(".thumbs/{}.jpg", id));
     project_db
         .set_cover_photo(path.as_deref())
         .map_err(|e| e.to_string())
@@ -825,33 +816,40 @@ pub fn regenerate_project_thumbnails(
     let project_db = state.project_db(&project_id)?;
     let photos = project_db.get_project_photos().map_err(|e| e.to_string())?;
 
-    let devices = scan_mounted_devices();
-    let device_map: HashMap<&str, &str> = devices
-        .iter()
-        .map(|d| (d.uuid.as_str(), d.mount_point.as_str()))
-        .collect();
+    let mount = project_db.mount_point.to_string_lossy().to_string();
 
-    // Delete existing thumbnails so cache_thumbnail recreates them
+    // Delete existing thumbnails (both .jpg and legacy .webp) so they get recreated
     let thumbs_dir = project_db.project_dir.join(".thumbs");
     if thumbs_dir.exists() {
         for photo in &photos {
+            let _ = std::fs::remove_file(thumbs_dir.join(format!("{}.jpg", photo.id)));
             let _ = std::fs::remove_file(thumbs_dir.join(format!("{}.webp", photo.id)));
         }
     }
 
+    // Reconcile rotation: read from source file → update DB if different
+    let mut reconciled = 0u32;
+    for photo in &photos {
+        let dng_full = Path::new(&mount).join(&photo.dng_path);
+        let file_rotation = read_exif_rotation(&dng_full);
+        if file_rotation != photo.rotation {
+            let _ = project_db.update_photo_rotation(&photo.id, file_rotation);
+            reconciled += 1;
+        }
+    }
+    if reconciled > 0 {
+        info!("regenerate_project_thumbnails: reconciled rotation for {} photo(s)", reconciled);
+    }
+
     let pairs: Vec<(PathBuf, String)> = photos
         .iter()
-        .filter_map(|photo| {
-            let mount = devices
-                .iter()
-                .find(|d| d.uuid == photo.device_uuid)
-                .map(|d| d.mount_point.as_str())?;
-            let dng_full = Path::new(mount).join(&photo.dng_path);
-            Some((dng_full, photo.id.clone()))
+        .map(|photo| {
+            let dng_full = Path::new(&mount).join(&photo.dng_path);
+            (dng_full, photo.id.clone())
         })
         .collect();
 
-    cache_thumbnails_parallel(&pairs);
+    cache_thumbnails_parallel(&pairs, None);
 
     let regenerated = pairs.len() as u32;
     info!("regenerate_project_thumbnails: {} thumbnails regenerated for project {}", regenerated, project_id);
@@ -1031,6 +1029,19 @@ pub async fn start_import(
         None
     };
 
+    let image_description: Option<String> = project_db
+        .get_project()
+        .ok()
+        .flatten()
+        .and_then(|p| {
+            let desc = p.description.filter(|d| !d.is_empty())?;
+            let year = p.session_date
+                .or(Some(p.created_at))
+                .and_then(|d| d.get(..4).map(|y| y.to_string()))
+                .unwrap_or_default();
+            Some(format!("{}@{}", desc, year))
+        });
+
     // Photos go into _media/ inside the project directory
     let dest_folder = project_db.project_dir.join("_media");
     let video_dest_folder = project_db.project_dir.join("_video");
@@ -1059,37 +1070,30 @@ pub async fn start_import(
         info!("No photo files selected, skipping photo pipeline");
         (0usize, Vec::<FailedFile>::new())
     } else {
-        // === PHASE 1: Copy + optionally convert ===
-        let (phase1_label, phase1_kind) = if settings.convert_to_dng {
-            ("Convirtiendo a DNG", ImportPhase::Converting)
-        } else {
-            ("Copiando archivos", ImportPhase::Reading)
-        };
-        emit_progress(&app, &request.session_id, 0, 3, phase1_label, phase1_kind, None);
+        // === PHASE 1: Copy files ===
+        emit_progress(&app, &request.session_id, 0, 3, "Copiando archivos", ImportPhase::Reading, None);
 
         let workspace = PipelineWorkspace::create(&request.project_name)
             .map_err(|e| format!("Failed to create workspace: {}", e))?;
+        emit_log(&app, &request.session_id, &format!("Workspace creado: {}", workspace.temp_dir.display()));
 
-        if settings.convert_to_dng {
-            pipeline_copy_files(&photo_paths, &workspace)
-                .map_err(|e| format!("Failed to copy files: {}", e))?;
-            let converted = pipeline_convert(&workspace)
-                .map_err(|e| format!("Conversion failed: {}", e))?;
-            info!("Converted {} files", converted);
-        } else {
-            let copied = pipeline_passthrough(&photo_paths, &workspace)
-                .map_err(|e| format!("Failed to copy files: {}", e))?;
-            info!("Copied {} files (no conversion)", copied);
-        }
+        let copied = pipeline_passthrough(&photo_paths, &workspace)
+            .map_err(|e| format!("Failed to copy files: {}", e))?;
+        info!("Copied {} files", copied);
+        emit_log(&app, &request.session_id, &format!("{} archivos copiados al workspace", copied));
 
         // === PHASE 2: Writing metadata ===
         emit_progress(&app, &request.session_id, 1, 3, "Agregando metadatos", ImportPhase::Writing, None);
 
-        pipeline_metadata(&workspace, &request.project_name, &metadata)
+        emit_log(&app, &request.session_id, "Escribiendo metadatos XMP y renombrando archivos...");
+        pipeline_metadata(&workspace, &request.project_name, &metadata, image_description.as_deref())
             .map_err(|e| format!("Metadata failed: {}", e))?;
+        emit_log(&app, &request.session_id, "Metadatos aplicados");
 
+        emit_log(&app, &request.session_id, "Moviendo archivos al disco de destino...");
         let dng_files = pipeline_move_to_dest(&workspace, &dest_folder)
             .map_err(|e| format!("Move failed: {}", e))?;
+        emit_log(&app, &request.session_id, &format!("{} archivos movidos a _media/", dng_files.len()));
 
         workspace.cleanup();
 
@@ -1114,11 +1118,7 @@ pub async fn start_import(
                     .join(&file_name),
             );
 
-            let original_format = if settings.convert_to_dng {
-                Some("DNG".to_string())
-            } else {
-                dng_path.extension().and_then(|e| e.to_str()).map(|e| e.to_uppercase())
-            };
+            let original_format = dng_path.extension().and_then(|e| e.to_str()).map(|e| e.to_uppercase());
 
             inserts.push((dng_path.clone(), CreatePhoto {
                 project_id: request.project_id.clone(),
@@ -1136,17 +1136,20 @@ pub async fn start_import(
                 exposure_compensation: meta.exposure_compensation,
                 focal_length: meta.focal_length,
                 lens_model: meta.lens_model,
+                rotation: meta.rotation,
             }));
         }
 
         let create_dtos: Vec<CreatePhoto> = inserts.iter().map(|(_, cp)| cp.clone()).collect();
         match project_db.create_photos_batch(&create_dtos) {
             Ok(photos) => {
+                emit_log(&app, &request.session_id, &format!("{} fotos registradas en BD", photos.len()));
                 let thumb_pairs: Vec<(PathBuf, String)> = inserts.iter()
                     .zip(photos.iter())
                     .map(|((path, _), photo)| (path.clone(), photo.id.clone()))
                     .collect();
-                cache_thumbnails_parallel(&thumb_pairs);
+                emit_log(&app, &request.session_id, &format!("Generando {} miniaturas...", thumb_pairs.len()));
+                cache_thumbnails_parallel(&thumb_pairs, Some((&app, &request.session_id)));
                 (photos.len(), Vec::new())
             }
             Err(e) => {
@@ -1175,99 +1178,113 @@ pub async fn start_import(
         "Import completed: {} successful, {} failed",
         result.successful, result.failed
     );
+    emit_log(&app, &request.session_id, &format!(
+        "Importación completada: {} fotos{}{}",
+        result.successful,
+        if result.videos_copied > 0 { format!(" · {} videos", result.videos_copied) } else { String::new() },
+        if result.failed > 0 { format!(" · {} errores", result.failed) } else { String::new() },
+    ));
     Ok(result)
 }
 
 #[derive(Clone, Default)]
-struct FileMetadata {
-    width: Option<i32>,
-    height: Option<i32>,
-    capture_date: Option<String>,
-    camera: Option<String>,
-    iso: Option<i32>,
-    aperture: Option<String>,
-    shutter_speed: Option<String>,
-    exposure_compensation: Option<f64>,
-    focal_length: Option<String>,
-    lens_model: Option<String>,
+pub struct FileMetadata {
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub capture_date: Option<String>,
+    pub camera: Option<String>,
+    pub iso: Option<i32>,
+    pub aperture: Option<String>,
+    pub shutter_speed: Option<String>,
+    pub exposure_compensation: Option<f64>,
+    pub focal_length: Option<String>,
+    pub lens_model: Option<String>,
+    pub rotation: i32,
 }
 
-/// Extract EXIF metadata for all files in a single exiftool call (-csv output).
-/// Returns a map from absolute path → metadata. Missing files are absent from the map.
+/// Extract EXIF metadata for all files. On desktop uses exiftool batch CSV;
+/// on Android uses rawler per-file (no subprocess available).
 fn extract_exif_metadata_batch(paths: &[PathBuf]) -> HashMap<PathBuf, FileMetadata> {
     if paths.is_empty() {
         return HashMap::new();
     }
 
-    let mut args: Vec<String> = vec![
-        "-csv".to_string(),
-        "-ImageWidth".to_string(),
-        "-ImageHeight".to_string(),
-        // DateTimeOriginal is preferred; -d flag makes exiftool fall back to
-        // CreateDate then DateTime automatically when using the composite tag.
-        "-DateTimeOriginal".to_string(),
-        "-CreateDate".to_string(),
-        "-Make".to_string(),
-        "-Model".to_string(),
-        "-ISO".to_string(),
-        "-FNumber".to_string(),
-        "-ExposureTime".to_string(),
-        "-ExposureCompensation".to_string(),
-        "-FocalLength".to_string(),
-        "-LensModel".to_string(),
-    ];
-    for p in paths {
-        args.push(p.to_string_lossy().to_string());
+    #[cfg(target_os = "android")]
+    return crate::exif_android::extract_exif_metadata_batch(paths);
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let mut args: Vec<String> = vec![
+            "-csv".to_string(),
+            "-ImageWidth".to_string(),
+            "-ImageHeight".to_string(),
+            "-DateTimeOriginal".to_string(),
+            "-CreateDate".to_string(),
+            "-Make".to_string(),
+            "-Model".to_string(),
+            "-ISO".to_string(),
+            "-FNumber".to_string(),
+            "-ExposureTime".to_string(),
+            "-ExposureCompensation".to_string(),
+            "-FocalLength".to_string(),
+            "-LensModel".to_string(),
+            "-IFD0:Orientation".to_string(),
+            "-n".to_string(),
+        ];
+        for p in paths {
+            args.push(p.to_string_lossy().to_string());
+        }
+
+        let stdout = match exiftool::run_text(&args) {
+            Ok(s) => s,
+            Err(_) => return HashMap::new(),
+        };
+
+        let mut lines = stdout.lines();
+        let _ = lines.next();
+
+        let mut map = HashMap::new();
+        for line in lines {
+            let f = parse_csv_line(line);
+            if f.is_empty() { continue; }
+
+            let opt = |i: usize| -> Option<String> {
+                f.get(i).map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+            };
+
+            let capture_date = opt(3).or_else(|| opt(4));
+            let camera = match (opt(5), opt(6)) {
+                (Some(make), Some(model)) => Some(format!("{} {}", make, model)),
+                (Some(make), None)        => Some(make),
+                _                         => None,
+            };
+            let aperture = opt(8)
+                .and_then(|s| s.parse::<f64>().ok())
+                .map(|n| format!("f/{:.1}", n));
+
+            let rotation = opt(13)
+                .and_then(|s| s.parse::<i32>().ok())
+                .map(|o| match o { 6 => 90, 3 => 180, 8 => 270, _ => 0 })
+                .unwrap_or(0);
+
+            let meta = FileMetadata {
+                width:                 opt(1).and_then(|s| s.parse().ok()),
+                height:                opt(2).and_then(|s| s.parse().ok()),
+                capture_date,
+                camera,
+                iso:                   opt(7).and_then(|s| s.parse().ok()),
+                aperture,
+                shutter_speed:         opt(9),
+                exposure_compensation: opt(10).and_then(|s| s.parse().ok()),
+                focal_length:          opt(11),
+                lens_model:            opt(12),
+                rotation,
+            };
+
+            map.insert(PathBuf::from(f[0].trim()), meta);
+        }
+        map
     }
-
-    let stdout = match exiftool::run_text(&args) {
-        Ok(s) => s,
-        Err(_) => return HashMap::new(),
-    };
-
-    let mut lines = stdout.lines();
-    let _ = lines.next(); // skip CSV header
-
-    let mut map = HashMap::new();
-    for line in lines {
-        let f = parse_csv_line(line);
-        if f.is_empty() { continue; }
-
-        // CSV columns: 0=SourceFile 1=ImageWidth 2=ImageHeight 3=DateTimeOriginal
-        //              4=CreateDate 5=Make 6=Model 7=ISO 8=FNumber 9=ExposureTime
-        //              10=ExposureCompensation 11=FocalLength 12=LensModel
-        let opt = |i: usize| -> Option<String> {
-            f.get(i).map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
-        };
-
-        // Use DateTimeOriginal first; fall back to CreateDate for TIFFs without it
-        let capture_date = opt(3).or_else(|| opt(4));
-
-        let camera = match (opt(5), opt(6)) {
-            (Some(make), Some(model)) => Some(format!("{} {}", make, model)),
-            (Some(make), None)        => Some(make),
-            _                         => None,
-        };
-        let aperture = opt(8)
-            .and_then(|s| s.parse::<f64>().ok())
-            .map(|n| format!("f/{:.1}", n));
-
-        let meta = FileMetadata {
-            width:                 opt(1).and_then(|s| s.parse().ok()),
-            height:                opt(2).and_then(|s| s.parse().ok()),
-            capture_date,
-            camera,
-            iso:                   opt(7).and_then(|s| s.parse().ok()),
-            aperture,
-            shutter_speed:         opt(9),
-            exposure_compensation: opt(10).and_then(|s| s.parse().ok()),
-            focal_length:          opt(11),
-            lens_model:            opt(12),
-        };
-
-        map.insert(PathBuf::from(f[0].trim()), meta);
-    }
-    map
 }
 
 /// Minimal RFC 4180 CSV line parser (handles double-quoted fields with embedded commas).
@@ -1299,7 +1316,7 @@ fn parse_csv_line(line: &str) -> Vec<String> {
 }
 
 /// Extract thumbnails for multiple photos in parallel, bounded by CPU count (max 8).
-fn cache_thumbnails_parallel(pairs: &[(PathBuf, String)]) {
+fn cache_thumbnails_parallel(pairs: &[(PathBuf, String)], log_ctx: Option<(&AppHandle, &str)>) {
     let concurrency = std::thread::available_parallelism()
         .map(|n| n.get().min(8))
         .unwrap_or(4);
@@ -1307,9 +1324,19 @@ fn cache_thumbnails_parallel(pairs: &[(PathBuf, String)]) {
     for chunk in pairs.chunks(concurrency) {
         std::thread::scope(|s| {
             for (path, id) in chunk {
-                s.spawn(|| cache_thumbnail(path, id));
+                s.spawn(|| cache_thumbnail(path, id, log_ctx));
             }
         });
+    }
+}
+
+fn emit_log(app: &AppHandle, session_id: &str, message: &str) {
+    let entry = ImportLogEntry {
+        session_id: session_id.to_string(),
+        message: message.to_string(),
+    };
+    if let Err(e) = app.emit("import-log", &entry) {
+        warn!("Failed to emit log event: {}", e);
     }
 }
 

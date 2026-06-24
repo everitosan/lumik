@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 
-export type Section = 'projects' | 'settings';
+export type Section = 'projects' | 'settings' | 'about';
 
 interface LayoutProps {
   children: ReactNode | ((section: Section) => ReactNode);

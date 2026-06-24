@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Layout, type Section } from './components';
-import { Projects, SettingsPage, ProjectDetail } from './pages';
+import { Projects, SettingsPage, ProjectDetail, AboutPage } from './pages';
 import type { ProjectDashboard } from './lib/types';
 
 function App() {
@@ -33,6 +33,8 @@ function App() {
         return <Projects onProjectClick={setSelectedProject} />;
       case 'settings':
         return <SettingsPage />;
+      case 'about':
+        return <AboutPage />;
       default:
         return <Projects onProjectClick={setSelectedProject} />;
     }

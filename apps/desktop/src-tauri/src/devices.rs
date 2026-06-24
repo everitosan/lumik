@@ -95,12 +95,13 @@ fn scan_mounted_devices_android() -> Vec<DetectedDevice> {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| mount_point.to_string());
 
-        debug!("scan_mounted_devices_android: found volume {} at {}", uuid, mount_point);
+        let name = friendly_volume_name(&uuid);
+        debug!("scan_mounted_devices_android: volume {} → \"{}\"", uuid, name);
 
         let (total_bytes, available_bytes) = statvfs_space(mount_point);
         devices.push(DetectedDevice {
             uuid: uuid.clone(),
-            name: format!("SD Card ({})", uuid),
+            name,
             mount_point: mount_point.to_string(),
             total_bytes,
             available_bytes,
@@ -455,6 +456,27 @@ fn statvfs_space(mount_point: &str) -> (Option<u64>, Option<u64>) {
         (Some(stat.f_blocks as u64 * bs), Some(stat.f_bavail as u64 * bs))
     } else {
         (None, None)
+    }
+}
+
+/// Query Android's StorageManager for a human-readable volume description.
+/// Returns something like "Kingston USB Drive" or "SD card" if available.
+/// Falls back to None so the caller can use its own default.
+/// Build a friendly name for an Android storage volume.
+/// Android's StorageManager JNI is not safely accessible from this context,
+/// so we derive the name from the UUID format instead:
+///  - "XXXX-XXXX"  (FAT32 short serial) → "SD Card"
+///  - long UUID → "USB Drive"
+#[cfg(target_os = "android")]
+fn friendly_volume_name(uuid: &str) -> String {
+    let looks_like_fat32_serial = uuid.len() == 9
+        && uuid.chars().nth(4) == Some('-')
+        && uuid[..4].chars().all(|c| c.is_ascii_hexdigit())
+        && uuid[5..].chars().all(|c| c.is_ascii_hexdigit());
+    if looks_like_fat32_serial {
+        "SD Card".to_string()
+    } else {
+        "USB Drive".to_string()
     }
 }
 

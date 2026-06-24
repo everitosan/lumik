@@ -80,7 +80,10 @@ CREATE TABLE IF NOT EXISTS photo (
     shutter_speed         TEXT,             -- e.g. "1/500"
     exposure_compensation REAL,             -- EV compensation, e.g. 0.0
     focal_length          TEXT,             -- e.g. "35 mm"
-    lens_model            TEXT              -- e.g. "SUMMILUX-M 35MM f/1.4 ASPH"
+    lens_model            TEXT,             -- e.g. "SUMMILUX-M 35MM f/1.4 ASPH"
+
+    -- Orientation from EXIF, cached so the canvas never reads the file
+    rotation              INTEGER NOT NULL DEFAULT 0  -- degrees: 0 / 90 / 180 / 270
 );
 
 CREATE INDEX IF NOT EXISTS idx_photo_project  ON photo(project_id) WHERE deleted = 0;

@@ -16,6 +16,15 @@ import type {
 } from './types';
 
 // ============================================================================
+// PLATFORM
+// ============================================================================
+
+export type Platform = 'linux' | 'windows' | 'macos' | 'android' | 'ios';
+
+export const getPlatform = (): Promise<Platform> =>
+  invoke<Platform>('get_platform');
+
+// ============================================================================
 // DEVICE API (runtime scan only, no DB storage)
 // ============================================================================
 

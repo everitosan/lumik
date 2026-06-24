@@ -10,6 +10,7 @@ import type {
   ProjectDashboard,
   Photographer,
   ImportRequest,
+  ImportLogEntry,
   ImportProgress,
   ImportResult,
 } from './types';
@@ -18,6 +19,16 @@ interface AsyncState<T> {
   data: T | null;
   loading: boolean;
   error: string | null;
+}
+
+// ============================================================================
+// PLATFORM
+// ============================================================================
+
+export function usePlatform() {
+  const [platform, setPlatform] = useState<api.Platform | null>(null);
+  useEffect(() => { api.getPlatform().then(setPlatform); }, []);
+  return platform;
 }
 
 // ============================================================================
@@ -351,6 +362,7 @@ export function useContextKeybindings(context: string): KeybindingMap {
 
 interface UseImportReturn {
   progress: ImportProgress | null;
+  importLog: string[];
   result: ImportResult | null;
   isImporting: boolean;
   error: string | null;
@@ -360,18 +372,22 @@ interface UseImportReturn {
 
 export function useImport(): UseImportReturn {
   const [progress, setProgress] = useState<ImportProgress | null>(null);
+  const [importLog, setImportLog] = useState<string[]>([]);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const unlistenRef = useRef<UnlistenFn | null>(null);
+  const unlistenProgressRef = useRef<UnlistenFn | null>(null);
+  const unlistenLogRef = useRef<UnlistenFn | null>(null);
+  const logBufferRef = useRef<string[]>([]);
+  const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionIdRef = useRef<string | null>(null);
 
-  // Cleanup listener on unmount
+  // Cleanup listeners on unmount
   useEffect(() => {
     return () => {
-      if (unlistenRef.current) {
-        unlistenRef.current();
-      }
+      unlistenProgressRef.current?.();
+      unlistenLogRef.current?.();
+      if (flushTimerRef.current !== null) clearInterval(flushTimerRef.current);
     };
   }, []);
 
@@ -380,18 +396,33 @@ export function useImport(): UseImportReturn {
     setError(null);
     setResult(null);
     setProgress(null);
+    setImportLog([]);
+    logBufferRef.current = [];
     sessionIdRef.current = request.session_id;
 
-    // Setup progress listener before starting import
     try {
-      unlistenRef.current = await listen<ImportProgress>('import-progress', (event) => {
-        // Only process events for our session
+      unlistenProgressRef.current = await listen<ImportProgress>('import-progress', (event) => {
         if (event.payload.session_id === sessionIdRef.current) {
           setProgress(event.payload);
         }
       });
+
+      unlistenLogRef.current = await listen<ImportLogEntry>('import-log', (event) => {
+        if (event.payload.session_id === sessionIdRef.current) {
+          logBufferRef.current.push(event.payload.message);
+        }
+      });
+
+      // Flush log buffer to state every 150ms to avoid per-event re-renders
+      flushTimerRef.current = setInterval(() => {
+        if (logBufferRef.current.length > 0) {
+          const pending = logBufferRef.current;
+          logBufferRef.current = [];
+          setImportLog((prev) => [...prev, ...pending]);
+        }
+      }, 150);
     } catch (err) {
-      console.error('Failed to setup progress listener:', err);
+      console.error('Failed to setup import listeners:', err);
     }
 
     try {
@@ -401,21 +432,32 @@ export function useImport(): UseImportReturn {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsImporting(false);
-      // Cleanup listener
-      if (unlistenRef.current) {
-        unlistenRef.current();
-        unlistenRef.current = null;
+      unlistenProgressRef.current?.();
+      unlistenProgressRef.current = null;
+      unlistenLogRef.current?.();
+      unlistenLogRef.current = null;
+      if (flushTimerRef.current !== null) {
+        clearInterval(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      // Final flush to capture any events that arrived before cleanup
+      if (logBufferRef.current.length > 0) {
+        const pending = logBufferRef.current;
+        logBufferRef.current = [];
+        setImportLog((prev) => [...prev, ...pending]);
       }
     }
   }, []);
 
   const reset = useCallback(() => {
     setProgress(null);
+    setImportLog([]);
     setResult(null);
     setError(null);
     setIsImporting(false);
+    logBufferRef.current = [];
     sessionIdRef.current = null;
   }, []);
 
-  return { progress, result, isImporting, error, startImport, reset };
+  return { progress, importLog, result, isImporting, error, startImport, reset };
 }

@@ -16,12 +16,34 @@ import {
 import { open } from '@tauri-apps/plugin-dialog';
 import { stat } from '@tauri-apps/plugin-fs';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { useConnectedDevices, useProjectsDashboard, useActivePhotographer, useImport, useAppSettings } from '../lib/hooks';
+import { useConnectedDevices, useProjectsDashboard, useActivePhotographer, useImport, useAppSettings, usePlatform } from '../lib/hooks';
 import { createProject } from '../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../components/CreateProjectModal';
-import type { ImportPhase, FailedFile } from '../lib/types';
+import type { FailedFile } from '../lib/types';
 
 const pathBasename = (p: string) => p.replace(/\\/g, '/').split('/').pop() || p;
+
+// Convert an Android content URI to a real file path so the Rust backend can open it.
+// Works for com.android.externalstorage.documents URIs (SD card / USB-OTG):
+//   content://.../document/primary%3ADCIM%2FIMG.CR2  →  /storage/emulated/0/DCIM/IMG.CR2
+//   content://.../document/1234-ABCD%3ADCIM%2FIMG.CR2  →  /storage/1234-ABCD/DCIM/IMG.CR2
+// Returns null for unrecognized URI schemes (caller should keep original path).
+function resolveContentUri(uri: string): string | null {
+  if (!uri.startsWith('content://')) return null;
+  try {
+    const match = uri.match(/\/document\/(.+)$/);
+    if (!match) return null;
+    const docId = decodeURIComponent(match[1]);
+    const colonIdx = docId.indexOf(':');
+    if (colonIdx === -1) return null;
+    const volume = docId.substring(0, colonIdx);
+    const rel = docId.substring(colonIdx + 1);
+    const base = volume === 'primary' ? '/storage/emulated/0' : `/storage/${volume}`;
+    return `${base}/${rel}`;
+  } catch {
+    return null;
+  }
+}
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mts', '.m2ts', '.mkv', '.mxf'];
 const isVideoFile = (filename: string) =>
@@ -233,6 +255,27 @@ const progressCountStyles: CSSProperties = {
   color: 'var(--lumik-outline, #8c90a0)',
 };
 
+// Import log styles
+const importLogContainerStyles: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '8px',
+};
+
+const importLogScrollStyles: CSSProperties = {
+  fontFamily: 'var(--lumik-font-mono, JetBrains Mono)',
+  fontSize: '11px',
+  backgroundColor: 'var(--lumik-surface-container-high, #2b2a2a)',
+  borderRadius: 'var(--lumik-radius-md, 8px)',
+  border: '1px solid var(--lumik-outline-variant, #424654)',
+  padding: '12px',
+  maxHeight: '180px',
+  overflowY: 'auto',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '3px',
+};
+
 const resultSuccessStyles: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -252,21 +295,6 @@ const resultErrorStyles: CSSProperties = {
   borderRadius: 'var(--lumik-radius-md, 8px)',
   border: '1px solid rgba(255, 180, 171, 0.3)',
 };
-
-// Helper functions
-function getPhaseLabel(phase: ImportPhase): string {
-  const labels: Record<ImportPhase, string> = {
-    reading: 'Leyendo',
-    decoding: 'Decodificando RAW',
-    converting: 'Convirtiendo a DNG',
-    hashing: 'Calculando hash',
-    writing: 'Guardando archivo',
-    saving: 'Registrando en BD',
-    complete: 'Completado',
-    failed: 'Error',
-  };
-  return labels[phase] || phase;
-}
 
 function generateSessionId(): string {
   return `import-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -323,6 +351,8 @@ export function ImportPage({
   const IMPORT_STEPS = embedded ? EMBEDDED_STEPS : ALL_STEPS;
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+  const logEndRef = useRef<HTMLDivElement>(null);
   const [importState, setImportState] = useState<ImportState>({
     sourceFiles: [],
     selectedProjectId: initialProjectId ?? null,
@@ -341,7 +371,12 @@ export function ImportPage({
   const { data: projects, loading: projectsLoading, refetch: refetchProjects } = useProjectsDashboard();
   const { data: photographer } = useActivePhotographer();
   const { data: settings } = useAppSettings();
-  const { progress, result, isImporting, error: importError, startImport, reset: resetImport } = useImport();
+  const { progress, importLog, result, isImporting, error: importError, startImport, reset: resetImport } = useImport();
+  const platform = usePlatform();
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [importLog]);
 
   // Tauri intercepts OS drag-drop before the WebView sees the files.
   // dataTransfer.files is empty in the HTML5 drop event when dragDropEnabled is true.
@@ -524,30 +559,53 @@ export function ImportPage({
     try {
       const selected = await open({
         multiple: true,
-        // No filters - GTK on Linux has issues with extension filtering
+        // No filters - GTK on Linux has issues with extension filtering.
+        // On Android, omitting filters forces DocumentsUI (full file browser)
+        // instead of the Photo Picker, which doesn't show RAW files.
       });
 
-      if (!selected || selected.length === 0) return;
+      setDebugLog([`platform=${platform}`, `selected=${JSON.stringify(selected)}`]);
+
+      if (!selected || selected.length === 0) {
+        setDebugLog(d => [...d, 'open() returned empty/null']);
+        return;
+      }
+
+      // On mobile, the file picker returns content URIs. Resolve them to real paths
+      // so the Rust backend can open them as regular files.
+      const isMobile = platform === 'android' || platform === 'ios';
+      const resolvedPaths = isMobile
+        ? selected.map((p: string) => resolveContentUri(p) ?? p)
+        : selected;
+
+      setDebugLog(d => [...d, `resolved=${JSON.stringify(resolvedPaths)}`]);
 
       // Filter only valid RAW files and get file info
-      const validPaths = selected.filter((filePath: string) => {
+      const validPaths = resolvedPaths.filter((filePath: string) => {
         const name = pathBasename(filePath);
+        setDebugLog(d => [...d, `basename="${name}" allowed=${isAllowedRawFile(name)}`]);
         return isAllowedRawFile(name);
       });
 
-      if (validPaths.length === 0) return;
+      setDebugLog(d => [...d, `validPaths.length=${validPaths.length}`]);
+      if (validPaths.length === 0) {
+        setDebugLog(d => [...d, 'ALL FILTERED OUT']);
+        return;
+      }
 
-      const newFiles: SourceFile[] = await Promise.all(
+      const newFiles: SourceFile[] = (await Promise.all(
         validPaths.map(async (filePath: string) => {
-          const fileInfo = await stat(filePath);
-          const name = pathBasename(filePath);
-          return {
-            name,
-            sizeBytes: fileInfo.size,
-            path: filePath,
-          };
+          try {
+            const fileInfo = await stat(filePath);
+            const name = pathBasename(filePath);
+            setDebugLog(d => [...d, `stat OK: ${name} ${fileInfo.size}b`]);
+            return { name, sizeBytes: fileInfo.size, path: filePath };
+          } catch (e) {
+            setDebugLog(d => [...d, `stat FAILED: ${filePath} | ${e}`]);
+            return null;
+          }
         })
-      );
+      )).filter((f): f is SourceFile => f !== null);
 
       setImportState((s) => {
         // Filter out files that are already in the list (by path)
@@ -562,7 +620,7 @@ export function ImportPage({
     } catch (error) {
       console.error('Error selecting files:', error);
     }
-  }, []);
+  }, [platform]);
 
   const handleRemoveFile = (index: number) => {
     setImportState((s) => ({
@@ -572,22 +630,37 @@ export function ImportPage({
   };
 
   const handleStartImport = async () => {
-    if (!selectedProject || !selectedDrive) return;
+    setDebugLog([
+      `handleStartImport`,
+      `selectedProject=${JSON.stringify(selectedProject?.id)}`,
+      `selectedDrive=${JSON.stringify(selectedDrive?.uuid)}`,
+      `files=${importState.sourceFiles.length}`,
+      `settings=${JSON.stringify(settings)}`,
+    ]);
+
+    if (!selectedProject || !selectedDrive) {
+      setDebugLog(d => [...d, 'BLOCKED: selectedProject or selectedDrive is null']);
+      return;
+    }
 
     const sessionId = generateSessionId();
     const startTime = Date.now();
     setElapsedTime(null);
 
-    await startImport({
-      session_id: sessionId,
-      source_files: importState.sourceFiles.map((f) => f.path),
-      project_id: selectedProject.id,
-      device_uuid: selectedDrive.uuid,
-      mount_point: selectedDrive.mountPath!,
-      project_name: selectedProject.name,
-    });
+    try {
+      await startImport({
+        session_id: sessionId,
+        source_files: importState.sourceFiles.map((f) => f.path),
+        project_id: selectedProject.id,
+        device_uuid: selectedDrive.uuid,
+        mount_point: selectedDrive.mountPath!,
+        project_name: selectedProject.name,
+      });
+      setDebugLog(d => [...d, 'startImport OK']);
+    } catch (e) {
+      setDebugLog(d => [...d, `startImport ERROR: ${e}`]);
+    }
 
-    // Calculate elapsed time when import finishes
     setElapsedTime(Date.now() - startTime);
   };
 
@@ -630,6 +703,12 @@ export function ImportPage({
           hint="Compatible con RAW, CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG"
         />
       </div>
+
+      {debugLog.length > 0 && (
+        <div style={{ background: '#111', color: '#0f0', fontFamily: 'monospace', fontSize: 10, padding: 8, marginTop: 8, borderRadius: 4, maxHeight: 200, overflowY: 'auto' }}>
+          {debugLog.map((line, i) => <div key={i}>{line}</div>)}
+        </div>
+      )}
 
       <FileList
         title="Archivos seleccionados"
@@ -718,6 +797,30 @@ export function ImportPage({
                 <span style={progressCountStyles}>
                   {progress.current_index + 1} de {progress.total_files} pasos
                 </span>
+              </div>
+            )}
+
+            {/* Import log */}
+            {importLog.length > 0 && (
+              <div style={importLogContainerStyles}>
+                <span style={sectionTitleStyles}>Registro</span>
+                <div style={importLogScrollStyles}>
+                  {importLog.map((line, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        color: line.includes('ERROR')
+                          ? 'var(--lumik-error, #ffb4ab)'
+                          : 'var(--lumik-on-surface-variant, #c2c6d7)',
+                        lineHeight: '1.6',
+                        whiteSpace: 'pre',
+                      }}
+                    >
+                      {line}
+                    </div>
+                  ))}
+                  <div ref={logEndRef} />
+                </div>
               </div>
             )}
 
@@ -856,9 +959,7 @@ export function ImportPage({
             />
           </div>
           <span style={validationTextStyles}>
-            {settings?.convert_to_dng
-              ? 'Todo listo. Los archivos se convertirán a DNG y se copiarán al disco de destino.'
-              : 'Todo listo. Los archivos se copiarán al disco de destino sin conversión.'}
+            {'Todo listo. Los archivos se copiarán al disco de destino.'}
           </span>
         </div>
       </div>

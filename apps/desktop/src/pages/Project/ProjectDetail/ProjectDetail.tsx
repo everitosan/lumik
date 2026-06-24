@@ -162,6 +162,15 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
   const { data: photos, loading, error, refetch: refetchPhotos } = useProjectPhotos(projectId);
   const { thumbnailIds, refetch: refetchThumbnails } = useProjectThumbnails(projectId);
   const thumbnailCache = useRef<Map<string, string>>(new Map());
+  const autoRedirectedToImport = useRef(false);
+
+  // Auto-show import when project has no photos (only once per mount)
+  useEffect(() => {
+    if (!loading && !error && photos && photos.length === 0 && !autoRedirectedToImport.current) {
+      autoRedirectedToImport.current = true;
+      setShowImport(true);
+    }
+  }, [loading, error, photos]);
 
   // Optimistic overrides: merged on top of the DB-loaded photos array so that
   // edits made in PhotoDetailView are reflected immediately when navigating back.

@@ -143,14 +143,8 @@ impl GlobalDatabase {
             .map(|v| v == "true")
             .unwrap_or(true);
 
-        let convert_to_dng = self
-            .get_setting("convert_to_dng")?
-            .map(|v| v == "true")
-            .unwrap_or(false);
-
         Ok(AppSettings {
             embed_metadata_on_import: embed_metadata,
-            convert_to_dng,
         })
     }
 
@@ -158,10 +152,6 @@ impl GlobalDatabase {
         self.set_setting(
             "embed_metadata_on_import",
             if settings.embed_metadata_on_import { "true" } else { "false" },
-        )?;
-        self.set_setting(
-            "convert_to_dng",
-            if settings.convert_to_dng { "true" } else { "false" },
         )?;
         self.get_app_settings()
     }
@@ -387,7 +377,7 @@ impl ProjectDatabase {
                     backup_date, backup_retries, deleted, stars, color_label,
                     tags, capture_date, width, height, file_size_bytes,
                     iso, aperture, shutter_speed, exposure_compensation,
-                    focal_length, lens_model
+                    focal_length, lens_model, rotation
              FROM photo
              WHERE project_id = ?1 AND deleted = 0
              ORDER BY capture_date ASC NULLS LAST, import_date ASC",
@@ -425,6 +415,7 @@ impl ProjectDatabase {
                     exposure_compensation: row.get(26)?,
                     focal_length: row.get(27)?,
                     lens_model: row.get(28)?,
+                    rotation: row.get::<_, i32>(29).unwrap_or(0),
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -441,7 +432,7 @@ impl ProjectDatabase {
                     backup_date, backup_retries, deleted, stars, color_label,
                     tags, capture_date, width, height, file_size_bytes,
                     iso, aperture, shutter_speed, exposure_compensation,
-                    focal_length, lens_model
+                    focal_length, lens_model, rotation
              FROM photo WHERE id = ?1",
         )?;
 
@@ -477,6 +468,7 @@ impl ProjectDatabase {
                     exposure_compensation: row.get(26)?,
                     focal_length: row.get(27)?,
                     lens_model: row.get(28)?,
+                    rotation: row.get::<_, i32>(29).unwrap_or(0),
                 })
             })
             .optional()?;
@@ -517,11 +509,21 @@ impl ProjectDatabase {
                     photo.exposure_compensation,
                     photo.focal_length,
                     photo.lens_model,
+                    photo.rotation,
                 ],
             )?;
         }
 
         self.get_photo(&id)?.ok_or(super::DbError::NotInitialized)
+    }
+
+    pub fn update_photo_rotation(&self, id: &str, rotation: i32) -> DbResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE photo SET rotation = ?1 WHERE id = ?2",
+            params![rotation, id],
+        )?;
+        Ok(())
     }
 
     pub fn update_photo_rating(
@@ -579,9 +581,9 @@ impl ProjectDatabase {
                         original_format, import_date, capture_date,
                         width, height, file_size_bytes,
                         iso, aperture, shutter_speed, exposure_compensation,
-                        focal_length, lens_model
+                        focal_length, lens_model, rotation
                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-                              ?12, ?13, ?14, ?15, ?16, ?17)",
+                              ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
                     params![
                         id,
                         photo.project_id,
@@ -600,6 +602,7 @@ impl ProjectDatabase {
                         photo.exposure_compensation,
                         photo.focal_length,
                         photo.lens_model,
+                        photo.rotation,
                     ],
                 )?;
                 temp_ids.push(id);

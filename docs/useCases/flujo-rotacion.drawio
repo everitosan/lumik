@@ -1,0 +1,284 @@
+<mxfile host="app.diagrams.net" modified="2026-06-24T00:00:00.000Z" agent="Claude Code" version="21.0.0" type="device">
+  <diagram id="flow-rotacion" name="Flujo: Rotación de imagen">
+    <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- =================== TÍTULO =================== -->
+        <mxCell id="title" value="Flujo: Rotación de imagen — Lumik Desktop (Linux · Windows · Android)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=17;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="6" width="1100" height="28" as="geometry"/>
+        </mxCell>
+
+        <!-- =================== SECCIONES =================== -->
+
+        <mxCell id="bg_fe" value="&lt;b&gt;Frontend — React / TypeScript&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5fe;strokeColor=#0288d1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" vertex="1" parent="1">
+          <mxGeometry x="40" y="30" width="1280" height="385" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="bg_ipc" value="&lt;b&gt;Tauri IPC Bridge&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#388e3c;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" vertex="1" parent="1">
+          <mxGeometry x="40" y="425" width="1280" height="100" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="bg_be" value="&lt;b&gt;Backend — Rust / Tauri (commands.rs)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#f57c00;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" vertex="1" parent="1">
+          <mxGeometry x="40" y="535" width="1280" height="795" as="geometry"/>
+        </mxCell>
+
+        <!-- Sub-sección: escritura en background por plataforma -->
+        <mxCell id="bg_platform" value="&lt;b&gt;Escritura en archivo — hilo de fondo (non-blocking)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=12;fontStyle=1;opacity=70;" vertex="1" parent="1">
+          <mxGeometry x="90" y="960" width="1180" height="295" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="bg_result" value="&lt;b&gt;Frontend — Respuesta&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5fe;strokeColor=#0288d1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1340" width="1280" height="250" as="geometry"/>
+        </mxCell>
+
+        <!-- =================== FRONTEND =================== -->
+
+        <mxCell id="start" value="&lt;b&gt;Usuario en PhotoDetailView&lt;br&gt;revisando foto en canvas&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="595" y="48" width="210" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="trigger" value="&lt;b&gt;Trigger de rotación&lt;/b&gt;&lt;br&gt;• Botones ↺ / ↻ en barra de herramientas del visor&lt;br&gt;• Keybindings: &lt;b&gt;rotateLeft / rotateRight&lt;/b&gt; (configurables en Settings)&lt;br&gt;• rotateLeft() / rotateRight() expuestos via &lt;b&gt;useImperativeHandle&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="140" y="140" width="760" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Nota: modelo canvas -->
+        <mxCell id="canvas_note" value="&lt;b&gt;Modelo de rotación en canvas:&lt;/b&gt;&lt;br&gt;• Preview extraído del DNG con &lt;i&gt;Orientation=1&lt;/i&gt;&lt;br&gt;  (exiftool lo strip al generar .previews/)&lt;br&gt;• Canvas aplica ctx.rotate(rad) manualmente&lt;br&gt;• Browser/WebView nunca auto-rota&lt;br&gt;• Sin flash entre fotos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f9a825;fontSize=11;align=left;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="960" y="140" width="330" height="115" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="calc_new_rotation" value="Calcular nueva rotación absoluta:&lt;br&gt;rotateRight → &lt;b&gt;newRot = (localRotation + 90) % 360&lt;/b&gt;&lt;br&gt;rotateLeft → &lt;b&gt;newRot = (localRotation + 270) % 360&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="140" y="250" width="760" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="optimistic" value="&lt;b&gt;Actualización optimista:&lt;/b&gt; setLocalRotation(newRot)&lt;br&gt;Canvas re-renderiza con ctx.rotate() — &lt;b&gt;sin re-render React&lt;/b&gt; (zoom/pan son refs)&lt;br&gt;setSaveState('saving') → indicador &lt;i&gt;'↻ Guardando…'&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="140" y="338" width="760" height="65" as="geometry"/>
+        </mxCell>
+
+        <!-- =================== IPC =================== -->
+
+        <mxCell id="invoke" value="&lt;b&gt;api.savePhotoRotation()&lt;/b&gt; → invoke(&lt;b&gt;'save_photo_rotation'&lt;/b&gt;, { photoId, projectId, rotation: newRot })" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#388e3c;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="130" y="442" width="1000" height="52" as="geometry"/>
+        </mxCell>
+
+        <!-- =================== BACKEND =================== -->
+
+        <mxCell id="be_validate" value="Rust: &lt;b&gt;save_photo_rotation()&lt;/b&gt; — validar rotation ∈ {0, 90, 180, 270}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="550" width="760" height="48" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="val_q" value="¿Válido?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="390" y="618" width="180" height="75" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="val_err" value="Error: 'Rotación inválida'&lt;br&gt;→ retornar al frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="740" y="630" width="200" height="55" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="get_photo" value="project_db.get_photo(&amp;photo_id) — leer &lt;b&gt;old_rotation&lt;/b&gt; desde BD" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="713" width="760" height="48" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="calc_delta" value="&lt;b&gt;delta = (rotation − old_rotation + 360) % 360&lt;/b&gt; — grados que debe girar la miniatura" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="781" width="760" height="48" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="db_update" value="&lt;b&gt;UPDATE photo SET rotation = ?&lt;/b&gt; WHERE id = ?&lt;br&gt;db/queries.rs: update_photo_rotation() — transacción síncrona" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcdd2;strokeColor=#c62828;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="849" width="760" height="58" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="regen_thumb" value="&lt;b&gt;regenerate_rotated_thumbnail()&lt;/b&gt; [solo si delta ≠ 0]&lt;br&gt;• Leer &lt;i&gt;.thumbs/{photo_id}.jpg&lt;/i&gt; existente&lt;br&gt;• image crate: rotate90 / rotate180 / rotate270 según delta&lt;br&gt;• Sobreescribir el mismo archivo — &lt;b&gt;sin exiftool, solo píxeles&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f9a825;fontSize=12;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="200" y="927" width="760" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- =================== PLATFORM SPLIT: ESCRITURA EN DNG =================== -->
+
+        <mxCell id="plat_q" value="Plataforma" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="530" y="1035" width="200" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="desktop_write" value="&lt;b&gt;Linux / Windows&lt;/b&gt;&lt;br&gt;&lt;i&gt;exiftool -IFD0:Orientation={val} -n -overwrite_original {dng}&lt;/i&gt;&lt;br&gt;Mapa EXIF: 90°→6 · 180°→3 · 270°→8 · 0°→1&lt;br&gt;Escribe en el &lt;b&gt;DNG original&lt;/b&gt; en disco externo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="110" y="1060" width="370" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="android_write" value="&lt;b&gt;Android&lt;/b&gt;&lt;br&gt;xmp::update_xmp_orientation(&amp;dng, rotation)&lt;br&gt;Escribe / actualiza el sidecar &lt;b&gt;{dng}.xmp&lt;/b&gt;&lt;br&gt;Sin exiftool — Rust puro" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="790" y="1060" width="370" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="bg_thread_note" value="Hilo background&lt;br&gt;&lt;b&gt;std::thread::spawn&lt;/b&gt;&lt;br&gt;Main thread NO espera&lt;br&gt;→ return Ok() inmediato" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;align=center;" vertex="1" parent="1">
+          <mxGeometry x="516" y="1068" width="228" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="return_ok" value="return Ok() — IPC response (antes de que el hilo de escritura termine)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="1272" width="760" height="48" as="geometry"/>
+        </mxCell>
+
+        <!-- =================== FRONTEND RESULTADO =================== -->
+
+        <mxCell id="fe_ok" value="setSaveState(&lt;b&gt;'saved'&lt;/b&gt;) → indicador &lt;i&gt;'✓ Guardado'&lt;/i&gt; visible 2 s → idle&lt;br&gt;Canvas ya muestra la rotación correcta (actualizado optimistamente antes del IPC)&lt;br&gt;Miniatura en galería ya rotada (.thumbs/ sobreescrito durante el comando)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="120" y="1358" width="900" height="75" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="fe_err" value="&lt;b&gt;En error:&lt;/b&gt; setLocalRotation(old_rotation) — revertir canvas&lt;br&gt;setSaveState('error') → &lt;i&gt;'✕ Error al guardar'&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="120" y="1453" width="900" height="55" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="end" value="&lt;b&gt;Foto rotada en canvas y galería · BD actualizada&lt;br&gt;DNG / sidecar XMP actualizado en segundo plano&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="330" y="1533" width="600" height="55" as="geometry"/>
+        </mxCell>
+
+        <!-- =================== REFERENCIAS DE CÓDIGO =================== -->
+
+        <mxCell id="ref_header" value="Archivos de código" style="text;html=1;strokeColor=#555555;fillColor=#e0e0e0;align=center;verticalAlign=middle;fontStyle=1;fontSize=11;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="30" width="230" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ref_view" value="&lt;b&gt;PhotoDetailView.tsx&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src/pages/Project/PhotoDetail/&lt;/font&gt;&lt;br&gt;rotateLeft() · rotateRight()&lt;br&gt;useImperativeHandle · PhotoViewer&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;Canvas: ctx.rotate(rad)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="70" width="230" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ref_hooks" value="&lt;b&gt;hooks.ts&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src/lib/hooks.ts&lt;/font&gt;&lt;br&gt;DEFAULT_KEYBINDINGS:&lt;br&gt;photo_detail.rotateLeft/Right" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="173" width="230" height="75" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ref_api" value="&lt;b&gt;api.ts&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src/lib/api.ts&lt;/font&gt;&lt;br&gt;savePhotoRotation(photoId, projectId, rotation)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="442" width="230" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ref_commands" value="&lt;b&gt;commands.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/commands.rs&lt;/font&gt;&lt;br&gt;save_photo_rotation() ~L606&lt;br&gt;regenerate_rotated_thumbnail() ~L572&lt;br&gt;read_exif_rotation() ~L487" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="550" width="230" height="95" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ref_db" value="&lt;b&gt;db/queries.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/db/queries.rs&lt;/font&gt;&lt;br&gt;update_photo_rotation()&lt;br&gt;UPDATE photo SET rotation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="849" width="230" height="75" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ref_xmp" value="&lt;b&gt;xmp.rs&lt;/b&gt; (Android)&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/import/xmp.rs&lt;/font&gt;&lt;br&gt;update_xmp_orientation()&lt;br&gt;Sidecar {dng}.xmp — Rust puro" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="1060" width="230" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- =================== ARISTAS =================== -->
+
+        <mxCell id="e01" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="start" target="trigger" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e01b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#f9a825;" edge="1" source="trigger" target="canvas_note" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e02" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="trigger" target="calc_new_rotation" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e03" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="calc_new_rotation" target="optimistic" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e04" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="optimistic" target="invoke" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="invoke" target="be_validate" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e06" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="be_validate" target="val_q" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e07" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;fontColor=#b85450;fontStyle=1;exitX=1;exitY=0.5;" edge="1" source="val_q" target="val_err" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e08" value="Sí" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;fontColor=#82b366;fontStyle=1;exitX=0.5;exitY=1;" edge="1" source="val_q" target="get_photo" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e09" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="get_photo" target="calc_delta" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="calc_delta" target="db_update" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="db_update" target="regen_thumb" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="regen_thumb" target="plat_q" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e13" value="Linux/Win" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0;exitY=0.5;" edge="1" source="plat_q" target="desktop_write" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e14" value="Android" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=1;exitY=0.5;" edge="1" source="plat_q" target="android_write" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="desktop_write" target="return_ok" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="android_write" target="return_ok" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="bg_thread_note" target="return_ok" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="return_ok" target="fe_ok" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e19" value="error" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#b85450;fontColor=#b85450;fontSize=10;exitX=1;exitY=1;" edge="1" source="val_err" target="fe_err" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1050" y="710"/>
+              <mxPoint x="1050" y="1480"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="fe_ok" target="end" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="fe_err" target="end" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Aristas de referencias de código -->
+        <mxCell id="eref_view" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" edge="1" source="ref_view" target="trigger" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eref_hooks" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" edge="1" source="ref_hooks" target="calc_new_rotation" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eref_api" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" edge="1" source="ref_api" target="invoke" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eref_commands" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" edge="1" source="ref_commands" target="be_validate" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eref_db" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" edge="1" source="ref_db" target="db_update" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eref_xmp" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" edge="1" source="ref_xmp" target="android_write" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

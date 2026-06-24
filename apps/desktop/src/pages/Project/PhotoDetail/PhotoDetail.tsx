@@ -16,7 +16,7 @@ export interface PhotoDetailProps {
   onClose: () => void;
   onNavigate: (index: number) => void;
   onThumbnailChanged?: (photoIds: string[]) => void;
-  onPhotoChanged?: (photoId: string, updates: Partial<Pick<Photo, 'stars' | 'color_label' | 'tags' | 'culled'>>) => void;
+  onPhotoChanged?: (photoId: string, updates: Partial<Pick<Photo, 'stars' | 'color_label' | 'tags' | 'culled' | 'rotation'>>) => void;
   onCoverPhotoChange?: (photoId: string | null) => void;
 }
 
@@ -120,7 +120,7 @@ export function PhotoDetail({
 
   const { data: preview, loading: previewLoading } = usePhotoPreview(photo.id, photo.project_id);
   const fullImageUrl = preview?.url ?? null;
-  const initialRotation = preview?.rotation ?? 0;
+  const initialRotation = photo.rotation;
 
   const goPrev = useCallback(() => {
     if (hasPrev) onNavigate(currentIndex - 1);
@@ -139,10 +139,11 @@ export function PhotoDetail({
           setSaveState('saved');
           saveTimerRef.current = setTimeout(() => setSaveState('idle'), 2000);
           thumbnailDirtyRef.current.add(photo.id);
+          onPhotoChanged?.(photo.id, { rotation });
         })
         .catch(() => setSaveState('error'));
     },
-    [photo.id, photo.project_id],
+    [photo.id, photo.project_id, onPhotoChanged],
   );
 
   const saveRating = (stars: number, colorLabels: ColorLabel[], tags: string[]) => {

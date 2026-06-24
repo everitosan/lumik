@@ -1,7 +1,9 @@
 # Lumik Desktop
 
-App de escritorio Linux para administrar fotografías de fotógrafos profesionales.
-Convierte RAW a DNG, escribe metadatos XMP, y permite organizar/culling.
+App de escritorio para importar y hacer culling de fotografías RAW.
+Importa sesiones desde tarjetas o discos, escribe metadatos XMP al fotógrafo,
+y permite filtrar qué fotos vale la pena editar. No entrega a clientes —
+eso corresponde a otros componentes de la suite (servidor, portal web).
 
 ## Stack
 

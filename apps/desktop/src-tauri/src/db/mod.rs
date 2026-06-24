@@ -69,15 +69,21 @@ pub struct ProjectDatabase {
     /// The project UUID stored in this database (cached to avoid re-reading).
     pub project_id: String,
     /// UUID of the device this project lives on (set during discovery/creation).
+    /// Kept for reference; do NOT use to resolve file paths — use mount_point instead
+    /// so that projects copied to a different disk still open correctly.
     pub device_uuid: String,
     /// Absolute path to the project directory (parent of project.db).
     /// Used to locate .thumbs/ and .previews/ regardless of culling state.
     pub project_dir: PathBuf,
+    /// Absolute path to the storage mount point where this project lives.
+    /// Derived from the mount point used during discovery, NOT from device_uuid.
+    /// This ensures projects copied to a different disk resolve paths correctly.
+    pub mount_point: PathBuf,
 }
 
 impl ProjectDatabase {
     /// Open an existing project.db, applying schema migrations (idempotent).
-    pub fn open(path: PathBuf, device_uuid: &str) -> DbResult<Self> {
+    pub fn open(path: PathBuf, device_uuid: &str, mount_point: PathBuf) -> DbResult<Self> {
         let conn = Connection::open(&path)?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         conn.execute_batch(schema::PROJECT_SCHEMA)?;
@@ -99,6 +105,12 @@ impl ProjectDatabase {
             )?;
         }
 
+        // Add rotation column if missing (idempotent)
+        let _ = conn.execute(
+            "ALTER TABLE photo ADD COLUMN rotation INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+
         let project_id: String = conn.query_row(
             "SELECT id FROM project LIMIT 1",
             [],
@@ -114,6 +126,7 @@ impl ProjectDatabase {
             project_id,
             device_uuid: device_uuid.to_string(),
             project_dir,
+            mount_point,
         })
     }
 
@@ -126,6 +139,7 @@ impl ProjectDatabase {
         description: Option<&str>,
         session_date: Option<&str>,
         device_uuid: &str,
+        mount_point: PathBuf,
     ) -> DbResult<Self> {
         if path.exists() {
             return Err(DbError::ProjectAlreadyExists(
@@ -156,6 +170,7 @@ impl ProjectDatabase {
             project_id: project_id.to_string(),
             device_uuid: device_uuid.to_string(),
             project_dir,
+            mount_point,
         })
     }
 
@@ -174,16 +189,23 @@ impl ProjectDatabase {
 /// structure (lumik/{year}/{month}/{day_name}/).
 /// Skips hidden directories (.thumbs, .previews, _culled, etc.).
 pub fn discover_projects_on_device(mount_point: &str, device_uuid: &str) -> Vec<ProjectDatabase> {
-    let lumik_dir = Path::new(mount_point).join("lumik");
+    let mount_path = PathBuf::from(mount_point);
+    let lumik_dir = mount_path.join("lumik");
     if !lumik_dir.exists() {
         return Vec::new();
     }
     let mut projects = Vec::new();
-    discover_recursive(&lumik_dir, device_uuid, 0, &mut projects);
+    discover_recursive(&lumik_dir, device_uuid, &mount_path, 0, &mut projects);
     projects
 }
 
-fn discover_recursive(dir: &Path, device_uuid: &str, depth: usize, out: &mut Vec<ProjectDatabase>) {
+fn discover_recursive(
+    dir: &Path,
+    device_uuid: &str,
+    mount_point: &Path,
+    depth: usize,
+    out: &mut Vec<ProjectDatabase>,
+) {
     const MAX_DEPTH: usize = 4;
     if depth > MAX_DEPTH {
         return;
@@ -192,7 +214,7 @@ fn discover_recursive(dir: &Path, device_uuid: &str, depth: usize, out: &mut Vec
     // If there's a project.db here, open it and stop descending
     let db_path = dir.join("project.db");
     if db_path.exists() {
-        match ProjectDatabase::open(db_path.clone(), device_uuid) {
+        match ProjectDatabase::open(db_path.clone(), device_uuid, mount_point.to_path_buf()) {
             Ok(db) => out.push(db),
             Err(e) => log::warn!("Failed to open project.db at {}: {}", db_path.display(), e),
         }
@@ -217,7 +239,7 @@ fn discover_recursive(dir: &Path, device_uuid: &str, depth: usize, out: &mut Vec
         if name.starts_with('.') || name.starts_with('_') {
             continue;
         }
-        discover_recursive(&path, device_uuid, depth + 1, out);
+        discover_recursive(&path, device_uuid, mount_point, depth + 1, out);
     }
 }
 

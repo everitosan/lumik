@@ -248,7 +248,6 @@ export function SettingsPage() {
 
   // Form fields
   const [embedMetadata, setEmbedMetadata] = useState(true);
-  const [convertToDng, setConvertToDng] = useState(true);
   const [artist, setArtist] = useState('');
   const [copyright, setCopyright] = useState('');
   const [creatorUrl, setCreatorUrl] = useState('');
@@ -279,7 +278,6 @@ export function SettingsPage() {
         }
 
         setEmbedMetadata(settingsData.embed_metadata_on_import);
-        setConvertToDng(settingsData.convert_to_dng);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error loading settings');
       } finally {
@@ -306,7 +304,6 @@ export function SettingsPage() {
         }),
         updateAppSettings({
           embed_metadata_on_import: embedMetadata,
-          convert_to_dng: convertToDng,
         }),
       ]);
 
@@ -331,8 +328,7 @@ export function SettingsPage() {
       : artist !== '' || copyright !== '' || creatorUrl !== '';
 
     const settingsChanged = appSettings
-      ? embedMetadata !== appSettings.embed_metadata_on_import ||
-        convertToDng !== appSettings.convert_to_dng
+      ? embedMetadata !== appSettings.embed_metadata_on_import
       : false;
 
     return metadataChanged || settingsChanged;
@@ -369,6 +365,19 @@ export function SettingsPage() {
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+          <label style={{ ...checkboxContainerStyles, gridColumn: '1 / -1' }}>
+            <input
+              type="checkbox"
+              checked={embedMetadata}
+              onChange={(e) => setEmbedMetadata(e.target.checked)}
+              style={checkboxStyles}
+              disabled={saving}
+            />
+            <span style={checkboxLabelStyles}>
+              Embed metadata in photos on import
+            </span>
+          </label>
+
           <Input
             label="Artist"
             placeholder="Your name or studio name"
@@ -398,31 +407,15 @@ export function SettingsPage() {
             />
           </div>
 
-          <label style={checkboxContainerStyles}>
-            <input
-              type="checkbox"
-              checked={convertToDng}
-              onChange={(e) => setConvertToDng(e.target.checked)}
-              style={checkboxStyles}
-              disabled={saving}
+          <div style={{ gridColumn: '1 / -1' }}>
+            <Input
+              label="Image description format"
+              value="{Project description}@{Year}"
+              placeholder="{Project description}@{Year}"
+              fullWidth
+              disabled
             />
-            <span style={checkboxLabelStyles}>
-              Convert photos to DNG on import
-            </span>
-          </label>
-
-          <label style={checkboxContainerStyles}>
-            <input
-              type="checkbox"
-              checked={embedMetadata}
-              onChange={(e) => setEmbedMetadata(e.target.checked)}
-              style={checkboxStyles}
-              disabled={saving}
-            />
-            <span style={checkboxLabelStyles}>
-              Embed metadata in photos on import
-            </span>
-          </label>
+          </div>
 
           <div style={{ gridColumn: '1 / -1', ...actionsStyles, justifyContent: 'flex-end' }}>
             <Button

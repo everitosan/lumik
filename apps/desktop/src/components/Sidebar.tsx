@@ -1,9 +1,10 @@
 import { Logo, SectionButton, DriveInfo } from '@lumik/ui';
 import { useConnectedDevices } from '../lib/hooks';
+import type { Section } from './Layout';
 
 interface SidebarProps {
-  activeSection: 'projects' | 'settings';
-  onSectionChange: (section: 'projects' | 'settings') => void;
+  activeSection: Section;
+  onSectionChange: (section: Section) => void;
 }
 
 const sidebarStyles: React.CSSProperties = {
@@ -56,7 +57,6 @@ const emptyStorageStyles: React.CSSProperties = {
 export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
   const { data: devices, loading } = useConnectedDevices();
 
-  // Calculate used bytes from total - available
   const getUsedBytes = (device: { total_bytes: number | null; available_bytes: number | null }) => {
     if (device.total_bytes === null || device.available_bytes === null) return 0;
     return device.total_bytes - device.available_bytes;
@@ -81,6 +81,12 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
           label="Settings"
           active={activeSection === 'settings'}
           onClick={() => onSectionChange('settings')}
+        />
+        <SectionButton
+          icon="info"
+          label="About"
+          active={activeSection === 'about'}
+          onClick={() => onSectionChange('about')}
         />
       </nav>
 

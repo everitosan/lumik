@@ -58,6 +58,16 @@ const errorTextStyles: CSSProperties = {
   color: 'var(--lumik-error, #ffb4ab)',
 };
 
+const disabledInputStyles: CSSProperties = {
+  opacity: 0.4,
+  cursor: 'not-allowed',
+  borderColor: 'var(--lumik-outline-variant, #424654)',
+};
+
+const disabledLabelStyles: CSSProperties = {
+  opacity: 0.4,
+};
+
 export function Input({
   label,
   error,
@@ -67,6 +77,8 @@ export function Input({
   style,
   ...props
 }: InputProps) {
+  const disabled = (props as InputHTMLAttributes<HTMLInputElement>).disabled;
+
   const containerStyle: CSSProperties = {
     ...containerStyles,
     width: fullWidth ? '100%' : 'auto',
@@ -75,13 +87,14 @@ export function Input({
   const inputStyle: CSSProperties = {
     ...(variant === 'textarea' ? textareaStyles : baseInputStyles),
     ...(error ? errorInputStyles : {}),
+    ...(disabled ? disabledInputStyles : {}),
     width: fullWidth ? '100%' : 'auto',
     boxSizing: 'border-box',
   };
 
   return (
     <div style={{ ...containerStyle, ...style }} className={className}>
-      {label && <label style={labelStyles}>{label}</label>}
+      {label && <label style={{ ...labelStyles, ...(disabled ? disabledLabelStyles : {}) }}>{label}</label>}
 
       {variant === 'textarea' ? (
         <textarea

@@ -32,6 +32,13 @@ pub struct FailedFile {
     pub error: String,
 }
 
+/// Log entry emitted during import for real-time display in the UI
+#[derive(Debug, Clone, Serialize)]
+pub struct ImportLogEntry {
+    pub session_id: String,
+    pub message: String,
+}
+
 /// Final result of an import session
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportResult {

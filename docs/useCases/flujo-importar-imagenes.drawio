@@ -1,0 +1,371 @@
+<mxfile host="65bd71144e">
+    <diagram id="flow-importar-imagenes" name="Flujo: Importar Imágenes">
+        <mxGraphModel dx="1855" dy="3755" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2560" pageHeight="2860" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="Flujo: Importar Imágenes a un Proyecto — Lumik Desktop (Linux · Windows · Android)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="335" y="-2770" width="1500" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_fe" value="&lt;b&gt;Frontend — React / TypeScript (ImportPage.tsx)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5fe;strokeColor=#0288d1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" parent="1" vertex="1">
+                    <mxGeometry x="75" y="-2640" width="2020" height="558" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_ipc" value="&lt;b&gt;Tauri IPC Bridge&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#388e3c;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" parent="1" vertex="1">
+                    <mxGeometry x="75" y="-2010" width="2020" height="92" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_be" value="&lt;b&gt;Backend — Rust / Tauri (commands.rs · pipeline.rs)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#f57c00;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="-1870" width="2020" height="1740" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_plat_copy" value="&lt;b&gt;Copia de archivos — todas las plataformas (sin conversión)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=12;fontStyle=1;opacity=70;" vertex="1" parent="1">
+                    <mxGeometry x="150" y="-1449" width="1860" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_plat_meta" value="&lt;b&gt;Metadatos y renombrado&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=12;fontStyle=1;opacity=70;" parent="1" vertex="1">
+                    <mxGeometry x="150" y="-1110" width="1860" height="228" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_plat_exif" value="&lt;b&gt;Extracción de metadatos EXIF + rotación&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=12;fontStyle=1;opacity=70;" parent="1" vertex="1">
+                    <mxGeometry x="150" y="-557" width="1860" height="242" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_data" value="&lt;b&gt;Persistencia — SQLite / Sistema de archivos&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffebee;strokeColor=#c62828;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="130" width="2020" height="534" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_plat_thumb" value="&lt;b&gt;Generación de miniaturas JPEG (paralelo, máx 8 threads)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=12;fontStyle=1;opacity=70;" parent="1" vertex="1">
+                    <mxGeometry x="150" y="280" width="1860" height="272" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_fe2" value="&lt;b&gt;Frontend — Resultado&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5fe;strokeColor=#0288d1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="676" width="2020" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend" value="&lt;b&gt;Leyenda — splits por plataforma:&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#6d8764&quot;&gt;■&lt;/font&gt; Izquierda = Linux / Windows&lt;br&gt;&lt;font color=&quot;#7b1fa2&quot;&gt;■&lt;/font&gt; Derecha = Android" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=11;align=left;spacingLeft=8;spacingTop=6;" parent="1" vertex="1">
+                    <mxGeometry x="1500" y="-2190" width="270" height="75" as="geometry"/>
+                </mxCell>
+                <mxCell id="start" value="&lt;b&gt;Usuario en pantalla&lt;br&gt;Importar / Detalle de proyecto&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="985" y="-2619" width="200" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="wizard_s1" value="&lt;b&gt;Paso 1 — Seleccionar archivos&lt;/b&gt;&lt;br&gt;• Clic en &#39;Browse&#39; o arrastrar archivos (DropZone)&lt;br&gt;• Validar extensiones: RAW, DNG, JPEG, video (MP4, MOV…)&lt;br&gt;• Mostrar FileList con tamaño total acumulado" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="882.5" y="-2520" width="405" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="note_android_uri" value="&lt;b&gt;Android:&lt;/b&gt; DocumentsUI devuelve&lt;br&gt;&lt;i&gt;content://...&lt;/i&gt; URIs&lt;br&gt;→ &lt;b&gt;resolveContentUri()&lt;/b&gt;&lt;br&gt;→ /storage/{UUID}/DCIM/..." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f9a825;fontSize=11;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="1505" y="-2512.5" width="255" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="wizard_s2" value="&lt;b&gt;Paso 2 — Seleccionar destino&lt;/b&gt; (solo modo desktop completo)&lt;br&gt;• Elegir dispositivo de destino (useConnectedDevices)&lt;br&gt;• Elegir proyecto existente o crear uno nuevo&lt;br&gt;• Validar espacio libre ≥ tamaño total de archivos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="897.5" y="-2380" width="375" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="note_embedded" value="Omitido en modo &lt;b&gt;embedded&lt;/b&gt;&lt;br&gt;(desde ProjectDetail,&lt;br&gt;proyecto ya conocido)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f9a825;fontSize=11;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="1505" y="-2365" width="260" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="wizard_s3b" value="&lt;b&gt;Paso 3 — Confirmar e iniciar&lt;/b&gt;&lt;br&gt;• Resumen: N fotos + M videos | dispositivo | proyecto&lt;br&gt;• Usuario confirma → genera &lt;i&gt;session_id&lt;/i&gt; único" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="927.5" y="-2230" width="315" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="invoke" value="&lt;b&gt;api.startImport()&lt;/b&gt; → listen(&#39;import-progress&#39;) + invoke(&#39;start_import&#39;, ImportRequest { session_id, source_files[], project_id, device_uuid, mount_point, project_name })" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#388e3c;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="622.5" y="-1991.5" width="925" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="be_load" value="Cargar &lt;b&gt;ProjectDatabase&lt;/b&gt; por project_id + &lt;b&gt;AppSettings&lt;/b&gt; (embed_metadata) + datos del fotógrafo + descripción del proyecto" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="767.5" y="-1850" width="635" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="be_partition" value="Particionar archivos&lt;br&gt;Videos vs Fotos" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="975" y="-1760" width="220" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="video_copy" value="&lt;b&gt;pipeline_copy_videos()&lt;/b&gt;&lt;br&gt;Copiar directamente a &lt;i&gt;_video/&lt;/i&gt;&lt;br&gt;Sin conversión · Sin XMP · Sin DB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1400" y="-1750" width="310" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="video_done" value="videos_copied count&lt;br&gt;→ ImportResult" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1780" y="-1668" width="270" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="photo_ws" value="&lt;b&gt;PipelineWorkspace::create()&lt;/b&gt; — directorio temp &lt;i&gt;lumik_{proyecto}_{ts}/files/&lt;/i&gt;&lt;br&gt;Linux/Win: /tmp/ · Android: $HOME/cache/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="842.5" y="-1630" width="485" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="passthrough" value="&lt;b&gt;pipeline_passthrough()&lt;/b&gt; — todas las plataformas&lt;br&gt;Archivos RAW/JPEG copiados en formato original sin conversión" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+                    <mxGeometry x="735" y="-1410" width="700" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="merge_convert" value="Archivos listos en &lt;i&gt;workspace/files/&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="945" y="-1310" width="280" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="plat_q2" value="Plataforma" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="975" y="-1120" width="220" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="exiftool_meta" value="&lt;b&gt;rename_and_embed_metadata()&lt;/b&gt;&lt;br&gt;&lt;i&gt;exiftool&lt;/i&gt; batch sobre &lt;i&gt;workspace/files/&lt;/i&gt;:&lt;br&gt;• Rename: &lt;i&gt;{DateTimeOrig}__{proyecto}__%03c.{ext}&lt;/i&gt;&lt;br&gt;• Embed: Artist, Copyright, ImageDescription@Año,&lt;br&gt;  CreatorURL, CreatorEmail, UsageTerms" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="-1055" width="420" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="merge_meta" value="Archivos en workspace renombrados · metadata embebida (Linux/Win) o en sidecar .xmp (Android)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="730" y="-830" width="700" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="move_media" value="&lt;b&gt;pipeline_move_to_dest()&lt;/b&gt; — mover a &lt;i&gt;{project}/_media/&lt;/i&gt; (+ sidecar .xmp si existe)&lt;br&gt;Implementado como Copy + Delete (seguro cross-filesystem)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="750" y="-740" width="660" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="cleanup_ws" value="&lt;b&gt;workspace.cleanup()&lt;/b&gt; — eliminar directorio temp completo (fs::remove_dir_all)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="840" y="-646.5" width="480" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="prog_note" value="&lt;span&gt;Eventos Tauri emitidos al frontend:&lt;/span&gt;&lt;br&gt;app.emit(&#39;import-progress&#39;, progress)&lt;br&gt;──────────────────────────&lt;br&gt;0/3 → Copiando archivos&lt;br&gt;1/3 → Agregando metadatos&lt;br&gt;2/3 → Registrando en BD&lt;br&gt;3/3 → Completo&lt;br&gt;──────────────────────────&lt;br&gt;Granularidad por &lt;span&gt;fase&lt;/span&gt;, no por archivo&lt;br&gt;Frontend filtra por &lt;i&gt;session_id&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f9a825;fontSize=11;align=left;spacingLeft=8;spacingTop=6;fontStyle=0" parent="1" vertex="1">
+                    <mxGeometry x="1730" y="-782" width="280" height="205" as="geometry"/>
+                </mxCell>
+                <mxCell id="plat_q3" value="Plataforma" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="970" y="-532" width="220" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="exif_desktop" value="&lt;b&gt;exiftool -csv&lt;/b&gt; batch sobre todos los archivos&lt;br&gt;Extrae: Width, Height, DateTimeOriginal,&lt;br&gt;Make, Model, ISO, FNumber, ExposureTime,&lt;br&gt;FocalLength, LensModel, &lt;b&gt;IFD0:Orientation&lt;/b&gt; → rotation°&lt;br&gt;→ HashMap&lt;path, FileMetadata&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="160" y="-447" width="400" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="label_desktop3" value="Linux / Windows" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=11;fontStyle=3;" parent="1" vertex="1">
+                    <mxGeometry x="195" y="-520" width="200" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="exif_android" value="&lt;b&gt;exif_android::extract_exif_metadata_batch()&lt;/b&gt;&lt;br&gt;Usa crate &lt;b&gt;rawler&lt;/b&gt; (sin exiftool)&lt;br&gt;Extrae mismos campos + &lt;b&gt;exif.orientation&lt;/b&gt; → rotation°&lt;br&gt;vía decodificación RAW nativa → HashMap&lt;path, meta&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="1600" y="-447" width="390" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="label_android3" value="Android" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=11;fontStyle=3;" parent="1" vertex="1">
+                    <mxGeometry x="1730" y="-520" width="120" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="merge_exif" value="HashMap&lt;PathBuf, FileMetadata&gt; (incl. rotation) disponible para todos los archivos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="880" y="-299" width="400" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="build_dtos" value="Construir &lt;b&gt;CreatePhoto DTOs&lt;/b&gt;: dng_path · original_format · capture_date · dimensiones · ISO · apertura · velocidad · longitud focal · lente · &lt;b&gt;rotation&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="-222" width="720" height="52" as="geometry"/>
+                </mxCell>
+                <mxCell id="db_insert" value="&lt;b&gt;project_db.create_photos_batch()&lt;/b&gt; — transacción SQLite única&lt;br&gt;• Genera UUID por foto&lt;br&gt;• INSERT INTO photo (id, project_id, dng_path, device_uuid, original_camera, original_format,&lt;br&gt;  capture_date, width, height, file_size_bytes, iso, aperture, shutter_speed, focal_length, lens_model, &lt;b&gt;rotation&lt;/b&gt;)&lt;br&gt;• Commit en éxito · Rollback en error (sin inserciones parciales)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcdd2;strokeColor=#c62828;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="147" width="1400" height="118" as="geometry"/>
+                </mxCell>
+                <mxCell id="plat_q4" value="Plataforma" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="970" y="302" width="220" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="desktop_thumb" value="&lt;b&gt;cache_thumbnail()&lt;/b&gt;&lt;br&gt;exiftool -b -PreviewImage (fallback -ThumbnailImage)&lt;br&gt;→ image crate: resize 320×320 · rotación EXIF aplicada&lt;br&gt;→ encode &lt;b&gt;JPEG&lt;/b&gt; → &lt;i&gt;.thumbs/{id}.jpg&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="160" y="396" width="400" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="label_desktop4" value="Linux / Windows" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=11;fontStyle=3;" parent="1" vertex="1">
+                    <mxGeometry x="195" y="381" width="200" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="android_thumb" value="&lt;b&gt;exif_android::cache_thumbnail()&lt;/b&gt;&lt;br&gt;rawler::extract_thumbnail_pixels()&lt;br&gt;→ resize 320×320 · rotación EXIF aplicada&lt;br&gt;→ encode &lt;b&gt;JPEG&lt;/b&gt; → &lt;i&gt;.thumbs/{id}.jpg&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="1600" y="396" width="390" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="label_android4" value="Android" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=11;fontStyle=3;" parent="1" vertex="1">
+                    <mxGeometry x="1730" y="381" width="120" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="merge_thumb" value="Miniaturas JPEG en &lt;i&gt;{project}/.thumbs/{photo_id}.jpg&lt;/i&gt; para todas las fotos importadas" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcdd2;strokeColor=#c62828;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="650" y="490" width="860" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="emit_result" value="Retornar &lt;b&gt;ImportResult&lt;/b&gt; al frontend: { total_files, successful, failed, failed_files[], videos_copied }" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#388e3c;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="594" width="1040" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="show_result" value="Mostrar resultado en UI:&lt;br&gt;• Barra de progreso (actualizada vía eventos &#39;import-progress&#39;)&lt;br&gt;• Resumen: N fotos importadas + M videos copiados&lt;br&gt;• Lista de errores si &lt;i&gt;failed &gt; 0&lt;/i&gt; (hasta 3 archivos fallidos detallados)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="692" width="1040" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="end" value="&lt;b&gt;Fotos visibles en galería del proyecto&lt;br&gt;Miniaturas disponibles en caché · rotation en BD&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="830" y="802" width="500" height="68" as="geometry"/>
+                </mxCell>
+                <mxCell id="e01" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="start" target="wizard_s1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e01b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#f9a825;" parent="1" source="wizard_s1" target="note_android_uri" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e02" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="wizard_s1" target="wizard_s2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e02b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#f9a825;" parent="1" source="wizard_s2" target="note_embedded" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e03" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="wizard_s2" target="wizard_s3b" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e04" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="wizard_s3b" target="invoke" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="invoke" target="be_load" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e06" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="be_load" target="be_partition" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e07" value="Videos" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#f57c00;fontColor=#f57c00;fontStyle=1;exitX=1;exitY=0.5;" parent="1" source="be_partition" target="video_copy" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e07b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#f57c00;" parent="1" source="video_copy" target="video_done" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e08" value="Fotos RAW" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;fontColor=#82b366;fontStyle=1;exitX=0.5;exitY=1;" parent="1" source="be_partition" target="photo_ws" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e09" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="photo_ws" target="passthrough" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="passthrough" target="merge_convert" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="merge_convert" target="plat_q2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e16" value="Linux/Win" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0;exitY=0.5;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="plat_q2" target="exiftool_meta" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="975" y="-1080"/>
+                            <mxPoint x="410" y="-1080"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e17" value="Android" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=1;exitY=0.5;" parent="1" source="plat_q2" target="meta_android" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1740" y="-1075"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" parent="1" source="exiftool_meta" target="merge_meta" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="410" y="-900"/>
+                            <mxPoint x="1080" y="-900"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="meta_android" target="merge_meta" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1740" y="-900"/>
+                            <mxPoint x="1080" y="-900"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="merge_meta" target="move_media" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="move_media" target="cleanup_ws" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="cleanup_ws" target="plat_q3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e23" value="Linux/Win" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0;exitY=0.5;" parent="1" source="plat_q3" target="exif_desktop" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e24" value="Android" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=1;exitY=0.5;" parent="1" source="plat_q3" target="exif_android" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="exif_desktop" target="merge_exif" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="exif_android" target="merge_exif" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e27" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="merge_exif" target="build_dtos" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="build_dtos" target="db_insert" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="db_insert" target="plat_q4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e30" value="Linux/Win" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0;exitY=0.5;" parent="1" source="plat_q4" target="desktop_thumb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e31" value="Android" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=1;exitY=0.5;" parent="1" source="plat_q4" target="android_thumb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e32" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="desktop_thumb" target="merge_thumb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e33" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="android_thumb" target="merge_thumb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e34" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="merge_thumb" target="emit_result" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e35" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="emit_result" target="show_result" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e36" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="show_result" target="end" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_prog" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#f9a825;endArrow=open;startArrow=open;" parent="1" source="prog_note" target="cleanup_ws" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ref_header" value="Archivos de código" style="text;html=1;strokeColor=#555555;fillColor=#e0e0e0;align=center;verticalAlign=middle;fontStyle=1;fontSize=11;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="2170" y="-2770" width="330" height="32" as="geometry"/>
+                </mxCell>
+                <mxCell id="ref_importpage" value="&lt;b&gt;ImportPage.tsx&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src/pages/ImportPage.tsx&lt;/font&gt;&lt;br&gt;Wizard 3 pasos · DropZone · FileList&lt;br&gt;handleBrowse() · resolveContentUri() (Android)&lt;br&gt;Auto-muestra import si proyecto vacío" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="2170" y="-2619" width="330" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="ref_api_hooks" value="&lt;b&gt;api.ts&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src/lib/api.ts&lt;/font&gt;&lt;br&gt;startImport() · listen(&#39;import-progress&#39;)&lt;br&gt;&lt;b&gt;hooks.ts&lt;/b&gt; — &lt;font color=&quot;#555555&quot;&gt;src/lib/hooks.ts&lt;/font&gt;&lt;br&gt;useImport() · session_id" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="2170" y="-2016.5" width="330" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="ref_commands_entry" value="&lt;b&gt;commands.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/commands.rs&lt;/font&gt;&lt;br&gt;start_import() · AppSettings(embed_metadata) · partition&lt;br&gt;image_description = {desc}@{year}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="2160" y="-1862.5" width="330" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="ref_pipeline_ws" value="&lt;b&gt;pipeline.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/import/pipeline.rs&lt;/font&gt;&lt;br&gt;PipelineWorkspace::create() — solo files/&lt;br&gt;pipeline_passthrough() — todas las plataformas&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;temp dir: /tmp (Linux/Win) · $HOME/cache (Android)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="2160" y="-1600" width="330" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="ref_xmp" value="&lt;b&gt;pipeline.rs&lt;/b&gt; · &lt;b&gt;xmp.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/import/pipeline.rs&lt;/font&gt;&lt;br&gt;pipeline_metadata() — split Linux vs Android&lt;br&gt;Linux: rename_and_embed_metadata() via exiftool&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/import/xmp.rs&lt;/font&gt;&lt;br&gt;Android: write_xmp_sidecar() — Rust puro" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="2180" y="-1180" width="330" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="ref_pipeline_move" value="&lt;b&gt;pipeline.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/import/pipeline.rs&lt;/font&gt;&lt;br&gt;pipeline_move_to_dest() · move_dng_files()&lt;br&gt;Copy + Delete (cross-FS) · .xmp excluidos de lista EXIF&lt;br&gt;workspace.cleanup() · fs::remove_dir_all" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="2170" y="-858.5" width="330" height="105" as="geometry"/>
+                </mxCell>
+                <mxCell id="ref_exif" value="&lt;b&gt;commands.rs&lt;/b&gt; (Linux/Win)&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/commands.rs&lt;/font&gt;&lt;br&gt;extract_exif_metadata_batch() · exiftool -csv&lt;br&gt;Incluye -IFD0:Orientation → rotation°&lt;br&gt;&lt;b&gt;exif_android.rs&lt;/b&gt; (Android)&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/exif_android.rs&lt;/font&gt;&lt;br&gt;rawler · exif.orientation → rotation°" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="2180" y="-630" width="330" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="ref_db_insert" value="&lt;b&gt;commands.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/commands.rs&lt;/font&gt;&lt;br&gt;create_photos_batch() · CreatePhoto incl. rotation&lt;br&gt;&lt;b&gt;db/queries.rs&lt;/b&gt; · &lt;b&gt;db/project_schema.sql&lt;/b&gt;&lt;br&gt;INSERT INTO photo (..., rotation)&lt;br&gt;Migración automática: ALTER TABLE ADD COLUMN rotation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="2180" y="-340" width="330" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="ref_thumbs" value="&lt;b&gt;commands.rs&lt;/b&gt; (Linux/Win)&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/commands.rs&lt;/font&gt;&lt;br&gt;cache_thumbnail() · cache_thumbnails_parallel()&lt;br&gt;exiftool -b -PreviewImage · image crate · JPEG&lt;br&gt;&lt;b&gt;exif_android.rs&lt;/b&gt; (Android)&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/exif_android.rs&lt;/font&gt;&lt;br&gt;rawler::extract_thumbnail_pixels() · JPEG" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="2150" y="384" width="330" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="ref_result" value="&lt;b&gt;hooks.ts&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src/lib/hooks.ts&lt;/font&gt;&lt;br&gt;useImport() · on &#39;import-progress&#39; event&lt;br&gt;&lt;b&gt;ImportPage.tsx&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src/pages/ImportPage.tsx&lt;/font&gt;&lt;br&gt;Barra de progreso · resumen · lista de errores" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="2150" y="682" width="330" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="eref_importpage" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_importpage" target="wizard_s1" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1410" y="-2572"/>
+                            <mxPoint x="1410" y="-2470"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="eref_api_hooks" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_api_hooks" target="invoke" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="eref_commands_entry" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_commands_entry" target="be_load" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="eref_pipeline_ws" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_pipeline_ws" target="passthrough" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="2160" y="-1500"/>
+                            <mxPoint x="1080" y="-1500"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="eref_xmp" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_xmp" target="exiftool_meta" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="eref_pipeline_move" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_pipeline_move" target="move_media" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1620" y="-835"/>
+                            <mxPoint x="1620" y="-770"/>
+                            <mxPoint x="1080" y="-770"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="eref_exif" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_exif" target="plat_q3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="eref_db_insert" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_db_insert" target="build_dtos" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="eref_thumbs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_thumbs" target="desktop_thumb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="eref_result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_result" target="show_result" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- progress.rs: tipos de eventos -->
+                <mxCell id="ref_progress" value="&lt;b&gt;progress.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/import/progress.rs&lt;/font&gt;&lt;br&gt;ImportPhase (Reading/Converting/Writing/Saving/Complete/Failed)&lt;br&gt;ImportProgress · ImportResult · FailedFile · ImportLogEntry&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;Tipos serializados en eventos Tauri 'import-progress'&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="2170" y="-800" width="330" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="eref_progress" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_progress" target="prog_note" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="meta_android" value="&lt;b&gt;rawler → extract_datetime → rename&lt;/b&gt;&lt;br&gt;• Rename: &lt;i&gt;{DateTimeOrig}__{proyecto}__{n:03}.{ext}&lt;/i&gt;&lt;br&gt;• Sidecar &lt;b&gt;.xmp&lt;/b&gt;: Artist, Copyright, ImageDescription@Año,&lt;br&gt;  CreatorURL, CreatorEmail (Rust puro, sin exiftool)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;align=left;spacingLeft=8;" vertex="1" parent="1">
+                    <mxGeometry x="1530" y="-1055" width="420" height="115" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

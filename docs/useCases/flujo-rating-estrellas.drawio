@@ -1,0 +1,265 @@
+<mxfile host="65bd71144e">
+    <diagram id="flow-rating" name="Flujo: Rating de estrellas">
+        <mxGraphModel dx="1204" dy="2673" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1620" pageHeight="1650" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="Flujo: Rating de estrellas — Lumik Desktop (Linux · Windows · Android)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=17;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="95" y="-1610" width="1000" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_fe" value="&lt;b&gt;Frontend — React / TypeScript&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5fe;strokeColor=#0288d1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" parent="1" vertex="1">
+                    <mxGeometry x="45" y="-1540" width="1120" height="720" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_sidebar" value="&lt;b&gt;PhotoSidebar.tsx — Sección Rating&lt;/b&gt; (sidebar derecho, 300px, scroll)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbdefb;strokeColor=#1565c0;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=12;fontStyle=1;opacity=70;" parent="1" vertex="1">
+                    <mxGeometry x="75" y="-1400" width="1060" height="560" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_ipc" value="&lt;b&gt;Tauri IPC Bridge&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#388e3c;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" parent="1" vertex="1">
+                    <mxGeometry x="45" y="-790" width="1120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_be" value="&lt;b&gt;Backend — Rust / Tauri (commands.rs)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#f57c00;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" parent="1" vertex="1">
+                    <mxGeometry x="100" y="-620" width="990" height="710" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_db" value="Persistencia — SQLite (project.db)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffebee;strokeColor=#c62828;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=11;fontStyle=1;opacity=70;" parent="1" vertex="1">
+                    <mxGeometry x="140" y="-310" width="870" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg_fe_res" value="&lt;b&gt;Frontend — Respuesta&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5fe;strokeColor=#0288d1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;opacity=60;" parent="1" vertex="1">
+                    <mxGeometry x="95" y="210" width="985" height="290" as="geometry"/>
+                </mxCell>
+                <mxCell id="start" value="&lt;b&gt;Usuario en PhotoDetail&lt;br&gt;revisando una foto&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="500" y="-1500" width="210" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="stars_ui" value="&lt;b&gt;★ Estrellas (1-5)&lt;/b&gt;&lt;br&gt;• Botones de 1 a 5 estrellas&lt;br&gt;• Teclas &lt;b&gt;1-5&lt;/b&gt; del teclado&lt;br&gt;• Click en estrella ya activa → 0 (limpiar)&lt;br&gt;• Valor 0 = sin rating" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="117.5" y="-1270" width="255" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="colors_ui" value="&lt;b&gt;● Color labels&lt;/b&gt;&lt;br&gt;• 5 colores: Rojo · Amarillo · Verde&lt;br&gt;  Azul · Morado&lt;br&gt;• Multi-select (varios activos)&lt;br&gt;• Almacenados como IDs: &lt;i&gt;&quot;1,3,5&quot;&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="490" y="-1270" width="230" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="tags_ui" value="&lt;b&gt;# Tags / Etiquetas&lt;/b&gt;&lt;br&gt;• Texto libre, separadas por coma&lt;br&gt;• Ej: &lt;i&gt;&quot;boda,mejor,editar&quot;&lt;/i&gt;&lt;br&gt;• Sin autocompletado&lt;br&gt;• null = sin etiquetas" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="820" y="-1280" width="220" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="any_change" value="Cualquier cambio en stars · color labels · tags" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="285" y="-1080" width="640" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="optimistic" value="&lt;b&gt;Actualización optimista:&lt;/b&gt; UI refleja el cambio de inmediato (estado React local)&lt;br&gt;setSaveState(&#39;saving&#39;) → indicador &lt;i&gt;&#39;↻ Guardando…&#39;&lt;/i&gt; visible en sidebar" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="372.5" y="-1000" width="465" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="send_all" value="&lt;b&gt;Se envían siempre los 3 valores juntos&lt;/b&gt; (el estado completo, no solo el campo que cambió):&lt;br&gt;{ stars: número actual, colorLabel: string actual | null, tags: string actual | null }" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="337.5" y="-910" width="535" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="invoke" value="&lt;b&gt;api.savePhotoRating()&lt;/b&gt; → invoke(&lt;b&gt;&#39;save_photo_rating&#39;&lt;/b&gt;, { photoId, projectId, stars, colorLabel, tags })" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#388e3c;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="312.5" y="-750" width="585" height="52" as="geometry"/>
+                </mxCell>
+                <mxCell id="be_entry" value="Rust: &lt;b&gt;save_photo_rating(state, photo_id, project_id, stars, color_label, tags)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="427.5" y="-600" width="475" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="get_db" value="state.project_db(&amp;project_id) — obtener &lt;b&gt;ProjectDatabase&lt;/b&gt; del mapa open_projects" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="420" y="-510" width="490" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="val_q" value="¿stars ∈ [0..5]?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="173" y="-447" width="222" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="val_err" value="&lt;b&gt;Error:&lt;/b&gt; &#39;Stars inválidas: N&#39;&lt;br&gt;→ retornar error al frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="545" y="-437" width="240" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="db_update" value="&lt;b&gt;project_db.update_photo_rating()&lt;/b&gt;&lt;br&gt;&lt;br&gt;UPDATE photo&lt;br&gt;SET stars = ?1, color_label = ?2, tags = ?3&lt;br&gt;WHERE id = ?4&lt;br&gt;&lt;br&gt;Transacción SQLite atómica · Sin movimiento de archivo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcdd2;strokeColor=#c62828;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="155" y="-270" width="385" height="155" as="geometry"/>
+                </mxCell>
+                <mxCell id="no_xmp" value="&lt;b&gt;NO ocurre:&lt;/b&gt;&lt;br&gt;✗ Sin fs::rename&lt;br&gt;✗ Sin escritura XMP al DNG&lt;br&gt;✗ Sin llamada a exiftool&lt;br&gt;Metadatos solo en &lt;i&gt;project.db&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f9a825;fontSize=11;align=left;spacingLeft=8;spacingTop=6;" parent="1" vertex="1">
+                    <mxGeometry x="735" y="-265" width="200" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="db_err_q" value="¿Error&lt;br&gt;en BD?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="409" y="-65" width="222" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="db_err_end" value="&lt;b&gt;Error:&lt;/b&gt; retornar&lt;br&gt;al frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="735" y="-50" width="200" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="return_ok" value="return Ok() → IPC response" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="120" width="240" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe_ok" value="setSaveState(&lt;b&gt;&#39;saved&#39;&lt;/b&gt;) → indicador &lt;i&gt;&#39;✓ Guardado&#39;&lt;/i&gt; visible 2 s → vuelve a idle&lt;br&gt;onPhotoChanged({ stars, colorLabel, tags }) → actualiza &lt;b&gt;photoOverrides&lt;/b&gt; en el grid (sin re-query)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="145" y="270" width="565" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe_err" value="&lt;b&gt;En error:&lt;/b&gt; revertir valores locales de stars / colorLabel / tags + setSaveState(&lt;b&gt;&#39;error&#39;&lt;/b&gt;) → &lt;i&gt;&#39;✕ Error al guardar&#39;&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="118" width="317.5" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="end" value="&lt;b&gt;Rating visible en sidebar, tarjeta de galería y futuros filtros&lt;br&gt;Persistido en project.db · Independiente del dispositivo montado&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="395" y="420" width="540" height="62" as="geometry"/>
+                </mxCell>
+                <mxCell id="e01" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="start" target="stars_ui" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="605" y="-1320"/>
+                            <mxPoint x="247" y="-1320"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e01b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="start" target="colors_ui" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="605" y="-1320"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e01c" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="start" target="tags_ui" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="605" y="-1320"/>
+                            <mxPoint x="937" y="-1320"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e02a" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="stars_ui" target="any_change" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e02b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="colors_ui" target="any_change" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e02c" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="tags_ui" target="any_change" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="930" y="-1110"/>
+                            <mxPoint x="605" y="-1110"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e03" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="any_change" target="optimistic" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e04" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="optimistic" target="send_all" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="send_all" target="invoke" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e06" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="invoke" target="be_entry" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e07" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="be_entry" target="get_db" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e08" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="get_db" target="val_q" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e09" value="Inválido" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;fontColor=#b85450;fontStyle=1;exitX=1;exitY=0.5;" parent="1" source="val_q" target="val_err" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10" value="Válido" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;fontColor=#82b366;fontStyle=1;exitX=0.5;exitY=1;" parent="1" source="val_q" target="db_update" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="db_update" target="db_err_q" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e12" value="Error" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;fontColor=#b85450;fontStyle=1;exitX=1;exitY=0.5;" parent="1" source="db_err_q" target="db_err_end" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e13" value="OK" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;fontColor=#82b366;fontStyle=1;exitX=0.5;exitY=1;" parent="1" source="db_err_q" target="return_ok" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="return_ok" target="fe_ok" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e15" value="error" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;dashed=1;fontColor=#b85450;fontSize=10;exitX=0.5;exitY=1;" parent="1" source="val_err" target="fe_err" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="800" y="-377"/>
+                            <mxPoint x="800" y="-410"/>
+                            <mxPoint x="1130" y="-410"/>
+                            <mxPoint x="1130" y="143"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e16" value="error" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;dashed=1;fontColor=#b85450;fontSize=10;exitX=0.5;exitY=1;" parent="1" source="db_err_end" target="fe_err" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="955" y="22"/>
+                            <mxPoint x="670" y="22"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="fe_ok" target="end" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="fe_err" target="end" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="959" y="390"/>
+                            <mxPoint x="665" y="390"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <!-- =================== REFERENCIAS DE CÓDIGO =================== -->
+
+                <!-- Header columna de referencias -->
+                <mxCell id="ref_header" value="Archivos de código" style="text;html=1;strokeColor=#555555;fillColor=#e0e0e0;align=center;verticalAlign=middle;fontStyle=1;fontSize=11;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="-1360" width="300" height="32" as="geometry"/>
+                </mxCell>
+
+                <!-- PhotoSidebar.tsx -->
+                <mxCell id="ref_sidebar" value="&lt;b&gt;PhotoSidebar.tsx&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src/pages/Project/PhotoDetail/&lt;/font&gt;&lt;br&gt;Sección rating: estrellas, colores, tags&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;~ líneas 290–350&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="-1310" width="310" height="80" as="geometry"/>
+                </mxCell>
+
+                <!-- hooks.ts -->
+                <mxCell id="ref_hooks" value="&lt;b&gt;hooks.ts&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src/lib/hooks.ts&lt;/font&gt;&lt;br&gt;DEFAULT_KEYBINDINGS:&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;photo_detail.stars_0 … stars_5&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="-1110" width="310" height="75" as="geometry"/>
+                </mxCell>
+
+                <!-- PhotoDetail.tsx -->
+                <mxCell id="ref_photodetail" value="&lt;b&gt;PhotoDetail.tsx&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src/pages/Project/PhotoDetail/&lt;/font&gt;&lt;br&gt;handleRatingChange() · setSaveState()&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;~ líneas 186–214&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="-1015" width="310" height="80" as="geometry"/>
+                </mxCell>
+
+                <!-- api.ts -->
+                <mxCell id="ref_api" value="&lt;b&gt;api.ts&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src/lib/api.ts&lt;/font&gt;&lt;br&gt;savePhotoRating(photoId, projectId, stars, colorLabel, tags)&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;~ líneas 94–102&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="-770" width="310" height="80" as="geometry"/>
+                </mxCell>
+
+                <!-- commands.rs -->
+                <mxCell id="ref_commands" value="&lt;b&gt;commands.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/commands.rs&lt;/font&gt;&lt;br&gt;save_photo_rating() · state.project_db()&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;~ líneas 658–677&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="-620" width="310" height="80" as="geometry"/>
+                </mxCell>
+
+                <!-- db/mod.rs -->
+                <mxCell id="ref_db_mod" value="&lt;b&gt;db/mod.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/db/mod.rs&lt;/font&gt;&lt;br&gt;ProjectDatabase · open_projects map&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;~ líneas 185–238&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="-520" width="310" height="75" as="geometry"/>
+                </mxCell>
+
+                <!-- db/queries.rs -->
+                <mxCell id="ref_db_queries" value="&lt;b&gt;db/queries.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/db/queries.rs&lt;/font&gt;&lt;br&gt;update_photo_rating()&lt;br&gt;UPDATE photo SET stars, color_label, tags&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;~ líneas 533–540&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="-275" width="310" height="90" as="geometry"/>
+                </mxCell>
+
+                <!-- =================== ARISTAS DE REFERENCIA (punteadas) =================== -->
+
+                <mxCell id="eref_sidebar" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_sidebar" target="tags_ui" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="eref_hooks" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_hooks" target="any_change" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="eref_photodetail" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_photodetail" target="optimistic" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="eref_api" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_api" target="invoke" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="eref_commands" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_commands" target="be_entry" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="eref_db_mod" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_db_mod" target="get_db" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="eref_db_queries" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#888888;endArrow=open;endFill=0;exitX=0;exitY=0.5;" parent="1" source="ref_db_queries" target="db_update" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

@@ -93,6 +93,7 @@ pub struct Photo {
     pub exposure_compensation: Option<f64>,
     pub focal_length: Option<String>,
     pub lens_model: Option<String>,
+    pub rotation: i32,
 }
 
 /// Photographer metadata for XMP writing
@@ -175,6 +176,7 @@ pub struct CreatePhoto {
     pub exposure_compensation: Option<f64>,
     pub focal_length: Option<String>,
     pub lens_model: Option<String>,
+    pub rotation: i32,
 }
 
 // ============================================================================
@@ -196,14 +198,12 @@ pub struct Keybinding {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub embed_metadata_on_import: bool,
-    pub convert_to_dng: bool,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             embed_metadata_on_import: true,
-            convert_to_dng: false,
         }
     }
 }

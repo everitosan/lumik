@@ -1,8 +1,4 @@
-use log::{debug, info, warn};
-use std::path::Path;
 use thiserror::Error;
-
-use crate::util::silent_command;
 
 /// Supported photo file extensions (lowercase)
 pub const SUPPORTED_EXTENSIONS: &[&str] = &[
@@ -12,110 +8,27 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "raf",        // Fujifilm
     "orf",        // Olympus
     "rw2",        // Panasonic
-    "dng",        // Already DNG
-    "jpg", "jpeg", // JPEG (copied as-is, no conversion)
-    "tif", "tiff", // TIFF (copied as-is, no conversion)
+    "dng",        // DNG
+    "jpg", "jpeg", // JPEG
+    "tif", "tiff", // TIFF
 ];
 
-/// Supported video file extensions (lowercase) — copied as-is, no conversion or metadata
+/// Supported video file extensions (lowercase) — copied as-is, no metadata
 pub const VIDEO_EXTENSIONS: &[&str] = &[
     "mp4", "mov", "avi", "mts", "m2ts", "mkv", "mxf",
 ];
 
-/// Errors that can occur during RAW conversion
+/// Errors that can occur during the import pipeline
 #[derive(Debug, Error)]
 pub enum ConvertError {
-    #[error("Unsupported RAW format: {0}")]
+    #[error("Unsupported format: {0}")]
     UnsupportedFormat(String),
 
-    #[error("Failed to create DNG: {0}")]
+    #[error("Import error: {0}")]
     DngError(String),
 
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-}
-
-/// Convert all RAW files in a directory to DNG using dnglab batch mode
-pub fn convert_directory_to_dng(
-    source_dir: &Path,
-    dest_dir: &Path,
-) -> Result<usize, ConvertError> {
-    info!(
-        "Batch converting {} to {}",
-        source_dir.display(),
-        dest_dir.display()
-    );
-
-    let dnglab_cmd = find_dnglab().ok_or_else(|| {
-        ConvertError::DngError("dnglab not found. Please install dnglab.".to_string())
-    })?;
-
-    let output = silent_command(&dnglab_cmd)
-        .args([
-            "convert",
-            "-v",
-            source_dir.to_str().unwrap_or_default(),
-            dest_dir.to_str().unwrap_or_default(),
-        ])
-        .output()
-        .map_err(|e| ConvertError::DngError(format!("Failed to execute dnglab: {}", e)))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        warn!("dnglab batch conversion failed: {}", stderr);
-        return Err(ConvertError::DngError(format!(
-            "dnglab batch conversion failed: {}",
-            stderr
-        )));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    debug!("dnglab batch conversion output: {}", stdout);
-
-    // Count converted files from output (e.g., "Converted 17/17 files")
-    let converted_count = stdout
-        .lines()
-        .find(|line| line.contains("Converted"))
-        .and_then(|line| {
-            line.split_whitespace()
-                .nth(1)
-                .and_then(|s| s.split('/').next())
-                .and_then(|n| n.parse::<usize>().ok())
-        })
-        .unwrap_or(0);
-
-    info!("Batch conversion completed: {} files converted", converted_count);
-    Ok(converted_count)
-}
-
-/// Find dnglab binary - checks PATH and common locations
-pub fn find_dnglab() -> Option<String> {
-    // Check if dnglab is in PATH
-    if silent_command("dnglab").arg("--version").output().is_ok() {
-        return Some("dnglab".to_string());
-    }
-
-    // Check common locations per platform
-    #[cfg(not(target_os = "windows"))]
-    let locations = [
-        dirs::home_dir().map(|h| h.join(".local/bin/dnglab")),
-        Some(std::path::PathBuf::from("/usr/local/bin/dnglab")),
-        Some(std::path::PathBuf::from("/usr/bin/dnglab")),
-    ];
-    #[cfg(target_os = "windows")]
-    let locations = [
-        dirs::data_local_dir().map(|h| h.join("Programs\\dnglab\\dnglab.exe")),
-        Some(std::path::PathBuf::from("C:\\Program Files\\dnglab\\dnglab.exe")),
-        Some(std::path::PathBuf::from("C:\\Program Files (x86)\\dnglab\\dnglab.exe")),
-    ];
-
-    for location in locations.into_iter().flatten() {
-        if location.exists() {
-            return Some(location.to_string_lossy().to_string());
-        }
-    }
-
-    None
 }
 
 #[cfg(test)]

@@ -28,7 +28,8 @@ export type IconName =
   | 'zoom-in'
   | 'zoom-out'
   | 'rotate-ccw'
-  | 'rotate-cw';
+  | 'rotate-cw'
+  | 'info';
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
   name: IconName;
@@ -44,6 +45,14 @@ const sizeMap = {
 };
 
 const icons: Record<IconName, (props: SVGProps<SVGSVGElement>) => ReactElement> = {
+  info: (props) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4" />
+      <path d="M12 8h.01" />
+    </svg>
+  ),
+
   search: (props) => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
       <circle cx="11" cy="11" r="8" />

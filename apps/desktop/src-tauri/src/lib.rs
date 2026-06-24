@@ -1,7 +1,10 @@
 mod commands;
 mod db;
 mod devices;
+#[cfg(not(target_os = "android"))]
 mod exiftool;
+#[cfg(target_os = "android")]
+mod exif_android;
 mod import;
 mod util;
 
@@ -79,6 +82,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
+            commands::get_platform,
             commands::scan_connected_devices,
             commands::get_known_devices,
             commands::get_projects_dashboard,

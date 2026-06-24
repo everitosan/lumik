@@ -3,15 +3,36 @@ use log::{debug, info, warn};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Returns the base directory for temporary import workspaces.
+/// On Android, std::env::temp_dir() returns /tmp which doesn't exist —
+/// use the app's private cache dir instead.
+fn workspace_base_dir() -> PathBuf {
+    #[cfg(target_os = "android")]
+    {
+        let home = std::env::var("HOME")
+            .unwrap_or_else(|_| "/data/data/com.lumik.desktop".to_string());
+        PathBuf::from(home).join("cache")
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        std::env::temp_dir()
+    }
+}
+
 use crate::db::models::PhotographerMetadata;
+#[cfg(not(target_os = "android"))]
 use crate::exiftool;
-use crate::util::silent_command;
-use super::converter::{find_dnglab, ConvertError, SUPPORTED_EXTENSIONS, VIDEO_EXTENSIONS};
+use super::converter::{ConvertError, SUPPORTED_EXTENSIONS, VIDEO_EXTENSIONS};
+#[cfg(target_os = "android")]
+use super::xmp::write_xmp_sidecar;
+#[cfg(target_os = "android")]
+use rawler::decoders::RawDecodeParams;
+#[cfg(target_os = "android")]
+use rawler::RawFile;
 
 /// Temporary workspace for the import pipeline
 pub struct PipelineWorkspace {
     pub temp_dir: PathBuf,
-    pub raw_dir: PathBuf,
     pub dng_dir: PathBuf,
 }
 
@@ -20,15 +41,13 @@ impl PipelineWorkspace {
     pub fn create(project_name: &str) -> Result<Self, ConvertError> {
         let timestamp = Local::now().format("%Y_%m_%d__%H_%M_%S");
         let temp_name = format!("{}_{}", sanitize_name(project_name), timestamp);
-        let temp_dir = std::env::temp_dir().join(&temp_name);
-        let raw_dir = temp_dir.join("raw");
-        let dng_dir = temp_dir.join("dng");
+        let temp_dir = workspace_base_dir().join(&temp_name);
+        let dng_dir = temp_dir.join("files");
 
-        fs::create_dir_all(&raw_dir)?;
         fs::create_dir_all(&dng_dir)?;
         info!("Created workspace: {}", temp_dir.display());
 
-        Ok(Self { temp_dir, raw_dir, dng_dir })
+        Ok(Self { temp_dir, dng_dir })
     }
 
     /// Cleanup the workspace
@@ -39,50 +58,7 @@ impl PipelineWorkspace {
     }
 }
 
-/// Step 1: Copy selected files to workspace.
-/// RAW files go to raw_dir for dnglab conversion; JPEG files bypass conversion and go to dng_dir.
-pub fn pipeline_copy_files(
-    source_files: &[PathBuf],
-    workspace: &PipelineWorkspace,
-) -> Result<usize, ConvertError> {
-    let mut count = 0;
-    for path in source_files {
-        if !path.is_file() {
-            warn!("Skipping non-file: {}", path.display());
-            continue;
-        }
-        let ext = path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).unwrap_or_default();
-        if !SUPPORTED_EXTENSIONS.contains(&ext.as_str()) {
-            warn!("Skipping unsupported format: {}", path.display());
-            continue;
-        }
-        // JPEG and TIFF files bypass dnglab: copy straight to dng_dir
-        let dest_dir = if matches!(ext.as_str(), "jpg" | "jpeg" | "tif" | "tiff") {
-            &workspace.dng_dir
-        } else {
-            &workspace.raw_dir
-        };
-        if let Some(file_name) = path.file_name() {
-            fs::copy(path, dest_dir.join(file_name))?;
-            count += 1;
-            debug!("Copied {} → {:?}", path.display(), dest_dir);
-        }
-    }
-    if count == 0 {
-        return Err(ConvertError::DngError("No files to process".to_string()));
-    }
-    info!("Copied {} files to workspace", count);
-    Ok(count)
-}
-
-/// Step 2: Convert RAW to DNG with dnglab
-pub fn pipeline_convert(workspace: &PipelineWorkspace) -> Result<usize, ConvertError> {
-    let converted = run_dnglab_convert(&workspace.raw_dir, &workspace.dng_dir)?;
-    info!("Converted {} files with dnglab", converted);
-    Ok(converted)
-}
-
-/// Step 2 (alternate): Skip conversion — copy source files directly to dng_dir
+/// Step 1: Copy source files to workspace (original format, no conversion)
 pub fn pipeline_passthrough(
     source_files: &[PathBuf],
     workspace: &PipelineWorkspace,
@@ -97,15 +73,138 @@ pub fn pipeline_passthrough(
     Ok(copied)
 }
 
-/// Step 3: Embed metadata and rename files with exiftool
+/// Step 3: Rename files and embed photographer metadata.
+/// Desktop (Linux/Windows): exiftool embeds metadata directly inside each RAW file.
+/// Android: rawler extracts the date for renaming, XMP sidecar carries the metadata.
 pub fn pipeline_metadata(
     workspace: &PipelineWorkspace,
     project_name: &str,
     metadata: &Option<PhotographerMetadata>,
+    image_description: Option<&str>,
 ) -> Result<usize, ConvertError> {
-    let renamed = rename_and_embed_metadata(&workspace.dng_dir, project_name, metadata)?;
-    info!("Renamed and embedded metadata in {} files", renamed);
-    Ok(renamed)
+    #[cfg(not(target_os = "android"))]
+    {
+        let count = rename_and_embed_metadata(&workspace.dng_dir, project_name, metadata, image_description)?;
+        info!("Renamed and embedded metadata in {} files", count);
+        return Ok(count);
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        let sanitized_project = sanitize_name(project_name);
+        let mut files: Vec<PathBuf> = fs::read_dir(&workspace.dng_dir)?
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_file())
+            .collect();
+        files.sort();
+
+        for (i, path) in files.iter().enumerate() {
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+            let datetime = extract_datetime_for_rename(path);
+            let new_name = format!("{}__{}__{:03}.{}", datetime, sanitized_project, i + 1, ext);
+            let new_path = workspace.dng_dir.join(&new_name);
+            if new_path != *path {
+                fs::rename(path, &new_path)?;
+            }
+            write_xmp_sidecar(&new_path, metadata.as_ref(), image_description)
+                .map_err(|e| ConvertError::DngError(e))?;
+        }
+
+        info!("Renamed and wrote XMP sidecars for {} files (android)", files.len());
+        Ok(files.len())
+    }
+}
+
+/// Desktop only: rename files by DateTimeOriginal and embed photographer metadata
+/// directly inside each RAW file using exiftool.
+#[cfg(not(target_os = "android"))]
+fn rename_and_embed_metadata(
+    dir: &Path,
+    project_name: &str,
+    metadata: &Option<PhotographerMetadata>,
+    image_description: Option<&str>,
+) -> Result<usize, ConvertError> {
+    let sanitized_name = sanitize_name(project_name);
+    let filename_tag = format!("-FileName<${{DateTimeOriginal}}__{}__%03c.%le", sanitized_name);
+
+    let mut args: Vec<String> = vec![
+        "-d".to_string(),
+        "%Y-%m-%d__%H-%M-%S".to_string(),
+        filename_tag,
+        "-overwrite_original".to_string(),
+    ];
+
+    if let Some(ref meta) = metadata {
+        if let Some(ref v) = meta.artist {
+            if !v.is_empty() {
+                args.push(format!("-Artist={}", v));
+                args.push(format!("-XMP-dc:Creator={}", v));
+            }
+        }
+        if let Some(ref v) = meta.copyright {
+            if !v.is_empty() {
+                args.push(format!("-Copyright={}", v));
+                args.push(format!("-XMP-dc:Rights={}", v));
+            }
+        }
+        if let Some(ref v) = meta.contact_url {
+            if !v.is_empty() {
+                args.push(format!("-XMP-iptcCore:CreatorWorkURL={}", v));
+            }
+        }
+        if let Some(ref v) = meta.contact_email {
+            if !v.is_empty() {
+                args.push(format!("-XMP-iptcCore:CreatorWorkEmail={}", v));
+            }
+        }
+        if let Some(ref v) = meta.usage_terms {
+            if !v.is_empty() {
+                args.push(format!("-XMP-xmpRights:UsageTerms={}", v));
+            }
+        }
+    }
+
+    if let Some(desc) = image_description {
+        if !desc.is_empty() {
+            args.push(format!("-ImageDescription={}", desc));
+            args.push(format!("-XMP-dc:Description={}", desc));
+        }
+    }
+
+    args.push(dir.to_string_lossy().to_string());
+    debug!("exiftool args: {:?}", args);
+
+    exiftool::run_text(&args)
+        .map_err(|e| ConvertError::DngError(format!("exiftool failed: {}", e)))?;
+
+    let count = fs::read_dir(dir)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_file())
+        .count();
+
+    Ok(count)
+}
+
+/// Android only: extract DateTimeOriginal via rawler for use in the renamed filename.
+/// Falls back to current timestamp if the file can't be decoded.
+#[cfg(target_os = "android")]
+fn extract_datetime_for_rename(path: &Path) -> String {
+    let params = RawDecodeParams { image_index: 0 };
+    if let Ok(file) = std::fs::File::open(path) {
+        let reader = std::io::BufReader::new(file);
+        let mut rawfile = RawFile::new(path.to_path_buf(), reader);
+        if let Ok(decoder) = rawler::get_decoder(&mut rawfile) {
+            if let Ok(meta) = decoder.raw_metadata(&mut rawfile, params) {
+                let dt = meta.exif.date_time_original.or(meta.exif.create_date);
+                if let Some(dt) = dt {
+                    // EXIF format: "2025:01:15 14:30:00" → "2025-01-15__14-30-00"
+                    return dt.replacen(':', "-", 2).replace(' ', "__").replacen(':', "-", 2);
+                }
+            }
+        }
+    }
+    Local::now().format("%Y-%m-%d__%H-%M-%S").to_string()
 }
 
 /// Step 4: Move DNGs to final destination
@@ -151,114 +250,6 @@ fn copy_selected_files(files: &[PathBuf], dest: &Path) -> Result<usize, ConvertE
     Ok(count)
 }
 
-/// Run dnglab convert on the temp directory
-fn run_dnglab_convert(source: &Path, dest: &Path) -> Result<usize, ConvertError> {
-    let dnglab_cmd = find_dnglab().ok_or_else(|| {
-        ConvertError::DngError("dnglab not found. Please install dnglab.".to_string())
-    })?;
-
-    let output = silent_command(&dnglab_cmd)
-        .args([
-            "convert",
-            source.to_str().unwrap_or_default(),
-            dest.to_str().unwrap_or_default(),
-        ])
-        .output()
-        .map_err(|e| ConvertError::DngError(format!("Failed to execute dnglab: {}", e)))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ConvertError::DngError(format!("dnglab failed: {}", stderr)));
-    }
-
-    // Count resulting DNG files
-    let count = fs::read_dir(dest)?
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .map(|ext| ext.to_ascii_lowercase() == "dng")
-                .unwrap_or(false)
-        })
-        .count();
-
-    Ok(count)
-}
-
-/// Rename DNG files using exiftool with pattern: yyyy-mm-dd__ProjectName_seq
-/// Also embeds photographer metadata
-fn rename_and_embed_metadata(
-    dng_dir: &Path,
-    project_name: &str,
-    metadata: &Option<PhotographerMetadata>,
-) -> Result<usize, ConvertError> {
-    let sanitized_name = sanitize_name(project_name);
-
-    // -d sets only the strftime date format (no counter or extension here to avoid
-    // conflicts: %c in strftime = locale date, %l = 12-hour clock, etc.).
-    // -FileName<${DateTimeOriginal} uses the -d-formatted date, then appends
-    // exiftool-specific %03c (zero-padded counter) and %le (lowercase extension).
-    let filename_tag = format!(
-        "-FileName<${{DateTimeOriginal}}__{}__%03c.%le",
-        sanitized_name
-    );
-
-    let mut args: Vec<String> = vec![
-        "-d".to_string(),
-        "%Y-%m-%d__%H-%M-%S".to_string(),
-        filename_tag,
-        "-overwrite_original".to_string(),
-    ];
-
-    // Add photographer metadata if provided
-    if let Some(ref meta) = metadata {
-        if let Some(ref artist) = meta.artist {
-            if !artist.is_empty() {
-                args.push(format!("-Artist={}", artist));
-                args.push(format!("-XMP-dc:Creator={}", artist));
-            }
-        }
-        if let Some(ref copyright) = meta.copyright {
-            if !copyright.is_empty() {
-                args.push(format!("-Copyright={}", copyright));
-                args.push(format!("-XMP-dc:Rights={}", copyright));
-            }
-        }
-        if let Some(ref url) = meta.contact_url {
-            if !url.is_empty() {
-                args.push(format!("-XMP-iptcCore:CreatorWorkURL={}", url));
-            }
-        }
-        if let Some(ref email) = meta.contact_email {
-            if !email.is_empty() {
-                args.push(format!("-XMP-iptcCore:CreatorWorkEmail={}", email));
-            }
-        }
-        if let Some(ref terms) = meta.usage_terms {
-            if !terms.is_empty() {
-                args.push(format!("-XMP-xmpRights:UsageTerms={}", terms));
-            }
-        }
-    }
-
-    // Process all files in directory (handles both DNG and original RAW formats)
-    args.push(dng_dir.to_string_lossy().to_string());
-
-    debug!("exiftool rename args: {:?}", args);
-
-    let stdout = exiftool::run_text(&args)
-        .map_err(|e| ConvertError::DngError(format!("exiftool rename failed: {}", e)))?;
-    debug!("exiftool output: {}", stdout);
-
-    // Count output files after rename
-    let count = fs::read_dir(dng_dir)?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file())
-        .count();
-
-    Ok(count)
-}
-
 /// Move all output files from temp to final destination
 /// Uses copy+delete because rename doesn't work across filesystems
 /// Returns (count, list of destination paths)
@@ -279,7 +270,14 @@ fn move_dng_files(source: &Path, dest: &Path) -> Result<(usize, Vec<PathBuf>), C
 
             count += 1;
             info!("Moved: {} -> {}", path.display(), dest_path.display());
-            moved_files.push(dest_path);
+            // Exclude XMP sidecars from the list — they are not processed for EXIF/thumbnails
+            let is_xmp = path.extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.eq_ignore_ascii_case("xmp"))
+                .unwrap_or(false);
+            if !is_xmp {
+                moved_files.push(dest_path);
+            }
         }
     }
 
