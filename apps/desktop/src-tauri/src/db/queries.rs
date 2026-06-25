@@ -388,6 +388,32 @@ impl ProjectDatabase {
         Ok(())
     }
 
+    pub fn update_session_date(&self, date: &str) -> DbResult<()> {
+        let conn = self.conn();
+        conn.execute("UPDATE project SET session_date = ?1", [date])?;
+        Ok(())
+    }
+
+    pub fn update_photo_paths_prefix(&self, old_prefix: &str, new_prefix: &str) -> DbResult<usize> {
+        let conn = self.conn();
+        let n = conn.execute(
+            "UPDATE photo SET dng_path = REPLACE(dng_path, ?1, ?2)",
+            rusqlite::params![old_prefix, new_prefix],
+        )?;
+        Ok(n)
+    }
+
+    pub fn get_oldest_capture_date(&self) -> DbResult<Option<String>> {
+        let conn = self.conn();
+        conn.query_row(
+            "SELECT MIN(capture_date) FROM photo \
+             WHERE project_id = ?1 AND deleted = 0 AND capture_date IS NOT NULL",
+            [&self.project_id],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .map_err(Into::into)
+    }
+
     // ------------------------------------------------------------------------
     // PHOTOS
     // ------------------------------------------------------------------------

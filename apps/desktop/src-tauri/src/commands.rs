@@ -1230,6 +1230,86 @@ pub async fn start_import(
         }
     };
 
+    // If session_date was not provided, infer it from the oldest imported photo,
+    // rename the project folder to match, and update the DB field.
+    if successful > 0 {
+        if let Ok(Some(project)) = project_db.get_project() {
+            if project.session_date.is_none() {
+                if let Ok(Some(oldest)) = project_db.get_oldest_capture_date() {
+                    // capture_date may be EXIF format "YYYY:MM:DD HH:MM:SS" or ISO "YYYY-MM-DD..."
+                    let date_str = oldest.get(..10).unwrap_or(&oldest).replace(':', "-");
+                    let parts: Vec<&str> = date_str.splitn(3, '-').collect();
+                    if parts.len() == 3 {
+                        let (year, month, day) = (parts[0], parts[1], parts[2]);
+                        let slug = request.project_name.replace('/', "-").trim().to_string();
+                        let new_project_dir = project_db.mount_point
+                            .join("lumik")
+                            .join(year)
+                            .join(month)
+                            .join(format!("{}_{}", day, slug));
+
+                        if new_project_dir == project_db.project_dir {
+                            let _ = project_db.update_session_date(&date_str);
+                        } else if new_project_dir.exists() {
+                            warn!("Rename skipped: target already exists: {}", new_project_dir.display());
+                            let _ = project_db.update_session_date(&date_str);
+                        } else {
+                            if let Some(parent) = new_project_dir.parent() {
+                                let _ = std::fs::create_dir_all(parent);
+                            }
+                            match std::fs::rename(&project_db.project_dir, &new_project_dir) {
+                                Ok(()) => {
+                                    emit_log(&app, &request.session_id, &format!(
+                                        "Carpeta movida a {}", new_project_dir.display()
+                                    ));
+                                    // Remove empty ancestor dirs left behind
+                                    let mut ancestor = project_db.project_dir.parent();
+                                    while let Some(d) = ancestor {
+                                        if std::fs::remove_dir(d).is_err() { break; }
+                                        ancestor = d.parent();
+                                    }
+                                    // Reopen the DB at its new location and update AppState
+                                    let new_db_path = new_project_dir.join("project.db");
+                                    match ProjectDatabase::open(
+                                        new_db_path,
+                                        &project_db.device_uuid,
+                                        project_db.mount_point.clone(),
+                                    ) {
+                                        Ok(new_db) => {
+                                            let _ = new_db.update_session_date(&date_str);
+                                            // Fix dng_path values that still reference the old folder
+                                            let old_prefix = path_to_slash(
+                                                &project_db.project_dir
+                                                    .strip_prefix(&project_db.mount_point)
+                                                    .unwrap_or(&project_db.project_dir),
+                                            );
+                                            let new_prefix = path_to_slash(
+                                                &new_project_dir
+                                                    .strip_prefix(&project_db.mount_point)
+                                                    .unwrap_or(&new_project_dir),
+                                            );
+                                            match new_db.update_photo_paths_prefix(&old_prefix, &new_prefix) {
+                                                Ok(n) => info!("Updated dng_path for {} photos after folder rename", n),
+                                                Err(e) => warn!("Could not update dng_path after rename: {}", e),
+                                            }
+                                            let mut map = state.open_projects.lock().unwrap();
+                                            map.insert(request.project_id.clone(), Arc::new(new_db));
+                                        }
+                                        Err(e) => warn!("Could not reopen DB after rename: {}", e),
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!("Could not rename project folder: {}", e);
+                                    let _ = project_db.update_session_date(&date_str);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     emit_progress(&app, &request.session_id, 3, 3, "Completado", ImportPhase::Complete, None);
 
     let result = ImportResult {
