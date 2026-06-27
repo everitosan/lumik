@@ -126,6 +126,16 @@ fn rename_and_embed_metadata(
     image_description: Option<&str>,
 ) -> Result<usize, ConvertError> {
     let sanitized_name = sanitize_name(project_name);
+
+    // For files without DateTimeOriginal (e.g. scanner TIFFs), seed it from ModifyDate
+    // so the rename pattern below has a date to work with.
+    let _ = exiftool::run_text(&[
+        "-if".to_string(), "not $DateTimeOriginal".to_string(),
+        "-DateTimeOriginal<ModifyDate".to_string(),
+        "-overwrite_original".to_string(),
+        dir.to_string_lossy().to_string(),
+    ]);
+
     let filename_tag = format!("-FileName<${{DateTimeOriginal}}__{}__%03c.%le", sanitized_name);
 
     let mut args: Vec<String> = vec![

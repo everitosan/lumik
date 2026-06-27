@@ -275,6 +275,42 @@ pub fn delete_project(state: State<AppState>, id: String) -> Result<(), String> 
 // THUMBNAIL CACHE HELPERS
 // ============================================================================
 
+/// Decode a TIFF with JPEG strip compression using the `tiff` crate (pure Rust, zune-jpeg backend).
+/// Returns None for unsupported color types or decode errors.
+#[cfg(not(target_os = "android"))]
+fn open_jpeg_tiff(path: &Path) -> Option<image::DynamicImage> {
+    use tiff::decoder::{Decoder, DecodingResult};
+    use tiff::ColorType;
+
+    let file = std::fs::File::open(path).ok()?;
+    let mut dec = Decoder::new(file).ok()?;
+    let (w, h) = dec.dimensions().ok()?;
+    match dec.read_image().ok()? {
+        DecodingResult::U8(data) => match dec.colortype().ok()? {
+            ColorType::RGB(8) => {
+                image::RgbImage::from_raw(w, h, data).map(image::DynamicImage::ImageRgb8)
+            }
+            ColorType::YCbCr(8) => {
+                // tiff crate returns raw YCbCr pixels (not converted); apply ITU-R BT.601 → RGB.
+                let rgb: Vec<u8> = data.chunks_exact(3).flat_map(|px| {
+                    let y  = px[0] as f32;
+                    let cb = px[1] as f32 - 128.0;
+                    let cr = px[2] as f32 - 128.0;
+                    let r = (y + 1.402   * cr              ).clamp(0.0, 255.0) as u8;
+                    let g = (y - 0.34414 * cb - 0.71414 * cr).clamp(0.0, 255.0) as u8;
+                    let b = (y + 1.772   * cb              ).clamp(0.0, 255.0) as u8;
+                    [r, g, b]
+                }).collect();
+                image::RgbImage::from_raw(w, h, rgb).map(image::DynamicImage::ImageRgb8)
+            }
+            ColorType::RGBA(8) => image::RgbaImage::from_raw(w, h, data).map(image::DynamicImage::ImageRgba8),
+            ColorType::Gray(8) => image::GrayImage::from_raw(w, h, data).map(|g| image::DynamicImage::ImageLuma8(g)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 fn thumbs_dir_for(project_dir: &Path) -> Option<std::path::PathBuf> {
     let thumbs = project_dir.join(".thumbs");
     std::fs::create_dir_all(&thumbs).ok()?;
@@ -302,28 +338,43 @@ fn cache_thumbnail(dng_full_path: &Path, photo_id: &str, log_ctx: Option<(&AppHa
         use std::io::Cursor;
 
         let path_str = dng_full_path.to_str().unwrap_or_default();
+        let ext = dng_full_path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).unwrap_or_default();
         let mut raw_bytes: Option<Vec<u8>> = None;
-        for tag in &["-PreviewImage", "-ThumbnailImage"] {
-            let output = match silent_command("exiftool").args(["-b", tag, path_str]).output() {
-                Ok(o) => o,
-                Err(_) => continue,
-            };
-            if output.status.success() && !output.stdout.is_empty() {
-                raw_bytes = Some(output.stdout);
-                break;
+        // TIFFs with JPEG strip compression store image data in 16-row strips; exiftool
+        // -PreviewImage returns only the first strip (16px tall), not a usable thumbnail.
+        if !matches!(ext.as_str(), "tif" | "tiff") {
+            for tag in &["-PreviewImage", "-ThumbnailImage"] {
+                let output = match silent_command("exiftool").args(["-b", tag, path_str]).output() {
+                    Ok(o) => o,
+                    Err(_) => continue,
+                };
+                if output.status.success() && !output.stdout.is_empty() {
+                    raw_bytes = Some(output.stdout);
+                    break;
+                }
             }
         }
 
         let raw_bytes = match raw_bytes {
             Some(b) => b,
             None => {
-                let ext = dng_full_path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).unwrap_or_default();
                 if !matches!(ext.as_str(), "jpg" | "jpeg" | "tif" | "tiff") { return; }
-                let full_img = match image::open(dng_full_path) { Ok(img) => img, Err(_) => return };
-                let thumb = full_img.thumbnail(320, 320);
-                let mut buf = std::io::Cursor::new(Vec::new());
-                if thumb.write_to(&mut buf, ImageFormat::Jpeg).is_err() { return; }
-                buf.into_inner()
+                match image::open(dng_full_path) {
+                    Ok(full_img) => {
+                        let thumb = full_img.thumbnail(320, 320);
+                        let mut buf = std::io::Cursor::new(Vec::new());
+                        if thumb.write_to(&mut buf, ImageFormat::Jpeg).is_err() { return; }
+                        buf.into_inner()
+                    }
+                    Err(_) if matches!(ext.as_str(), "tif" | "tiff") => {
+                        let img = match open_jpeg_tiff(dng_full_path) { Some(i) => i, None => return };
+                        let thumb = img.thumbnail(320, 320);
+                        let mut buf = std::io::Cursor::new(Vec::new());
+                        if thumb.write_to(&mut buf, ImageFormat::Jpeg).is_err() { return; }
+                        buf.into_inner()
+                    }
+                    Err(_) => return,
+                }
             }
         };
 
@@ -442,24 +493,27 @@ fn ensure_preview_cached(dng_full_path: &Path, project_dir: &Path, photo_id: &st
     #[cfg(not(target_os = "android"))]
     {
         let path_str = dng_full_path.to_str()?;
-        for tag in &["-JpgFromRaw", "-LargeImage", "-PreviewImage", "-OtherImage"] {
-            let output = match silent_command("exiftool").args(["-b", tag, path_str]).output() {
-                Ok(o) => o,
-                Err(_) => continue,
-            };
-            if output.status.success() && output.stdout.len() > 4096 {
-                if std::fs::write(&dest, &output.stdout).is_ok() {
-                    let _ = exiftool::run_text(&[
-                        "-Orientation=1".to_string(), "-n".to_string(),
-                        "-overwrite_original".to_string(), dest.to_string_lossy().to_string(),
-                    ]);
-                    debug!("Cached preview ({}) for {} → {:?}", tag, photo_id, dest);
-                    return Some(dest);
+        let ext = dng_full_path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).unwrap_or_default();
+        // TIFFs with JPEG strip compression return only the first 16px strip via
+        // exiftool -PreviewImage; use image::open instead to reconstruct the full image.
+        if !matches!(ext.as_str(), "tif" | "tiff") {
+            for tag in &["-JpgFromRaw", "-LargeImage", "-PreviewImage", "-OtherImage"] {
+                let output = match silent_command("exiftool").args(["-b", tag, path_str]).output() {
+                    Ok(o) => o,
+                    Err(_) => continue,
+                };
+                if output.status.success() && output.stdout.len() > 4096 {
+                    if std::fs::write(&dest, &output.stdout).is_ok() {
+                        let _ = exiftool::run_text(&[
+                            "-Orientation=1".to_string(), "-n".to_string(),
+                            "-overwrite_original".to_string(), dest.to_string_lossy().to_string(),
+                        ]);
+                        debug!("Cached preview ({}) for {} → {:?}", tag, photo_id, dest);
+                        return Some(dest);
+                    }
                 }
             }
         }
-
-        let ext = dng_full_path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).unwrap_or_default();
         if matches!(ext.as_str(), "jpg" | "jpeg") {
             if std::fs::copy(dng_full_path, &dest).is_ok() {
                 let _ = exiftool::run_text(&[
@@ -471,11 +525,23 @@ fn ensure_preview_cached(dng_full_path: &Path, project_dir: &Path, photo_id: &st
         }
         if matches!(ext.as_str(), "tif" | "tiff") {
             use image::ImageFormat;
-            if let Ok(img) = image::open(dng_full_path) {
-                let mut buf = std::io::Cursor::new(Vec::new());
-                if img.write_to(&mut buf, ImageFormat::Jpeg).is_ok() {
-                    if std::fs::write(&dest, buf.into_inner()).is_ok() {
-                        return Some(dest);
+            match image::open(dng_full_path) {
+                Ok(img) => {
+                    let mut buf = std::io::Cursor::new(Vec::new());
+                    if img.write_to(&mut buf, ImageFormat::Jpeg).is_ok() {
+                        if std::fs::write(&dest, buf.into_inner()).is_ok() {
+                            return Some(dest);
+                        }
+                    }
+                }
+                Err(_) => {
+                    if let Some(img) = open_jpeg_tiff(dng_full_path) {
+                        let mut buf = std::io::Cursor::new(Vec::new());
+                        if img.write_to(&mut buf, image::ImageFormat::Jpeg).is_ok() {
+                            if std::fs::write(&dest, buf.into_inner()).is_ok() {
+                                return Some(dest);
+                            }
+                        }
                     }
                 }
             }
@@ -1367,6 +1433,7 @@ fn extract_exif_metadata_batch(paths: &[PathBuf]) -> HashMap<PathBuf, FileMetada
             "-ImageHeight".to_string(),
             "-DateTimeOriginal".to_string(),
             "-CreateDate".to_string(),
+            "-ModifyDate".to_string(),
             "-Make".to_string(),
             "-Model".to_string(),
             "-ISO".to_string(),
@@ -1415,7 +1482,7 @@ fn extract_exif_metadata_batch(paths: &[PathBuf]) -> HashMap<PathBuf, FileMetada
                     .filter(|s| !s.is_empty())
             };
 
-            let capture_date = get("datetimeoriginal").or_else(|| get("createdate"));
+            let capture_date = get("datetimeoriginal").or_else(|| get("createdate")).or_else(|| get("modifydate"));
             let camera = match (get("make"), get("model")) {
                 (Some(make), Some(model)) => Some(format!("{} {}", make, model)),
                 (Some(make), None)        => Some(make),
