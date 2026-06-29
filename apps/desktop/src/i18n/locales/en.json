@@ -122,13 +122,28 @@
       "title": "Photographer info",
       "description": "Configure the metadata to embed in your photos during import.",
       "embedMetadata": "Embed metadata in photos on import",
-      "renameOnImport": "Rename photos on import",
       "name": "Name",
       "email": "Email",
       "copyright": "Copyright",
       "credits": "Credits"
     },
+    "importOptions": {
+      "title": "Import options",
+      "description": "Configure how files are processed on import.",
+      "renameOnImport": "Rename photos on import",
+      "renameExampleLabel": "They'll look like:",
+      "renameExample": "IMG_4821.CR2 → 2024-06-15__14-30-22__Smith_Wedding.cr2"
+    },
     "language": "Language",
+    "tabs": {
+      "import": "Import",
+      "shortcuts": "Shortcuts",
+      "appearance": "Appearance"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "description": "Customize the language and presentation of the app."
+    },
     "keybindings": {
       "title": "Keyboard shortcuts",
       "description": "Click on a key badge and press the new key to reassign it. Press Esc to cancel.",

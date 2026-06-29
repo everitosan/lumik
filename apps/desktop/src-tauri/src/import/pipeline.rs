@@ -29,6 +29,8 @@ use super::xmp::write_xmp_sidecar;
 use rawler::decoders::RawDecodeParams;
 #[cfg(target_os = "android")]
 use rawler::RawFile;
+#[cfg(target_os = "android")]
+use std::collections::HashMap;
 
 /// Temporary workspace for the import pipeline
 pub struct PipelineWorkspace {
@@ -100,11 +102,23 @@ pub fn pipeline_metadata(
             .collect();
         files.sort();
 
-        for (i, path) in files.iter().enumerate() {
+        // How many files already claimed each target name. The first file with a given
+        // timestamp+extension keeps a clean name; duplicates get a -001, -002… suffix.
+        // Mirrors the desktop exiftool pattern `%-03c`.
+        let mut seen: HashMap<String, usize> = HashMap::new();
+
+        for path in &files {
             let target_path = if rename {
                 let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
                 let datetime = extract_datetime_for_rename(path);
-                let new_name = format!("{}__{}__{:03}.{}", datetime, sanitized_project, i + 1, ext);
+                let base = format!("{}__{}.{}", datetime, sanitized_project, ext);
+                let count = seen.entry(base.clone()).or_insert(0);
+                let new_name = if *count == 0 {
+                    base.clone()
+                } else {
+                    format!("{}__{}-{:03}.{}", datetime, sanitized_project, count, ext)
+                };
+                *count += 1;
                 let new_path = workspace.dng_dir.join(&new_name);
                 if new_path != *path {
                     fs::rename(path, &new_path)?;
@@ -148,7 +162,9 @@ fn rename_and_embed_metadata(
 
         args.push("-d".to_string());
         args.push("%Y-%m-%d__%H-%M-%S".to_string());
-        args.push(format!("-FileName<${{DateTimeOriginal}}__{}__%03c.%le", sanitized_name));
+        // %-03c only appends a suffix (e.g. -001) when several files share the same
+        // timestamp; a unique file stays clean: 2024-06-15__14-30-22__Project.cr2
+        args.push(format!("-FileName<${{DateTimeOriginal}}__{}%-03c.%le", sanitized_name));
     }
 
     let mut has_metadata = false;

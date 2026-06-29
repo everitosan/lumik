@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Input, Button, Icon } from '@lumik/ui';
+import { Input, Button, Icon, Tabs, type TabItem } from '@lumik/ui';
 import { useActivePhotographer, useLanguage } from '../lib/hooks';
 import {
   getPhotographerMetadata,
@@ -21,9 +21,10 @@ const containerStyles: React.CSSProperties = {
   overflow: 'auto',
 };
 
-const headerStyles: React.CSSProperties = {
+const topGroupStyles: React.CSSProperties = {
   display: 'flex',
-  alignItems: 'center',
+  flexDirection: 'column',
+  gap: '20px',
   flexShrink: 0,
 };
 
@@ -39,6 +40,12 @@ const sectionStyles: React.CSSProperties = {
   flexDirection: 'column',
   gap: '20px',
   maxWidth: '560px',
+};
+
+const importSectionStyles: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '20px',
 };
 
 const sectionHeaderStyles: React.CSSProperties = {
@@ -60,6 +67,15 @@ const sectionDescriptionStyles: React.CSSProperties = {
   margin: 0,
 };
 
+const fieldLabelStyles: React.CSSProperties = {
+  fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
+  fontSize: '12px',
+  fontWeight: 500,
+  color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+};
+
 const formStyles: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
@@ -70,6 +86,31 @@ const actionsStyles: React.CSSProperties = {
   display: 'flex',
   gap: '12px',
   marginTop: '8px',
+};
+
+const importFooterStyles: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px',
+};
+
+const renameExampleStyles: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  marginLeft: '32px',
+  marginTop: '-4px',
+};
+
+const renameExampleLabelStyles: React.CSSProperties = {
+  fontSize: '12px',
+  color: 'var(--lumik-outline, #8c90a0)',
+};
+
+const renameExampleCodeStyles: React.CSSProperties = {
+  fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
+  fontSize: '12px',
+  color: 'var(--lumik-outline, #8c90a0)',
 };
 
 const successStyles: React.CSSProperties = {
@@ -249,6 +290,7 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [activeTab, setActiveTab] = useState('import');
 
   // Form fields
   const [embedMetadata, setEmbedMetadata] = useState(true);
@@ -350,130 +392,139 @@ export function SettingsPage() {
     );
   }
 
+  const tabs: TabItem[] = [
+    { id: 'import', label: t('settings.tabs.import') },
+    { id: 'shortcuts', label: t('settings.tabs.shortcuts') },
+    { id: 'appearance', label: t('settings.tabs.appearance') },
+  ];
+
   return (
     <div style={containerStyles}>
-      <div style={headerStyles}>
+      <div style={topGroupStyles}>
         <h1 style={titleStyles}>{t('settings.title')}</h1>
+        <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
       </div>
 
-      {/* Language Switcher */}
-      <section style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '560px' }}>
-        <div style={sectionHeaderStyles}>
-          <h2 style={sectionTitleStyles}>{t('settings.language')}</h2>
-        </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <Button
-            variant={currentLanguage === 'es' ? 'primary' : 'secondary'}
-            onClick={() => changeLanguage('es')}
-            size="sm"
-          >
-            Español
-          </Button>
-          <Button
-            variant={currentLanguage === 'en' ? 'primary' : 'secondary'}
-            onClick={() => changeLanguage('en')}
-            size="sm"
-          >
-            English
-          </Button>
-        </div>
-      </section>
+      {activeTab === 'import' && (
+        <>
+          <section style={importSectionStyles}>
+            <div style={sectionHeaderStyles}>
+              <h2 style={sectionTitleStyles}>{t('settings.importOptions.title')}</h2>
+              <p style={sectionDescriptionStyles}>
+                {t('settings.importOptions.description')}
+              </p>
+            </div>
 
-      <section style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div style={sectionHeaderStyles}>
-          <h2 style={sectionTitleStyles}>{t('settings.photographer.title')}</h2>
-          <p style={sectionDescriptionStyles}>
-            {t('settings.photographer.description')}
-          </p>
-        </div>
+            <label style={checkboxContainerStyles}>
+              <input
+                type="checkbox"
+                checked={renameOnImport}
+                onChange={(e) => setRenameOnImport(e.target.checked)}
+                style={checkboxStyles}
+                disabled={saving}
+              />
+              <span style={checkboxLabelStyles}>
+                {t('settings.importOptions.renameOnImport')}
+              </span>
+            </label>
 
-        {error && <div style={errorStyles}>{error}</div>}
-        {success && (
-          <div style={successStyles}>
-            <Icon name="check" size="sm" />
-            {t('common.success')}
+            {renameOnImport && (
+              <div style={renameExampleStyles}>
+                <span style={renameExampleLabelStyles}>
+                  {t('settings.importOptions.renameExampleLabel')}
+                </span>
+                <span style={renameExampleCodeStyles}>
+                  {t('settings.importOptions.renameExample')}
+                </span>
+              </div>
+            )}
+          </section>
+
+          <section style={importSectionStyles}>
+            <div style={sectionHeaderStyles}>
+              <h2 style={sectionTitleStyles}>{t('settings.photographer.title')}</h2>
+              <p style={sectionDescriptionStyles}>
+                {t('settings.photographer.description')}
+              </p>
+            </div>
+
+            <label style={checkboxContainerStyles}>
+              <input
+                type="checkbox"
+                checked={embedMetadata}
+                onChange={(e) => setEmbedMetadata(e.target.checked)}
+                style={checkboxStyles}
+                disabled={saving}
+              />
+              <span style={checkboxLabelStyles}>
+                {t('settings.photographer.embedMetadata')}
+              </span>
+            </label>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+              <Input
+                label={t('settings.photographer.name')}
+                placeholder={t('settings.placeholders.photographerName')}
+                value={artist}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setArtist(e.target.value)}
+                fullWidth
+                disabled={saving || !embedMetadata}
+              />
+
+              <Input
+                label={t('settings.photographer.copyright')}
+                placeholder={t('settings.placeholders.copyright')}
+                value={copyright}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setCopyright(e.target.value)}
+                fullWidth
+                disabled={saving || !embedMetadata}
+              />
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Input
+                  label={t('settings.photographer.credits')}
+                  placeholder={t('settings.placeholders.website')}
+                  value={creatorUrl}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setCreatorUrl(e.target.value)}
+                  fullWidth
+                  disabled={saving || !embedMetadata}
+                />
+              </div>
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Input
+                  label={t('settings.imageDescriptionFormat')}
+                  value={t('settings.placeholders.creditTemplate')}
+                  placeholder={t('settings.placeholders.creditTemplate')}
+                  fullWidth
+                  disabled
+                />
+              </div>
+            </div>
+          </section>
+
+          <div style={importFooterStyles}>
+            {error && <div style={errorStyles}>{error}</div>}
+            {success && (
+              <div style={successStyles}>
+                <Icon name="check" size="sm" />
+                {t('common.success')}
+              </div>
+            )}
+            <div style={{ ...actionsStyles, justifyContent: 'flex-end' }}>
+              <Button
+                variant="primary"
+                onClick={handleSave}
+                disabled={saving || !hasChanges()}
+              >
+                {saving ? t('common.loading') : t('common.save')}
+              </Button>
+            </div>
           </div>
-        )}
+        </>
+      )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-          <label style={{ ...checkboxContainerStyles, gridColumn: '1 / -1' }}>
-            <input
-              type="checkbox"
-              checked={embedMetadata}
-              onChange={(e) => setEmbedMetadata(e.target.checked)}
-              style={checkboxStyles}
-              disabled={saving}
-            />
-            <span style={checkboxLabelStyles}>
-              {t('settings.photographer.embedMetadata')}
-            </span>
-          </label>
-
-          <label style={{ ...checkboxContainerStyles, gridColumn: '1 / -1' }}>
-            <input
-              type="checkbox"
-              checked={renameOnImport}
-              onChange={(e) => setRenameOnImport(e.target.checked)}
-              style={checkboxStyles}
-              disabled={saving}
-            />
-            <span style={checkboxLabelStyles}>
-              {t('settings.photographer.renameOnImport')}
-            </span>
-          </label>
-
-          <Input
-            label={t('settings.photographer.name')}
-            placeholder={t('settings.placeholders.photographerName')}
-            value={artist}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setArtist(e.target.value)}
-            fullWidth
-            disabled={saving || !embedMetadata}
-          />
-
-          <Input
-            label={t('settings.photographer.copyright')}
-            placeholder={t('settings.placeholders.copyright')}
-            value={copyright}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setCopyright(e.target.value)}
-            fullWidth
-            disabled={saving || !embedMetadata}
-          />
-
-          <div style={{ gridColumn: '1 / -1' }}>
-            <Input
-              label={t('settings.photographer.credits')}
-              placeholder={t('settings.placeholders.website')}
-              value={creatorUrl}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setCreatorUrl(e.target.value)}
-              fullWidth
-              disabled={saving || !embedMetadata}
-            />
-          </div>
-
-          <div style={{ gridColumn: '1 / -1' }}>
-            <Input
-              label={t('settings.imageDescriptionFormat')}
-              value={t('settings.placeholders.creditTemplate')}
-              placeholder={t('settings.placeholders.creditTemplate')}
-              fullWidth
-              disabled
-            />
-          </div>
-
-          <div style={{ gridColumn: '1 / -1', ...actionsStyles, justifyContent: 'flex-end' }}>
-            <Button
-              variant="primary"
-              onClick={handleSave}
-              disabled={saving || !hasChanges()}
-            >
-              {saving ? t('common.loading') : t('common.save')}
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {keybindings.length > 0 && (() => {
+      {activeTab === 'shortcuts' && keybindings.length > 0 && (() => {
         const CONTEXT_LABELS: Record<string, string> = {
           photo_detail: t('settings.keybindings.contexts.photo_detail'),
           project: t('settings.keybindings.contexts.project'),
@@ -528,6 +579,34 @@ export function SettingsPage() {
           </section>
         );
       })()}
+
+      {activeTab === 'appearance' && (
+        <section style={sectionStyles}>
+          <div style={sectionHeaderStyles}>
+            <h2 style={sectionTitleStyles}>{t('settings.appearance.title')}</h2>
+            <p style={sectionDescriptionStyles}>{t('settings.appearance.description')}</p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <span style={fieldLabelStyles}>{t('settings.language')}</span>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <Button
+                variant={currentLanguage === 'es' ? 'primary' : 'secondary'}
+                onClick={() => changeLanguage('es')}
+                size="sm"
+              >
+                Español
+              </Button>
+              <Button
+                variant={currentLanguage === 'en' ? 'primary' : 'secondary'}
+                onClick={() => changeLanguage('en')}
+                size="sm"
+              >
+                English
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
