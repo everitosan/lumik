@@ -11,7 +11,6 @@ eso corresponde a otros componentes de la suite (servidor, portal web).
 - **Bundler**: Vite
 - **BD global**: SQLite en `~/.local/share/lumik/lumik.db` (fotógrafo, ajustes, keybindings, dispositivos conocidos)
 - **BD proyectos**: SQLite por proyecto, en cada disco externo (`project.db`)
-- **Conversión RAW**: `dnglab` (binario empaquetado en `src-tauri/binaries/`)
 - **Metadatos EXIF/XMP**: `exiftool` (dependencia externa en runtime — debe estar instalado)
 - **UI**: `@lumik/ui` (paquete interno del monorepo en `packages/ui/`)
 
@@ -50,8 +49,8 @@ src-tauri/src/
     project_schema.sql              # Schema de la BD por proyecto
   devices.rs                        # scan_mounted_devices() — detecta discos montados vía lsblk
   import/
-    pipeline.rs                     # Orquestación del pipeline (copy → convert → metadata → move)
-    converter.rs                    # Invoca dnglab para conversión RAW→DNG
+    pipeline.rs                     # Orquestación del pipeline (copy → metadata → move)
+    converter.rs                    # Constantes de extensiones soportadas y tipos de error
     xmp.rs                          # Escritura de metadatos XMP con exiftool
     hasher.rs                       # SHA-256 de archivos
     progress.rs                     # Tipos ImportProgress / ImportResult / ImportPhase
@@ -118,9 +117,8 @@ src-tauri/src/
 
 ```
 source files
-  → pipeline_copy_files → workspace temporal
-  → pipeline_convert (dnglab, si convert_to_dng=true)  |  pipeline_passthrough
-  → pipeline_metadata (exiftool escribe XMP del fotógrafo, si embed_metadata=true)
+  → pipeline_passthrough → workspace temporal (copia en formato original, sin conversión)
+  → pipeline_metadata (exiftool embebe XMP del fotógrafo, si embed_metadata=true)
   → pipeline_move_to_dest → carpeta del proyecto en disco externo
   → extract_exif_metadata_batch (UN proceso exiftool para todos, salida CSV)
   → create_photos_batch (UNA transacción SQLite)
@@ -176,7 +174,7 @@ Import: `start_import`
 
 | Feature | Estado |
 |---------|--------|
-| Import RAW → DNG + metadatos → disco externo | ✓ Funcional |
+| Import RAW/JPEG/TIFF + metadatos → disco externo (sin conversión) | ✓ Funcional |
 | Grid virtual de fotos agrupadas por día | ✓ Funcional |
 | Visor canvas (zoom / pan / rotate / histograma) | ✓ Funcional |
 | Rating: estrellas, etiquetas de color, tags | ✓ Funcional |
