@@ -19,6 +19,12 @@
         "imported": "Imported",
         "edited": "Editing",
         "delivered": "Delivered"
+      },
+      "menu": {
+        "label": "Project options",
+        "openFolder": "Open folder",
+        "edit": "Edit",
+        "delete": "Delete"
       }
     },
     "dropzone": {

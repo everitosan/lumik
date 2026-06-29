@@ -1,4 +1,5 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../Icon';
 
@@ -12,7 +13,12 @@ export interface ProjectCardProps {
   status: WorkflowStatus;
   thumbnailUrl?: string;
   onClick?: () => void;
-  onMenuClick?: () => void;
+  /** Each handler, when provided, adds its item to the 3-dot menu. Omit one to hide
+   *  that option (e.g. leave out onOpenFolder on Android). If none are provided the
+   *  menu button is hidden entirely. */
+  onOpenFolder?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
   className?: string;
   style?: CSSProperties;
 }
@@ -89,6 +95,47 @@ const menuButtonStyles: CSSProperties = {
   cursor: 'pointer',
   color: 'var(--lumik-on-surface-variant, #c2c6d7)',
   flexShrink: 0,
+};
+
+const menuWrapperStyles: CSSProperties = {
+  position: 'relative',
+  flexShrink: 0,
+};
+
+// Rendered in a portal with fixed positioning so it isn't clipped by the card's
+// overflow:hidden (needed for the thumbnail's rounded corners).
+const menuDropdownStyles: CSSProperties = {
+  position: 'fixed',
+  zIndex: 1000,
+  minWidth: '180px',
+  display: 'flex',
+  flexDirection: 'column',
+  padding: '4px',
+  backgroundColor: 'var(--lumik-surface-container-high, #2a2929)',
+  border: '1px solid var(--lumik-outline-variant, #424654)',
+  borderRadius: 'var(--lumik-radius-sm, 4px)',
+  boxShadow: 'var(--lumik-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.4))',
+};
+
+const menuItemStyles: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+  width: '100%',
+  padding: '8px 10px',
+  background: 'transparent',
+  border: 'none',
+  borderRadius: 'var(--lumik-radius-sm, 4px)',
+  cursor: 'pointer',
+  textAlign: 'left',
+  fontFamily: 'var(--lumik-font-primary, Inter)',
+  fontSize: '13px',
+  color: 'var(--lumik-on-surface, #e5e2e1)',
+};
+
+const menuItemDangerStyles: CSSProperties = {
+  ...menuItemStyles,
+  color: 'var(--lumik-error, #ffb4ab)',
 };
 
 const metaContainerStyles: CSSProperties = {
@@ -168,20 +215,71 @@ export function ProjectCard({
   status,
   thumbnailUrl,
   onClick,
-  onMenuClick,
+  onOpenFolder,
+  onEdit,
+  onDelete,
   className,
   style,
 }: ProjectCardProps) {
   const { t } = useTranslation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuDropdownRef = useRef<HTMLDivElement>(null);
+
+  const hasMenu = Boolean(onOpenFolder || onEdit || onDelete);
 
   const statusLabels = {
     imported: t('components.projectCard.status.imported'),
     edited: t('components.projectCard.status.edited'),
     delivered: t('components.projectCard.status.delivered'),
   };
-  const handleMenuClick = (e: React.MouseEvent) => {
+
+  // Position the portal dropdown just under the button, right-aligned.
+  useLayoutEffect(() => {
+    if (!menuOpen || !menuButtonRef.current) return;
+    const rect = menuButtonRef.current.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+  }, [menuOpen]);
+
+  // Close the menu on outside click, Escape, or any scroll/resize (the fixed
+  // dropdown would otherwise detach from the button).
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handlePointer = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        !menuButtonRef.current?.contains(target) &&
+        !menuDropdownRef.current?.contains(target)
+      ) {
+        setMenuOpen(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    const handleReflow = () => setMenuOpen(false);
+    document.addEventListener('mousedown', handlePointer);
+    document.addEventListener('keydown', handleKey);
+    window.addEventListener('scroll', handleReflow, true);
+    window.addEventListener('resize', handleReflow);
+    return () => {
+      document.removeEventListener('mousedown', handlePointer);
+      document.removeEventListener('keydown', handleKey);
+      window.removeEventListener('scroll', handleReflow, true);
+      window.removeEventListener('resize', handleReflow);
+    };
+  }, [menuOpen]);
+
+  const handleMenuToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onMenuClick?.();
+    setMenuOpen((v) => !v);
+  };
+
+  const runAction = (e: React.MouseEvent, action?: () => void) => {
+    e.stopPropagation();
+    setMenuOpen(false);
+    action?.();
   };
 
   return (
@@ -208,13 +306,48 @@ export function ProjectCard({
           <h3 style={titleStyles} title={name}>
             {name}
           </h3>
-          <button
-            style={menuButtonStyles}
-            onClick={handleMenuClick}
-            aria-label="Project options"
-          >
-            <Icon name="menu" size="md" />
-          </button>
+          {hasMenu && (
+            <div style={menuWrapperStyles}>
+              <button
+                ref={menuButtonRef}
+                style={menuButtonStyles}
+                onClick={handleMenuToggle}
+                aria-label={t('components.projectCard.menu.label')}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+              >
+                <Icon name="menu" size="md" />
+              </button>
+              {menuOpen && createPortal(
+                <div
+                  ref={menuDropdownRef}
+                  style={{ ...menuDropdownStyles, top: menuPos.top, right: menuPos.right }}
+                  role="menu"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {onOpenFolder && (
+                    <button style={menuItemStyles} role="menuitem" onClick={(e) => runAction(e, onOpenFolder)}>
+                      <Icon name="folder-open" size="sm" />
+                      {t('components.projectCard.menu.openFolder')}
+                    </button>
+                  )}
+                  {onEdit && (
+                    <button style={menuItemStyles} role="menuitem" onClick={(e) => runAction(e, onEdit)}>
+                      <Icon name="edit" size="sm" />
+                      {t('components.projectCard.menu.edit')}
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button style={menuItemDangerStyles} role="menuitem" onClick={(e) => runAction(e, onDelete)}>
+                      <Icon name="trash" size="sm" />
+                      {t('components.projectCard.menu.delete')}
+                    </button>
+                  )}
+                </div>,
+                document.body
+              )}
+            </div>
+          )}
         </div>
 
         <div style={metaContainerStyles}>
