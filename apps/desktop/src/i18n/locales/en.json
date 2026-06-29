@@ -106,6 +106,8 @@
     "loading": "Loading settings...",
     "photographer": {
       "title": "Photographer info",
+      "description": "Configure the metadata to embed in your photos during import.",
+      "embedMetadata": "Embed metadata in photos on import",
       "name": "Name",
       "email": "Email",
       "copyright": "Copyright",

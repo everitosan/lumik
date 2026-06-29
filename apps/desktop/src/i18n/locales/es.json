@@ -106,6 +106,8 @@
     "loading": "Cargando configuración...",
     "photographer": {
       "title": "Datos del fotógrafo",
+      "description": "Configura los metadatos a incrustar en tus fotos durante la importación.",
+      "embedMetadata": "Incrustar metadatos en las fotos al importar",
       "name": "Nombre",
       "email": "Email",
       "copyright": "Copyright",

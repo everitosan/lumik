@@ -379,7 +379,7 @@ export function SettingsPage() {
         <div style={sectionHeaderStyles}>
           <h2 style={sectionTitleStyles}>{t('settings.photographer.title')}</h2>
           <p style={sectionDescriptionStyles}>
-            Configure the metadata to embed in your photos during import.
+            {t('settings.photographer.description')}
           </p>
         </div>
 
@@ -401,7 +401,7 @@ export function SettingsPage() {
               disabled={saving}
             />
             <span style={checkboxLabelStyles}>
-              Embed metadata in photos on import
+              {t('settings.photographer.embedMetadata')}
             </span>
           </label>
 
