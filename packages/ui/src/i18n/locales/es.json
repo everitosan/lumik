@@ -28,7 +28,9 @@
     "driveInfo": {
       "connected": "Conectado",
       "disconnected": "Desconectado",
-      "freeOf": "libres de"
+      "freeOf": "libres de",
+      "eject": "Expulsar disco",
+      "ejecting": "Expulsando..."
     },
     "fileList": {
       "searchPlaceholder": "Buscar archivos...",

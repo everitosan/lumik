@@ -30,7 +30,8 @@ export type IconName =
   | 'rotate-ccw'
   | 'rotate-cw'
   | 'info'
-  | 'tags';
+  | 'tags'
+  | 'eject';
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
   name: IconName;
@@ -266,6 +267,13 @@ const icons: Record<IconName, (props: SVGProps<SVGSVGElement>) => ReactElement> 
     <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
       <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
       <line x1="7" y1="7" x2="7.01" y2="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+
+  eject: (props) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <polygon points="12 4 4 14 20 14" />
+      <line x1="4" y1="18" x2="20" y2="18" />
     </svg>
   ),
 };

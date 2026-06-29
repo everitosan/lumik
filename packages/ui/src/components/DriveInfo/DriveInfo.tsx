@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../Icon';
 
@@ -8,6 +8,9 @@ export interface DriveInfoProps {
   usedBytes: number;
   totalBytes: number;
   connected?: boolean;
+  /** When provided, an eject button is shown. Receives no args; the parent
+   *  knows which device this is. Should resolve once the OS eject completes. */
+  onEject?: () => Promise<void> | void;
   className?: string;
   style?: CSSProperties;
 }
@@ -50,6 +53,22 @@ const statusDotStyles = (connected: boolean): CSSProperties => ({
     : 'var(--lumik-outline, #8c90a0)',
 });
 
+const ejectBtnStyles = (disabled: boolean): CSSProperties => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '28px',
+  height: '28px',
+  padding: 0,
+  borderRadius: 'var(--lumik-radius-sm, 4px)',
+  border: '1px solid var(--lumik-outline-variant, #424654)',
+  background: 'transparent',
+  color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+  cursor: disabled ? 'default' : 'pointer',
+  opacity: disabled ? 0.5 : 1,
+  flexShrink: 0,
+});
+
 const capacityTextStyles: CSSProperties = {
   fontFamily: 'var(--lumik-font-mono, JetBrains Mono)',
   fontSize: '12px',
@@ -90,12 +109,24 @@ export function DriveInfo({
   usedBytes,
   totalBytes,
   connected = true,
+  onEject,
   className,
   style,
 }: DriveInfoProps) {
   const { t } = useTranslation();
+  const [ejecting, setEjecting] = useState(false);
   const usedPercentage = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
   const freeBytes = totalBytes - usedBytes;
+
+  const handleEject = async () => {
+    if (!onEject || ejecting) return;
+    setEjecting(true);
+    try {
+      await onEject();
+    } finally {
+      setEjecting(false);
+    }
+  };
 
   return (
     <div style={{ ...containerStyles, ...style }} className={className}>
@@ -105,6 +136,18 @@ export function DriveInfo({
           <span style={nameStyles}>{name}</span>
           <span style={statusDotStyles(connected)} title={connected ? t('components.driveInfo.connected') : t('components.driveInfo.disconnected')} />
         </div>
+        {onEject && (
+          <button
+            type="button"
+            style={ejectBtnStyles(ejecting)}
+            onClick={handleEject}
+            disabled={ejecting}
+            title={ejecting ? t('components.driveInfo.ejecting') : t('components.driveInfo.eject')}
+            aria-label={t('components.driveInfo.eject')}
+          >
+            <Icon name="eject" size="sm" />
+          </button>
+        )}
       </div>
 
       <div style={progressContainerStyles}>
