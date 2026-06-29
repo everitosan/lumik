@@ -338,6 +338,7 @@ const DEFAULT_KEYBINDINGS: KeybindingMap = {
   'photo_detail.stars_3':      '3',
   'photo_detail.stars_4':      '4',
   'photo_detail.stars_5':      '5',
+  'photo_detail.add_tag':      't',
   'projects.new_project':      'n',
   'projects.focus_search':     's',
   'project.show_culled':       'Ctrl+c',

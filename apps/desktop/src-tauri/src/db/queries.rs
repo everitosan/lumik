@@ -222,6 +222,7 @@ impl GlobalDatabase {
             ("photo_detail.stars_3",      "3",          "3 estrellas"),
             ("photo_detail.stars_4",      "4",          "4 estrellas"),
             ("photo_detail.stars_5",      "5",          "5 estrellas"),
+            ("photo_detail.add_tag",      "t",          "Agregar etiqueta"),
             ("project.show_culled",        "Ctrl+c",     "Mostrar solo fotos culled"),
             ("projects.new_project",        "n",          "Crear nuevo proyecto"),
             ("projects.focus_search",       "s",          "Enfocar barra de búsqueda"),

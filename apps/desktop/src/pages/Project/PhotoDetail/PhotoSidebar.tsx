@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type CSSProperties } from 'react';
+import { useState, useRef, useEffect, useMemo, forwardRef, useImperativeHandle, type Ref, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '@lumik/ui';
 import type { ColorLabel } from '@lumik/ui';
@@ -251,88 +251,179 @@ function ColorInput({ selected, onChange, t }: { selected: ColorLabel[]; onChang
 
 // ─── Tag manager ──────────────────────────────────────────────────────────────
 
-function TagManager({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
-  const [adding, setAdding] = useState(false);
-  const [input, setInput] = useState('');
+export interface TagManagerHandle {
+  /** Open the input and focus it (used by the "add tag" keyboard shortcut). */
+  startAdding: () => void;
+}
 
-  const confirmAdd = () => {
-    const trimmed = input.trim();
-    if (trimmed && !tags.includes(trimmed)) onChange([...tags, trimmed]);
-    setInput('');
-    setAdding(false);
-  };
+/** Normalize a raw tag to its canonical stored form: trimmed + lowercase. */
+function normalizeTag(raw: string): string {
+  return raw.trim().toLowerCase();
+}
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    e.stopPropagation();
-    if (e.key === 'Enter') confirmAdd();
-    if (e.key === 'Escape') { setInput(''); setAdding(false); }
-  };
+const TagManager = forwardRef<TagManagerHandle, { tags: string[]; suggestions: string[]; onChange: (tags: string[]) => void }>(
+  function TagManager({ tags, suggestions, onChange }, ref) {
+    const { t } = useTranslation();
+    const [adding, setAdding] = useState(false);
+    const [input, setInput] = useState('');
+    const [highlight, setHighlight] = useState(-1);
+    const inputRef = useRef<HTMLInputElement>(null);
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-        {tags.map((tag) => (
-          <span
-            key={tag}
+    useImperativeHandle(ref, () => ({
+      startAdding: () => {
+        setAdding(true);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      },
+    }), []);
+
+    const query = normalizeTag(input);
+
+    // Existing project tags that match what's typed and aren't already added.
+    const matches = useMemo(() => {
+      if (!query) return [];
+      return suggestions.filter((s) => s.includes(query) && !tags.includes(s)).slice(0, 8);
+    }, [query, suggestions, tags]);
+
+    // Whether the typed value would create a brand new tag (no exact match yet).
+    const isNew = query.length > 0 && !suggestions.includes(query) && !tags.includes(query);
+
+    const addTag = (raw: string) => {
+      const tag = normalizeTag(raw);
+      if (tag && !tags.includes(tag)) onChange([...tags, tag]);
+      // Keep the input open so several tags can be added in a row.
+      setInput('');
+      setHighlight(-1);
+    };
+
+    const close = () => { setInput(''); setHighlight(-1); setAdding(false); };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (highlight >= 0 && matches[highlight]) addTag(matches[highlight]);
+        else if (query) addTag(query);
+      } else if (e.key === 'Escape') {
+        close();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlight((h) => Math.min(h + 1, matches.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlight((h) => Math.max(h - 1, -1));
+      }
+    };
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                padding: '4px 8px 4px 10px',
+                fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
+                fontSize: '16px', fontWeight: 500,
+                borderRadius: 'var(--lumik-radius, 4px)',
+                backgroundColor: 'var(--lumik-surface-container, #201f1f)',
+                color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+                border: '1px solid var(--lumik-outline-variant, #424654)',
+              }}
+            >
+              {tag}
+              <button
+                onClick={() => onChange(tags.filter((tagItem) => tagItem !== tag))}
+                title={t('photo.sidebar.deleteTag')}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '14px', height: '14px', padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--lumik-outline, #8c90a0)', fontSize: '12px', lineHeight: 1, borderRadius: '2px' }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        {adding ? (
+          <div style={{ position: 'relative' }}>
+            <input
+              ref={inputRef}
+              autoFocus
+              value={input}
+              onChange={(e) => { setInput(e.target.value); setHighlight(-1); }}
+              onKeyDown={handleKeyDown}
+              onBlur={() => { if (query) addTag(query); close(); }}
+              placeholder={t('photo.sidebar.newTagPlaceholder')}
+              style={{
+                fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
+                fontSize: '13px', padding: '6px 8px',
+                background: 'var(--lumik-surface-container, #201f1f)',
+                border: '1px solid var(--lumik-primary, #b0c6ff)',
+                borderRadius: 'var(--lumik-radius, 4px)',
+                color: 'var(--lumik-on-surface, #e5e2e1)',
+                outline: 'none', width: '100%', boxSizing: 'border-box' as const,
+              }}
+            />
+            {matches.length > 0 && (
+              <div
+                style={{
+                  position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 20,
+                  display: 'flex', flexDirection: 'column',
+                  background: 'var(--lumik-surface-container, #201f1f)',
+                  border: '1px solid var(--lumik-outline-variant, #424654)',
+                  borderRadius: 'var(--lumik-radius, 4px)',
+                  overflow: 'hidden',
+                  boxShadow: '0 6px 18px rgba(0,0,0,0.45)',
+                }}
+              >
+                {matches.map((s, i) => (
+                  <button
+                    key={s}
+                    // onMouseDown (not onClick) so the input's onBlur doesn't fire first.
+                    onMouseDown={(e) => { e.preventDefault(); addTag(s); }}
+                    onMouseEnter={() => setHighlight(i)}
+                    style={{
+                      display: 'flex', alignItems: 'center', textAlign: 'left',
+                      padding: '6px 8px', border: 'none', cursor: 'pointer',
+                      fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
+                      fontSize: '13px',
+                      background: i === highlight ? 'var(--lumik-surface-container-high, #2a2929)' : 'transparent',
+                      color: 'var(--lumik-on-surface, #e5e2e1)',
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+            {isNew && (
+              <span style={{
+                display: 'block', marginTop: '4px',
+                fontFamily: 'var(--lumik-font-primary, Inter)', fontSize: '11px',
+                color: 'var(--lumik-outline, #8c90a0)',
+              }}>
+                {t('photo.sidebar.createTagHint', { tag: query })}
+              </span>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={() => { setAdding(true); requestAnimationFrame(() => inputRef.current?.focus()); }}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: '4px',
-              padding: '4px 8px 4px 10px',
+              alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '4px',
+              padding: '4px 10px',
               fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
-              fontSize: '16px', fontWeight: 500,
+              fontSize: '16px', background: 'transparent',
+              border: '1px dashed var(--lumik-outline-variant, #424654)',
               borderRadius: 'var(--lumik-radius, 4px)',
-              backgroundColor: 'var(--lumik-surface-container, #201f1f)',
-              color: 'var(--lumik-on-surface-variant, #c2c6d7)',
-              border: '1px solid var(--lumik-outline-variant, #424654)',
+              color: 'var(--lumik-outline, #8c90a0)', cursor: 'pointer',
             }}
           >
-            {tag}
-            <button
-              onClick={() => onChange(tags.filter((tagItem) => tagItem !== tag))}
-              title={t('photo.sidebar.deleteTag')}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '14px', height: '14px', padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--lumik-outline, #8c90a0)', fontSize: '12px', lineHeight: 1, borderRadius: '2px' }}
-            >
-              ×
-            </button>
-          </span>
-        ))}
+            + Tag
+          </button>
+        )}
       </div>
-      {adding ? (
-        <input
-          autoFocus
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={confirmAdd}
-          placeholder={t('photo.sidebar.newTagPlaceholder')}
-          style={{
-            fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
-            fontSize: '11px', padding: '4px 8px',
-            background: 'var(--lumik-surface-container, #201f1f)',
-            border: '1px solid var(--lumik-primary, #b0c6ff)',
-            borderRadius: 'var(--lumik-radius, 4px)',
-            color: 'var(--lumik-on-surface, #e5e2e1)',
-            outline: 'none', width: '100%', boxSizing: 'border-box' as const,
-          }}
-        />
-      ) : (
-        <button
-          onClick={() => setAdding(true)}
-          style={{
-            alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '4px',
-            padding: '4px 10px',
-            fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
-            fontSize: '16px', background: 'transparent',
-            border: '1px dashed var(--lumik-outline-variant, #424654)',
-            borderRadius: 'var(--lumik-radius, 4px)',
-            color: 'var(--lumik-outline, #8c90a0)', cursor: 'pointer',
-          }}
-        >
-          + Tag
-        </button>
-      )}
-    </div>
-  );
-}
+    );
+  },
+);
 
 // ─── Cull input ───────────────────────────────────────────────────────────────
 
@@ -387,6 +478,8 @@ export interface PhotoSidebarProps {
   localColorLabels: ColorLabel[];
   localTags: string[];
   localCulled: boolean;
+  tagSuggestions: string[];
+  tagManagerRef?: Ref<TagManagerHandle>;
   onStarsChange: (stars: number) => void;
   onColorChange: (labels: ColorLabel[]) => void;
   onTagsChange: (tags: string[]) => void;
@@ -401,6 +494,8 @@ export function PhotoSidebar({
   localColorLabels,
   localTags,
   localCulled,
+  tagSuggestions,
+  tagManagerRef,
   onStarsChange,
   onColorChange,
   onTagsChange,
@@ -474,7 +569,7 @@ export function PhotoSidebar({
         <span style={{ ...labelStyle, marginTop: '4px' }}>{t('photo.sidebar.color')}</span>
         <ColorInput selected={localColorLabels} onChange={onColorChange} t={t} />
         <span style={{ ...labelStyle, marginTop: '4px' }}>{t('photo.sidebar.tags')}</span>
-        <TagManager tags={localTags} onChange={onTagsChange} />
+        <TagManager ref={tagManagerRef} tags={localTags} suggestions={tagSuggestions} onChange={onTagsChange} />
       </div>
 
       <div style={dividerStyle} />

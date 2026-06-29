@@ -962,6 +962,23 @@ pub fn save_photo_rotation(
     Ok(())
 }
 
+/// Normaliza una cadena de tags separada por comas: minúsculas, sin espacios
+/// sobrantes, sin duplicados y preservando el orden. Devuelve `None` si no
+/// queda ningún tag (para guardar NULL en BD).
+fn normalize_tags(raw: &str) -> Option<String> {
+    let mut seen = std::collections::HashSet::new();
+    let normalized: Vec<String> = raw
+        .split(',')
+        .map(|t| t.trim().to_lowercase())
+        .filter(|t| !t.is_empty() && seen.insert(t.clone()))
+        .collect();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized.join(","))
+    }
+}
+
 #[tauri::command]
 pub fn save_photo_rating(
     state: State<AppState>,
@@ -974,6 +991,9 @@ pub fn save_photo_rating(
     if !(0..=5).contains(&stars) {
         return Err(format!("Stars inválidas: {}", stars));
     }
+    // Normalizar tags: minúsculas + trim + dedupe, para evitar duplicados por
+    // diferencias de mayúsculas/espacios. Se persiste ya normalizado en BD.
+    let tags = tags.as_deref().and_then(normalize_tags);
     let project_db = state.project_db(&project_id)?;
     project_db
         .update_photo_rating(&photo_id, stars, color_label.as_deref(), tags.as_deref())

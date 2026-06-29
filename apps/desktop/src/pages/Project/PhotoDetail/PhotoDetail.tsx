@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '@lumik/ui';
 import type { ColorLabel } from '@lumik/ui';
@@ -6,7 +6,7 @@ import type { Photo } from '../../../lib/types';
 import { usePhotoPreview, useContextKeybindings, matchesKey, usePlatform } from '../../../lib/hooks';
 import * as api from '../../../lib/api';
 import { PhotoViewer, type PhotoViewerHandle, type HistogramBins } from './PhotoViewer';
-import { PhotoSidebar } from './PhotoSidebar';
+import { PhotoSidebar, type TagManagerHandle } from './PhotoSidebar';
 
 export interface PhotoDetailProps {
   photo: Photo;
@@ -96,6 +96,7 @@ export function PhotoDetail({
 
   const kb = useContextKeybindings('photo_detail');
   const viewerRef = useRef<PhotoViewerHandle>(null);
+  const tagManagerRef = useRef<TagManagerHandle>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const thumbnailDirtyRef = useRef(new Set<string>());
@@ -133,6 +134,16 @@ export function PhotoDetail({
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < photos.length - 1;
   const filename = basename(photo.dng_path);
+
+  // All tags already used across the project, normalized to lowercase + deduped,
+  // sorted alphabetically. Feeds the tag autocomplete to avoid near-duplicates.
+  const tagSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of photos) {
+      for (const tag of parseTags(p.tags)) set.add(tag.toLowerCase());
+    }
+    return [...set].sort();
+  }, [photos]);
 
   const { data: preview, loading: previewLoading } = usePhotoPreview(photo.id, photo.project_id);
   const fullImageUrl = preview?.url ?? null;
@@ -229,6 +240,7 @@ export function PhotoDetail({
       if (matchesKey(e, kb['photo_detail.rotate_left']))   { viewerRef.current?.rotateLeft(); return; }
       if (matchesKey(e, kb['photo_detail.rotate_right']))  { viewerRef.current?.rotateRight(); return; }
       if (matchesKey(e, kb['photo_detail.cull']))          { handleCulledChange(!localCulled); return; }
+      if (matchesKey(e, kb['photo_detail.add_tag']))       { e.preventDefault(); tagManagerRef.current?.startAdding(); return; }
       if (matchesKey(e, kb['photo_detail.stars_0']))       { handleStarsChange(0); return; }
       if (matchesKey(e, kb['photo_detail.stars_1']))       { handleStarsChange(1); return; }
       if (matchesKey(e, kb['photo_detail.stars_2']))       { handleStarsChange(2); return; }
@@ -345,6 +357,8 @@ export function PhotoDetail({
             localColorLabels={localColorLabels}
             localTags={localTags}
             localCulled={localCulled}
+            tagSuggestions={tagSuggestions}
+            tagManagerRef={tagManagerRef}
             onStarsChange={handleStarsChange}
             onColorChange={handleColorChange}
             onTagsChange={handleTagsChange}
