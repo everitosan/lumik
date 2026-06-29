@@ -174,7 +174,8 @@
     "loadingDevices": "Detectando dispositivos...",
     "noDevices": "Sin dispositivos conectados",
     "closeMenu": "Cerrar menú",
-    "openMenu": "Abrir menú"
+    "openMenu": "Abrir menú",
+    "ejectError": "No se pudo expulsar el disco: {{error}}"
   },
   "dashboard": {
     "title": "Proyectos",

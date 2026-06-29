@@ -1,5 +1,6 @@
 mod commands;
 mod db;
+mod device_watch;
 mod devices;
 #[cfg(not(target_os = "android"))]
 mod exiftool;
@@ -11,7 +12,7 @@ mod util;
 use commands::{AppState, refresh_open_projects};
 use db::GlobalDatabase;
 use log::{debug, error, info, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 fn get_system_username() -> String {
@@ -61,9 +62,10 @@ pub fn run() {
 
     let open_projects: Arc<Mutex<HashMap<String, Arc<db::ProjectDatabase>>>> =
         Arc::new(Mutex::new(HashMap::new()));
+    let ejecting_devices: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
 
     info!("Scanning for project databases on connected devices...");
-    refresh_open_projects(&global_db, &open_projects);
+    refresh_open_projects(&global_db, &open_projects, &ejecting_devices);
     {
         let map = open_projects.lock().unwrap();
         info!("Found {} open project(s) at startup", map.len());
@@ -72,6 +74,7 @@ pub fn run() {
     let state = AppState {
         global_db,
         open_projects,
+        ejecting_devices,
     };
 
     info!("Starting Tauri application...");
@@ -81,9 +84,17 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(state)
+        .setup(|app| {
+            // Start native OS hotplug watcher (Linux/Windows). It emits
+            // "devices-changed" on mount/unmount so the UI updates without
+            // busy-polling. Android falls back to frontend polling.
+            device_watch::start(app.handle().clone());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::get_platform,
             commands::scan_connected_devices,
+            commands::eject_device,
             commands::get_known_devices,
             commands::get_projects_dashboard,
             commands::get_project,

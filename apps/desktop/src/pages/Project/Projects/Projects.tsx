@@ -153,15 +153,21 @@ export function Projects({ onProjectClick }: ProjectsProps) {
   const { data: devices } = useConnectedDevices();
   const coverThumbnails = useCoverThumbnails(projects);
 
-  // Refetch projects whenever a new device UUID appears in the connected list.
-  // scan_connected_devices already called refresh_open_projects on the Rust side,
-  // so we just need to re-query get_projects_dashboard to pick up the new entries.
+  // Refetch projects whenever the set of connected device UUIDs changes — a
+  // device appearing (new projects to show) or disappearing (e.g. the user
+  // ejected it, so its projects must vanish from the grid). scan_connected_devices
+  // already called refresh_open_projects on the Rust side, so we just re-query
+  // get_projects_dashboard to mirror the current open_projects map.
   const knownDeviceUuids = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!devices) return;
-    const hasNew = devices.some((d) => !knownDeviceUuids.current.has(d.uuid));
-    knownDeviceUuids.current = new Set(devices.map((d) => d.uuid));
-    if (hasNew) refetch();
+    const current = new Set(devices.map((d) => d.uuid));
+    const prev = knownDeviceUuids.current;
+    const changed =
+      current.size !== prev.size ||
+      [...current].some((uuid) => !prev.has(uuid));
+    knownDeviceUuids.current = current;
+    if (changed) refetch();
   }, [devices, refetch]);
 
   const filteredProjects = useMemo(() => {

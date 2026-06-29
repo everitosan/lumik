@@ -1,11 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout, type Section } from './components';
 import { Projects, SettingsPage, ProjectDetail, AboutPage } from './pages';
+import { useConnectedDevices } from './lib/hooks';
 import type { ProjectDashboard } from './lib/types';
 
 function App() {
   const [activeSection, setActiveSection] = useState<Section>('projects');
   const [selectedProject, setSelectedProject] = useState<ProjectDashboard | null>(null);
+  const { data: devices } = useConnectedDevices();
+
+  // If the open project's device is ejected/disconnected, leave the detail view
+  // and return to the dashboard — its data is no longer reachable.
+  useEffect(() => {
+    if (!selectedProject || !devices) return;
+    const stillConnected = devices.some((d) => d.uuid === selectedProject.device_uuid);
+    if (!stillConnected) setSelectedProject(null);
+  }, [devices, selectedProject]);
 
   const handleSectionChange = (section: Section) => {
     setActiveSection(section);

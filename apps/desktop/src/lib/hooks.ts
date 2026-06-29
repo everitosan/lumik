@@ -36,9 +36,18 @@ export function usePlatform() {
 // DEVICE HOOKS (runtime scan with polling)
 // ============================================================================
 
-const DEFAULT_POLL_INTERVAL = 10000; // 10 seconds
+// Desktop relies on the native OS hotplug watcher (emits "devices-changed"),
+// so it only needs a slow safety-net poll. Android has no native listener and
+// keeps a responsive poll.
+const DESKTOP_POLL_INTERVAL = 60000; // 60s fallback in case an event is missed
+const ANDROID_POLL_INTERVAL = 10000; // 10s — Android has no OS listener
 
-export function useConnectedDevices(pollInterval = DEFAULT_POLL_INTERVAL) {
+export function useConnectedDevices(pollIntervalOverride?: number) {
+  const platform = usePlatform();
+  const pollInterval =
+    pollIntervalOverride ??
+    (platform === 'android' ? ANDROID_POLL_INTERVAL : DESKTOP_POLL_INTERVAL);
+
   const [state, setState] = useState<AsyncState<DetectedDevice[]>>({
     data: null,
     loading: true,
@@ -77,7 +86,27 @@ export function useConnectedDevices(pollInterval = DEFAULT_POLL_INTERVAL) {
     return () => clearInterval(interval);
   }, [refetch, pollInterval]);
 
-  return { ...state, refetch: () => refetch(false) };
+  // Refresh immediately when the backend signals a device change (e.g. an eject
+  // from elsewhere in the UI), so every useConnectedDevices instance stays in
+  // sync without waiting for its own poll tick.
+  useEffect(() => {
+    let unlisten: UnlistenFn | undefined;
+    listen('devices-changed', () => refetch(true)).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, [refetch]);
+
+  // Safely eject a device. The backend emits "devices-changed" on success, which
+  // refreshes this (and every other) device list, so no manual refetch is needed.
+  const eject = useCallback(
+    async (deviceUuid: string) => {
+      await api.ejectDevice(deviceUuid);
+    },
+    [],
+  );
+
+  return { ...state, refetch: () => refetch(false), eject };
 }
 
 // ============================================================================

@@ -23,7 +23,7 @@ use crate::import::{
 use chrono::Utc;
 use log::{debug, error, info, warn};
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
@@ -35,6 +35,11 @@ pub struct AppState {
     /// whenever scan_connected_devices is called. Wrapped in Arc so commands can
     /// clone a reference out of the map and release the lock before doing DB work.
     pub open_projects: Arc<Mutex<HashMap<String, Arc<ProjectDatabase>>>>,
+    /// Device UUIDs currently being ejected by the user. While a UUID is in this
+    /// set, the device-scan polling must NOT re-open the projects we just closed —
+    /// otherwise it would re-acquire the SQLite handles and block the unmount.
+    /// The UUID is removed once the eject finishes (success or failure).
+    pub ejecting_devices: Arc<Mutex<HashSet<String>>>,
 }
 
 impl AppState {
@@ -57,18 +62,31 @@ impl AppState {
 pub fn refresh_open_projects(
     global_db: &Arc<GlobalDatabase>,
     open_projects: &Arc<Mutex<HashMap<String, Arc<ProjectDatabase>>>>,
+    ejecting_devices: &Arc<Mutex<HashSet<String>>>,
 ) {
     let devices = scan_mounted_devices();
     let mounted_uuids: std::collections::HashSet<String> =
         devices.iter().map(|d| d.uuid.clone()).collect();
 
+    // Devices the user is actively ejecting must be treated as "not available"
+    // even if they are technically still mounted, so we don't re-open their DBs.
+    let ejecting: HashSet<String> = ejecting_devices.lock().unwrap().clone();
+
     let mut map = open_projects.lock().unwrap();
 
-    // Remove projects from devices that are no longer mounted
-    map.retain(|_, proj_db| mounted_uuids.contains(&proj_db.device_uuid));
+    // Remove projects from devices that are no longer mounted (or are being ejected)
+    map.retain(|_, proj_db| {
+        mounted_uuids.contains(&proj_db.device_uuid)
+            && !ejecting.contains(&proj_db.device_uuid)
+    });
 
     // Open new project DBs from currently mounted devices
     for device in &devices {
+        // Skip devices the user is ejecting — re-opening would block the unmount.
+        if ejecting.contains(&device.uuid) {
+            continue;
+        }
+
         // Register / update device in global DB
         let _ = global_db.register_or_update_device(
             &device.uuid,
@@ -108,10 +126,164 @@ pub fn get_platform() -> &'static str {
 #[tauri::command]
 pub fn scan_connected_devices(state: State<AppState>) -> Vec<DetectedDevice> {
     // debug!("scan_connected_devices called");
-    refresh_open_projects(&state.global_db, &state.open_projects);
+    refresh_open_projects(&state.global_db, &state.open_projects, &state.ejecting_devices);
     let devices = scan_mounted_devices();
     // debug!("scan_connected_devices returning {} devices", devices.len());
+
+    // Hide devices that are mid-eject so the UI drops them immediately.
+    let ejecting = state.ejecting_devices.lock().unwrap();
     devices
+        .into_iter()
+        .filter(|d| !ejecting.contains(&d.uuid))
+        .collect()
+}
+
+/// Safely release an external device so the OS can eject it, WITHOUT closing the app.
+///
+/// Flow:
+///  1. Mark the device as "ejecting" so the background scan won't re-open its DBs.
+///  2. Drop every open ProjectDatabase that lives on this device — dropping the
+///     Arc closes the SQLite connection and releases the file handle that would
+///     otherwise make the volume busy.
+///  3. Ask the OS to unmount / power off the device.
+///  4. Clear the "ejecting" flag.
+///
+/// On success a `"devices-changed"` event is emitted so every part of the UI
+/// (sidebar device list AND the projects dashboard) refreshes immediately,
+/// instead of waiting for the next 10s device-scan poll.
+#[tauri::command]
+pub fn eject_device(
+    app: AppHandle,
+    state: State<AppState>,
+    device_uuid: String,
+) -> Result<(), String> {
+    info!("eject_device called: {}", device_uuid);
+
+    // Resolve the mount point now, before we remove anything, so we can hand it
+    // to the OS eject call. If the device isn't found it may already be gone.
+    let mount_point = scan_mounted_devices()
+        .into_iter()
+        .find(|d| d.uuid == device_uuid)
+        .map(|d| d.mount_point);
+
+    // 1. Guard against the polling re-opening these DBs mid-eject.
+    state.ejecting_devices.lock().unwrap().insert(device_uuid.clone());
+
+    // Ensure we always clear the guard, even on early error.
+    let clear_guard = || {
+        state.ejecting_devices.lock().unwrap().remove(&device_uuid);
+    };
+
+    // 2. Close all project DBs on this device. Dropping the Arc<ProjectDatabase>
+    //    releases its SQLite connection (and the file handle on the volume).
+    let closed: Vec<String> = {
+        let mut map = state.open_projects.lock().unwrap();
+        let ids: Vec<String> = map
+            .iter()
+            .filter(|(_, db)| db.device_uuid == device_uuid)
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in &ids {
+            map.remove(id);
+        }
+        ids
+    };
+    info!("eject_device: closed {} project DB(s) on device {}", closed.len(), device_uuid);
+
+    // 3. Ask the OS to unmount / eject the volume.
+    let result = match mount_point.as_deref() {
+        Some(mount) => os_eject(&device_uuid, mount),
+        None => {
+            // Already unmounted; nothing more to do.
+            info!("eject_device: device {} no longer mounted, treating as ejected", device_uuid);
+            Ok(())
+        }
+    };
+
+    clear_guard();
+
+    // Notify the UI immediately so the ejected device's projects vanish without
+    // waiting for the next poll. Only on success — on failure the device is still
+    // present and the next scan will re-list it.
+    if result.is_ok() {
+        let _ = app.emit("devices-changed", &device_uuid);
+    }
+
+    result
+}
+
+/// Platform-specific volume eject. Closes/unmounts the volume at `mount_point`.
+/// The SQLite handles must already be released before this is called.
+#[allow(unused_variables)]
+fn os_eject(device_uuid: &str, mount_point: &str) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        // udisksctl is part of udisks2 and works without root for removable media.
+        // Resolve the block device from the UUID symlink udev maintains.
+        let by_uuid = format!("/dev/disk/by-uuid/{}", device_uuid);
+        let block_dev = std::fs::canonicalize(&by_uuid)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or(by_uuid);
+
+        // Unmount the filesystem first…
+        let unmount = Command::new("udisksctl")
+            .args(["unmount", "-b", &block_dev])
+            .output()
+            .map_err(|e| format!("Failed to run udisksctl unmount: {}", e))?;
+        if !unmount.status.success() {
+            let stderr = String::from_utf8_lossy(&unmount.stderr);
+            // "Not mounted" is fine — the volume may already be unmounted.
+            if !stderr.to_lowercase().contains("not mounted") {
+                return Err(format!("Could not unmount device: {}", stderr.trim()));
+            }
+        }
+
+        // …then power off the drive so it's safe to physically remove.
+        let _ = Command::new("udisksctl")
+            .args(["power-off", "-b", &block_dev])
+            .output();
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        // Use the Shell "Eject" verb via PowerShell. mount_point is like "E:\".
+        let drive = mount_point.trim_end_matches(['\\', '/']);
+        let ps = format!(
+            "$o = New-Object -comObject Shell.Application; \
+             $o.Namespace(17).ParseName('{}').InvokeVerb('Eject')",
+            drive
+        );
+        let out = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
+            .output()
+            .map_err(|e| format!("Failed to run eject: {}", e))?;
+        if !out.status.success() {
+            return Err(format!(
+                "Could not eject device: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        // On Android the OS owns mount lifecycle; the app cannot (and must not)
+        // unmount removable storage itself. Releasing the SQLite handles — which
+        // already happened before this call — is all we can and need to do.
+        // The user finishes ejection from the system UI.
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "android")))]
+    {
+        // macOS and others: not in current scope. Handles are released; treat as ok.
+        Ok(())
+    }
 }
 
 /// Return all devices previously seen (from the global registry).

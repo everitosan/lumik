@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Logo, SectionButton, DriveInfo } from '@lumik/ui';
-import { useConnectedDevices } from '../lib/hooks';
+import { useConnectedDevices, usePlatform } from '../lib/hooks';
 import type { Section } from './Layout';
 
 interface SidebarProps {
@@ -87,7 +87,21 @@ const closeBtnStyles: React.CSSProperties = {
 
 export function Sidebar({ activeSection, onSectionChange, collapsed = false, onToggle, isMobile = false }: SidebarProps) {
   const { t } = useTranslation();
-  const { data: devices, loading } = useConnectedDevices();
+  const { data: devices, loading, eject } = useConnectedDevices();
+  const platform = usePlatform();
+  // Android can't unmount removable storage from an app — the OS owns that.
+  // Showing an "eject" button there would be misleading, so we hide it.
+  const canEject = platform !== 'android';
+
+  const handleEject = async (uuid: string) => {
+    try {
+      await eject(uuid);
+    } catch (err) {
+      // Surface the failure; the device stays listed so the user can retry.
+      console.error('eject failed', err);
+      alert(t('navigation.ejectError', { error: String(err) }));
+    }
+  };
 
   const getUsedBytes = (device: { total_bytes: number | null; available_bytes: number | null }) => {
     if (device.total_bytes === null || device.available_bytes === null) return 0;
@@ -145,6 +159,7 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
             usedBytes={getUsedBytes(device)}
             totalBytes={device.total_bytes ?? 0}
             connected={true}
+            onEject={canEject ? () => handleEject(device.uuid) : undefined}
           />
         ))}
       </div>

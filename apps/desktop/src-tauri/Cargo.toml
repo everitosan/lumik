@@ -52,8 +52,14 @@ base64 = "0.22"
 [target.'cfg(target_os = "android")'.dependencies]
 libc = "0.2"
 
+# Linux: libc for poll() on /proc/self/mountinfo (native mount/unmount watcher)
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32_Foundation"] }
+# Windows: WMI subscription to Win32_VolumeChangeEvent (native device watcher)
+wmi = "0.14"
 
 [profile.dev]
 incremental = true

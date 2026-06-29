@@ -174,7 +174,8 @@
     "loadingDevices": "Loading devices...",
     "noDevices": "No devices connected",
     "closeMenu": "Close menu",
-    "openMenu": "Open menu"
+    "openMenu": "Open menu",
+    "ejectError": "Could not eject the drive: {{error}}"
   },
   "dashboard": {
     "title": "Projects",

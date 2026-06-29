@@ -33,6 +33,12 @@ export async function scanConnectedDevices(): Promise<DetectedDevice[]> {
   return invoke('scan_connected_devices');
 }
 
+/// Safely release an external device so the OS can eject it, without closing the app.
+/// Closes all project DBs on the device and asks the OS to unmount it.
+export async function ejectDevice(deviceUuid: string): Promise<void> {
+  return invoke('eject_device', { deviceUuid });
+}
+
 export async function getKnownDevices(): Promise<KnownDevice[]> {
   return invoke('get_known_devices');
 }
