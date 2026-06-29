@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchBar, ProjectCard, Button, Icon } from '@lumik/ui';
-import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, matchesKey } from '../../../lib/hooks';
-import { createProject } from '../../../lib/api';
+import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, matchesKey, usePlatform } from '../../../lib/hooks';
+import { createProject, renameProject, deleteProject, openProjectFolder } from '../../../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../../../components/CreateProjectModal';
+import { RenameProjectModal } from './RenameProjectModal';
+import { DeleteProjectModal } from './DeleteProjectModal';
 import type { ProjectDashboard } from '../../../lib/types';
 
 const containerStyles: React.CSSProperties = {
@@ -127,7 +129,16 @@ export function Projects({ onProjectClick }: ProjectsProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [editingProject, setEditingProject] = useState<ProjectDashboard | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [deletingProject, setDeletingProject] = useState<ProjectDashboard | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const platform = usePlatform();
+  // Opening a folder in a file manager isn't available on Android.
+  const canOpenFolder = platform !== 'android';
 
   const kb = useContextKeybindings('projects');
 
@@ -211,9 +222,43 @@ export function Projects({ onProjectClick }: ProjectsProps) {
     onProjectClick?.(project);
   };
 
-  const handleProjectMenu = (project: ProjectDashboard) => {
-    console.log('Open menu for:', project.name);
-    // TODO: Show context menu
+  const handleOpenFolder = async (project: ProjectDashboard) => {
+    try {
+      await openProjectFolder(project.id);
+    } catch (err) {
+      console.error('open folder failed', err);
+      alert(t('project.openFolderError', { error: String(err) }));
+    }
+  };
+
+  const handleRename = async (newName: string) => {
+    if (!editingProject) return;
+    setIsRenaming(true);
+    setRenameError(null);
+    try {
+      await renameProject(editingProject.id, newName);
+      setEditingProject(null);
+      refetch();
+    } catch (err) {
+      setRenameError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingProject) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteProject(deletingProject.id);
+      setDeletingProject(null);
+      refetch();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleCreateProject = async (data: ProjectFormData) => {
@@ -304,7 +349,9 @@ export function Projects({ onProjectClick }: ProjectsProps) {
                   driveName={devices?.find((d) => d.uuid === project.device_uuid)?.name ?? project.device_uuid}
                   thumbnailUrl={coverThumbnails[project.id]}
                   onClick={() => handleProjectClick(project)}
-                  onMenuClick={() => handleProjectMenu(project)}
+                  onOpenFolder={canOpenFolder ? () => handleOpenFolder(project) : undefined}
+                  onEdit={() => setEditingProject(project)}
+                  onDelete={() => setDeletingProject(project)}
                 />
               ))}
             </div>
@@ -319,6 +366,24 @@ export function Projects({ onProjectClick }: ProjectsProps) {
         devices={devices ?? []}
         loading={isCreating}
         error={createError}
+      />
+
+      <RenameProjectModal
+        open={editingProject !== null}
+        currentName={editingProject?.name ?? ''}
+        onClose={() => { setEditingProject(null); setRenameError(null); }}
+        onSubmit={handleRename}
+        loading={isRenaming}
+        error={renameError}
+      />
+
+      <DeleteProjectModal
+        open={deletingProject !== null}
+        projectName={deletingProject?.name ?? ''}
+        onClose={() => { setDeletingProject(null); setDeleteError(null); }}
+        onConfirm={handleDelete}
+        loading={isDeleting}
+        error={deleteError}
       />
     </div>
   );

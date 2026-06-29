@@ -99,7 +99,21 @@
       "archive": "Archivar",
       "delete": "Eliminar",
       "import": "Importar fotos"
-    }
+    },
+    "rename": {
+      "title": "Editar proyecto",
+      "name": "Nombre del proyecto",
+      "validation": {
+        "nameRequired": "El nombre del proyecto es requerido"
+      }
+    },
+    "delete": {
+      "title": "Eliminar proyecto",
+      "message": "¿Seguro que quieres eliminar «{{name}}»?",
+      "warning": "Se eliminarán de forma permanente la carpeta del proyecto y todos sus archivos (fotos, videos y metadatos). Esta acción no se puede deshacer.",
+      "confirm": "Eliminar todo"
+    },
+    "openFolderError": "No se pudo abrir la carpeta: {{error}}"
   },
   "settings": {
     "title": "Configuración",

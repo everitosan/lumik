@@ -145,6 +145,16 @@ export async function deleteProject(id: string): Promise<void> {
   return invoke('delete_project', { id });
 }
 
+/// Rename a project: moves its folder on disk and updates the stored name + photo paths.
+export async function renameProject(id: string, newName: string): Promise<Project> {
+  return invoke('rename_project', { id, newName });
+}
+
+/// Open the project's folder in the OS file manager (desktop only).
+export async function openProjectFolder(id: string): Promise<void> {
+  return invoke('open_project_folder', { id });
+}
+
 // ============================================================================
 // PHOTOGRAPHER API
 // ============================================================================

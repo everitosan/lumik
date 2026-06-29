@@ -83,6 +83,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(state)
         .setup(|app| {
             // Start native OS hotplug watcher (Linux/Windows). It emits
@@ -101,6 +102,8 @@ pub fn run() {
             commands::create_project,
             commands::archive_project,
             commands::delete_project,
+            commands::rename_project,
+            commands::open_project_folder,
             commands::get_project_photos,
             commands::get_project_thumbnails,
             commands::get_thumbnail,

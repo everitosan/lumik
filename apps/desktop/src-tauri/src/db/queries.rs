@@ -425,12 +425,22 @@ impl ProjectDatabase {
         Ok(())
     }
 
-    pub fn delete_project(&self) -> DbResult<()> {
+    /// Rename the project and rewrite every photo's relative `dng_path` so the old
+    /// folder-name segment is swapped for the new one. `old_prefix`/`new_prefix` are
+    /// the project folder's path relative to the mount point (slash-normalized).
+    pub fn update_name_and_paths(&self, new_name: &str, old_prefix: &str, new_prefix: &str) -> DbResult<()> {
         let conn = self.conn();
-        conn.execute(
-            "UPDATE project SET deleted = 1 WHERE id = ?1",
-            [&self.project_id],
-        )?;
+        conn.execute("UPDATE project SET name = ?1", params![new_name])?;
+
+        if old_prefix != new_prefix {
+            // Exact prefix match (not LIKE) so '_'/'%' in the slug aren't treated as wildcards.
+            let old_len = old_prefix.chars().count() as i64;
+            conn.execute(
+                "UPDATE photo SET dng_path = ?1 || SUBSTR(dng_path, ?2) \
+                 WHERE SUBSTR(dng_path, 1, ?3) = ?4",
+                params![new_prefix, old_len + 1, old_len, old_prefix],
+            )?;
+        }
         Ok(())
     }
 

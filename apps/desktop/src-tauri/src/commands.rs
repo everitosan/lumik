@@ -433,14 +433,144 @@ pub fn archive_project(state: State<AppState>, id: String) -> Result<(), String>
     })
 }
 
+/// Permanently delete a project: removes its folder and all files from disk.
+/// The SQLite handle is closed first (taken out of the open map) so the directory
+/// can be removed on Windows, where an open file blocks folder removal.
 #[tauri::command]
 pub fn delete_project(state: State<AppState>, id: String) -> Result<(), String> {
     info!("delete_project called: {}", id);
-    let project_db = state.project_db(&id)?;
-    project_db.delete_project().map_err(|e| {
-        error!("delete_project error: {}", e);
-        e.to_string()
-    })
+
+    let project_db = {
+        let mut map = state.open_projects.lock().unwrap();
+        map.remove(&id)
+    }
+    .ok_or_else(|| format!("Project '{}' not available — device may not be mounted", id))?;
+
+    let dir = project_db.project_dir.clone();
+    // Drop the only remaining handle so the SQLite connection closes before removal.
+    drop(project_db);
+
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(|e| {
+            error!("delete_project: failed to remove {}: {}", dir.display(), e);
+            // The project is already out of the open map; a future device scan will
+            // re-discover it if the files are still there.
+            format!("Failed to delete project folder: {}", e)
+        })?;
+    }
+
+    info!("delete_project: removed {}", dir.display());
+    Ok(())
+}
+
+/// Rename a project: moves its folder on disk, updates the stored name and rewrites
+/// every photo's relative `dng_path` to point at the new folder. The SQLite handle is
+/// closed before the move (Windows can't rename a directory with an open file inside).
+#[tauri::command]
+pub fn rename_project(state: State<AppState>, id: String, new_name: String) -> Result<Project, String> {
+    let new_name = new_name.trim().to_string();
+    if new_name.is_empty() {
+        return Err("Project name cannot be empty".to_string());
+    }
+    info!("rename_project called: {} -> {}", id, new_name);
+
+    // Take the project out of the open map so its SQLite connection can be closed.
+    let project_db = {
+        let mut map = state.open_projects.lock().unwrap();
+        map.remove(&id)
+    }
+    .ok_or_else(|| format!("Project '{}' not available — device may not be mounted", id))?;
+
+    let mount_point = project_db.mount_point.clone();
+    let device_uuid = project_db.device_uuid.clone();
+    let old_dir = project_db.project_dir.clone();
+
+    // New folder name: keep the "{day}_" prefix, swap the slug (matches create_project).
+    let old_folder = old_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default()
+        .to_string();
+    let day_prefix = old_folder.split_once('_').map(|(d, _)| d.to_string());
+    let new_slug = new_name.replace('/', "-").trim().to_string();
+    let new_folder = match &day_prefix {
+        Some(day) => format!("{}_{}", day, new_slug),
+        None => new_slug.clone(),
+    };
+    let new_dir = old_dir.with_file_name(&new_folder);
+
+    // Relative path prefixes (slash-normalized) for rewriting dng_path.
+    let old_rel = path_to_slash(old_dir.strip_prefix(&mount_point).unwrap_or(&old_dir));
+    let new_rel = path_to_slash(new_dir.strip_prefix(&mount_point).unwrap_or(&new_dir));
+
+    // Close the connection before touching the filesystem.
+    drop(project_db);
+
+    // Helper: reopen at a directory and put it back in the open map.
+    let reinsert = |state: &State<AppState>, dir: &Path, id: &str| {
+        if let Ok(db) = ProjectDatabase::open(dir.join("project.db"), &device_uuid, mount_point.clone()) {
+            state.open_projects.lock().unwrap().insert(id.to_string(), Arc::new(db));
+        }
+    };
+
+    if new_dir != old_dir {
+        if new_dir.exists() {
+            reinsert(&state, &old_dir, &id);
+            return Err(format!("A project folder already exists at: {}", new_dir.display()));
+        }
+        if let Err(e) = std::fs::rename(&old_dir, &new_dir) {
+            error!("rename_project: rename failed: {}", e);
+            reinsert(&state, &old_dir, &id);
+            return Err(format!("Failed to move project folder: {}", e));
+        }
+    }
+
+    let final_dir = if new_dir == old_dir { &old_dir } else { &new_dir };
+    let reopened = ProjectDatabase::open(final_dir.join("project.db"), &device_uuid, mount_point.clone())
+        .map_err(|e| format!("Failed to reopen project after rename: {}", e))?;
+
+    if let Err(e) = reopened.update_name_and_paths(&new_name, &old_rel, &new_rel) {
+        error!("rename_project: db update failed: {}", e);
+        state.open_projects.lock().unwrap().insert(id.clone(), Arc::new(reopened));
+        return Err(format!("Failed to update project record: {}", e));
+    }
+
+    let updated = reopened
+        .get_project()
+        .map_err(|e| e.to_string())?
+        .ok_or("Failed to read renamed project")?;
+
+    state.open_projects.lock().unwrap().insert(id, Arc::new(reopened));
+
+    info!("rename_project success: {}", updated.id);
+    Ok(updated)
+}
+
+/// Open the project's folder in the OS file manager. Desktop only — Android has no
+/// standard way to open a directory path in a file browser.
+#[tauri::command]
+pub fn open_project_folder(app: AppHandle, state: State<AppState>, id: String) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, state, id);
+        return Err("Opening the folder is not supported on Android".to_string());
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        let project_db = state.project_db(&id)?;
+        let dir = project_db.project_dir.clone();
+        if !dir.exists() {
+            return Err(format!("Project folder not found: {}", dir.display()));
+        }
+        app.opener()
+            .open_path(dir.to_string_lossy().to_string(), None::<&str>)
+            .map_err(|e| {
+                error!("open_project_folder error: {}", e);
+                e.to_string()
+            })
+    }
 }
 
 // ============================================================================

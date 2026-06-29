@@ -99,7 +99,21 @@
       "archive": "Archive",
       "delete": "Delete",
       "import": "Import photos"
-    }
+    },
+    "rename": {
+      "title": "Edit project",
+      "name": "Project name",
+      "validation": {
+        "nameRequired": "Project name is required"
+      }
+    },
+    "delete": {
+      "title": "Delete project",
+      "message": "Are you sure you want to delete \"{{name}}\"?",
+      "warning": "This permanently deletes the project folder and all its files (photos, videos and metadata). This action cannot be undone.",
+      "confirm": "Delete everything"
+    },
+    "openFolderError": "Could not open the folder: {{error}}"
   },
   "settings": {
     "title": "Settings",
