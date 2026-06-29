@@ -214,6 +214,16 @@ impl Default for AppSettings {
 pub struct ProjectSettings {
     pub sidebar_open: bool,
     pub show_culled: bool,
+    #[serde(default)]
+    pub min_stars: Option<i32>,
+    #[serde(default)]
+    pub selected_tags: Option<String>,
+    #[serde(default)]
+    pub selected_colors: Option<String>,
+    #[serde(default)]
+    pub stars_filter_mode: Option<String>,
+    #[serde(default)]
+    pub view_mode: Option<String>,
 }
 
 impl Default for ProjectSettings {
@@ -221,6 +231,11 @@ impl Default for ProjectSettings {
         Self {
             sidebar_open: true,
             show_culled: false,
+            min_stars: None,
+            selected_tags: None,
+            selected_colors: None,
+            stars_filter_mode: None,
+            view_mode: None,
         }
     }
 }

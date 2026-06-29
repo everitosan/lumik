@@ -304,15 +304,50 @@ impl ProjectDatabase {
         Ok(result)
     }
 
+    /// Migrates project_settings table by adding missing columns from older databases.
+    /// This is a "lazy migration" that runs on first access, not on schema initialization.
+    fn migrate_project_settings(&self) -> DbResult<()> {
+        let conn = self.conn();
+
+        // Add missing columns if they don't exist
+        let columns_to_add = [
+            ("min_stars", "INTEGER"),
+            ("selected_tags", "TEXT"),
+            ("selected_colors", "TEXT"),
+            ("stars_filter_mode", "TEXT"),
+            ("view_mode", "TEXT"),
+        ];
+
+        for (col_name, col_type) in &columns_to_add {
+            // Try to select the column; if it fails, add it
+            if conn.execute(&format!("SELECT {} FROM project_settings LIMIT 0", col_name), []).is_err() {
+                conn.execute(
+                    &format!("ALTER TABLE project_settings ADD COLUMN {} {} DEFAULT NULL", col_name, col_type),
+                    [],
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn get_project_settings(&self) -> DbResult<ProjectSettings> {
+        // Run migration first (idempotent, safe to run every time)
+        self.migrate_project_settings()?;
+
         let conn = self.conn();
         let result = conn.query_row(
-            "SELECT sidebar_open, show_culled FROM project_settings WHERE id = 1",
+            "SELECT sidebar_open, show_culled, min_stars, selected_tags, selected_colors, stars_filter_mode, view_mode FROM project_settings WHERE id = 1",
             [],
             |row| {
                 Ok(ProjectSettings {
                     sidebar_open: row.get::<_, i32>(0)? != 0,
                     show_culled: row.get::<_, i32>(1)? != 0,
+                    min_stars: row.get::<_, Option<i32>>(2).ok().flatten(),
+                    selected_tags: row.get::<_, Option<String>>(3).ok().flatten(),
+                    selected_colors: row.get::<_, Option<String>>(4).ok().flatten(),
+                    stars_filter_mode: row.get::<_, Option<String>>(5).ok().flatten(),
+                    view_mode: row.get::<_, Option<String>>(6).ok().flatten(),
                 })
             },
         );
@@ -322,8 +357,8 @@ impl ProjectDatabase {
     pub fn update_project_settings(&self, settings: &ProjectSettings) -> DbResult<()> {
         let conn = self.conn();
         conn.execute(
-            "UPDATE project_settings SET sidebar_open = ?1, show_culled = ?2 WHERE id = 1",
-            params![settings.sidebar_open as i32, settings.show_culled as i32],
+            "UPDATE project_settings SET sidebar_open = ?1, show_culled = ?2, min_stars = ?3, selected_tags = ?4, selected_colors = ?5, stars_filter_mode = ?6, view_mode = ?7 WHERE id = 1",
+            params![settings.sidebar_open as i32, settings.show_culled as i32, settings.min_stars, settings.selected_tags, settings.selected_colors, settings.stars_filter_mode, settings.view_mode],
         )?;
         Ok(())
     }

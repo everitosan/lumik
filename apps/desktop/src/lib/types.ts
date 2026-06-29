@@ -102,6 +102,11 @@ export interface AppSettings {
 export interface ProjectSettings {
   sidebar_open: boolean;
   show_culled: boolean;
+  min_stars?: number | null;
+  selected_tags?: string | null;
+  selected_colors?: string | null;
+  stars_filter_mode?: 'exact' | 'inclusive';
+  view_mode?: 'grid' | 'by-date';
 }
 
 // ============================================================================

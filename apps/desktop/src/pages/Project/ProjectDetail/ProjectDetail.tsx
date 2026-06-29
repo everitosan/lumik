@@ -132,10 +132,15 @@ const feedbackStyles: CSSProperties = {
 
 export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPath, onBack, onCoverPhotoChange }: ProjectDetailProps) {
   const [sortBy, setSortBy] = useState<SortOption>('date');
+  const [viewMode, setViewMode] = useState<'grid' | 'by-date'>('by-date');
   const [showImport, setShowImport] = useState(false);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [showCulledOnly, setShowCulledOnly] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [minStars, setMinStars] = useState<number | null>(null);
+  const [starsFilterMode, setStarsFilterMode] = useState<'exact' | 'inclusive'>('inclusive');
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [selectedColors, setSelectedColors] = useState<Set<number>>(new Set());
   const kb = useContextKeybindings('project');
 
   // Load project settings from DB on mount
@@ -143,6 +148,11 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
     api.getProjectSettings(projectId).then((s) => {
       setSidebarOpen(s.sidebar_open);
       setShowCulledOnly(s.show_culled);
+      setMinStars(s.min_stars ?? null);
+      setStarsFilterMode(s.stars_filter_mode ?? 'inclusive');
+      setViewMode((s.view_mode as 'grid' | 'by-date') ?? 'by-date');
+      setSelectedTags(s.selected_tags ? new Set(s.selected_tags.split(',')) : new Set());
+      setSelectedColors(s.selected_colors ? new Set(s.selected_colors.split(',').map(Number)) : new Set());
     });
   }, [projectId]);
 
@@ -153,8 +163,74 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
   const handleShowCulledChange = useCallback((value: boolean) => {
     setShowCulledOnly(value);
-    api.updateProjectSettings(projectId, { sidebar_open: sidebarOpen, show_culled: value });
-  }, [projectId, sidebarOpen]);
+    api.updateProjectSettings(projectId, {
+      sidebar_open: sidebarOpen,
+      show_culled: value,
+      min_stars: minStars,
+      selected_tags: Array.from(selectedTags).join(','),
+      selected_colors: Array.from(selectedColors).join(','),
+    });
+  }, [projectId, sidebarOpen, minStars, selectedTags, selectedColors]);
+
+  const handleMinStarsChange = useCallback((stars: number | null) => {
+    setMinStars(stars);
+    api.updateProjectSettings(projectId, {
+      sidebar_open: sidebarOpen,
+      show_culled: showCulledOnly,
+      min_stars: stars,
+      selected_tags: Array.from(selectedTags).join(','),
+      selected_colors: Array.from(selectedColors).join(','),
+      stars_filter_mode: starsFilterMode,
+    });
+  }, [projectId, sidebarOpen, showCulledOnly, selectedTags, selectedColors, starsFilterMode]);
+
+  const handleStarsFilterModeChange = useCallback((mode: 'exact' | 'inclusive') => {
+    setStarsFilterMode(mode);
+    api.updateProjectSettings(projectId, {
+      sidebar_open: sidebarOpen,
+      show_culled: showCulledOnly,
+      min_stars: minStars,
+      selected_tags: Array.from(selectedTags).join(','),
+      selected_colors: Array.from(selectedColors).join(','),
+      stars_filter_mode: mode,
+      view_mode: viewMode,
+    });
+  }, [projectId, sidebarOpen, showCulledOnly, minStars, selectedTags, selectedColors, viewMode]);
+
+  const handleViewModeChange = useCallback((mode: 'grid' | 'by-date') => {
+    setViewMode(mode);
+    api.updateProjectSettings(projectId, {
+      sidebar_open: sidebarOpen,
+      show_culled: showCulledOnly,
+      min_stars: minStars,
+      selected_tags: Array.from(selectedTags).join(','),
+      selected_colors: Array.from(selectedColors).join(','),
+      stars_filter_mode: starsFilterMode,
+      view_mode: mode,
+    });
+  }, [projectId, sidebarOpen, showCulledOnly, minStars, selectedTags, selectedColors, starsFilterMode]);
+
+  const handleSelectedTagsChange = useCallback((tags: Set<string>) => {
+    setSelectedTags(tags);
+    api.updateProjectSettings(projectId, {
+      sidebar_open: sidebarOpen,
+      show_culled: showCulledOnly,
+      min_stars: minStars,
+      selected_tags: Array.from(tags).join(','),
+      selected_colors: Array.from(selectedColors).join(','),
+    });
+  }, [projectId, sidebarOpen, showCulledOnly, minStars, selectedColors]);
+
+  const handleSelectedColorsChange = useCallback((colors: Set<number>) => {
+    setSelectedColors(colors);
+    api.updateProjectSettings(projectId, {
+      sidebar_open: sidebarOpen,
+      show_culled: showCulledOnly,
+      min_stars: minStars,
+      selected_tags: Array.from(selectedTags).join(','),
+      selected_colors: Array.from(colors).join(','),
+    });
+  }, [projectId, sidebarOpen, showCulledOnly, minStars, selectedTags]);
 
   // Grid-level keyboard shortcuts (only active when grid is visible)
   useEffect(() => {
@@ -225,11 +301,49 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
   const sortedPhotos = useMemo(() => {
     if (!photosWithOverrides) return [];
-    const filtered = showCulledOnly
+    let filtered = showCulledOnly
       ? photosWithOverrides.filter((p) => p.culled)
       : photosWithOverrides;
+
+    if (minStars !== null) {
+      if (starsFilterMode === 'exact') {
+        filtered = filtered.filter((p) => p.stars === minStars);
+      } else {
+        filtered = filtered.filter((p) => p.stars >= minStars);
+      }
+    }
+
+    if (selectedTags.size > 0) {
+      filtered = filtered.filter((p) => {
+        if (!p.tags) return false;
+        const photoTags = p.tags.split(',').map((t) => t.trim());
+        return Array.from(selectedTags).some((t) => photoTags.includes(t));
+      });
+    }
+
+    if (selectedColors.size > 0) {
+      filtered = filtered.filter((p) => {
+        if (!p.color_label) return false;
+        const photoColors = p.color_label.split(',').map((c) => parseInt(c.trim(), 10));
+        return Array.from(selectedColors).some((c) => photoColors.includes(c));
+      });
+    }
+
     return sortPhotos(filtered, sortBy);
-  }, [photosWithOverrides, sortBy, showCulledOnly]);
+  }, [photosWithOverrides, sortBy, showCulledOnly, minStars, starsFilterMode, selectedTags, selectedColors]);
+
+  const allAvailableTags = useMemo(() => {
+    const tags = new Set<string>();
+    if (photosWithOverrides) {
+      for (const photo of photosWithOverrides) {
+        if (photo.tags) {
+          const photoTags = photo.tags.split(',').map((t) => t.trim());
+          photoTags.forEach((t) => tags.add(t));
+        }
+      }
+    }
+    return tags;
+  }, [photosWithOverrides]);
 
   const selectedPhotoIndex = useMemo(
     () => (selectedPhotoId ? sortedPhotos.findIndex((p) => p.id === selectedPhotoId) : -1),
@@ -272,6 +386,16 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
   const flatList = useMemo((): FlatItem[] => {
     if (sortedPhotos.length === 0 || colCount === 0) return [];
 
+    // Grid view: just rows without separators
+    if (viewMode === 'grid') {
+      const items: FlatItem[] = [];
+      for (let i = 0; i < sortedPhotos.length; i += colCount) {
+        items.push({ type: 'row', photos: sortedPhotos.slice(i, i + colCount) });
+      }
+      return items;
+    }
+
+    // By-date view: group by day with separators
     const groups = new Map<string, Photo[]>();
     for (const photo of sortedPhotos) {
       const day = photo.capture_date ? captureDateToDay(photo.capture_date) : 'sin-fecha';
@@ -295,7 +419,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
       }
     }
     return items;
-  }, [sortedPhotos, colCount]);
+  }, [sortedPhotos, colCount, viewMode]);
 
   const rowVirtualizer = useVirtualizer({
     count: flatList.length,
@@ -348,10 +472,9 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
       <ProjectDetailHeader
         projectName={projectName}
         onBack={onBack}
-        sortBy={sortBy}
-        onSortChange={setSortBy}
-        showCulledOnly={showCulledOnly}
-        onShowCulledOnlyChange={handleShowCulledChange}
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
+        onImport={() => setShowImport(true)}
       />
 
       <div ref={setScrollEl} style={gridScrollStyles}>
@@ -433,8 +556,17 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
       <ProjectDetailFooter
         totalPhotos={photos?.length ?? 0}
         culledCount={culledCount}
-        projectId={projectId}
-        onImport={() => setShowImport(true)}
+        showCulledOnly={showCulledOnly}
+        onShowCulledOnlyChange={handleShowCulledChange}
+        minStars={minStars}
+        onMinStarsChange={handleMinStarsChange}
+        starsFilterMode={starsFilterMode}
+        onStarsFilterModeChange={handleStarsFilterModeChange}
+        allTags={allAvailableTags}
+        selectedTags={selectedTags}
+        onSelectedTagsChange={handleSelectedTagsChange}
+        selectedColors={selectedColors}
+        onSelectedColorsChange={handleSelectedColorsChange}
       />
     </div>
   );

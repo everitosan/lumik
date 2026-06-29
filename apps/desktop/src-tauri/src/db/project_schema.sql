@@ -102,7 +102,12 @@ CREATE INDEX IF NOT EXISTS idx_photo_workflow ON photo(project_id, workflow_stat
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS project_settings (
-    id           INTEGER PRIMARY KEY DEFAULT 1 CHECK(id = 1),
-    sidebar_open INTEGER NOT NULL DEFAULT 1,   -- 1 = metadata panel open in PhotoDetail
-    show_culled  INTEGER NOT NULL DEFAULT 0    -- 1 = show culled filter active in ProjectDetail
+    id                  INTEGER PRIMARY KEY DEFAULT 1 CHECK(id = 1),
+    sidebar_open        INTEGER NOT NULL DEFAULT 1,   -- 1 = metadata panel open in PhotoDetail
+    show_culled         INTEGER NOT NULL DEFAULT 0,   -- 1 = show culled filter active in ProjectDetail
+    min_stars           INTEGER,                      -- minimum rating filter (1-5, or NULL for no filter)
+    selected_tags       TEXT,                         -- comma-separated tags (or NULL)
+    selected_colors     TEXT,                         -- comma-separated color labels 1-5 (or NULL)
+    stars_filter_mode   TEXT,                         -- 'exact' | 'inclusive' (or NULL for default)
+    view_mode           TEXT                          -- 'grid' | 'by-date' (or NULL for default 'by-date')
 );
