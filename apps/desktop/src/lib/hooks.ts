@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 import * as api from './api';
@@ -460,4 +461,22 @@ export function useImport(): UseImportReturn {
   }, []);
 
   return { progress, importLog, result, isImporting, error, startImport, reset };
+}
+
+// ============================================================================
+// LANGUAGE
+// ============================================================================
+
+export function useLanguage() {
+  const { i18n } = useTranslation();
+
+  const changeLanguage = useCallback((lang: 'es' | 'en') => {
+    i18n.changeLanguage(lang);
+    localStorage.setItem('lumik-language', lang);
+  }, [i18n]);
+
+  return {
+    currentLanguage: (i18n.language || 'es') as 'es' | 'en',
+    changeLanguage,
+  };
 }

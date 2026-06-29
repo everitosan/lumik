@@ -1,8 +1,7 @@
 # Lumik
 
 Suite de aplicaciones para administrar fotografias de fotografos profesionales.
-Permite convertir archivos RAW a DNG, organizar sesiones, etiquetar fotos para
-culling, respaldar y entregar a clientes.
+Permite organizar sesiones en proyectos, seleccionar, etiquetar, calificar y tagear fotos.
 
 ## Componentes de la suite
 
@@ -28,55 +27,3 @@ lumik/
 └── docs/             # Documentacion compartida
 ```
 
-## Modelo de datos compartido
-
-Tablas: fotografo, proyecto, fotografia, metadatos_fotografo.
-
-Campos clave de fotografia:
-- `dng_path`: relativo al mount point, nunca absoluto
-- `device_name` / `device_uuid`: para detectar disponibilidad del disco
-- `culled`: booleano, indica si vive en `_culled/`
-- `workflow_status`: importada | editada | entregada
-- Cache del DNG: stars, color_label, tags, capture_date, width, height, file_size_bytes
-
-Ver `docs/schema.sql` para el esquema completo.
-
-## Principios arquitectonicos globales
-
-- **Paths relativos**: Los paths en BD son siempre relativos al mount point.
-  El path completo se reconstruye en runtime via device_uuid.
-- **DNG como fuente de verdad**: Los metadatos viven en el XMP del DNG.
-  La BD es cache de consulta rapida.
-- **Deteccion por UUID**: Dispositivos se identifican por UUID de filesystem,
-  no por letra de unidad ni path de montaje.
-- **Offline-first**: Cada componente debe funcionar sin conexion y sincronizar
-  cuando haya red disponible.
-
-## Estructura de carpetas en destino (discos externos)
-
-```
-{mount_point}/lumik/{año}/{mes}/{día}_{nombre-proyecto}/
-  project.db
-  _media/
-    IMG_0001.dng
-    IMG_0002.dng
-  _culled/
-    IMG_0047.dng
-  _video/
-    CLIP_001.mp4
-  .thumbs/
-    {photo_id}.jpg       # JPEG 480px, rotación física aplicada
-  .previews/
-    {photo_id}.jpg       # JPEG full-res extraído del DNG, Orientation=1
-```
-
-- Las fotos (DNG) van en `_media/`. Al cullarse, se mueven a `_culled/` (hermana de `_media/`).
-- Los videos se copian directamente a `_video/` sin conversión ni metadatos XMP.
-- `dng_path` en BD es relativo al mount point, p.ej. `lumik/2025/06/12_sesion/_media/IMG_0001.dng`.
-
-## Vision a futuro
-
-- Vinculacion de JPG editado (match por nombre o seleccion manual)
-- Respaldo via API con cola offline-first
-- Conversion WebP para entrega web optimizada
-- Sincronizacion entre dispositivos via servidor

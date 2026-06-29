@@ -35,7 +35,7 @@ const iconStyles: CSSProperties = {
 };
 
 export function SearchBar({
-  placeholder = 'Buscar proyectos...',
+  placeholder = 'Search...',
   onSearch,
   onChange,
   onFocus,

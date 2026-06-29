@@ -1,0 +1,54 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "accept": "Accept",
+    "back": "Back",
+    "next": "Next",
+    "close": "Close",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "notSelected": "Not selected"
+  },
+  "components": {
+    "projectCard": {
+      "status": {
+        "imported": "Imported",
+        "edited": "Editing",
+        "delivered": "Delivered"
+      }
+    },
+    "dropzone": {
+      "filesSelected": "files selected",
+      "total": "total"
+    },
+    "driveInfo": {
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "freeOf": "free of"
+    },
+    "fileList": {
+      "searchPlaceholder": "Search files...",
+      "noResults": "No files found matching \"{{query}}\""
+    }
+  },
+  "dashboard": {
+    "statistics": {
+      "projects": "projects",
+      "photos": "photos"
+    }
+  },
+  "photo": {
+    "rating": "Rating",
+    "tags": "Tags",
+    "cull": "Cull",
+    "uncull": "Recover",
+    "rotate": "Rotate",
+    "saving": "↻ Saving…",
+    "saved": "✓ Saved",
+    "errorSaving": "✕ Error saving"
+  }
+}

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { CSSProperties } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT, type ColorLabel } from '@lumik/ui';
@@ -107,12 +108,13 @@ function captureDateToDay(raw: string): string {
   return raw.slice(0, 10).replace(/:/g, '-');
 }
 
-function formatDayLabel(day: string): string {
-  if (day === 'sin-fecha') return 'Sin fecha';
+function formatDayLabel(day: string, t: (key: string) => string, locale: string): string {
+  if (day === 'sin-fecha') return t('projectDetail.noDate');
   try {
     const d = new Date(day + 'T00:00:00');
     if (isNaN(d.getTime())) return day;
-    return d.toLocaleDateString('es-MX', {
+    const dateLocale = locale === 'es' ? 'es-MX' : 'en-US';
+    return d.toLocaleDateString(dateLocale, {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     });
   } catch {
@@ -131,6 +133,7 @@ const feedbackStyles: CSSProperties = {
 };
 
 export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPath, onBack, onCoverPhotoChange }: ProjectDetailProps) {
+  const { t, i18n } = useTranslation();
   const [sortBy, setSortBy] = useState<SortOption>('date');
   const [viewMode, setViewMode] = useState<'grid' | 'by-date'>('by-date');
   const [showImport, setShowImport] = useState(false);
@@ -412,14 +415,14 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
     const items: FlatItem[] = [];
     for (const key of sortedKeys) {
-      items.push({ type: 'separator', label: formatDayLabel(key) });
+      items.push({ type: 'separator', label: formatDayLabel(key, t, i18n.language) });
       const dayPhotos = groups.get(key)!;
       for (let i = 0; i < dayPhotos.length; i += colCount) {
         items.push({ type: 'row', photos: dayPhotos.slice(i, i + colCount) });
       }
     }
     return items;
-  }, [sortedPhotos, colCount, viewMode]);
+  }, [sortedPhotos, colCount, viewMode, t, i18n.language]);
 
   const rowVirtualizer = useVirtualizer({
     count: flatList.length,
@@ -478,14 +481,14 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
       />
 
       <div ref={setScrollEl} style={gridScrollStyles}>
-        {loading && <div style={feedbackStyles}>Cargando fotos…</div>}
+        {loading && <div style={feedbackStyles}>{t('projectDetail.loading')}</div>}
 
         {!loading && error && (
-          <div style={feedbackStyles}>No se pudieron cargar las fotos: {error}</div>
+          <div style={feedbackStyles}>{t('projectDetail.loadError', { error })}</div>
         )}
 
         {!loading && !error && sortedPhotos.length === 0 && (
-          <div style={feedbackStyles}>Este proyecto no tiene fotos aún.</div>
+          <div style={feedbackStyles}>{t('projectDetail.empty')}</div>
         )}
 
         {!loading && !error && flatList.length > 0 && (

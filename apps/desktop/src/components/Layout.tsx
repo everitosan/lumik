@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Sidebar } from './Sidebar';
 import { usePlatform } from '../lib/hooks';
 
@@ -46,6 +47,7 @@ const sidebarTabStyles: React.CSSProperties = {
 };
 
 export function Layout({ children, activeSection: controlledSection, onSectionChange }: LayoutProps) {
+  const { t } = useTranslation();
   const platform = usePlatform();
   const isMobile = platform === 'android' || platform === 'ios';
 
@@ -96,7 +98,7 @@ export function Layout({ children, activeSection: controlledSection, onSectionCh
         <button
           style={sidebarTabStyles}
           onClick={() => setSidebarCollapsed(false)}
-          aria-label="Abrir menú"
+          aria-label={t('navigation.openMenu')}
         >
           ›
         </button>

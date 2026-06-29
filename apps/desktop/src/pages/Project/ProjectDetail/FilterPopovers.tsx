@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '@lumik/ui';
 
 const popoverTriggerStyles: CSSProperties = {
@@ -91,6 +92,7 @@ interface RatingFilterProps {
 }
 
 export function RatingFilter({ value, onChange, mode, onModeChange }: RatingFilterProps) {
+  const { t } = useTranslation();
   return (
     <div
       style={{
@@ -119,7 +121,7 @@ export function RatingFilter({ value, onChange, mode, onModeChange }: RatingFilt
           transition: 'all 0.15s',
           lineHeight: '1',
         }}
-        title="Toggle between exact (=) and inclusive (≥)"
+        title={t('projectDetail.filterToggle')}
       >
         {mode === 'exact' ? '=' : '≥'}
       </button>
@@ -140,7 +142,7 @@ export function RatingFilter({ value, onChange, mode, onModeChange }: RatingFilt
             justifyContent: 'center',
             transition: 'all 0.15s',
           }}
-          title={mode === 'inclusive' ? `Up to ${star} stars` : `Exactly ${star} stars`}
+          title={mode === 'inclusive' ? t('projectDetail.ratingFilter.upTo', { star }) : t('projectDetail.ratingFilter.exactly', { star })}
         >
           <Icon
             name={value !== null && star <= value ? 'star-filled' : 'star'}
@@ -173,6 +175,7 @@ const popoverPanelTopStyles: CSSProperties = {
 };
 
 export function TagsFilter({ allTags, selectedTags, onChange }: TagsFilterProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -212,7 +215,7 @@ export function TagsFilter({ allTags, selectedTags, onChange }: TagsFilterProps)
           <div style={popoverContentStyles}>
             {sortedTags.length === 0 ? (
               <div style={{ padding: '8px', color: 'var(--lumik-on-surface-variant, #c2c6d7)', fontSize: '12px' }}>
-                No tags available
+                {t('projectDetail.noTagsAvailable')}
               </div>
             ) : (
               sortedTags.map((tag) => (

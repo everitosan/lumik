@@ -1,0 +1,54 @@
+{
+  "common": {
+    "cancel": "Cancelar",
+    "accept": "Aceptar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "close": "Cerrar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "notSelected": "No seleccionado"
+  },
+  "components": {
+    "projectCard": {
+      "status": {
+        "imported": "Importado",
+        "edited": "Editando",
+        "delivered": "Entregado"
+      }
+    },
+    "dropzone": {
+      "filesSelected": "fotos seleccionadas",
+      "total": "total"
+    },
+    "driveInfo": {
+      "connected": "Conectado",
+      "disconnected": "Desconectado",
+      "freeOf": "libres de"
+    },
+    "fileList": {
+      "searchPlaceholder": "Buscar archivos...",
+      "noResults": "No se encontraron archivos que coincidan con \"{{query}}\""
+    }
+  },
+  "dashboard": {
+    "statistics": {
+      "projects": "proyectos",
+      "photos": "fotos"
+    }
+  },
+  "photo": {
+    "rating": "Clasificación",
+    "tags": "Etiquetas",
+    "cull": "Seleccionar",
+    "uncull": "Descartar",
+    "rotate": "Rotar",
+    "saving": "↻ Guardando…",
+    "saved": "✓ Guardado",
+    "errorSaving": "✕ Error al guardar"
+  }
+}

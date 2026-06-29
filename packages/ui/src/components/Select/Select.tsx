@@ -133,7 +133,7 @@ export function Select({
   value,
   onChange,
   label,
-  placeholder = 'Seleccionar...',
+  placeholder = 'Select...',
   disabled = false,
   fullWidth = false,
 }: SelectProps) {

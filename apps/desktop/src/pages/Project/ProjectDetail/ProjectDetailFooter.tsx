@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '@lumik/ui';
 import { RatingFilter, TagsFilter, ColorsFilter } from './FilterPopovers';
 
@@ -65,15 +66,16 @@ export function ProjectDetailFooter({
   selectedColors,
   onSelectedColorsChange,
 }: ProjectDetailFooterProps) {
+  const { t } = useTranslation();
   return (
     <footer style={footerStyles}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
         <div style={statsStyles}>
           <span style={statValueStyles}>{totalPhotos.toLocaleString()}</span>
-          <span>photos</span>
+          <span>{t('projectDetail.photos')}</span>
           <span style={sepStyles}>•</span>
           <span style={culledValueStyles}>{culledCount}</span>
-          <span>culled</span>
+          <span>{t('projectDetail.culled')}</span>
         </div>
 
         <label
@@ -113,7 +115,7 @@ export function ProjectDetailFooter({
               </svg>
             )}
           </span>
-          Show culled
+          {t('projectDetail.showCulled')}
         </label>
       </div>
 

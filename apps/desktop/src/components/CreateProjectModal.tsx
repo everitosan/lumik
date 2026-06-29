@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type ChangeEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import flatpickr from 'flatpickr';
 import 'flatpickr/dist/flatpickr.min.css';
 import '../styles/flatpickr.css';
@@ -109,6 +110,7 @@ export function CreateProjectModal({
   loading,
   error,
 }: CreateProjectModalProps) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [sessionDate, setSessionDate] = useState('');
@@ -156,8 +158,8 @@ export function CreateProjectModal({
 
   const validate = (): boolean => {
     const newErrors: Partial<Record<'name' | 'deviceUuid', string>> = {};
-    if (!name.trim()) newErrors.name = 'El nombre del proyecto es requerido';
-    if (!deviceUuid) newErrors.deviceUuid = 'Selecciona un dispositivo de destino';
+    if (!name.trim()) newErrors.name = t('project.create.validation.nameRequired');
+    if (!deviceUuid) newErrors.deviceUuid = t('project.create.validation.deviceRequired');
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -182,7 +184,7 @@ export function CreateProjectModal({
 
   return (
     <Modal
-      title="New Project"
+      title={t('project.create.title')}
       open={open}
       onClose={handleClose}
       closable
@@ -195,8 +197,8 @@ export function CreateProjectModal({
           {/* Left column: name + description + date */}
           <div style={columnStyles}>
             <Input
-              label="Project Name"
-              placeholder="e.g. Wedding Martinez-Lopez"
+              label={t('project.create.name')}
+              placeholder={t('project.create.namePlaceholder')}
               value={name}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
               error={errors.name}
@@ -206,9 +208,9 @@ export function CreateProjectModal({
             />
 
             <Input
-              label="Description"
+              label={t('project.create.description')}
               variant="textarea"
-              placeholder="Add notes about the project..."
+              placeholder={t('project.create.descriptionPlaceholder')}
               value={description}
               onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
               fullWidth
@@ -216,11 +218,11 @@ export function CreateProjectModal({
             />
 
             <div style={dateFieldStyles}>
-              <span style={dateLabelStyles}>Session Date</span>
+              <span style={dateLabelStyles}>{t('project.create.date')}</span>
               <input
                 ref={dateInputCallbackRef}
                 type="text"
-                placeholder="Select date..."
+                placeholder={t('components.createProjectModal.datePlaceholder')}
                 readOnly
                 disabled={loading}
                 style={{
@@ -238,7 +240,7 @@ export function CreateProjectModal({
               drives={drives}
               selectedId={deviceUuid}
               onSelect={(drive: Drive) => setDeviceUuid(drive.id)}
-              label="Destination Device"
+              label={t('project.create.device')}
             />
             {errors.deviceUuid && (
               <span style={fieldErrorStyles}>{errors.deviceUuid}</span>
@@ -248,10 +250,10 @@ export function CreateProjectModal({
 
         <div style={actionsStyles}>
           <Button variant="ghost" type="button" onClick={handleClose} disabled={loading}>
-            Cancel
+            {t('project.create.buttons.cancel')}
           </Button>
           <Button variant="primary" type="submit" disabled={loading || !deviceUuid}>
-            {loading ? 'Creating...' : 'Create Project'}
+            {loading ? t('common.loading') : t('project.create.buttons.create')}
           </Button>
         </div>
       </form>

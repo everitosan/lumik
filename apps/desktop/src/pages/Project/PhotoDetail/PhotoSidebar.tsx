@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, type CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '@lumik/ui';
 import type { ColorLabel } from '@lumik/ui';
 import type { Photo } from '../../../lib/types';
@@ -162,11 +163,12 @@ function ParamsGrid({ params }: { params: [ParamCell, ParamCell, ParamCell, Para
 
 // ─── Camera spec row ──────────────────────────────────────────────────────────
 
-function CameraSpecRow({ label, value }: { label: string; value: string | null }) {
+function CameraSpecRow({ label, value, t }: { label: string; value: string | null; t: (key: string, opts?: any) => string }) {
   if (!value) return null;
+  const labelKey = `photo.sidebar.${label.toLowerCase()}`;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-      <span style={labelStyle}>{label}</span>
+      <span style={labelStyle}>{t(labelKey)}</span>
       <span style={{ fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)', fontSize: '26px', fontWeight: 700, color: 'var(--lumik-on-surface, #e5e2e1)', lineHeight: '1.2' }}>
         {value}
       </span>
@@ -176,7 +178,7 @@ function CameraSpecRow({ label, value }: { label: string; value: string | null }
 
 // ─── Star input ───────────────────────────────────────────────────────────────
 
-function StarInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function StarInput({ value, onChange, t }: { value: number; onChange: (v: number) => void; t: (key: string, opts?: any) => string }) {
   const platform = usePlatform();
   const isMobile = platform === 'android' || platform === 'ios';
   const btnSize = isMobile ? 44 : 32;
@@ -188,7 +190,7 @@ function StarInput({ value, onChange }: { value: number; onChange: (v: number) =
         <button
           key={i}
           onClick={() => onChange(value === i + 1 ? 0 : i + 1)}
-          title={`${i + 1} estrellas`}
+          title={t('photo.sidebar.starsRating', { stars: i + 1 })}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: `${btnSize}px`, height: `${btnSize}px`, padding: 0,
@@ -206,7 +208,7 @@ function StarInput({ value, onChange }: { value: number; onChange: (v: number) =
 
 // ─── Color input ──────────────────────────────────────────────────────────────
 
-function ColorInput({ selected, onChange }: { selected: ColorLabel[]; onChange: (v: ColorLabel[]) => void }) {
+function ColorInput({ selected, onChange, t }: { selected: ColorLabel[]; onChange: (v: ColorLabel[]) => void; t: (key: string, opts?: any) => string }) {
   const platform = usePlatform();
   const isMobile = platform === 'android' || platform === 'ios';
   const ALL_COLORS = [1, 2, 3, 4, 5] as ColorLabel[];
@@ -224,7 +226,7 @@ function ColorInput({ selected, onChange }: { selected: ColorLabel[]; onChange: 
           <button
             key={label}
             onClick={() => toggle(label)}
-            title={`Color ${label}`}
+            title={t(`photo.colors.${label}`)}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: `${hitSize}px`, height: `${hitSize}px`,
@@ -285,8 +287,8 @@ function TagManager({ tags, onChange }: { tags: string[]; onChange: (tags: strin
           >
             {tag}
             <button
-              onClick={() => onChange(tags.filter((t) => t !== tag))}
-              title="Eliminar tag"
+              onClick={() => onChange(tags.filter((tagItem) => tagItem !== tag))}
+              title={t('photo.sidebar.deleteTag')}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '14px', height: '14px', padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--lumik-outline, #8c90a0)', fontSize: '12px', lineHeight: 1, borderRadius: '2px' }}
             >
               ×
@@ -301,7 +303,7 @@ function TagManager({ tags, onChange }: { tags: string[]; onChange: (tags: strin
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={confirmAdd}
-          placeholder="Nuevo tag…"
+          placeholder={t('photo.sidebar.newTagPlaceholder')}
           style={{
             fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
             fontSize: '11px', padding: '4px 8px',
@@ -334,7 +336,7 @@ function TagManager({ tags, onChange }: { tags: string[]; onChange: (tags: strin
 
 // ─── Cull input ───────────────────────────────────────────────────────────────
 
-function CullInput({ culled, onChange }: { culled: boolean; onChange: (v: boolean) => void }) {
+function CullInput({ culled, onChange, t }: { culled: boolean; onChange: (v: boolean) => void; t: (key: string, opts?: any) => string }) {
   const platform = usePlatform();
   const isMobile = platform === 'android' || platform === 'ios';
   // Hit area 44px on mobile; visual circle smaller
@@ -370,7 +372,7 @@ function CullInput({ culled, onChange }: { culled: boolean; onChange: (v: boolea
         </span>
       </span>
       <span style={{ fontFamily: 'var(--lumik-font-primary, Inter)', fontSize: isMobile ? '15px' : '13px', color: 'var(--lumik-on-surface, #e5e2e1)' }}>
-        Select photo
+        {t('photo.sidebar.selectPhoto')}
       </span>
     </label>
   );
@@ -405,6 +407,7 @@ export function PhotoSidebar({
   onCulledChange,
   onCollapse,
 }: PhotoSidebarProps) {
+  const { t } = useTranslation();
   return (
     <div style={panelStyle}>
 
@@ -412,7 +415,7 @@ export function PhotoSidebar({
       {onCollapse && (
         <button
           onClick={onCollapse}
-          aria-label="Ocultar panel"
+          aria-label={t('photo.sidebar.hidePanel')}
           style={{
             alignSelf: 'flex-start',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -430,7 +433,7 @@ export function PhotoSidebar({
 
       {/* Histogram */}
       <div style={sectionStyle}>
-        <span style={labelStyle}>Histogram</span>
+        <span style={labelStyle}>{t('photo.sidebar.histogram')}</span>
         <div style={{ width: '100%', height: '160px', borderRadius: '6px', background: 'rgba(10, 10, 10, 0.6)', overflow: 'hidden', flexShrink: 0 }}>
           {histogramBins && <Histogram bins={histogramBins} />}
         </div>
@@ -440,7 +443,7 @@ export function PhotoSidebar({
 
       {/* Parameters */}
       <div style={sectionStyle}>
-        <span style={labelStyle}>Parameters</span>
+        <span style={labelStyle}>{t('photo.sidebar.parameters')}</span>
         <ParamsGrid params={[
           { label: 'ISO',    value: photo.iso != null ? String(photo.iso) : null },
           { label: 'F-Stop', value: photo.aperture },
@@ -455,10 +458,10 @@ export function PhotoSidebar({
       {(photo.original_camera || photo.lens_model || photo.focal_length) && (
         <>
           <div style={{ ...sectionStyle, gap: '14px' }}>
-            <span style={labelStyle}>Camera Specs</span>
-            <CameraSpecRow label="Camera" value={photo.original_camera} />
-            <CameraSpecRow label="Optics" value={photo.lens_model} />
-            <CameraSpecRow label="Focal"  value={photo.focal_length} />
+            <span style={labelStyle}>{t('photo.sidebar.cameraSpecs')}</span>
+            <CameraSpecRow label="Camera" value={photo.original_camera} t={t} />
+            <CameraSpecRow label="Optics" value={photo.lens_model} t={t} />
+            <CameraSpecRow label="Focal"  value={photo.focal_length} t={t} />
           </div>
           <div style={dividerStyle} />
         </>
@@ -466,11 +469,11 @@ export function PhotoSidebar({
 
       {/* Rating */}
       <div style={sectionStyle}>
-        <span style={labelStyle}>Rating</span>
-        <StarInput value={localStars} onChange={onStarsChange} />
-        <span style={{ ...labelStyle, marginTop: '4px' }}>Color</span>
-        <ColorInput selected={localColorLabels} onChange={onColorChange} />
-        <span style={{ ...labelStyle, marginTop: '4px' }}>Tags</span>
+        <span style={labelStyle}>{t('photo.sidebar.rating')}</span>
+        <StarInput value={localStars} onChange={onStarsChange} t={t} />
+        <span style={{ ...labelStyle, marginTop: '4px' }}>{t('photo.sidebar.color')}</span>
+        <ColorInput selected={localColorLabels} onChange={onColorChange} t={t} />
+        <span style={{ ...labelStyle, marginTop: '4px' }}>{t('photo.sidebar.tags')}</span>
         <TagManager tags={localTags} onChange={onTagsChange} />
       </div>
 
@@ -478,8 +481,8 @@ export function PhotoSidebar({
 
       {/* Cull */}
       <div style={sectionStyle}>
-        <span style={labelStyle}>Cull</span>
-        <CullInput culled={localCulled} onChange={onCulledChange} />
+        <span style={labelStyle}>{t('photo.sidebar.cull')}</span>
+        <CullInput culled={localCulled} onChange={onCulledChange} t={t} />
       </div>
 
     </div>

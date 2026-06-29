@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { SearchBar, ProjectCard, Button, Icon } from '@lumik/ui';
 import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, matchesKey } from '../../../lib/hooks';
 import { createProject } from '../../../lib/api';
@@ -121,6 +122,7 @@ interface ProjectsProps {
 }
 
 export function Projects({ onProjectClick }: ProjectsProps) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -224,7 +226,7 @@ export function Projects({ onProjectClick }: ProjectsProps) {
       setShowCreateModal(false);
       refetch();
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Error al crear el proyecto');
+      setCreateError(err instanceof Error ? err.message : t('import.errors.createProject'));
     } finally {
       setIsCreating(false);
     }
@@ -234,20 +236,20 @@ export function Projects({ onProjectClick }: ProjectsProps) {
     <div style={containerStyles}>
       <div style={headerStyles}>
         <div style={headerLeftStyles}>
-          <h1 style={titleStyles}>Projects</h1>
+          <h1 style={titleStyles}>{t('dashboard.title')}</h1>
           <div style={statsStyles}>
             <span style={statItemStyles}>
-              <span style={statValueStyles}>{projects?.length ?? 0}</span> projects
+              <span style={statValueStyles}>{projects?.length ?? 0}</span> {t('dashboard.statistics.projects')}
             </span>
             <span style={statItemStyles}>
-              <span style={statValueStyles}>{totalPhotos.toLocaleString()}</span> photos
+              <span style={statValueStyles}>{totalPhotos.toLocaleString()}</span> {t('dashboard.statistics.photos')}
             </span>
           </div>
         </div>
         <div style={headerCenterStyles}>
           <SearchBar
             ref={searchRef}
-            placeholder="Search projects..."
+            placeholder={t('dashboard.searchPlaceholder')}
             onSearch={setSearchQuery}
           />
         </div>
@@ -257,25 +259,25 @@ export function Projects({ onProjectClick }: ProjectsProps) {
             leftIcon={<Icon name="plus" size="sm" />}
             onClick={() => setShowCreateModal(true)}
           >
-            New project
+            {t('dashboard.newProject')}
           </Button>
         </div>
       </div>
 
       <div style={gridContainerStyles}>
         {loading && (
-          <div style={loadingStyles}>Loading projects...</div>
+          <div style={loadingStyles}>{t('dashboard.loading')}</div>
         )}
 
         {error && (
-          <div style={loadingStyles}>Error: {error}</div>
+          <div style={loadingStyles}>{t('dashboard.error')}: {error}</div>
         )}
 
         {!loading && !error && filteredProjects.length === 0 && (
           <div style={emptyStyles}>
-            <span>No projects found</span>
+            <span>{t('dashboard.empty')}</span>
             <span style={{ fontSize: '14px' }}>
-              Create a new project to get started
+              {t('dashboard.emptyHint')}
             </span>
           </div>
         )}
@@ -283,7 +285,7 @@ export function Projects({ onProjectClick }: ProjectsProps) {
         {!loading && !error && projectsByYear.map(([year, yearProjects]) => (
           <div key={year} style={yearSectionStyles}>
             <div style={yearSeparatorStyles}>
-              {year === 'sin-fecha' ? 'Sin fecha' : year}
+              {year === 'sin-fecha' ? t('dashboard.noDate') : year}
             </div>
             <div style={gridStyles}>
               {yearProjects.map((project) => (

@@ -154,7 +154,7 @@ export function DriveSelector({
   selectedId,
   onSelect,
   requiredBytes = 0,
-  label = 'Seleccionar destino',
+  label = 'Select destination',
 }: DriveSelectorProps) {
   const handleSelect = (drive: Drive, freeBytes: number) => {
     if (drive.connected === false || freeBytes < requiredBytes) return;

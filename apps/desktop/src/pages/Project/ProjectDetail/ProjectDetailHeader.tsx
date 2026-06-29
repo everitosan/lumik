@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '@lumik/ui';
 
 
@@ -70,12 +71,13 @@ export function ProjectDetailHeader({
   onViewModeChange,
   onImport,
 }: ProjectDetailHeaderProps) {
+  const { t } = useTranslation();
 
   return (
     <header style={headerStyles}>
       <nav style={breadcrumbStyles} aria-label="breadcrumb">
         <button style={breadcrumbLinkStyles} onClick={onBack}>
-          Projects
+          {t('navigation.projects')}
         </button>
         <span style={breadcrumbSepStyles}>
           <Icon name="chevron-right" size={14} />
@@ -112,7 +114,7 @@ export function ProjectDetailHeader({
               transition: 'all 0.15s',
             }}
             onClick={() => onViewModeChange('by-date')}
-            title="Group by date"
+            title={t('projectDetail.viewMode.groupByDate')}
           >
             <Icon name="calendar" size={14} />
           </button>
@@ -133,7 +135,7 @@ export function ProjectDetailHeader({
               transition: 'all 0.15s',
             }}
             onClick={() => onViewModeChange('grid')}
-            title="Grid view"
+            title={t('projectDetail.viewMode.gridView')}
           >
             <Icon name="projects" size={14} />
           </button>
@@ -157,7 +159,7 @@ export function ProjectDetailHeader({
           onClick={onImport}
         >
           <Icon name="import" size={14} />
-          Import
+          {t('import.title')}
         </button>
       </div>
     </header>

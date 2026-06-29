@@ -1,0 +1,253 @@
+{
+  "import": {
+    "title": "Importar fotos",
+    "steps": {
+      "origin": "Origen",
+      "destination": "Destino",
+      "confirm": "Confirmar"
+    },
+    "origin": {
+      "title": "Seleccionar origen",
+      "selectFolder": "Selecciona una carpeta",
+      "dragDrop": "Arrastra tus fotos aquí o haz clic para explorar",
+      "supportedFormats": "Compatible con RAW, CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG, TIFF, MP4, MOV y más",
+      "selectFiles": "Archivos seleccionados"
+    },
+    "destination": {
+      "title": "Seleccionar destino",
+      "selectProject": "Selecciona un proyecto",
+      "createNew": "+ Crear nuevo proyecto"
+    },
+    "confirm": {
+      "title": "Confirmar importación",
+      "ready": "Todo listo. Los archivos se copiarán al disco de destino.",
+      "project": "Proyecto",
+      "drive": "Disco"
+    },
+    "progress": {
+      "importing": "Importando...",
+      "completed": "Importación completada",
+      "files": "Archivos",
+      "elapsed": "Tiempo transcurrido",
+      "photoImported_one": "fotografía importada",
+      "photoImported_other": "fotografías importadas",
+      "videoCopied_one": "video copiado",
+      "videoCopied_other": "videos copiados",
+      "totalTime": "Tiempo total"
+    },
+    "buttons": {
+      "import": "Iniciar importación",
+      "importing": "Importando...",
+      "accept": "Aceptar",
+      "newImport": "Nueva importación",
+      "cancel": "Cancelar"
+    },
+    "summary": {
+      "title": "Resumen de importación",
+      "photos": "Fotografías",
+      "videos": "Videos",
+      "totalSize": "Tamaño total",
+      "project": "Proyecto",
+      "destination": "Destino",
+      "availableSpace": "Espacio disponible",
+      "ready": "Todo listo. Los archivos se copiarán al disco de destino.",
+      "failedFiles": "archivos fallaron",
+      "moreFiles": "más..."
+    },
+    "header": {
+      "title": "Importar fotos",
+      "back": "Volver"
+    },
+    "footer": {
+      "back": "Atrás",
+      "next": "Siguiente",
+      "accept": "Aceptar",
+      "newImport": "Nueva importación",
+      "import": "Iniciar importación",
+      "photo_one": "fotografía",
+      "photo_other": "fotografías",
+      "video_one": "video",
+      "video_other": "videos"
+    },
+    "errors": {
+      "createProject": "Error al crear el proyecto",
+      "selectFiles": "Error seleccionando archivos",
+      "invalidFiles": "Algunos archivos no son soportados",
+      "noFilesSelected": "No hay archivos seleccionados",
+      "importError": "Error"
+    }
+  },
+  "project": {
+    "create": {
+      "title": "Crear nuevo proyecto",
+      "name": "Nombre del proyecto",
+      "namePlaceholder": "Ej. Boda Juan y María",
+      "date": "Fecha de sesión",
+      "device": "Dispositivo de destino",
+      "description": "Descripción",
+      "descriptionPlaceholder": "Agregar notas sobre el proyecto...",
+      "validation": {
+        "nameRequired": "El nombre del proyecto es requerido",
+        "deviceRequired": "Selecciona un dispositivo de destino"
+      },
+      "buttons": {
+        "create": "Crear",
+        "cancel": "Cancelar"
+      }
+    },
+    "actions": {
+      "archive": "Archivar",
+      "delete": "Eliminar",
+      "import": "Importar fotos"
+    }
+  },
+  "settings": {
+    "title": "Configuración",
+    "loading": "Cargando configuración...",
+    "photographer": {
+      "title": "Datos del fotógrafo",
+      "name": "Nombre",
+      "email": "Email",
+      "copyright": "Copyright",
+      "credits": "Créditos"
+    },
+    "language": "Idioma",
+    "keybindings": {
+      "title": "Atajos de teclado",
+      "description": "Haz clic en un atajo y presiona la nueva tecla para reasignarlo. Presiona Esc para cancelar.",
+      "reset": "Restaurar por defecto",
+      "listening": "Presiona una tecla…",
+      "contexts": {
+        "projects": "Proyectos",
+        "project": "Proyecto",
+        "photo_detail": "Detalle de foto"
+      },
+      "descriptions": {
+        "photo_detail.close": "Cerrar vista de detalle",
+        "photo_detail.prev": "Foto anterior",
+        "photo_detail.next": "Siguiente foto",
+        "photo_detail.zoom_in": "Acercar",
+        "photo_detail.zoom_out": "Alejar",
+        "photo_detail.fit": "Ajustar a pantalla",
+        "photo_detail.rotate_left": "Rotar izquierda",
+        "photo_detail.rotate_right": "Rotar derecha",
+        "photo_detail.cull": "Seleccionar para culling",
+        "photo_detail.stars_0": "Sin estrellas",
+        "photo_detail.stars_1": "1 estrella",
+        "photo_detail.stars_2": "2 estrellas",
+        "photo_detail.stars_3": "3 estrellas",
+        "photo_detail.stars_4": "4 estrellas",
+        "photo_detail.stars_5": "5 estrellas",
+        "project.show_culled": "Mostrar solo fotos culled",
+        "projects.new_project": "Crear nuevo proyecto",
+        "projects.focus_search": "Enfocar barra de búsqueda",
+        "project.back": "Volver a la lista de proyectos",
+        "project.import": "Ir a importación"
+      }
+    },
+    "errors": {
+      "loadingSettings": "Error al cargar la configuración",
+      "savingSettings": "Error al guardar la configuración"
+    },
+    "imageDescriptionFormat": "Formato de descripción de imagen",
+    "placeholders": {
+      "photographerName": "Tu nombre o nombre del estudio",
+      "copyright": "Ej. © 2024 Tu Nombre. Todos los derechos reservados.",
+      "website": "https://tusitio.com",
+      "creditTemplate": "{Descripción del proyecto}@{Año}"
+    }
+  },
+  "about": {
+    "title": "Acerca de Lumik",
+    "version": "Versión",
+    "description": "Herramienta profesional para importar y hacer culling de fotos RAW. Importa tus sesiones, organízalas por fecha y filtra qué fotos vale la pena editar — todo sin conexión, directamente desde tus discos externos.",
+    "credits": "Créditos",
+    "copyright": "© 2026 Everardo Sánchez Hernández. Todos los derechos reservados.",
+    "openSourceLicenses": "Licencias de código abierto"
+  },
+  "navigation": {
+    "management": "Gestión",
+    "projects": "Proyectos",
+    "settings": "Configuración",
+    "about": "Acerca de",
+    "storage": "Almacenamiento",
+    "loadingDevices": "Detectando dispositivos...",
+    "noDevices": "Sin dispositivos conectados",
+    "closeMenu": "Cerrar menú",
+    "openMenu": "Abrir menú"
+  },
+  "dashboard": {
+    "title": "Proyectos",
+    "searchPlaceholder": "Buscar proyectos...",
+    "newProject": "Nuevo proyecto",
+    "loading": "Cargando proyectos...",
+    "empty": "No se encontraron proyectos",
+    "emptyHint": "Crear un nuevo proyecto para comenzar",
+    "error": "Error al cargar proyectos",
+    "noDate": "Sin fecha"
+  },
+  "projectDetail": {
+    "noDate": "Sin fecha",
+    "photos": "fotos",
+    "culled": "aprobadas",
+    "showCulled": "Mostrar aprobadas",
+    "noTagsAvailable": "Sin etiquetas disponibles",
+    "loading": "Cargando fotos…",
+    "loadError": "No se pudieron cargar las fotos: {{error}}",
+    "empty": "Este proyecto no tiene fotos aún.",
+    "ratingFilter": {
+      "upTo": "Hasta {{star}} estrellas",
+      "exactly": "Exactamente {{star}} estrellas"
+    },
+    "viewMode": {
+      "groupByDate": "Agrupar por fecha",
+      "gridView": "Vista cuadrícula"
+    },
+    "filterToggle": "Cambiar entre exacto (=) e inclusivo (≥)"
+  },
+  "photo": {
+    "colors": {
+      "1": "Rojo",
+      "2": "Amarillo",
+      "3": "Verde",
+      "4": "Azul",
+      "5": "Púrpura"
+    },
+    "sidebar": {
+      "starsRating": "{{stars}} estrellas",
+      "deleteTag": "Eliminar tag",
+      "newTagPlaceholder": "Nuevo tag…",
+      "hidePanel": "Ocultar panel",
+      "histogram": "Histograma",
+      "parameters": "Parámetros",
+      "cameraSpecs": "Especificaciones de cámara",
+      "camera": "Cámara",
+      "optics": "Óptica",
+      "focal": "Focal",
+      "selectPhoto": "Aprobar foto",
+      "rating": "Clasificación",
+      "color": "Color",
+      "tags": "Etiquetas",
+      "cull": "Revisión"
+    },
+    "viewer": {
+      "previous": "Foto anterior (←)",
+      "next": "Siguiente foto (→)",
+      "zoomOut": "Alejar (-)",
+      "fitScreen": "Ajustar a pantalla (0)",
+      "zoomIn": "Acercar (+)",
+      "rotateLeft": "Rotar izquierda ([)",
+      "rotateRight": "Rotar derecha (])"
+    },
+    "detail": {
+      "setCover": "Usar como portada del proyecto",
+      "removeCover": "Quitar como portada del proyecto",
+      "showInfo": "Mostrar info"
+    }
+  },
+  "components": {
+    "createProjectModal": {
+      "datePlaceholder": "Selecciona una fecha..."
+    }
+  }
+}

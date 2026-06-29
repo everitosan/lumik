@@ -1,0 +1,253 @@
+{
+  "import": {
+    "title": "Import photos",
+    "steps": {
+      "origin": "Source",
+      "destination": "Destination",
+      "confirm": "Confirm"
+    },
+    "origin": {
+      "title": "Select source",
+      "selectFolder": "Select a folder",
+      "dragDrop": "Drag files here or click to browse",
+      "supportedFormats": "Supports RAW, CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG, TIFF, MP4, MOV and more",
+      "selectFiles": "Selected files"
+    },
+    "destination": {
+      "title": "Select destination",
+      "selectProject": "Select a project",
+      "createNew": "+ Create new project"
+    },
+    "confirm": {
+      "title": "Confirm import",
+      "ready": "Ready. Files will be copied to destination drive.",
+      "project": "Project",
+      "drive": "Drive"
+    },
+    "progress": {
+      "importing": "Importing...",
+      "completed": "Import complete",
+      "files": "Files",
+      "elapsed": "Elapsed time",
+      "photoImported_one": "photo imported",
+      "photoImported_other": "photos imported",
+      "videoCopied_one": "video copied",
+      "videoCopied_other": "videos copied",
+      "totalTime": "Total time"
+    },
+    "buttons": {
+      "import": "Start import",
+      "importing": "Importing...",
+      "accept": "Accept",
+      "newImport": "New import",
+      "cancel": "Cancel"
+    },
+    "summary": {
+      "title": "Import summary",
+      "photos": "Photos",
+      "videos": "Videos",
+      "totalSize": "Total size",
+      "project": "Project",
+      "destination": "Destination",
+      "availableSpace": "Available space",
+      "ready": "Ready. Files will be copied to destination drive.",
+      "failedFiles": "files failed",
+      "moreFiles": "more..."
+    },
+    "header": {
+      "title": "Import photos",
+      "back": "Back"
+    },
+    "footer": {
+      "back": "Back",
+      "next": "Next",
+      "accept": "Accept",
+      "newImport": "New import",
+      "import": "Start import",
+      "photo_one": "photo",
+      "photo_other": "photos",
+      "video_one": "video",
+      "video_other": "videos"
+    },
+    "errors": {
+      "createProject": "Error creating project",
+      "selectFiles": "Error selecting files",
+      "invalidFiles": "Some files are not supported",
+      "noFilesSelected": "No files selected",
+      "importError": "Error"
+    }
+  },
+  "project": {
+    "create": {
+      "title": "Create new project",
+      "name": "Project name",
+      "namePlaceholder": "E.g. John and Mary wedding",
+      "date": "Session date",
+      "device": "Destination device",
+      "description": "Description",
+      "descriptionPlaceholder": "Add notes about the project...",
+      "validation": {
+        "nameRequired": "Project name is required",
+        "deviceRequired": "Select a destination device"
+      },
+      "buttons": {
+        "create": "Create",
+        "cancel": "Cancel"
+      }
+    },
+    "actions": {
+      "archive": "Archive",
+      "delete": "Delete",
+      "import": "Import photos"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "loading": "Loading settings...",
+    "photographer": {
+      "title": "Photographer info",
+      "name": "Name",
+      "email": "Email",
+      "copyright": "Copyright",
+      "credits": "Credits"
+    },
+    "language": "Language",
+    "keybindings": {
+      "title": "Keyboard shortcuts",
+      "description": "Click on a key badge and press the new key to reassign it. Press Esc to cancel.",
+      "reset": "Reset to defaults",
+      "listening": "Press a key…",
+      "contexts": {
+        "projects": "Projects",
+        "project": "Project",
+        "photo_detail": "Photo Detail"
+      },
+      "descriptions": {
+        "photo_detail.close": "Close detail view",
+        "photo_detail.prev": "Previous photo",
+        "photo_detail.next": "Next photo",
+        "photo_detail.zoom_in": "Zoom in",
+        "photo_detail.zoom_out": "Zoom out",
+        "photo_detail.fit": "Fit to screen",
+        "photo_detail.rotate_left": "Rotate left",
+        "photo_detail.rotate_right": "Rotate right",
+        "photo_detail.cull": "Select for culling",
+        "photo_detail.stars_0": "No stars",
+        "photo_detail.stars_1": "1 star",
+        "photo_detail.stars_2": "2 stars",
+        "photo_detail.stars_3": "3 stars",
+        "photo_detail.stars_4": "4 stars",
+        "photo_detail.stars_5": "5 stars",
+        "project.show_culled": "Show only culled photos",
+        "projects.new_project": "Create new project",
+        "projects.focus_search": "Focus search bar",
+        "project.back": "Back to projects list",
+        "project.import": "Go to import"
+      }
+    },
+    "errors": {
+      "loadingSettings": "Error loading settings",
+      "savingSettings": "Error saving settings"
+    },
+    "imageDescriptionFormat": "Image description format",
+    "placeholders": {
+      "photographerName": "Your name or studio name",
+      "copyright": "e.g. © 2024 Your Name. All rights reserved.",
+      "website": "https://yourwebsite.com",
+      "creditTemplate": "{Project description}@{Year}"
+    }
+  },
+  "about": {
+    "title": "About Lumik",
+    "version": "Version",
+    "description": "Professional RAW photo importer and culling tool. Import your shoots, organize them by session, and filter which photos are worth editing — all offline, directly from your external drives.",
+    "credits": "Credits",
+    "copyright": "© 2026 Everardo Sánchez Hernández. All rights reserved.",
+    "openSourceLicenses": "Open Source Licenses"
+  },
+  "navigation": {
+    "management": "Management",
+    "projects": "Projects",
+    "settings": "Settings",
+    "about": "About",
+    "storage": "Storage",
+    "loadingDevices": "Loading devices...",
+    "noDevices": "No devices connected",
+    "closeMenu": "Close menu",
+    "openMenu": "Open menu"
+  },
+  "dashboard": {
+    "title": "Projects",
+    "searchPlaceholder": "Search projects...",
+    "newProject": "New project",
+    "loading": "Loading projects...",
+    "empty": "No projects found",
+    "emptyHint": "Create a new project to get started",
+    "error": "Error loading projects",
+    "noDate": "No date"
+  },
+  "projectDetail": {
+    "noDate": "No date",
+    "photos": "photos",
+    "culled": "culled",
+    "showCulled": "Show culled",
+    "noTagsAvailable": "No tags available",
+    "loading": "Loading photos…",
+    "loadError": "Failed to load photos: {{error}}",
+    "empty": "This project has no photos yet.",
+    "ratingFilter": {
+      "upTo": "Up to {{star}} stars",
+      "exactly": "Exactly {{star}} stars"
+    },
+    "viewMode": {
+      "groupByDate": "Group by date",
+      "gridView": "Grid view"
+    },
+    "filterToggle": "Toggle between exact (=) and inclusive (≥)"
+  },
+  "photo": {
+    "colors": {
+      "1": "Red",
+      "2": "Yellow",
+      "3": "Green",
+      "4": "Blue",
+      "5": "Purple"
+    },
+    "sidebar": {
+      "starsRating": "{{stars}} stars",
+      "deleteTag": "Delete tag",
+      "newTagPlaceholder": "New tag…",
+      "hidePanel": "Hide panel",
+      "histogram": "Histogram",
+      "parameters": "Parameters",
+      "cameraSpecs": "Camera Specs",
+      "camera": "Camera",
+      "optics": "Optics",
+      "focal": "Focal",
+      "selectPhoto": "Select photo",
+      "rating": "Rating",
+      "color": "Color",
+      "tags": "Tags",
+      "cull": "Cull"
+    },
+    "viewer": {
+      "previous": "Previous photo (←)",
+      "next": "Next photo (→)",
+      "zoomOut": "Zoom out (-)",
+      "fitScreen": "Fit to screen (0)",
+      "zoomIn": "Zoom in (+)",
+      "rotateLeft": "Rotate left ([)",
+      "rotateRight": "Rotate right (])"
+    },
+    "detail": {
+      "setCover": "Set as project cover",
+      "removeCover": "Remove as project cover",
+      "showInfo": "Show info"
+    }
+  },
+  "components": {
+    "createProjectModal": {
+      "datePlaceholder": "Select date..."
+    }
+  }
+}

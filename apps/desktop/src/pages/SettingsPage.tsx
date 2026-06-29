@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Input, Button, Icon } from '@lumik/ui';
-import { useActivePhotographer } from '../lib/hooks';
+import { useActivePhotographer, useLanguage } from '../lib/hooks';
 import {
   getPhotographerMetadata,
   updatePhotographerMetadata,
@@ -168,6 +169,7 @@ function KeybindingRow({
   binding: Keybinding;
   onSaved: (action: string, key: string) => void;
 }) {
+  const { t } = useTranslation();
   const [listening, setListening] = useState(false);
   const [rowState, setRowState] = useState<'idle' | 'saved' | 'error'>('idle');
 
@@ -223,10 +225,10 @@ function KeybindingRow({
 
   return (
     <div style={kbRowStyles}>
-      <span style={kbDescStyles}>{binding.description}</span>
+      <span style={kbDescStyles}>{t(`settings.keybindings.descriptions.${binding.action}`) || binding.description}</span>
       <button onClick={startListening} style={badgeStyle}>
         {listening
-          ? 'Presiona una tecla…'
+          ? t('settings.keybindings.listening')
           : rowState === 'error'
           ? '✕ Error'
           : formatKey(binding.key)}
@@ -236,6 +238,8 @@ function KeybindingRow({
 }
 
 export function SettingsPage() {
+  const { t } = useTranslation();
+  const { currentLanguage, changeLanguage } = useLanguage();
   const { data: photographer, loading: photographerLoading } = useActivePhotographer();
 
   const [metadata, setMetadata] = useState<PhotographerMetadata | null>(null);
@@ -279,7 +283,7 @@ export function SettingsPage() {
 
         setEmbedMetadata(settingsData.embed_metadata_on_import);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error loading settings');
+        setError(err instanceof Error ? err.message : t('settings.errors.loadingSettings'));
       } finally {
         setLoading(false);
       }
@@ -314,7 +318,7 @@ export function SettingsPage() {
       // Hide success message after 3 seconds
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error saving settings');
+      setError(err instanceof Error ? err.message : t('settings.errors.savingSettings'));
     } finally {
       setSaving(false);
     }
@@ -337,7 +341,7 @@ export function SettingsPage() {
   if (photographerLoading || loading) {
     return (
       <div style={containerStyles}>
-        <div style={loadingStyles}>Loading settings...</div>
+        <div style={loadingStyles}>{t('settings.loading')}</div>
       </div>
     );
   }
@@ -345,12 +349,35 @@ export function SettingsPage() {
   return (
     <div style={containerStyles}>
       <div style={headerStyles}>
-        <h1 style={titleStyles}>Settings</h1>
+        <h1 style={titleStyles}>{t('settings.title')}</h1>
       </div>
+
+      {/* Language Switcher */}
+      <section style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '560px' }}>
+        <div style={sectionHeaderStyles}>
+          <h2 style={sectionTitleStyles}>{t('settings.language')}</h2>
+        </div>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <Button
+            variant={currentLanguage === 'es' ? 'primary' : 'secondary'}
+            onClick={() => changeLanguage('es')}
+            size="sm"
+          >
+            Español
+          </Button>
+          <Button
+            variant={currentLanguage === 'en' ? 'primary' : 'secondary'}
+            onClick={() => changeLanguage('en')}
+            size="sm"
+          >
+            English
+          </Button>
+        </div>
+      </section>
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div style={sectionHeaderStyles}>
-          <h2 style={sectionTitleStyles}>Metadata</h2>
+          <h2 style={sectionTitleStyles}>{t('settings.photographer.title')}</h2>
           <p style={sectionDescriptionStyles}>
             Configure the metadata to embed in your photos during import.
           </p>
@@ -360,7 +387,7 @@ export function SettingsPage() {
         {success && (
           <div style={successStyles}>
             <Icon name="check" size="sm" />
-            Settings saved successfully
+            {t('common.success')}
           </div>
         )}
 
@@ -379,8 +406,8 @@ export function SettingsPage() {
           </label>
 
           <Input
-            label="Artist"
-            placeholder="Your name or studio name"
+            label={t('settings.photographer.name')}
+            placeholder={t('settings.placeholders.photographerName')}
             value={artist}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setArtist(e.target.value)}
             fullWidth
@@ -388,8 +415,8 @@ export function SettingsPage() {
           />
 
           <Input
-            label="Copyright"
-            placeholder="e.g. © 2024 Your Name. All rights reserved."
+            label={t('settings.photographer.copyright')}
+            placeholder={t('settings.placeholders.copyright')}
             value={copyright}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setCopyright(e.target.value)}
             fullWidth
@@ -398,8 +425,8 @@ export function SettingsPage() {
 
           <div style={{ gridColumn: '1 / -1' }}>
             <Input
-              label="Creator URL"
-              placeholder="https://yourwebsite.com"
+              label={t('settings.photographer.credits')}
+              placeholder={t('settings.placeholders.website')}
               value={creatorUrl}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setCreatorUrl(e.target.value)}
               fullWidth
@@ -409,9 +436,9 @@ export function SettingsPage() {
 
           <div style={{ gridColumn: '1 / -1' }}>
             <Input
-              label="Image description format"
-              value="{Project description}@{Year}"
-              placeholder="{Project description}@{Year}"
+              label={t('settings.imageDescriptionFormat')}
+              value={t('settings.placeholders.creditTemplate')}
+              placeholder={t('settings.placeholders.creditTemplate')}
               fullWidth
               disabled
             />
@@ -423,7 +450,7 @@ export function SettingsPage() {
               onClick={handleSave}
               disabled={saving || !hasChanges()}
             >
-              {saving ? 'Saving...' : 'Save changes'}
+              {saving ? t('common.loading') : t('common.save')}
             </Button>
           </div>
         </div>
@@ -431,9 +458,9 @@ export function SettingsPage() {
 
       {keybindings.length > 0 && (() => {
         const CONTEXT_LABELS: Record<string, string> = {
-          photo_detail: 'Photo Detail',
-          project: 'Project',
-          projects: 'Projects',
+          photo_detail: t('settings.keybindings.contexts.photo_detail'),
+          project: t('settings.keybindings.contexts.project'),
+          projects: t('settings.keybindings.contexts.projects'),
         };
 
         const groups = keybindings.reduce<Record<string, typeof keybindings>>((acc, kb) => {
@@ -448,9 +475,9 @@ export function SettingsPage() {
         return (
           <section style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={sectionHeaderStyles}>
-              <h2 style={sectionTitleStyles}>Keyboard shortcuts</h2>
+              <h2 style={sectionTitleStyles}>{t('settings.keybindings.title')}</h2>
               <p style={sectionDescriptionStyles}>
-                Click on a key badge and press the new key to reassign it. Press Esc to cancel.
+                {t('settings.keybindings.description')}
               </p>
             </div>
 

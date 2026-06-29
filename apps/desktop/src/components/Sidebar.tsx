@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Logo, SectionButton, DriveInfo } from '@lumik/ui';
 import { useConnectedDevices } from '../lib/hooks';
 import type { Section } from './Layout';
@@ -85,6 +86,7 @@ const closeBtnStyles: React.CSSProperties = {
 };
 
 export function Sidebar({ activeSection, onSectionChange, collapsed = false, onToggle, isMobile = false }: SidebarProps) {
+  const { t } = useTranslation();
   const { data: devices, loading } = useConnectedDevices();
 
   const getUsedBytes = (device: { total_bytes: number | null; available_bytes: number | null }) => {
@@ -99,27 +101,27 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
           <Logo size="md" />
         </div>
         {isMobile && onToggle && (
-          <button style={closeBtnStyles} onClick={onToggle} aria-label="Cerrar menú">✕</button>
+          <button style={closeBtnStyles} onClick={onToggle} aria-label={t('navigation.closeMenu')}>✕</button>
         )}
       </div>
 
       <nav style={navStyles}>
-        <div style={sectionTitleStyles}>Management</div>
+        <div style={sectionTitleStyles}>{t('navigation.management')}</div>
         <SectionButton
           icon="projects"
-          label="Projects"
+          label={t('navigation.projects')}
           active={activeSection === 'projects'}
           onClick={() => onSectionChange('projects')}
         />
         <SectionButton
           icon="settings"
-          label="Settings"
+          label={t('navigation.settings')}
           active={activeSection === 'settings'}
           onClick={() => onSectionChange('settings')}
         />
         <SectionButton
           icon="info"
-          label="About"
+          label={t('navigation.about')}
           active={activeSection === 'about'}
           onClick={() => onSectionChange('about')}
         />
@@ -128,12 +130,12 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
       <div style={spacerStyles} />
 
       <div style={storageContainerStyles}>
-        <div style={sectionTitleStyles}>Storage</div>
+        <div style={sectionTitleStyles}>{t('navigation.storage')}</div>
         {loading && (
-          <div style={emptyStorageStyles}>Loading devices...</div>
+          <div style={emptyStorageStyles}>{t('navigation.loadingDevices')}</div>
         )}
         {!loading && (!devices || devices.length === 0) && (
-          <div style={emptyStorageStyles}>No devices connected</div>
+          <div style={emptyStorageStyles}>{t('navigation.noDevices')}</div>
         )}
         {!loading && devices && devices.map((device) => (
           <DriveInfo

@@ -207,3 +207,44 @@ Al maquetar una página, aplicar esta regla:
 
 El criterio es el uso real, no el potencial: un componente no se mueve hasta que
 efectivamente se necesite en una segunda página.
+
+## Internacionalización (i18n)
+
+La app soporta español (por defecto) e inglés.
+
+**Estructura:**
+- Traducciones en `apps/desktop/src/i18n/locales/` (es.json, en.json)
+- Configuración en `apps/desktop/src/i18n/config.ts`
+- Extiende traducciones de `@lumik/ui` (componentes compartidos) con propias
+
+**Organización de claves:**
+- `import.*` - Flujo de importación
+- `project.*` - Gestión de proyectos
+- `settings.*` - Configuración (photographer, language, keybindings, placeholders, errors)
+- `navigation.*` - Navegación principal
+- `dashboard.*` - Vista de proyectos
+- `projectDetail.*` - Detalle de proyecto (noDate, photos, culled, filters, viewMode, errors, loading)
+- `photo.*` - Detalles de fotos (colors, sidebar, viewer, detail)
+- `about.*` - Página about
+- `components.*` - Traducciones de componentes (createProjectModal)
+
+**Implementación:**
+- Usar `const { t, i18n } = useTranslation()` en cada componente
+- Llamar `t('key.path')` para todos los strings de UI
+- **Nunca pasar props de texto** a componentes - dejar que traduzcan internamente
+- Agregar `i18n.language` a dependencias de useMemo/useEffect si la lógica depende del idioma
+
+**Interpolación:**
+- Variables: `"upTo": "Hasta {{star}} estrellas"` → `t('key', { star: 5 })`
+- Plurales: `"photo_one"`, `"photo_other"` → `t('key', { count })`
+
+**Validación:**
+- Usar `jq empty` para validar JSON
+- No permitir claves duplicadas
+- Consolidated en secciones únicas
+
+**No se traducen:**
+- Library names y URLs externas
+- Keyboard symbols estándar (Esc, Space, Backspace)
+- Términos técnicos de fotografía (ISO, F-Stop, SS, EV)
+- Formatos ISO de fecha

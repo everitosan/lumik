@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '@lumik/ui';
 
 export interface PhotoViewerToolbarProps {
@@ -97,36 +98,37 @@ export function PhotoViewerToolbar({
   onRotateLeft,
   onRotateRight,
 }: PhotoViewerToolbarProps) {
+  const { t } = useTranslation();
   return (
     <div style={toolbarStyle}>
-      <ToolbarBtn onClick={onPrev} disabled={!hasPrev} title="Foto anterior (←)">
+      <ToolbarBtn onClick={onPrev} disabled={!hasPrev} title={t('photo.viewer.previous')}>
         <Icon name="chevron-left" size={20} />
       </ToolbarBtn>
 
       <div style={sepStyle} />
 
-      <ToolbarBtn onClick={onZoomOut} title="Alejar (-)">
+      <ToolbarBtn onClick={onZoomOut} title={t('photo.viewer.zoomOut')}>
         <Icon name="zoom-out" size={18} />
       </ToolbarBtn>
-      <button style={zoomLabelStyle} onClick={onFitToScreen} title="Ajustar a pantalla (0)">
+      <button style={zoomLabelStyle} onClick={onFitToScreen} title={t('photo.viewer.fitScreen')}>
         {displayScale}%
       </button>
-      <ToolbarBtn onClick={onZoomIn} title="Acercar (+)">
+      <ToolbarBtn onClick={onZoomIn} title={t('photo.viewer.zoomIn')}>
         <Icon name="zoom-in" size={18} />
       </ToolbarBtn>
 
       <div style={sepStyle} />
 
-      <ToolbarBtn onClick={onRotateLeft} title="Rotar izquierda ([)">
+      <ToolbarBtn onClick={onRotateLeft} title={t('photo.viewer.rotateLeft')}>
         <Icon name="rotate-ccw" size={18} />
       </ToolbarBtn>
-      <ToolbarBtn onClick={onRotateRight} title="Rotar derecha (])">
+      <ToolbarBtn onClick={onRotateRight} title={t('photo.viewer.rotateRight')}>
         <Icon name="rotate-cw" size={18} />
       </ToolbarBtn>
 
       <div style={sepStyle} />
 
-      <ToolbarBtn onClick={onNext} disabled={!hasNext} title="Siguiente foto (→)">
+      <ToolbarBtn onClick={onNext} disabled={!hasNext} title={t('photo.viewer.next')}>
         <Icon name="chevron-right" size={20} />
       </ToolbarBtn>
     </div>

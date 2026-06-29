@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getVersion } from '@tauri-apps/api/app';
 import { Logo, Icon } from '@lumik/ui';
 
@@ -119,6 +120,7 @@ const licenses = [
 ];
 
 export function AboutPage() {
+  const { t } = useTranslation();
   const [version, setVersion] = useState<string>('');
   const [licensesOpen, setLicensesOpen] = useState(false);
 
@@ -132,19 +134,17 @@ export function AboutPage() {
 
         <div style={heroStyles}>
           <Logo size="lg" />
-          {version && <div style={versionStyles}>Version {version}</div>}
+          {version && <div style={versionStyles}>{t('about.version')} {version}</div>}
           <p style={descriptionStyles}>
-            Professional RAW photo importer and culling tool. Import your shoots,
-            organize them by session, and filter which photos are worth editing —
-            all offline, directly from your external drives.
+            {t('about.description')}
           </p>
         </div>
 
         <div style={sectionStyles}>
-          <div style={sectionTitleStyles}>Credits</div>
+          <div style={sectionTitleStyles}>{t('about.credits')}</div>
           <div style={authorNameStyles}>Everardo Sánchez Hernández</div>
           <div style={authorDetailStyles}>
-            <span>© 2026 Everardo Sánchez Hernández. All rights reserved.</span>
+            <span>{t('about.copyright')}</span>
             <a href="https://evesan.rocks" target="_blank" rel="noreferrer" style={linkStyles}>
               evesan.rocks
             </a>
@@ -156,7 +156,7 @@ export function AboutPage() {
 
         <div style={sectionStyles}>
           <div style={accordionHeaderStyles} onClick={() => setLicensesOpen(o => !o)}>
-            <span>Open Source Licenses</span>
+            <span>{t('about.openSourceLicenses')}</span>
             <Icon name={licensesOpen ? 'chevron-down' : 'chevron-right'} size="sm" />
           </div>
           {licensesOpen && licenses.map(({ name, license, url }) => (

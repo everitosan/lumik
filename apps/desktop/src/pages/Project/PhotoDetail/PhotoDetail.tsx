@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '@lumik/ui';
 import type { ColorLabel } from '@lumik/ui';
 import type { Photo } from '../../../lib/types';
@@ -87,6 +88,7 @@ export function PhotoDetail({
   onPhotoChanged,
   onCoverPhotoChange,
 }: PhotoDetailProps) {
+  const { t } = useTranslation();
   const platform = usePlatform();
   const isMobile = platform === 'android' || platform === 'ios';
   const [infoPanelCollapsed, setInfoPanelCollapsed] = useState(!sidebarOpen);
@@ -262,7 +264,7 @@ export function PhotoDetail({
         </div>
         <button
           onClick={handleCoverToggle}
-          title={isCover ? 'Quitar como portada del proyecto' : 'Usar como portada del proyecto'}
+          title={isCover ? t('photo.detail.removeCover') : t('photo.detail.setCover')}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: '32px', height: '32px', padding: 0, flexShrink: 0,
@@ -283,9 +285,9 @@ export function PhotoDetail({
             color: saveState === 'error' ? 'var(--lumik-error, #ffb4ab)' : saveState === 'saved' ? '#27AE60' : saveState === 'saving' ? 'var(--lumik-secondary, #e9c349)' : 'var(--lumik-outline, #8c90a0)',
             flexShrink: 0,
           }}>
-            {saveState === 'saving' && '↻ Guardando…'}
-            {saveState === 'saved'  && '✓ Guardado'}
-            {saveState === 'error'  && '✕ Error al guardar'}
+            {saveState === 'saving' && t('photo.saving')}
+            {saveState === 'saved'  && t('photo.saved')}
+            {saveState === 'error'  && t('photo.errorSaving')}
           </span>
         )}
       </div>
@@ -310,7 +312,7 @@ export function PhotoDetail({
         {infoCollapsed && (
           <button
             onClick={() => { setInfoPanelCollapsed(false); onSidebarToggle?.(true); }}
-            aria-label="Mostrar info"
+            aria-label={t('photo.detail.showInfo')}
             style={{
               position: 'absolute',
               right: 0,

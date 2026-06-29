@@ -1,4 +1,5 @@
 import { useState, useRef, type CSSProperties, type DragEvent, type ChangeEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '../Icon';
 
 export interface DropZoneFile {
@@ -156,13 +157,13 @@ export function isAllowedRawFile(filename: string, extensions: string[] = ALLOWE
   return extensions.some((ext) => lowerName.endsWith(ext.toLowerCase()));
 }
 
-const DEFAULT_HINT = 'Compatible con CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG, TIFF, MP4, MOV y más';
+const DEFAULT_HINT = 'Supports CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG, TIFF, MP4, MOV and more';
 
 export function DropZone({
   onFilesAdded,
   acceptedExtensions = ALLOWED_RAW_EXTENSIONS,
   multiple = true,
-  title = 'Arrastra tus fotos aquí o haz clic para explorar',
+  title = 'Drag files here or click to browse',
   hint = DEFAULT_HINT,
   disabled = false,
   minHeight,
@@ -343,16 +344,21 @@ const summaryValueStyles: CSSProperties = {
   color: 'var(--lumik-on-surface, #e5e2e1)',
 };
 
-export function DropZoneSummary({ fileCount, totalBytes }: DropZoneSummaryProps) {
+export function DropZoneSummary({
+  fileCount,
+  totalBytes
+}: DropZoneSummaryProps) {
+  const { t } = useTranslation();
+
   return (
     <div style={summaryStyles}>
       <div style={summaryItemStyles}>
         <span style={summaryValueStyles}>{fileCount}</span>
-        <span style={summaryLabelStyles}>fotos seleccionadas</span>
+        <span style={summaryLabelStyles}>{t('components.dropzone.filesSelected')}</span>
       </div>
       <div style={summaryItemStyles}>
         <span style={summaryValueStyles}>{formatBytes(totalBytes)}</span>
-        <span style={summaryLabelStyles}>total</span>
+        <span style={summaryLabelStyles}>{t('components.dropzone.total')}</span>
       </div>
     </div>
   );

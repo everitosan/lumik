@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Stepper,
   Button,
@@ -330,24 +331,26 @@ interface ImportPageProps {
   onClose?: () => void;
 }
 
-const ALL_STEPS: Step[] = [
-  { id: 'origin', label: 'Origen' },
-  { id: 'destination', label: 'Destino' },
-  { id: 'confirm', label: 'Confirmar' },
-];
-
-const EMBEDDED_STEPS: Step[] = [
-  { id: 'origin', label: 'Origen' },
-  { id: 'confirm', label: 'Confirmar' },
-];
-
 export function ImportPage({
   initialProjectId,
   initialProjectName,
   initialDeviceId,
   onClose,
 }: ImportPageProps = {}) {
+  const { t } = useTranslation();
   const embedded = !!initialProjectId;
+
+  const ALL_STEPS: Step[] = [
+    { id: 'origin', label: t('import.steps.origin') },
+    { id: 'destination', label: t('import.steps.destination') },
+    { id: 'confirm', label: t('import.steps.confirm') },
+  ];
+
+  const EMBEDDED_STEPS: Step[] = [
+    { id: 'origin', label: t('import.steps.origin') },
+    { id: 'confirm', label: t('import.steps.confirm') },
+  ];
+
   const IMPORT_STEPS = embedded ? EMBEDDED_STEPS : ALL_STEPS;
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -447,7 +450,7 @@ export function ImportPage({
     }
     options.push({
       value: '__new__',
-      label: '+ Crear nuevo proyecto',
+      label: `+ ${t('project.create.title')}`,
       isAction: true,
     });
     return options;
@@ -540,7 +543,7 @@ export function ImportPage({
       // Refresh projects list
       refetchProjects();
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Error al crear el proyecto');
+      setCreateError(err instanceof Error ? err.message : t('import.errors.createProject'));
     } finally {
       setIsCreating(false);
     }
@@ -675,18 +678,22 @@ export function ImportPage({
   const renderOriginStep = () => (
     <div style={stepContentStyles}>
       <div style={sectionStyles}>
-        <DropZoneSummary fileCount={importState.sourceFiles.length} totalBytes={totalImportSize} />
+        <DropZoneSummary
+          fileCount={importState.sourceFiles.length}
+          totalBytes={totalImportSize}
+        />
         <DropZone
           onBrowse={handleBrowse}
-          title="Arrastra tus fotos aquí o haz clic para explorar"
-          hint="Compatible con RAW, CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG"
+          title={t('import.origin.dragDrop')}
+          hint={t('import.origin.supportedFormats')}
         />
       </div>
 
       <FileList
-        title="Archivos seleccionados"
+        title={t('import.origin.selectFiles')}
         files={importState.sourceFiles}
         onRemove={handleRemoveFile}
+        searchPlaceholder={t('components.fileList.searchPlaceholder')}
       />
     </div>
   );
@@ -696,11 +703,11 @@ export function ImportPage({
     <div style={stepContentStyles}>
       <div style={sectionStyles}>
         <Select
-          label="Asignar a proyecto"
+          label={t('import.destination.selectProject')}
           options={projectOptions}
           value={importState.selectedProjectId ?? undefined}
           onChange={handleProjectChange}
-          placeholder="Seleccionar proyecto..."
+          placeholder={t('import.destination.selectProject')}
           fullWidth
           disabled={projectsLoading}
         />
@@ -708,14 +715,14 @@ export function ImportPage({
 
       <div style={sectionStyles}>
         <DriveSelector
-          label="Disco de destino"
+          label={t('import.confirm.drive')}
           drives={drives}
           selectedId={importState.selectedDriveId ?? undefined}
           onSelect={handleDriveSelect}
           requiredBytes={totalImportSize}
         />
         {devicesLoading && (
-          <span style={hintStyles}>Detectando dispositivos...</span>
+          <span style={hintStyles}>{t('common.loading')}</span>
         )}
       </div>
 
@@ -734,8 +741,8 @@ export function ImportPage({
           </div>
           <span style={validationTextStyles}>
             {hasEnoughSpace
-              ? `Destino validado. Espacio suficiente en ${selectedDrive.name}`
-              : `Espacio insuficiente en ${selectedDrive.name}. Necesitas ${formatBytes(totalImportSize)}`}
+              ? t('import.destination.title')
+              : `${t('import.destination.title')} ${selectedDrive.name}. ${t('common.error')} ${formatBytes(totalImportSize)}`}
           </span>
         </div>
       )}
@@ -750,7 +757,7 @@ export function ImportPage({
         <div style={stepContentStyles}>
           <div style={sectionStyles}>
             <span style={sectionTitleStyles}>
-              {isImporting ? 'Importando...' : 'Importación completada'}
+              {isImporting ? t('import.progress.importing') : t('import.progress.completed')}
             </span>
 
             {/* Progress UI */}
@@ -768,7 +775,7 @@ export function ImportPage({
                   {progress.current_file}
                 </span>
                 <span style={progressCountStyles}>
-                  {progress.current_index + 1} de {progress.total_files} pasos
+                  {progress.current_index + 1} / {progress.total_files} {t('import.progress.files')}
                 </span>
               </div>
             )}
@@ -776,7 +783,7 @@ export function ImportPage({
             {/* Import log */}
             {importLog.length > 0 && (
               <div style={importLogContainerStyles}>
-                <span style={sectionTitleStyles}>Registro</span>
+                <span style={sectionTitleStyles}>{t('import.progress.completed')}</span>
                 <div style={importLogScrollStyles}>
                   {importLog.map((line, i) => (
                     <div
@@ -806,17 +813,17 @@ export function ImportPage({
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       {result.successful > 0 && (
                         <span style={progressTextStyles}>
-                          {result.successful} {result.successful === 1 ? 'fotografía importada' : 'fotografías importadas'}
+                          {result.successful} {t(result.successful === 1 ? 'import.progress.photoImported_one' : 'import.progress.photoImported_other')}
                         </span>
                       )}
                       {result.videos_copied > 0 && (
                         <span style={progressTextStyles}>
-                          {result.videos_copied} {result.videos_copied === 1 ? 'video copiado' : 'videos copiados'}
+                          {result.videos_copied} {t(result.videos_copied === 1 ? 'import.progress.videoCopied_one' : 'import.progress.videoCopied_other')}
                         </span>
                       )}
                       {elapsedTime && (
                         <span style={progressCountStyles}>
-                          Tiempo total: {formatElapsedTime(elapsedTime)}
+                          {t('import.progress.totalTime')}: {formatElapsedTime(elapsedTime)}
                         </span>
                       )}
                     </div>
@@ -828,17 +835,17 @@ export function ImportPage({
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         {result.successful > 0 && (
                           <span style={progressTextStyles}>
-                            {result.successful} {result.successful === 1 ? 'fotografía importada' : 'fotografías importadas'}
+                            {result.successful} {t(result.successful === 1 ? 'import.progress.photoImported_one' : 'import.progress.photoImported_other')}
                           </span>
                         )}
                         {result.videos_copied > 0 && (
                           <span style={progressTextStyles}>
-                            {result.videos_copied} {result.videos_copied === 1 ? 'video copiado' : 'videos copiados'}
+                            {result.videos_copied} {t(result.videos_copied === 1 ? 'import.progress.videoCopied_one' : 'import.progress.videoCopied_other')}
                           </span>
                         )}
                         {elapsedTime && (
                           <span style={progressCountStyles}>
-                            Tiempo total: {formatElapsedTime(elapsedTime)}
+                            {t('import.progress.totalTime')}: {formatElapsedTime(elapsedTime)}
                           </span>
                         )}
                       </div>
@@ -847,7 +854,7 @@ export function ImportPage({
                       <Icon name="x" size="md" color="var(--lumik-error, #ffb4ab)" />
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span style={progressTextStyles}>
-                          {result.failed} archivos fallaron
+                          {result.failed} {t('import.summary.failedFiles')}
                         </span>
                         {result.failed_files.slice(0, 3).map((f: FailedFile) => (
                           <span key={f.path} style={progressCountStyles}>
@@ -856,7 +863,7 @@ export function ImportPage({
                         ))}
                         {result.failed_files.length > 3 && (
                           <span style={progressCountStyles}>
-                            y {result.failed_files.length - 3} más...
+                            {result.failed_files.length - 3} {t('import.summary.moreFiles')}
                           </span>
                         )}
                       </div>
@@ -870,7 +877,7 @@ export function ImportPage({
             {importError && (
               <div style={resultErrorStyles}>
                 <Icon name="x" size="md" color="var(--lumik-error, #ffb4ab)" />
-                <span style={progressTextStyles}>Error: {importError}</span>
+                <span style={progressTextStyles}>{t('import.errors.importError')}: {importError}</span>
               </div>
             )}
           </div>
@@ -882,39 +889,39 @@ export function ImportPage({
     return (
       <div style={stepContentStyles}>
         <div style={sectionStyles}>
-          <span style={sectionTitleStyles}>Resumen de importación</span>
+          <span style={sectionTitleStyles}>{t('import.summary.title')}</span>
           <div style={summaryCardStyles}>
             {photoCount > 0 && (
               <div style={summaryRowStyles}>
-                <span style={summaryLabelStyles}>Fotografías</span>
+                <span style={summaryLabelStyles}>{t('import.summary.photos')}</span>
                 <span style={summaryValueStyles}>{photoCount}</span>
               </div>
             )}
             {videoCount > 0 && (
               <div style={summaryRowStyles}>
-                <span style={summaryLabelStyles}>Videos</span>
+                <span style={summaryLabelStyles}>{t('import.summary.videos')}</span>
                 <span style={summaryValueStyles}>{videoCount}</span>
               </div>
             )}
             <div style={summaryRowStyles}>
-              <span style={summaryLabelStyles}>Tamaño total</span>
+              <span style={summaryLabelStyles}>{t('import.summary.totalSize')}</span>
               <span style={summaryValueStyles}>{formatBytes(totalImportSize)}</span>
             </div>
             <div style={summaryRowStyles}>
-              <span style={summaryLabelStyles}>Proyecto</span>
+              <span style={summaryLabelStyles}>{t('import.summary.project')}</span>
               <span style={summaryValueStyles}>
-                {selectedProject?.name ?? initialProjectName ?? 'No seleccionado'}
+                {selectedProject?.name ?? initialProjectName ?? t('common.notSelected')}
               </span>
             </div>
             <div style={summaryRowStyles}>
-              <span style={summaryLabelStyles}>Destino</span>
+              <span style={summaryLabelStyles}>{t('import.summary.destination')}</span>
               <span style={summaryValueStyles}>
-                {selectedDrive?.name ?? 'No seleccionado'}
+                {selectedDrive?.name ?? t('common.notSelected')}
               </span>
             </div>
             {selectedDrive && (
               <div style={summaryRowStyles}>
-                <span style={summaryLabelStyles}>Espacio disponible</span>
+                <span style={summaryLabelStyles}>{t('import.summary.availableSpace')}</span>
                 <span style={summaryValueStyles}>
                   {formatBytes(selectedDrive.totalBytes - selectedDrive.usedBytes)}
                 </span>
@@ -932,7 +939,7 @@ export function ImportPage({
             />
           </div>
           <span style={validationTextStyles}>
-            {'Todo listo. Los archivos se copiarán al disco de destino.'}
+            {t('import.summary.ready')}
           </span>
         </div>
       </div>
@@ -954,11 +961,11 @@ export function ImportPage({
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {onClose && (
             <Button variant="ghost" size="sm" onClick={onClose} leftIcon={<Icon name="chevron-right" size="sm" style={{ transform: 'rotate(180deg)' }} />}>
-              Volver
+              {t('import.header.back')}
             </Button>
           )}
           <h1 style={titleStyles}>
-            Importar fotos
+            {t('import.header.title')}
             {initialProjectName && (
               <span style={{ fontWeight: 400, color: 'var(--lumik-on-surface-variant, #c2c6d7)', fontSize: '18px', marginLeft: '12px' }}>
                 → {initialProjectName}
@@ -983,8 +990,8 @@ export function ImportPage({
           {importState.sourceFiles.length > 0 && (
             <span style={hintStyles}>
               {[
-                photoCount > 0 && `${photoCount} ${photoCount === 1 ? 'fotografía' : 'fotografías'}`,
-                videoCount > 0 && `${videoCount} ${videoCount === 1 ? 'video' : 'videos'}`,
+                photoCount > 0 && `${photoCount} ${t(photoCount === 1 ? 'import.footer.photo_one' : 'import.footer.photo_other')}`,
+                videoCount > 0 && `${videoCount} ${t(videoCount === 1 ? 'import.footer.video_one' : 'import.footer.video_other')}`,
               ].filter(Boolean).join(' • ')} • {formatBytes(totalImportSize)}
             </span>
           )}
@@ -993,7 +1000,7 @@ export function ImportPage({
           {currentStepIndex > 0 && !isImporting && !result && (
             <Button variant="secondary" onClick={handleBack}>
               <Icon name="chevron-right" size="sm" style={{ transform: 'rotate(180deg)' }} />
-              Atrás
+              {t('import.footer.back')}
             </Button>
           )}
           {currentStepIndex < IMPORT_STEPS.length - 1 ? (
@@ -1002,13 +1009,13 @@ export function ImportPage({
               onClick={handleNext}
               disabled={!canProceed}
             >
-              Siguiente
+              {t('import.footer.next')}
               <Icon name="chevron-right" size="sm" />
             </Button>
           ) : result ? (
             <Button variant="primary" onClick={embedded ? onClose : handleNewImport}>
               <Icon name={embedded ? 'check' : 'import'} size="sm" />
-              {embedded ? 'Aceptar' : 'Nueva importación'}
+              {embedded ? t('import.footer.accept') : t('import.footer.newImport')}
             </Button>
           ) : (
             <Button
@@ -1017,7 +1024,7 @@ export function ImportPage({
               disabled={!canProceed || isImporting}
             >
               <Icon name="import" size="sm" />
-              {isImporting ? 'Importando...' : 'Iniciar importación'}
+              {isImporting ? t('import.progress.importing') : t('import.footer.import')}
             </Button>
           )}
         </div>

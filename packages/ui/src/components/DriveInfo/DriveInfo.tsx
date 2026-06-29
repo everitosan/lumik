@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '../Icon';
 
 export interface DriveInfoProps {
@@ -92,6 +93,7 @@ export function DriveInfo({
   className,
   style,
 }: DriveInfoProps) {
+  const { t } = useTranslation();
   const usedPercentage = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
   const freeBytes = totalBytes - usedBytes;
 
@@ -101,7 +103,7 @@ export function DriveInfo({
         <div style={nameContainerStyles}>
           <Icon name="drive" size="md" color="var(--lumik-on-surface-variant, #c2c6d7)" />
           <span style={nameStyles}>{name}</span>
-          <span style={statusDotStyles(connected)} title={connected ? 'Conectado' : 'Desconectado'} />
+          <span style={statusDotStyles(connected)} title={connected ? t('components.driveInfo.connected') : t('components.driveInfo.disconnected')} />
         </div>
       </div>
 
@@ -110,7 +112,7 @@ export function DriveInfo({
       </div>
 
       <div style={capacityTextStyles}>
-        {formatBytes(freeBytes)} libres de {formatBytes(totalBytes)}
+        {formatBytes(freeBytes)} {t('components.driveInfo.freeOf')} {formatBytes(totalBytes)}
       </div>
 
       {uuid && (

@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '../Icon';
 
 export type WorkflowStatus = 'imported' | 'edited' | 'delivered';
@@ -171,6 +172,13 @@ export function ProjectCard({
   className,
   style,
 }: ProjectCardProps) {
+  const { t } = useTranslation();
+
+  const statusLabels = {
+    imported: t('components.projectCard.status.imported'),
+    edited: t('components.projectCard.status.edited'),
+    delivered: t('components.projectCard.status.delivered'),
+  };
   const handleMenuClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onMenuClick?.();
@@ -222,7 +230,7 @@ export function ProjectCard({
           </span>
           <span style={{ ...metaItemStyles, justifyContent: 'flex-end' }}>
             <Icon name="photo" size="sm" />
-            {photoCount} photos
+            {photoCount} {t('dashboard.statistics.photos')}
           </span>
         </div>
 

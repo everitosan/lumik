@@ -1,4 +1,5 @@
 import { useState, useMemo, type CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../Button';
 import { Icon } from '../Icon';
 
@@ -142,10 +143,11 @@ export function FileList({
   onRemove,
   maxHeight,
   showSearch = true,
-  searchPlaceholder = 'Buscar archivos...',
+  searchPlaceholder = 'Search files...',
   className,
   style,
 }: FileListProps) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredFiles = useMemo(() => {
@@ -194,7 +196,7 @@ export function FileList({
 
       {filteredFiles.length === 0 ? (
         <div style={noResultsStyles}>
-          No se encontraron archivos que coincidan con "{searchQuery}"
+          {t('components.fileList.noResults', { query: searchQuery })}
         </div>
       ) : (
         <div style={gridStyles(maxHeight)}>
