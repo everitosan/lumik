@@ -6,7 +6,7 @@ import { PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT, type Col
 import type { Photo } from '../../../lib/types';
 import { useProjectPhotos, useProjectThumbnails, useContextKeybindings, matchesKey } from '../../../lib/hooks';
 import * as api from '../../../lib/api';
-import { ProjectDetailHeader, type SortOption } from './ProjectDetailHeader';
+import { ProjectDetailHeader } from './ProjectDetailHeader';
 import { ProjectDetailFooter } from './ProjectDetailFooter';
 import { ImportPage } from '../../ImportPage';
 import { PhotoDetail } from '../PhotoDetail';
@@ -27,6 +27,8 @@ function parseColorLabels(raw: string | null): ColorLabel[] {
     .map((n) => parseInt(n.trim(), 10))
     .filter((n) => n >= 1 && n <= 5) as ColorLabel[];
 }
+
+type SortOption = 'date' | 'name' | 'stars';
 
 function sortPhotos(photos: Photo[], sortBy: SortOption): Photo[] {
   return [...photos].sort((a, b) => {
