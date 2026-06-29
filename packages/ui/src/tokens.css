@@ -73,3 +73,42 @@
   --lumik-transition-normal: 250ms ease;
   --lumik-transition-slow: 350ms ease;
 }
+
+/* Loader (see <Loader /> in @lumik/ui). Size and colors are overridable via
+   the --size / --color-1 / --color-2 custom properties set on the element. */
+.lumik-loader {
+  --color-1: var(--lumik-outline-variant, #424654);
+  --color-2: var(--lumik-primary, #b0c6ff);
+  --size: 0.33px;
+
+  width: calc(48 * var(--size));
+  height: calc(48 * var(--size));
+  border: calc(3 * var(--size)) solid var(--color-1);
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;
+  box-sizing: border-box;
+  animation: lumik-loader-rotation 1s linear infinite;
+}
+.lumik-loader::after {
+  content: '';
+  box-sizing: border-box;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(40 * var(--size));
+  height: calc(40 * var(--size));
+  border-radius: 50%;
+  border: calc(3 * var(--size)) solid;
+  border-color: var(--color-2) transparent;
+}
+
+@keyframes lumik-loader-rotation {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}

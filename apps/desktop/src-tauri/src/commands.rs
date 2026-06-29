@@ -1410,8 +1410,8 @@ pub async fn start_import(
         // === PHASE 2: Writing metadata ===
         emit_progress(&app, &request.session_id, 1, 3, "Agregando metadatos", ImportPhase::Writing, None);
 
-        emit_log(&app, &request.session_id, "Escribiendo metadatos XMP y renombrando archivos...");
-        pipeline_metadata(&workspace, &request.project_name, &metadata, image_description.as_deref())
+        emit_log(&app, &request.session_id, "Procesando metadatos XMP y nombres de archivo...");
+        pipeline_metadata(&workspace, &request.project_name, &metadata, image_description.as_deref(), settings.rename_on_import)
             .map_err(|e| format!("Metadata failed: {}", e))?;
         emit_log(&app, &request.session_id, "Metadatos aplicados");
 

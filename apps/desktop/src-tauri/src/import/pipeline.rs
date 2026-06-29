@@ -81,11 +81,12 @@ pub fn pipeline_metadata(
     project_name: &str,
     metadata: &Option<PhotographerMetadata>,
     image_description: Option<&str>,
+    rename: bool,
 ) -> Result<usize, ConvertError> {
     #[cfg(not(target_os = "android"))]
     {
-        let count = rename_and_embed_metadata(&workspace.dng_dir, project_name, metadata, image_description)?;
-        info!("Renamed and embedded metadata in {} files", count);
+        let count = rename_and_embed_metadata(&workspace.dng_dir, project_name, metadata, image_description, rename)?;
+        info!("Processed metadata in {} files (rename: {})", count, rename);
         return Ok(count);
     }
 
@@ -100,18 +101,23 @@ pub fn pipeline_metadata(
         files.sort();
 
         for (i, path) in files.iter().enumerate() {
-            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-            let datetime = extract_datetime_for_rename(path);
-            let new_name = format!("{}__{}__{:03}.{}", datetime, sanitized_project, i + 1, ext);
-            let new_path = workspace.dng_dir.join(&new_name);
-            if new_path != *path {
-                fs::rename(path, &new_path)?;
-            }
-            write_xmp_sidecar(&new_path, metadata.as_ref(), image_description)
+            let target_path = if rename {
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                let datetime = extract_datetime_for_rename(path);
+                let new_name = format!("{}__{}__{:03}.{}", datetime, sanitized_project, i + 1, ext);
+                let new_path = workspace.dng_dir.join(&new_name);
+                if new_path != *path {
+                    fs::rename(path, &new_path)?;
+                }
+                new_path
+            } else {
+                path.clone()
+            };
+            write_xmp_sidecar(&target_path, metadata.as_ref(), image_description)
                 .map_err(|e| ConvertError::DngError(e))?;
         }
 
-        info!("Renamed and wrote XMP sidecars for {} files (android)", files.len());
+        info!("Wrote XMP sidecars for {} files (android, rename: {})", files.len(), rename);
         Ok(files.len())
     }
 }
@@ -124,53 +130,59 @@ fn rename_and_embed_metadata(
     project_name: &str,
     metadata: &Option<PhotographerMetadata>,
     image_description: Option<&str>,
+    rename: bool,
 ) -> Result<usize, ConvertError> {
     let sanitized_name = sanitize_name(project_name);
 
-    // For files without DateTimeOriginal (e.g. scanner TIFFs), seed it from ModifyDate
-    // so the rename pattern below has a date to work with.
-    let _ = exiftool::run_text(&[
-        "-if".to_string(), "not $DateTimeOriginal".to_string(),
-        "-DateTimeOriginal<ModifyDate".to_string(),
-        "-overwrite_original".to_string(),
-        dir.to_string_lossy().to_string(),
-    ]);
+    let mut args: Vec<String> = vec!["-overwrite_original".to_string()];
 
-    let filename_tag = format!("-FileName<${{DateTimeOriginal}}__{}__%03c.%le", sanitized_name);
+    if rename {
+        // For files without DateTimeOriginal (e.g. scanner TIFFs), seed it from ModifyDate
+        // so the rename pattern below has a date to work with.
+        let _ = exiftool::run_text(&[
+            "-if".to_string(), "not $DateTimeOriginal".to_string(),
+            "-DateTimeOriginal<ModifyDate".to_string(),
+            "-overwrite_original".to_string(),
+            dir.to_string_lossy().to_string(),
+        ]);
 
-    let mut args: Vec<String> = vec![
-        "-d".to_string(),
-        "%Y-%m-%d__%H-%M-%S".to_string(),
-        filename_tag,
-        "-overwrite_original".to_string(),
-    ];
+        args.push("-d".to_string());
+        args.push("%Y-%m-%d__%H-%M-%S".to_string());
+        args.push(format!("-FileName<${{DateTimeOriginal}}__{}__%03c.%le", sanitized_name));
+    }
 
+    let mut has_metadata = false;
     if let Some(ref meta) = metadata {
         if let Some(ref v) = meta.artist {
             if !v.is_empty() {
                 args.push(format!("-Artist={}", v));
                 args.push(format!("-XMP-dc:Creator={}", v));
+                has_metadata = true;
             }
         }
         if let Some(ref v) = meta.copyright {
             if !v.is_empty() {
                 args.push(format!("-Copyright={}", v));
                 args.push(format!("-XMP-dc:Rights={}", v));
+                has_metadata = true;
             }
         }
         if let Some(ref v) = meta.contact_url {
             if !v.is_empty() {
                 args.push(format!("-XMP-iptcCore:CreatorWorkURL={}", v));
+                has_metadata = true;
             }
         }
         if let Some(ref v) = meta.contact_email {
             if !v.is_empty() {
                 args.push(format!("-XMP-iptcCore:CreatorWorkEmail={}", v));
+                has_metadata = true;
             }
         }
         if let Some(ref v) = meta.usage_terms {
             if !v.is_empty() {
                 args.push(format!("-XMP-xmpRights:UsageTerms={}", v));
+                has_metadata = true;
             }
         }
     }
@@ -179,14 +191,19 @@ fn rename_and_embed_metadata(
         if !desc.is_empty() {
             args.push(format!("-ImageDescription={}", desc));
             args.push(format!("-XMP-dc:Description={}", desc));
+            has_metadata = true;
         }
     }
 
-    args.push(dir.to_string_lossy().to_string());
-    debug!("exiftool args: {:?}", args);
+    // Skip exiftool entirely when there's nothing to rename and no metadata to embed,
+    // so the original files are left untouched.
+    if rename || has_metadata {
+        args.push(dir.to_string_lossy().to_string());
+        debug!("exiftool args: {:?}", args);
 
-    exiftool::run_text(&args)
-        .map_err(|e| ConvertError::DngError(format!("exiftool failed: {}", e)))?;
+        exiftool::run_text(&args)
+            .map_err(|e| ConvertError::DngError(format!("exiftool failed: {}", e)))?;
+    }
 
     let count = fs::read_dir(dir)?
         .filter_map(|e| e.ok())

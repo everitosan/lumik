@@ -108,6 +108,7 @@
       "title": "Datos del fotógrafo",
       "description": "Configura los metadatos a incrustar en tus fotos durante la importación.",
       "embedMetadata": "Incrustar metadatos en las fotos al importar",
+      "renameOnImport": "Renombrar las fotos al importar",
       "name": "Nombre",
       "email": "Email",
       "copyright": "Copyright",

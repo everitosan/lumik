@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../Icon';
+import { Loader } from '../Loader';
 
 export interface DriveInfoProps {
   name: string;
@@ -145,7 +146,11 @@ export function DriveInfo({
             title={ejecting ? t('components.driveInfo.ejecting') : t('components.driveInfo.eject')}
             aria-label={t('components.driveInfo.eject')}
           >
-            <Icon name="eject" size="sm" />
+            {ejecting ? (
+              <Loader size={16} label={t('components.driveInfo.ejecting')} />
+            ) : (
+              <Icon name="eject" size="sm" />
+            )}
           </button>
         )}
       </div>

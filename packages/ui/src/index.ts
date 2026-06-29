@@ -1,6 +1,8 @@
 // Components
 export { Icon } from './components/Icon';
 export type { IconProps, IconName } from './components/Icon';
+export { Loader } from './components/Loader';
+export type { LoaderProps } from './components/Loader';
 
 export { Logo } from './components/Logo';
 export type { LogoProps } from './components/Logo';

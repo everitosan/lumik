@@ -252,6 +252,7 @@ export function SettingsPage() {
 
   // Form fields
   const [embedMetadata, setEmbedMetadata] = useState(true);
+  const [renameOnImport, setRenameOnImport] = useState(true);
   const [artist, setArtist] = useState('');
   const [copyright, setCopyright] = useState('');
   const [creatorUrl, setCreatorUrl] = useState('');
@@ -282,6 +283,7 @@ export function SettingsPage() {
         }
 
         setEmbedMetadata(settingsData.embed_metadata_on_import);
+        setRenameOnImport(settingsData.rename_on_import);
       } catch (err) {
         setError(err instanceof Error ? err.message : t('settings.errors.loadingSettings'));
       } finally {
@@ -308,6 +310,7 @@ export function SettingsPage() {
         }),
         updateAppSettings({
           embed_metadata_on_import: embedMetadata,
+          rename_on_import: renameOnImport,
         }),
       ]);
 
@@ -332,7 +335,8 @@ export function SettingsPage() {
       : artist !== '' || copyright !== '' || creatorUrl !== '';
 
     const settingsChanged = appSettings
-      ? embedMetadata !== appSettings.embed_metadata_on_import
+      ? embedMetadata !== appSettings.embed_metadata_on_import ||
+        renameOnImport !== appSettings.rename_on_import
       : false;
 
     return metadataChanged || settingsChanged;
@@ -402,6 +406,19 @@ export function SettingsPage() {
             />
             <span style={checkboxLabelStyles}>
               {t('settings.photographer.embedMetadata')}
+            </span>
+          </label>
+
+          <label style={{ ...checkboxContainerStyles, gridColumn: '1 / -1' }}>
+            <input
+              type="checkbox"
+              checked={renameOnImport}
+              onChange={(e) => setRenameOnImport(e.target.checked)}
+              style={checkboxStyles}
+              disabled={saving}
+            />
+            <span style={checkboxLabelStyles}>
+              {t('settings.photographer.renameOnImport')}
             </span>
           </label>
 

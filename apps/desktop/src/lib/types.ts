@@ -96,6 +96,7 @@ export type KeybindingMap = Record<string, string>;
 // Application settings
 export interface AppSettings {
   embed_metadata_on_import: boolean;
+  rename_on_import: boolean;
 }
 
 // Per-project UI and workflow settings

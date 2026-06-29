@@ -143,8 +143,14 @@ impl GlobalDatabase {
             .map(|v| v == "true")
             .unwrap_or(true);
 
+        let rename_on_import = self
+            .get_setting("rename_on_import")?
+            .map(|v| v == "true")
+            .unwrap_or(true);
+
         Ok(AppSettings {
             embed_metadata_on_import: embed_metadata,
+            rename_on_import,
         })
     }
 
@@ -152,6 +158,10 @@ impl GlobalDatabase {
         self.set_setting(
             "embed_metadata_on_import",
             if settings.embed_metadata_on_import { "true" } else { "false" },
+        )?;
+        self.set_setting(
+            "rename_on_import",
+            if settings.rename_on_import { "true" } else { "false" },
         )?;
         self.get_app_settings()
     }

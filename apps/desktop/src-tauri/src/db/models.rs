@@ -204,12 +204,14 @@ pub struct Keybinding {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub embed_metadata_on_import: bool,
+    pub rename_on_import: bool,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             embed_metadata_on_import: true,
+            rename_on_import: true,
         }
     }
 }
