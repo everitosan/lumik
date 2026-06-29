@@ -31,6 +31,9 @@ export type { InputProps, InputVariant } from './components/Input';
 export { Stepper } from './components/Stepper';
 export type { StepperProps, Step } from './components/Stepper';
 
+export { Tabs } from './components/Tabs';
+export type { TabsProps, TabItem } from './components/Tabs';
+
 export { DriveSelector } from './components/DriveSelector';
 export type { DriveSelectorProps, Drive } from './components/DriveSelector';
 
