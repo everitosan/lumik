@@ -21,9 +21,6 @@ pub enum DbError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("Project not available — device may not be mounted")]
-    DeviceNotMounted,
-
     #[error("Project already exists at path: {0}")]
     ProjectAlreadyExists(String),
 }
@@ -255,37 +252,6 @@ fn discover_recursive(
             continue;
         }
         discover_recursive(&path, device_uuid, mount_point, depth + 1, out);
-    }
-}
-
-/// Sanitize a project name into a filesystem-safe slug.
-pub fn slug_from_name(name: &str) -> String {
-    let raw: String = name
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '-' })
-        .collect::<String>()
-        .to_lowercase();
-
-    // Collapse consecutive dashes
-    let mut slug = String::with_capacity(raw.len());
-    let mut last_dash = false;
-    for c in raw.chars() {
-        if c == '-' {
-            if !last_dash {
-                slug.push(c);
-            }
-            last_dash = true;
-        } else {
-            slug.push(c);
-            last_dash = false;
-        }
-    }
-
-    let slug = slug.trim_matches('-').to_string();
-    if slug.is_empty() {
-        "project".to_string()
-    } else {
-        slug
     }
 }
 

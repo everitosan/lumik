@@ -1,5 +1,4 @@
 pub mod converter;
-pub mod hasher;
 pub mod pipeline;
 pub mod progress;
 pub mod xmp;

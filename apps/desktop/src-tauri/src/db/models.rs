@@ -25,14 +25,18 @@ pub struct Project {
 }
 
 /// Workflow status
+// Representación tipada de workflow_status. Hoy se guarda/lee como String crudo
+// (con CHECK en el schema); este enum queda reservado para cuando se cablee.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[allow(dead_code)]
 pub enum WorkflowStatus {
     Imported,
     Edited,
     Delivered,
 }
 
+#[allow(dead_code)]
 impl WorkflowStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -52,9 +56,11 @@ impl WorkflowStatus {
     }
 }
 
-/// Backup status
+/// Backup status. Reservado: la feature de respaldo está planificada (fuera del
+/// MVP); el schema ya reserva las columnas pero aún no se construye este enum.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[allow(dead_code)]
 pub enum BackupStatus {
     Pending,
     Uploaded,

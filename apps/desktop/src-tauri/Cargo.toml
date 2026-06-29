@@ -39,10 +39,6 @@ image = "0.25"
 tiff = { version = "0.11", features = ["jpeg"] }
 kamadak-exif = "0.5"
 
-# Hashing
-sha2 = "0.10"
-hex = "0.4"
-
 # Cross-platform disk info (listing, space)
 sysinfo = "0.31"
 

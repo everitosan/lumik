@@ -1,3 +1,8 @@
+// Este módulo solo se usa en Android (sin exiftool): ahí se escriben sidecars
+// .xmp a mano. En desktop exiftool hace este trabajo, por lo que estas funciones
+// aparecen como "dead code" al compilar para Linux/Windows.
+#![allow(dead_code)]
+
 use crate::db::models::PhotographerMetadata;
 use std::path::Path;
 

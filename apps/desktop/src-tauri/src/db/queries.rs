@@ -562,47 +562,6 @@ impl ProjectDatabase {
         Ok(result)
     }
 
-    pub fn create_photo(&self, photo: &CreatePhoto) -> DbResult<Photo> {
-        let id = Uuid::new_v4().to_string();
-        let now = Utc::now().to_rfc3339();
-
-        {
-            let conn = self.conn();
-            conn.execute(
-                "INSERT INTO photo (
-                    id, project_id, dng_path, device_uuid, original_camera,
-                    original_format, import_date, capture_date,
-                    width, height, file_size_bytes,
-                    iso, aperture, shutter_speed, exposure_compensation,
-                    focal_length, lens_model
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-                          ?12, ?13, ?14, ?15, ?16, ?17)",
-                params![
-                    id,
-                    photo.project_id,
-                    photo.dng_path,
-                    photo.device_uuid,
-                    photo.original_camera,
-                    photo.original_format,
-                    now,
-                    photo.capture_date,
-                    photo.width,
-                    photo.height,
-                    photo.file_size_bytes,
-                    photo.iso,
-                    photo.aperture,
-                    photo.shutter_speed,
-                    photo.exposure_compensation,
-                    photo.focal_length,
-                    photo.lens_model,
-                    photo.rotation,
-                ],
-            )?;
-        }
-
-        self.get_photo(&id)?.ok_or(super::DbError::NotInitialized)
-    }
-
     pub fn update_photo_rotation(&self, id: &str, rotation: i32) -> DbResult<()> {
         let conn = self.conn();
         conn.execute(
