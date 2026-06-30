@@ -463,9 +463,82 @@ pub fn delete_project(state: State<AppState>, id: String) -> Result<(), String> 
     Ok(())
 }
 
-/// Rename a project: moves its folder on disk, updates the stored name and rewrites
-/// every photo's relative `dng_path` to point at the new folder. The SQLite handle is
-/// closed before the move (Windows can't rename a directory with an open file inside).
+/// Move a project's folder on disk to `new_dir` and rewrite every photo's
+/// `dng_path` so it points at the new location. Closes the project's SQLite
+/// handle before the move (Windows can't rename a directory containing open
+/// files), reopens at `new_dir`, and re-registers it in `state.open_projects`.
+/// Callers are responsible for any additional per-call DB updates (project
+/// name, session_date, …). On error the project is reinserted at its old
+/// location when possible.
+fn relocate_project_folder(
+    state: &AppState,
+    project_id: &str,
+    new_dir: &Path,
+) -> Result<Arc<ProjectDatabase>, String> {
+    // Take the project out of the open map so its SQLite connection can be closed.
+    let project_db = {
+        let mut map = state.open_projects.lock().unwrap();
+        map.remove(project_id)
+    }
+    .ok_or_else(|| format!("Project '{}' not available — device may not be mounted", project_id))?;
+
+    let device_uuid = project_db.device_uuid.clone();
+    let mount_point = project_db.mount_point.clone();
+    let old_dir = project_db.project_dir.clone();
+    let old_rel = path_to_slash(old_dir.strip_prefix(&mount_point).unwrap_or(&old_dir));
+    let new_rel = path_to_slash(new_dir.strip_prefix(&mount_point).unwrap_or(new_dir));
+
+    // Close the SQLite handle before touching the filesystem.
+    drop(project_db);
+
+    let reinsert_at = |dir: &Path| {
+        if let Ok(db) = ProjectDatabase::open(dir.join("project.db"), &device_uuid, mount_point.clone()) {
+            state.open_projects.lock().unwrap().insert(project_id.to_string(), Arc::new(db));
+        }
+    };
+
+    if new_dir == old_dir {
+        // Nothing to move, but caller still expects an Arc back.
+        let reopened = ProjectDatabase::open(old_dir.join("project.db"), &device_uuid, mount_point.clone())
+            .map_err(|e| format!("Failed to reopen project: {}", e))?;
+        let arc = Arc::new(reopened);
+        state.open_projects.lock().unwrap().insert(project_id.to_string(), arc.clone());
+        return Ok(arc);
+    }
+
+    if new_dir.exists() {
+        reinsert_at(&old_dir);
+        return Err(format!("A project folder already exists at: {}", new_dir.display()));
+    }
+    if let Some(parent) = new_dir.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Err(e) = std::fs::rename(&old_dir, new_dir) {
+        error!("relocate_project_folder: rename failed: {}", e);
+        reinsert_at(&old_dir);
+        return Err(format!("Failed to move project folder: {}", e));
+    }
+
+    // Remove empty ancestor dirs left behind, but never go above the mount point.
+    let mut ancestor = old_dir.parent();
+    while let Some(d) = ancestor {
+        if d == mount_point.as_path() { break; }
+        if std::fs::remove_dir(d).is_err() { break; }
+        ancestor = d.parent();
+    }
+
+    let reopened = ProjectDatabase::open(new_dir.join("project.db"), &device_uuid, mount_point.clone())
+        .map_err(|e| format!("Failed to reopen project at new location: {}", e))?;
+    if let Err(e) = reopened.update_photo_paths_prefix(&old_rel, &new_rel) {
+        warn!("Could not rewrite dng_path after move: {}", e);
+    }
+
+    let arc = Arc::new(reopened);
+    state.open_projects.lock().unwrap().insert(project_id.to_string(), arc.clone());
+    Ok(arc)
+}
+
+/// Rename a project: moves its folder on disk and updates the stored name.
 #[tauri::command]
 pub fn rename_project(state: State<AppState>, id: String, new_name: String) -> Result<Project, String> {
     let new_name = new_name.trim().to_string();
@@ -474,16 +547,7 @@ pub fn rename_project(state: State<AppState>, id: String, new_name: String) -> R
     }
     info!("rename_project called: {} -> {}", id, new_name);
 
-    // Take the project out of the open map so its SQLite connection can be closed.
-    let project_db = {
-        let mut map = state.open_projects.lock().unwrap();
-        map.remove(&id)
-    }
-    .ok_or_else(|| format!("Project '{}' not available — device may not be mounted", id))?;
-
-    let mount_point = project_db.mount_point.clone();
-    let device_uuid = project_db.device_uuid.clone();
-    let old_dir = project_db.project_dir.clone();
+    let old_dir = state.project_db(&id)?.project_dir.clone();
 
     // New folder name: keep the "{day}_" prefix, swap the slug (matches create_project).
     let old_folder = old_dir
@@ -499,48 +563,17 @@ pub fn rename_project(state: State<AppState>, id: String, new_name: String) -> R
     };
     let new_dir = old_dir.with_file_name(&new_folder);
 
-    // Relative path prefixes (slash-normalized) for rewriting dng_path.
-    let old_rel = path_to_slash(old_dir.strip_prefix(&mount_point).unwrap_or(&old_dir));
-    let new_rel = path_to_slash(new_dir.strip_prefix(&mount_point).unwrap_or(&new_dir));
+    let db = relocate_project_folder(&state, &id, &new_dir)?;
 
-    // Close the connection before touching the filesystem.
-    drop(project_db);
-
-    // Helper: reopen at a directory and put it back in the open map.
-    let reinsert = |state: &State<AppState>, dir: &Path, id: &str| {
-        if let Ok(db) = ProjectDatabase::open(dir.join("project.db"), &device_uuid, mount_point.clone()) {
-            state.open_projects.lock().unwrap().insert(id.to_string(), Arc::new(db));
-        }
-    };
-
-    if new_dir != old_dir {
-        if new_dir.exists() {
-            reinsert(&state, &old_dir, &id);
-            return Err(format!("A project folder already exists at: {}", new_dir.display()));
-        }
-        if let Err(e) = std::fs::rename(&old_dir, &new_dir) {
-            error!("rename_project: rename failed: {}", e);
-            reinsert(&state, &old_dir, &id);
-            return Err(format!("Failed to move project folder: {}", e));
-        }
+    if let Err(e) = db.update_name(&new_name) {
+        error!("rename_project: name update failed: {}", e);
+        return Err(format!("Failed to update project name: {}", e));
     }
 
-    let final_dir = if new_dir == old_dir { &old_dir } else { &new_dir };
-    let reopened = ProjectDatabase::open(final_dir.join("project.db"), &device_uuid, mount_point.clone())
-        .map_err(|e| format!("Failed to reopen project after rename: {}", e))?;
-
-    if let Err(e) = reopened.update_name_and_paths(&new_name, &old_rel, &new_rel) {
-        error!("rename_project: db update failed: {}", e);
-        state.open_projects.lock().unwrap().insert(id.clone(), Arc::new(reopened));
-        return Err(format!("Failed to update project record: {}", e));
-    }
-
-    let updated = reopened
+    let updated = db
         .get_project()
         .map_err(|e| e.to_string())?
         .ok_or("Failed to read renamed project")?;
-
-    state.open_projects.lock().unwrap().insert(id, Arc::new(reopened));
 
     info!("rename_project success: {}", updated.id);
     Ok(updated)
@@ -1621,78 +1654,48 @@ pub async fn start_import(
     // If session_date was not provided, infer it from the oldest imported photo,
     // rename the project folder to match, and update the DB field.
     if successful > 0 {
-        if let Ok(Some(project)) = project_db.get_project() {
-            if project.session_date.is_none() {
-                if let Ok(Some(oldest)) = project_db.get_oldest_capture_date() {
-                    // capture_date may be EXIF format "YYYY:MM:DD HH:MM:SS" or ISO "YYYY-MM-DD..."
-                    let date_str = oldest.get(..10).unwrap_or(&oldest).replace(':', "-");
-                    let parts: Vec<&str> = date_str.splitn(3, '-').collect();
-                    if parts.len() == 3 {
-                        let (year, month, day) = (parts[0], parts[1], parts[2]);
-                        let slug = request.project_name.replace('/', "-").trim().to_string();
-                        let new_project_dir = project_db.mount_point
-                            .join("lumik")
-                            .join(year)
-                            .join(month)
-                            .join(format!("{}_{}", day, slug));
+        // capture_date may be EXIF format "YYYY:MM:DD HH:MM:SS" or ISO "YYYY-MM-DD..."
+        let inferred = (|| -> Option<(PathBuf, String)> {
+            let project = project_db.get_project().ok().flatten()?;
+            if project.session_date.is_some() { return None; }
+            let oldest = project_db.get_oldest_capture_date().ok().flatten()?;
+            let date_str = oldest.get(..10).unwrap_or(&oldest).replace(':', "-");
+            let parts: Vec<&str> = date_str.splitn(3, '-').collect();
+            if parts.len() != 3 { return None; }
+            let slug = request.project_name.replace('/', "-").trim().to_string();
+            let new_dir = project_db.mount_point
+                .join("lumik")
+                .join(parts[0])
+                .join(parts[1])
+                .join(format!("{}_{}", parts[2], slug));
+            Some((new_dir, date_str))
+        })();
 
-                        if new_project_dir == project_db.project_dir {
-                            let _ = project_db.update_session_date(&date_str);
-                        } else if new_project_dir.exists() {
-                            warn!("Rename skipped: target already exists: {}", new_project_dir.display());
-                            let _ = project_db.update_session_date(&date_str);
-                        } else {
-                            if let Some(parent) = new_project_dir.parent() {
-                                let _ = std::fs::create_dir_all(parent);
-                            }
-                            match std::fs::rename(&project_db.project_dir, &new_project_dir) {
-                                Ok(()) => {
-                                    emit_log(&app, &request.session_id, &format!(
-                                        "Carpeta movida a {}", new_project_dir.display()
-                                    ));
-                                    // Remove empty ancestor dirs left behind
-                                    let mut ancestor = project_db.project_dir.parent();
-                                    while let Some(d) = ancestor {
-                                        if std::fs::remove_dir(d).is_err() { break; }
-                                        ancestor = d.parent();
-                                    }
-                                    // Reopen the DB at its new location and update AppState
-                                    let new_db_path = new_project_dir.join("project.db");
-                                    match ProjectDatabase::open(
-                                        new_db_path,
-                                        &project_db.device_uuid,
-                                        project_db.mount_point.clone(),
-                                    ) {
-                                        Ok(new_db) => {
-                                            let _ = new_db.update_session_date(&date_str);
-                                            // Fix dng_path values that still reference the old folder
-                                            let old_prefix = path_to_slash(
-                                                &project_db.project_dir
-                                                    .strip_prefix(&project_db.mount_point)
-                                                    .unwrap_or(&project_db.project_dir),
-                                            );
-                                            let new_prefix = path_to_slash(
-                                                &new_project_dir
-                                                    .strip_prefix(&project_db.mount_point)
-                                                    .unwrap_or(&new_project_dir),
-                                            );
-                                            match new_db.update_photo_paths_prefix(&old_prefix, &new_prefix) {
-                                                Ok(n) => info!("Updated dng_path for {} photos after folder rename", n),
-                                                Err(e) => warn!("Could not update dng_path after rename: {}", e),
-                                            }
-                                            let mut map = state.open_projects.lock().unwrap();
-                                            map.insert(request.project_id.clone(), Arc::new(new_db));
-                                        }
-                                        Err(e) => warn!("Could not reopen DB after rename: {}", e),
-                                    }
-                                }
-                                Err(e) => {
-                                    warn!("Could not rename project folder: {}", e);
-                                    let _ = project_db.update_session_date(&date_str);
-                                }
-                            }
-                        }
+        if let Some((new_project_dir, date_str)) = inferred {
+            let needs_move = new_project_dir != project_db.project_dir;
+            // Release our Arc so relocate_project_folder can close the SQLite handle.
+            drop(project_db);
+
+            let db = if needs_move {
+                match relocate_project_folder(&state, &request.project_id, &new_project_dir) {
+                    Ok(db) => {
+                        emit_log(&app, &request.session_id, &format!(
+                            "Carpeta movida a {}", new_project_dir.display()
+                        ));
+                        Some(db)
                     }
+                    Err(e) => {
+                        warn!("Auto-rename after import failed: {}", e);
+                        state.project_db(&request.project_id).ok()
+                    }
+                }
+            } else {
+                state.project_db(&request.project_id).ok()
+            };
+
+            if let Some(db) = db {
+                if let Err(e) = db.update_session_date(&date_str) {
+                    warn!("Could not update session_date after import: {}", e);
                 }
             }
         }

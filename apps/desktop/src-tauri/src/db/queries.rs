@@ -425,22 +425,9 @@ impl ProjectDatabase {
         Ok(())
     }
 
-    /// Rename the project and rewrite every photo's relative `dng_path` so the old
-    /// folder-name segment is swapped for the new one. `old_prefix`/`new_prefix` are
-    /// the project folder's path relative to the mount point (slash-normalized).
-    pub fn update_name_and_paths(&self, new_name: &str, old_prefix: &str, new_prefix: &str) -> DbResult<()> {
+    pub fn update_name(&self, new_name: &str) -> DbResult<()> {
         let conn = self.conn();
         conn.execute("UPDATE project SET name = ?1", params![new_name])?;
-
-        if old_prefix != new_prefix {
-            // Exact prefix match (not LIKE) so '_'/'%' in the slug aren't treated as wildcards.
-            let old_len = old_prefix.chars().count() as i64;
-            conn.execute(
-                "UPDATE photo SET dng_path = ?1 || SUBSTR(dng_path, ?2) \
-                 WHERE SUBSTR(dng_path, 1, ?3) = ?4",
-                params![new_prefix, old_len + 1, old_len, old_prefix],
-            )?;
-        }
         Ok(())
     }
 
@@ -450,11 +437,20 @@ impl ProjectDatabase {
         Ok(())
     }
 
+    /// Rewrite every photo's relative `dng_path` so the leading `old_prefix`
+    /// segment is swapped for `new_prefix`. Uses an exact prefix match (not
+    /// `LIKE`) so `_`/`%` characters in slugs aren't treated as wildcards, and
+    /// only rewrites paths that actually start with `old_prefix`.
     pub fn update_photo_paths_prefix(&self, old_prefix: &str, new_prefix: &str) -> DbResult<usize> {
+        if old_prefix == new_prefix {
+            return Ok(0);
+        }
         let conn = self.conn();
+        let old_len = old_prefix.chars().count() as i64;
         let n = conn.execute(
-            "UPDATE photo SET dng_path = REPLACE(dng_path, ?1, ?2)",
-            rusqlite::params![old_prefix, new_prefix],
+            "UPDATE photo SET dng_path = ?1 || SUBSTR(dng_path, ?2) \
+             WHERE SUBSTR(dng_path, 1, ?3) = ?4",
+            params![new_prefix, old_len + 1, old_len, old_prefix],
         )?;
         Ok(n)
     }

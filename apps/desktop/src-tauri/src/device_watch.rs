@@ -89,7 +89,8 @@ fn watch_linux(app: AppHandle) {
 /// this thread for the lifetime of the app.
 #[cfg(target_os = "windows")]
 fn watch_windows(app: AppHandle) {
-    use wmi::{COMLibrary, WMIConnection};
+    use std::collections::HashMap;
+    use wmi::{COMLibrary, Variant, WMIConnection};
 
     let com = match COMLibrary::new() {
         Ok(c) => c,
@@ -108,7 +109,7 @@ fn watch_windows(app: AppHandle) {
     info!("device_watch(windows): subscribing to Win32_VolumeChangeEvent");
 
     // Blocking iterator that yields one item per volume change event.
-    let iter = match con.raw_notification("SELECT * FROM Win32_VolumeChangeEvent") {
+    let iter = match con.raw_notification::<HashMap<String, Variant>>("SELECT * FROM Win32_VolumeChangeEvent") {
         Ok(it) => it,
         Err(e) => {
             warn!("device_watch(windows): notification query failed: {}", e);
