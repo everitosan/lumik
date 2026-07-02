@@ -76,6 +76,7 @@ pub fn run() {
         global_db,
         open_projects,
         ejecting_devices,
+        rotation_write_gen: Arc::new(Mutex::new(HashMap::new())),
     };
 
     info!("Starting Tauri application...");

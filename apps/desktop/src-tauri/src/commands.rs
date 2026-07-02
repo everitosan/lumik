@@ -40,6 +40,12 @@ pub struct AppState {
     /// otherwise it would re-acquire the SQLite handles and block the unmount.
     /// The UUID is removed once the eject finishes (success or failure).
     pub ejecting_devices: Arc<Mutex<HashSet<String>>>,
+    /// Per-photo generation counter used to debounce the background exiftool
+    /// write in save_photo_rotation(). Rapid successive rotations bump this
+    /// counter; only the write that is still the latest after the debounce
+    /// window actually touches the file, avoiding concurrent `exiftool
+    /// -overwrite_original` calls racing on the same file.
+    pub rotation_write_gen: Arc<Mutex<HashMap<String, u64>>>,
 }
 
 impl AppState {
@@ -1089,15 +1095,49 @@ pub fn save_photo_rotation(
         info!("[rotation] regenerate_rotated_thumbnail: {}ms", t.elapsed().as_millis());
     }
 
-    // Write orientation to file in background (non-blocking)
+    // Write orientation to file after a short debounce (non-blocking).
+    // Rapid successive rotations bump this photo's generation counter; only the
+    // write that is still the latest generation once the debounce window elapses
+    // actually runs exiftool, and it re-reads the DB for the final rotation —
+    // this keeps at most one `exiftool -overwrite_original` in flight per photo,
+    // avoiding concurrent writes racing on the same file.
     #[cfg(not(target_os = "android"))]
     {
-        let orientation = match rotation { 90 => 6, 180 => 3, 270 => 8, _ => 1 };
+        const ROTATION_WRITE_DEBOUNCE_MS: u64 = 600;
+
+        let my_gen = {
+            let mut gens = state.rotation_write_gen.lock().unwrap();
+            let gen = gens.entry(photo_id.clone()).or_insert(0);
+            *gen += 1;
+            *gen
+        };
+
+        let gens = state.rotation_write_gen.clone();
+        let project_db_for_thread = project_db.clone();
+        let photo_id_for_thread = photo_id.clone();
         let dng_for_thread = dng_full.to_string_lossy().to_string();
+
         std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(ROTATION_WRITE_DEBOUNCE_MS));
+
+            {
+                let map = gens.lock().unwrap();
+                if map.get(&photo_id_for_thread).copied() != Some(my_gen) {
+                    debug!("[rotation] exiftool write skipped (superseded): {}", photo_id_for_thread);
+                    return;
+                }
+            }
+
+            let rotation = match project_db_for_thread.get_photo(&photo_id_for_thread) {
+                Ok(Some(p)) => p.rotation,
+                _ => return,
+            };
+            let orientation = match rotation { 90 => 6, 180 => 3, 270 => 8, _ => 1 };
+
             let t = std::time::Instant::now();
             match exiftool::run_text(&[
                 format!("-IFD0:Orientation={}", orientation),
+                format!("-IFD1:Orientation={}", orientation),
                 "-n".to_string(),
                 "-overwrite_original".to_string(),
                 dng_for_thread,
