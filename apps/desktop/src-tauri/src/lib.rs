@@ -1,3 +1,4 @@
+mod apple_tags;
 mod commands;
 mod db;
 mod device_watch;

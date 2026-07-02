@@ -64,8 +64,8 @@
                 <mxCell id="db_update" value="&lt;b&gt;project_db.update_photo_rating()&lt;/b&gt;&lt;br&gt;&lt;br&gt;UPDATE photo&lt;br&gt;SET stars = ?1, color_label = ?2, tags = ?3&lt;br&gt;WHERE id = ?4&lt;br&gt;&lt;br&gt;Transacción SQLite atómica · Sin movimiento de archivo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcdd2;strokeColor=#c62828;fontSize=12;align=left;spacingLeft=10;" parent="1" vertex="1">
                     <mxGeometry x="155" y="-270" width="385" height="155" as="geometry"/>
                 </mxCell>
-                <mxCell id="no_xmp" value="&lt;b&gt;NO ocurre:&lt;/b&gt;&lt;br&gt;✗ Sin fs::rename&lt;br&gt;✗ Sin escritura XMP al DNG&lt;br&gt;✗ Sin llamada a exiftool&lt;br&gt;Metadatos solo en &lt;i&gt;project.db&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f9a825;fontSize=11;align=left;spacingLeft=8;spacingTop=6;" parent="1" vertex="1">
-                    <mxGeometry x="735" y="-265" width="200" height="120" as="geometry"/>
+                <mxCell id="no_xmp" value="&lt;b&gt;Efecto adicional (color labels)&lt;/b&gt;&lt;br&gt;Linux/Windows · si &lt;i&gt;finder_tags_sidecar&lt;/i&gt;=ON:&lt;br&gt;→ escribe sidecar AppleDouble &lt;i&gt;._nombre&lt;/i&gt; (Finder tags de macOS/iPad) al DNG y JPG&lt;br&gt;→ invalida &lt;i&gt;.Spotlight-V100&lt;/i&gt; del volumen (el iPad reindexa al reconectar)&lt;br&gt;Best-effort · el rating no falla si esto falla&lt;br&gt;stars/tags: sin XMP ni exiftool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f9a825;fontSize=11;align=left;spacingLeft=8;spacingTop=6;" parent="1" vertex="1">
+                    <mxGeometry x="735" y="-265" width="265" height="205" as="geometry"/>
                 </mxCell>
                 <mxCell id="db_err_q" value="¿Error&lt;br&gt;en BD?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" parent="1" vertex="1">
                     <mxGeometry x="409" y="-65" width="222" height="80" as="geometry"/>
@@ -215,7 +215,7 @@
                 </mxCell>
 
                 <!-- commands.rs -->
-                <mxCell id="ref_commands" value="&lt;b&gt;commands.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/commands.rs&lt;/font&gt;&lt;br&gt;save_photo_rating() · state.project_db()&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;~ líneas 658–677&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+                <mxCell id="ref_commands" value="&lt;b&gt;commands.rs&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot;&gt;src-tauri/src/commands.rs&lt;/font&gt;&lt;br&gt;save_photo_rating() → sync_color_sidecar()&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;+ apple_tags.rs (sidecar AppleDouble)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
                     <mxGeometry x="1160" y="-620" width="310" height="80" as="geometry"/>
                 </mxCell>
 

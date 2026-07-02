@@ -148,9 +148,15 @@ impl GlobalDatabase {
             .map(|v| v == "true")
             .unwrap_or(true);
 
+        let finder_tags_sidecar = self
+            .get_setting("finder_tags_sidecar")?
+            .map(|v| v == "true")
+            .unwrap_or(true);
+
         Ok(AppSettings {
             embed_metadata_on_import: embed_metadata,
             rename_on_import,
+            finder_tags_sidecar,
         })
     }
 
@@ -162,6 +168,10 @@ impl GlobalDatabase {
         self.set_setting(
             "rename_on_import",
             if settings.rename_on_import { "true" } else { "false" },
+        )?;
+        self.set_setting(
+            "finder_tags_sidecar",
+            if settings.finder_tags_sidecar { "true" } else { "false" },
         )?;
         self.get_app_settings()
     }

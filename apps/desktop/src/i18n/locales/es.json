@@ -132,7 +132,9 @@
       "description": "Define cómo se procesan los archivos al importar.",
       "renameOnImport": "Renombrar las fotos al importar",
       "renameExampleLabel": "Quedarán así:",
-      "renameExample": "IMG_4821.CR2 → 2024-06-15__14-30-22__Boda_García.cr2"
+      "renameExample": "IMG_4821.CR2 → 2024-06-15__14-30-22__Boda_García.cr2",
+      "finderTags": "Escribir etiquetas de color para iPad/macOS",
+      "finderTagsHint": "Al asignar un color a una foto se genera un archivo hermano (._nombre) para que la etiqueta se vea al conectar el disco a un iPad o Mac."
     },
     "language": "Idioma",
     "tabs": {

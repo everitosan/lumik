@@ -1163,7 +1163,80 @@ pub fn save_photo_rating(
         .map_err(|e| {
             error!("save_photo_rating error: {}", e);
             e.to_string()
-        })
+        })?;
+
+    // Sincronizar los color labels con Finder tags (sidecar AppleDouble) para que se
+    // vean al conectar el disco a un iPad/Mac. Best-effort: la BD es la fuente de
+    // verdad, así que un fallo aquí no debe romper el guardado del rating.
+    #[cfg(not(target_os = "android"))]
+    sync_color_sidecar(&state, &project_db, &photo_id, color_label.as_deref());
+
+    Ok(())
+}
+
+/// Escribe o borra el sidecar AppleDouble de Finder tags para el DNG (y el JPG, si
+/// existe) de una foto, según su `color_label`. Respeta el ajuste
+/// `finder_tags_sidecar` y nunca falla: solo registra warnings.
+#[cfg(not(target_os = "android"))]
+fn sync_color_sidecar(
+    state: &State<AppState>,
+    project_db: &ProjectDatabase,
+    photo_id: &str,
+    color_label: Option<&str>,
+) {
+    match state.global_db.get_app_settings() {
+        Ok(s) if !s.finder_tags_sidecar => return,
+        Ok(_) => {}
+        Err(e) => {
+            warn!("finder tags: no se pudieron leer ajustes: {}", e);
+            return;
+        }
+    }
+
+    let photo = match project_db.get_photo(photo_id) {
+        Ok(Some(p)) => p,
+        Ok(None) => return,
+        Err(e) => {
+            warn!("finder tags: get_photo falló: {}", e);
+            return;
+        }
+    };
+
+    let mount = project_db.mount_point.to_string_lossy().to_string();
+    let mut targets: Vec<PathBuf> = vec![Path::new(&mount).join(&photo.dng_path)];
+    if let Some(jpg) = &photo.jpg_path {
+        targets.push(Path::new(&mount).join(jpg));
+    }
+
+    let colors = color_label
+        .map(crate::apple_tags::colors_from_label)
+        .unwrap_or_default();
+
+    for target in &targets {
+        let res = if colors.is_empty() {
+            crate::apple_tags::remove_tags_sidecar(target)
+        } else {
+            crate::apple_tags::write_color_tags(target, &colors)
+        };
+        if let Err(e) = res {
+            warn!("finder tags: sidecar de {:?} falló: {}", target, e);
+        }
+    }
+
+    // Invalidar el índice de Spotlight del volumen para que el iPad/Mac lo
+    // reconstruya al reconectar el disco e indexe los tags recién escritos. Sin
+    // esto, el Finder pinta el punto de color pero el filtro por etiquetas del
+    // sidebar no los encuentra. Best-effort y en segundo plano; solo si el índice
+    // aún existe (auto-limitado a una vez por "generación" del índice).
+    let volume_root = PathBuf::from(&mount);
+    if crate::apple_tags::spotlight_index_present(&volume_root) {
+        std::thread::spawn(move || {
+            match crate::apple_tags::invalidate_spotlight_index(&volume_root) {
+                Ok(()) => debug!("finder tags: índice Spotlight invalidado en {:?}", volume_root),
+                Err(e) => warn!("finder tags: no se pudo invalidar el índice Spotlight: {}", e),
+            }
+        });
+    }
 }
 
 #[tauri::command]
@@ -1218,6 +1291,10 @@ pub fn save_photo_culled(
         let xmp_dest = target_path.with_extension("xmp");
         let _ = std::fs::rename(&xmp_src, &xmp_dest);
     }
+
+    // Move the AppleDouble Finder-tags sidecar (._name) alongside the RAW too, so
+    // the color tags stay attached to the file after culling/un-culling.
+    let _ = crate::apple_tags::move_sidecar(&current_path, &target_path);
 
     let new_dng_path_str = path_to_slash(&new_dng_path);
 

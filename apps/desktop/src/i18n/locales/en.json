@@ -132,7 +132,9 @@
       "description": "Configure how files are processed on import.",
       "renameOnImport": "Rename photos on import",
       "renameExampleLabel": "They'll look like:",
-      "renameExample": "IMG_4821.CR2 → 2024-06-15__14-30-22__Smith_Wedding.cr2"
+      "renameExample": "IMG_4821.CR2 → 2024-06-15__14-30-22__Smith_Wedding.cr2",
+      "finderTags": "Write color tags for iPad/macOS",
+      "finderTagsHint": "When you assign a color to a photo, a sibling file (._name) is generated so the tag shows up when the disk is connected to an iPad or Mac."
     },
     "language": "Language",
     "tabs": {

@@ -295,6 +295,7 @@ export function SettingsPage() {
   // Form fields
   const [embedMetadata, setEmbedMetadata] = useState(true);
   const [renameOnImport, setRenameOnImport] = useState(true);
+  const [finderTags, setFinderTags] = useState(true);
   const [artist, setArtist] = useState('');
   const [copyright, setCopyright] = useState('');
   const [creatorUrl, setCreatorUrl] = useState('');
@@ -326,6 +327,7 @@ export function SettingsPage() {
 
         setEmbedMetadata(settingsData.embed_metadata_on_import);
         setRenameOnImport(settingsData.rename_on_import);
+        setFinderTags(settingsData.finder_tags_sidecar);
       } catch (err) {
         setError(err instanceof Error ? err.message : t('settings.errors.loadingSettings'));
       } finally {
@@ -353,6 +355,7 @@ export function SettingsPage() {
         updateAppSettings({
           embed_metadata_on_import: embedMetadata,
           rename_on_import: renameOnImport,
+          finder_tags_sidecar: finderTags,
         }),
       ]);
 
@@ -378,7 +381,8 @@ export function SettingsPage() {
 
     const settingsChanged = appSettings
       ? embedMetadata !== appSettings.embed_metadata_on_import ||
-        renameOnImport !== appSettings.rename_on_import
+        renameOnImport !== appSettings.rename_on_import ||
+        finderTags !== appSettings.finder_tags_sidecar
       : false;
 
     return metadataChanged || settingsChanged;
@@ -438,6 +442,22 @@ export function SettingsPage() {
                 </span>
               </div>
             )}
+
+            <label style={checkboxContainerStyles}>
+              <input
+                type="checkbox"
+                checked={finderTags}
+                onChange={(e) => setFinderTags(e.target.checked)}
+                style={checkboxStyles}
+                disabled={saving}
+              />
+              <span style={checkboxLabelStyles}>
+                {t('settings.importOptions.finderTags')}
+              </span>
+            </label>
+            <p style={sectionDescriptionStyles}>
+              {t('settings.importOptions.finderTagsHint')}
+            </p>
           </section>
 
           <section style={importSectionStyles}>

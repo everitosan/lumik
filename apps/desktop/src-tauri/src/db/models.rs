@@ -205,6 +205,15 @@ pub struct Keybinding {
 pub struct AppSettings {
     pub embed_metadata_on_import: bool,
     pub rename_on_import: bool,
+    /// Genera sidecars AppleDouble (`._nombre`) con los color labels como Finder
+    /// tags de macOS/iPadOS, para que las etiquetas se vean al conectar el disco
+    /// a un iPad/Mac.
+    #[serde(default = "default_true")]
+    pub finder_tags_sidecar: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for AppSettings {
@@ -212,6 +221,7 @@ impl Default for AppSettings {
         Self {
             embed_metadata_on_import: true,
             rename_on_import: true,
+            finder_tags_sidecar: true,
         }
     }
 }
