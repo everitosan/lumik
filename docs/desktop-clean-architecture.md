@@ -237,17 +237,22 @@ bitácora.
 ### Fase 2 — Definir puertos y mover infraestructura detrás de ellos
 Colapsar el `#[cfg]` de plataforma al *composition root*.
 
-- [ ] `application/ports.rs` con los traits de §4.
+- [x] `application/ports.rs` (crece por puerto a medida que se cablea).
+- [x] `DeviceScanner`: `SystemDeviceScanner` envuelve `devices.rs` + `os_eject`
+      relocado; cableado en AppState + composition root. `#[cfg]` de eject fuera
+      de `commands.rs`.
 - [ ] `MetadataTool`: implementarlo para desktop (`exiftool.rs`) y android (`rawler`/`exif_android.rs`).
   - [ ] Test de `application` con un `FakeMetadataTool`.
 - [ ] `ImageProcessor`: envolver la lógica de `imaging` (thumbnails/previews/tiff).
-- [ ] `DeviceScanner`: envolver `devices.rs`.
 - [ ] `FinderTagWriter`: envolver `apple_tags.rs` (conservando sus tests existentes).
 - [ ] `ProgressReporter`: implementación Tauri (`app.emit`) + `FakeReporter` para tests.
-- [ ] Seleccionar la impl por plataforma UNA vez en `lib.rs` (composition root).
+- [ ] `open_project_folder` detrás de infra (saca su `#[cfg]`).
+- [x] Patrón de composition root establecido en `lib.rs` (elige impl por puerto).
 
 **Gate 2:** no queda ningún `#[cfg(target_os)]` en `commands.rs`; la selección de
-plataforma ocurre solo en `lib.rs`.
+plataforma ocurre solo en `lib.rs`. **Estado: parcial** — hecho `DeviceScanner`;
+pendiente el grueso (Metadata/Imaging/Progress), que toca las rutas de
+thumbnails/previews/import y conviene verificar ejecutando la app.
 
 ---
 
@@ -338,3 +343,13 @@ Registrar aquí decisiones/desvíos al ejecutar cada fase (fecha + nota breve).
   `"2024/06/15"`) antes caía a `0000/00/00`; ahora `ProjectFolder::date_parts`
   devuelve `None` y se usa la fecha de hoy como fallback (igual que cuando no hay
   fecha). Caso extremo e improbable; se prefirió una sola ruta de fallback.
+- **2026-07-05 · Fase 2 · parcial** — Primer puerto: `DeviceScanner`
+  (`SystemDeviceScanner`) con `os_eject` relocado a `infrastructure/devices.rs`.
+  Establece el patrón: `application/ports.rs` define el trait, `infrastructure/`
+  lo implementa, `lib.rs` (composition root) elige la impl e inyecta en AppState,
+  y `commands.rs` la consume vía `state.device_scanner`. Pendiente el grueso de
+  la fase (Metadata/Imaging/Progress): son ~17 `#[cfg]` que envuelven exiftool/
+  rawler/decodificación de imagen y tocan thumbnails, previews e import — rutas
+  runtime-críticas que no se pueden unit-testear con fixtures y conviene validar
+  ejecutando la app (disco externo + exiftool). Se abordan como siguiente sub-paso
+  con verificación en ejecución.
