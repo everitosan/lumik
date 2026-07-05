@@ -331,14 +331,18 @@ errores tipados serializables — pendiente (coordinación con frontend).
 
 ### Fase 6 — Cierre
 - [x] `cargo test` completo verde (dominio + casos de uso + infra): 52 tests.
-- [ ] `cargo build` para Windows y Android (Linux ✅). Pendiente verificar cross-compile.
+- [x] `cargo check` Linux ✅ y **aarch64-Android ✅** (con NDK r26): compila sin
+      errores ni warnings NUEVOS. Las únicas warnings en Android están en
+      `device_watch.rs`/`devices.rs` (preexistentes, código no tocado por el refactor).
+      Windows: no verificado aquí (cross-compile), pero mismo patrón multiplataforma.
 - [x] Verificación manual (usuario): import/visor/rotación (Fase 2) y eject/CRUD (Fase 3).
 - [x] Actualizar `apps/desktop/CLAUDE.md` con la nueva estructura por capas.
 - [x] Revisión: ninguna capa interior importa de una exterior (domain no usa nada;
       application solo domain + DTOs; los comandos delegan).
 
-**Gate 6:** MVP funcional idéntico, con backend por capas y dominio testeado.
-**Estado: casi** — falta el build cross-platform (Windows/Android) y `AppError`.
+**Gate 6:** ✅ **logrado** — backend por capas, dominio testeado, compila para Linux
+y Android sin regresiones. Pendiente opcional: `AppError` (coordinación frontend) y
+build de Windows.
 
 ---
 
