@@ -3,4 +3,5 @@
 //! implementa sus puertos. Ver `docs/desktop-clean-architecture.md`.
 
 pub mod ports;
+pub mod registry;
 pub mod use_cases;

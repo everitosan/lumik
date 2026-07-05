@@ -19,8 +19,7 @@ mod util;
 use commands::{AppState, refresh_open_projects};
 use db::GlobalDatabase;
 use log::{debug, error, info, warn};
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 fn get_system_username() -> String {
     #[cfg(target_os = "windows")]
@@ -67,9 +66,8 @@ pub fn run() {
         }
     }
 
-    let open_projects: Arc<Mutex<HashMap<String, Arc<db::ProjectDatabase>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-    let ejecting_devices: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+    // Estado de sesión (proyectos abiertos, ejecting, rotación) encapsulado.
+    let registry = Arc::new(application::registry::ProjectRegistry::new());
 
     // Composition root: se elige aquí la implementación concreta de cada puerto.
     let device_scanner: Arc<dyn application::ports::DeviceScanner> =
@@ -100,17 +98,12 @@ pub fn run() {
         Arc::new(infrastructure::fs::StdFileStore);
 
     info!("Scanning for project databases on connected devices...");
-    refresh_open_projects(device_scanner.as_ref(), &global_db, &open_projects, &ejecting_devices);
-    {
-        let map = open_projects.lock().unwrap();
-        info!("Found {} open project(s) at startup", map.len());
-    }
+    refresh_open_projects(device_scanner.as_ref(), &global_db, &registry);
+    info!("Found {} open project(s) at startup", registry.open_count());
 
     let state = AppState {
         global_db,
-        open_projects,
-        ejecting_devices,
-        rotation_write_gen: Arc::new(Mutex::new(HashMap::new())),
+        registry,
         device_scanner,
         metadata,
         image_processor,

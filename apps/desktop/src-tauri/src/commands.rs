@@ -1,6 +1,7 @@
 use crate::application::ports::{
     DeviceScanner, FileStore, FinderTagWriter, ImageProcessor, MetadataTool, ProgressReporter,
 };
+use crate::application::registry::ProjectRegistry;
 use crate::application::use_cases::cull_photo::CullPhoto;
 use crate::application::use_cases::rate_photo::RatePhoto;
 use crate::application::use_cases::rotate_photo::RotatePhoto;
@@ -26,29 +27,17 @@ use crate::domain::project::{compare_dashboard, ProjectFolder};
 use chrono::Utc;
 use log::{debug, error, info, warn};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
 /// Application state
 pub struct AppState {
     pub global_db: Arc<GlobalDatabase>,
-    /// Map from project_id → ProjectDatabase. Populated at startup and refreshed
-    /// whenever scan_connected_devices is called. Wrapped in Arc so commands can
-    /// clone a reference out of the map and release the lock before doing DB work.
-    pub open_projects: Arc<Mutex<HashMap<String, Arc<ProjectDatabase>>>>,
-    /// Device UUIDs currently being ejected by the user. While a UUID is in this
-    /// set, the device-scan polling must NOT re-open the projects we just closed —
-    /// otherwise it would re-acquire the SQLite handles and block the unmount.
-    /// The UUID is removed once the eject finishes (success or failure).
-    pub ejecting_devices: Arc<Mutex<HashSet<String>>>,
-    /// Per-photo generation counter used to debounce the background exiftool
-    /// write in save_photo_rotation(). Rapid successive rotations bump this
-    /// counter; only the write that is still the latest after the debounce
-    /// window actually touches the file, avoiding concurrent `exiftool
-    /// -overwrite_original` calls racing on the same file.
-    pub rotation_write_gen: Arc<Mutex<HashMap<String, u64>>>,
+    /// Estado de sesión: proyectos abiertos, dispositivos en expulsión y contador
+    /// de generación para el debounce de rotación (ver `application::registry`).
+    pub registry: Arc<ProjectRegistry>,
     /// Detección/expulsión de dispositivos, detrás del puerto `DeviceScanner`.
     /// La implementación concreta (y su `#[cfg]` de plataforma) se elige en `lib.rs`.
     pub device_scanner: Arc<dyn DeviceScanner>,
@@ -66,13 +55,12 @@ impl AppState {
     /// Look up an open ProjectDatabase by project_id.
     /// Returns an error if the project's device is not currently mounted.
     fn project_db(&self, project_id: &str) -> Result<Arc<ProjectDatabase>, String> {
-        let map = self.open_projects.lock().unwrap();
-        map.get(project_id)
-            .cloned()
-            .ok_or_else(|| format!(
+        self.registry.get(project_id).ok_or_else(|| {
+            format!(
                 "Project '{}' not available — device may not be mounted",
                 project_id
-            ))
+            )
+        })
     }
 }
 
@@ -82,24 +70,17 @@ impl AppState {
 pub fn refresh_open_projects(
     scanner: &dyn DeviceScanner,
     global_db: &Arc<GlobalDatabase>,
-    open_projects: &Arc<Mutex<HashMap<String, Arc<ProjectDatabase>>>>,
-    ejecting_devices: &Arc<Mutex<HashSet<String>>>,
+    registry: &ProjectRegistry,
 ) {
     let devices = scanner.scan();
-    let mounted_uuids: std::collections::HashSet<String> =
-        devices.iter().map(|d| d.uuid.clone()).collect();
+    let mounted_uuids: HashSet<String> = devices.iter().map(|d| d.uuid.clone()).collect();
 
     // Devices the user is actively ejecting must be treated as "not available"
     // even if they are technically still mounted, so we don't re-open their DBs.
-    let ejecting: HashSet<String> = ejecting_devices.lock().unwrap().clone();
-
-    let mut map = open_projects.lock().unwrap();
+    let ejecting = registry.ejecting_snapshot();
 
     // Remove projects from devices that are no longer mounted (or are being ejected)
-    map.retain(|_, proj_db| {
-        mounted_uuids.contains(&proj_db.device_uuid)
-            && !ejecting.contains(&proj_db.device_uuid)
-    });
+    registry.retain_mounted(&mounted_uuids, &ejecting);
 
     // Open new project DBs from currently mounted devices
     for device in &devices {
@@ -119,17 +100,11 @@ pub fn refresh_open_projects(
         let projects = discover_projects_on_device(&device.mount_point, &device.uuid);
         for project_db in projects {
             let id = project_db.project_id.clone();
-            if !map.contains_key(&id) {
-                map.insert(id, Arc::new(project_db));
+            if !registry.contains(&id) {
+                registry.insert(id, Arc::new(project_db));
             }
         }
     }
-
-    // debug!(
-    //     "refresh_open_projects: {} project(s) open across {} mounted device(s)",
-    //     map.len(),
-    //     mounted_uuids.len()
-    // );
 }
 
 // ============================================================================
@@ -147,17 +122,12 @@ pub fn get_platform() -> &'static str {
 #[tauri::command]
 pub fn scan_connected_devices(state: State<AppState>) -> Vec<DetectedDevice> {
     // debug!("scan_connected_devices called");
-    refresh_open_projects(
-        state.device_scanner.as_ref(),
-        &state.global_db,
-        &state.open_projects,
-        &state.ejecting_devices,
-    );
+    refresh_open_projects(state.device_scanner.as_ref(), &state.global_db, &state.registry);
     let devices = state.device_scanner.scan();
     // debug!("scan_connected_devices returning {} devices", devices.len());
 
     // Hide devices that are mid-eject so the UI drops them immediately.
-    let ejecting = state.ejecting_devices.lock().unwrap();
+    let ejecting = state.registry.ejecting_snapshot();
     devices
         .into_iter()
         .filter(|d| !ejecting.contains(&d.uuid))
@@ -195,24 +165,19 @@ pub fn eject_device(
         .map(|d| d.mount_point);
 
     // 1. Guard against the polling re-opening these DBs mid-eject.
-    state.ejecting_devices.lock().unwrap().insert(device_uuid.clone());
+    state.registry.mark_ejecting(&device_uuid);
 
     // Ensure we always clear the guard, even on early error.
     let clear_guard = || {
-        state.ejecting_devices.lock().unwrap().remove(&device_uuid);
+        state.registry.clear_ejecting(&device_uuid);
     };
 
     // 2. Close all project DBs on this device. Dropping the Arc<ProjectDatabase>
     //    releases its SQLite connection (and the file handle on the volume).
     let closed: Vec<String> = {
-        let mut map = state.open_projects.lock().unwrap();
-        let ids: Vec<String> = map
-            .iter()
-            .filter(|(_, db)| db.device_uuid == device_uuid)
-            .map(|(id, _)| id.clone())
-            .collect();
+        let ids = state.registry.ids_on_device(&device_uuid);
         for id in &ids {
-            map.remove(id);
+            state.registry.remove(id);
         }
         ids
     };
@@ -258,10 +223,7 @@ pub fn get_known_devices(state: State<AppState>) -> Result<Vec<KnownDevice>, Str
 pub fn get_projects_dashboard(state: State<AppState>) -> Result<Vec<ProjectDashboard>, String> {
     debug!("get_projects_dashboard called");
 
-    let project_dbs: Vec<Arc<ProjectDatabase>> = {
-        let map = state.open_projects.lock().unwrap();
-        map.values().cloned().collect()
-    };
+    let project_dbs = state.registry.all_open();
 
     let mut dashboard = Vec::new();
     for project_db in &project_dbs {
@@ -361,10 +323,7 @@ pub fn create_project(state: State<AppState>, project: CreateProject) -> Result<
         .ok_or("Failed to read created project")?;
 
     // Add to open projects map
-    {
-        let mut map = state.open_projects.lock().unwrap();
-        map.insert(project_id, Arc::new(project_db));
-    }
+    state.registry.insert(project_id, Arc::new(project_db));
 
     info!("create_project success: id={}", created.id);
     Ok(created)
@@ -387,11 +346,10 @@ pub fn archive_project(state: State<AppState>, id: String) -> Result<(), String>
 pub fn delete_project(state: State<AppState>, id: String) -> Result<(), String> {
     info!("delete_project called: {}", id);
 
-    let project_db = {
-        let mut map = state.open_projects.lock().unwrap();
-        map.remove(&id)
-    }
-    .ok_or_else(|| format!("Project '{}' not available — device may not be mounted", id))?;
+    let project_db = state
+        .registry
+        .remove(&id)
+        .ok_or_else(|| format!("Project '{}' not available — device may not be mounted", id))?;
 
     let dir = project_db.project_dir.clone();
     // Drop the only remaining handle so the SQLite connection closes before removal.
@@ -423,11 +381,10 @@ fn relocate_project_folder(
     new_dir: &Path,
 ) -> Result<Arc<ProjectDatabase>, String> {
     // Take the project out of the open map so its SQLite connection can be closed.
-    let project_db = {
-        let mut map = state.open_projects.lock().unwrap();
-        map.remove(project_id)
-    }
-    .ok_or_else(|| format!("Project '{}' not available — device may not be mounted", project_id))?;
+    let project_db = state
+        .registry
+        .remove(project_id)
+        .ok_or_else(|| format!("Project '{}' not available — device may not be mounted", project_id))?;
 
     let device_uuid = project_db.device_uuid.clone();
     let mount_point = project_db.mount_point.clone();
@@ -440,7 +397,7 @@ fn relocate_project_folder(
 
     let reinsert_at = |dir: &Path| {
         if let Ok(db) = ProjectDatabase::open(dir.join("project.db"), &device_uuid, mount_point.clone()) {
-            state.open_projects.lock().unwrap().insert(project_id.to_string(), Arc::new(db));
+            state.registry.insert(project_id.to_string(), Arc::new(db));
         }
     };
 
@@ -449,7 +406,7 @@ fn relocate_project_folder(
         let reopened = ProjectDatabase::open(old_dir.join("project.db"), &device_uuid, mount_point.clone())
             .map_err(|e| format!("Failed to reopen project: {}", e))?;
         let arc = Arc::new(reopened);
-        state.open_projects.lock().unwrap().insert(project_id.to_string(), arc.clone());
+        state.registry.insert(project_id.to_string(), arc.clone());
         return Ok(arc);
     }
 
@@ -481,7 +438,7 @@ fn relocate_project_folder(
     }
 
     let arc = Arc::new(reopened);
-    state.open_projects.lock().unwrap().insert(project_id.to_string(), arc.clone());
+    state.registry.insert(project_id.to_string(), arc.clone());
     Ok(arc)
 }
 
@@ -689,14 +646,9 @@ pub fn save_photo_rotation(
     {
         const ROTATION_WRITE_DEBOUNCE_MS: u64 = 600;
 
-        let my_gen = {
-            let mut gens = state.rotation_write_gen.lock().unwrap();
-            let gen = gens.entry(photo_id.clone()).or_insert(0);
-            *gen += 1;
-            *gen
-        };
+        let my_gen = state.registry.bump_rotation_gen(&photo_id);
 
-        let gens = state.rotation_write_gen.clone();
+        let registry = state.registry.clone();
         let project_db_for_thread = project_db.clone();
         let photo_id_for_thread = photo_id.clone();
         let dng_for_thread = dng_full.clone();
@@ -705,12 +657,9 @@ pub fn save_photo_rotation(
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(ROTATION_WRITE_DEBOUNCE_MS));
 
-            {
-                let map = gens.lock().unwrap();
-                if map.get(&photo_id_for_thread).copied() != Some(my_gen) {
-                    debug!("[rotation] orientation write skipped (superseded): {}", photo_id_for_thread);
-                    return;
-                }
+            if registry.rotation_gen(&photo_id_for_thread) != Some(my_gen) {
+                debug!("[rotation] orientation write skipped (superseded): {}", photo_id_for_thread);
+                return;
             }
 
             let rotation = match project_db_for_thread.get_photo(&photo_id_for_thread) {
