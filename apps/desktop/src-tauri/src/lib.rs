@@ -96,6 +96,9 @@ pub fn run() {
     let finder_tags: Arc<dyn application::ports::FinderTagWriter> =
         Arc::new(infrastructure::finder_tags::NoopFinderTags);
 
+    let file_store: Arc<dyn application::ports::FileStore> =
+        Arc::new(infrastructure::fs::StdFileStore);
+
     info!("Scanning for project databases on connected devices...");
     refresh_open_projects(device_scanner.as_ref(), &global_db, &open_projects, &ejecting_devices);
     {
@@ -112,6 +115,7 @@ pub fn run() {
         metadata,
         image_processor,
         finder_tags,
+        file_store,
     };
 
     info!("Starting Tauri application...");

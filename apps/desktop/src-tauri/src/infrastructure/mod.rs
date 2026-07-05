@@ -6,5 +6,7 @@
 pub mod devices;
 pub mod finder_tags;
 pub mod folder;
+pub mod fs;
 pub mod imaging;
 pub mod metadata;
+pub mod persistence;

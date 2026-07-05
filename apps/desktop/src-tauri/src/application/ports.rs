@@ -4,9 +4,28 @@
 //! tests. La selección de la implementación concreta ocurre en el composition
 //! root (`lib.rs`). Se agregan puertos a medida que se cablean (Fase 2+).
 
+use crate::db::models::Photo;
 use crate::devices::DetectedDevice;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+/// Acceso a las fotos de un proyecto (una `ProjectDatabase`). Los casos de uso
+/// dependen de este trait, no de SQLite; en tests se sustituye por un fake.
+/// Nota: por ahora expone el struct `db::models::Photo` como DTO compartido;
+/// moverlo a `domain` es trabajo de una fase posterior.
+pub trait PhotoRepository {
+    fn get(&self, id: &str) -> Result<Option<Photo>, String>;
+    fn update_culled(&self, id: &str, culled: bool, new_dng_path: &str) -> Result<(), String>;
+}
+
+/// Operaciones de sistema de archivos usadas por los casos de uso (mover una
+/// foto entre `_media`/`_culled`, etc.). Se abstrae para poder testear la
+/// orquestación (incluido el rollback) sin tocar el disco real.
+pub trait FileStore: Send + Sync {
+    fn create_dir_all(&self, dir: &Path) -> std::io::Result<()>;
+    fn rename(&self, from: &Path, to: &Path) -> std::io::Result<()>;
+    fn exists(&self, path: &Path) -> bool;
+}
 
 /// Detección y expulsión de dispositivos de almacenamiento extraíbles.
 /// La implementación concreta encapsula el `#[cfg(target_os)]` por plataforma.

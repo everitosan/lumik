@@ -1,4 +1,7 @@
-use crate::application::ports::{DeviceScanner, FinderTagWriter, ImageProcessor, MetadataTool};
+use crate::application::ports::{
+    DeviceScanner, FileStore, FinderTagWriter, ImageProcessor, MetadataTool,
+};
+use crate::application::use_cases::cull_photo::CullPhoto;
 use crate::db::models::*;
 use crate::db::{GlobalDatabase, ProjectDatabase, discover_projects_on_device};
 use crate::devices::DetectedDevice;
@@ -17,7 +20,6 @@ use crate::import::{
     is_video_file,
     FailedFile, ImportLogEntry, ImportPhase, ImportProgress, ImportResult, PipelineWorkspace,
 };
-use crate::domain::paths::cull_destination;
 use crate::domain::photo::{normalize_tags, Rotation, Stars};
 use crate::domain::project::{compare_dashboard, ProjectFolder};
 use chrono::Utc;
@@ -55,6 +57,8 @@ pub struct AppState {
     pub image_processor: Arc<dyn ImageProcessor>,
     /// Escritura de Finder tags (sidecars AppleDouble en desktop, no-op en Android).
     pub finder_tags: Arc<dyn FinderTagWriter>,
+    /// Operaciones de sistema de archivos usadas por los casos de uso.
+    pub file_store: Arc<dyn FileStore>,
 }
 
 impl AppState {
@@ -838,55 +842,21 @@ pub fn save_photo_culled(
     culled: bool,
 ) -> Result<(), String> {
     let project_db = state.project_db(&project_id)?;
-    let photo = project_db
-        .get_photo(&photo_id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Photo {} not found", photo_id))?;
+    let mount = project_db.mount_point.clone();
 
-    if photo.culled == culled {
-        return Ok(());
+    CullPhoto {
+        photos: project_db.as_ref(),
+        files: state.file_store.as_ref(),
+        finder_tags: state.finder_tags.as_ref(),
+        mount_point: &mount,
     }
+    .execute(&photo_id, culled)
+    .map_err(|e| {
+        error!("save_photo_culled error: {}", e);
+        e
+    })?;
 
-    let mount = project_db.mount_point.to_string_lossy().to_string();
-
-    // dng_path always reflects the actual file location. La regla _media↔_culled
-    // (subir dos niveles y recolocar bajo la carpeta destino) vive en
-    // domain::paths::cull_destination.
-    let new_dng_path_str = cull_destination(&photo.dng_path, culled).map_err(|e| e.to_string())?;
-
-    let current_path = Path::new(&mount).join(&photo.dng_path);
-    let target_path = Path::new(&mount).join(&new_dng_path_str);
-
-    // Asegura que exista la carpeta destino (_culled/ o _media/).
-    if let Some(target_dir) = target_path.parent() {
-        let sub = if culled { "_culled" } else { "_media" };
-        std::fs::create_dir_all(target_dir)
-            .map_err(|e| format!("No se pudo crear {}/: {}", sub, e))?;
-    }
-
-    std::fs::rename(&current_path, &target_path)
-        .map_err(|e| format!("Error al mover archivo: {}", e))?;
-
-    // Move XMP sidecar alongside the RAW if it exists
-    let xmp_src = current_path.with_extension("xmp");
-    if xmp_src.exists() {
-        let xmp_dest = target_path.with_extension("xmp");
-        let _ = std::fs::rename(&xmp_src, &xmp_dest);
-    }
-
-    // Move the AppleDouble Finder-tags sidecar (._name) alongside the RAW too, so
-    // the color tags stay attached to the file after culling/un-culling.
-    let _ = state.finder_tags.move_sidecar(&current_path, &target_path);
-
-    project_db
-        .update_photo_culled(&photo_id, culled, &new_dng_path_str)
-        .map_err(|e| {
-            let _ = std::fs::rename(&target_path, &current_path);
-            error!("save_photo_culled DB error: {}", e);
-            e.to_string()
-        })?;
-
-    debug!("save_photo_culled: photo={} culled={} dng_path={}", photo_id, culled, new_dng_path_str);
+    debug!("save_photo_culled: photo={} culled={}", photo_id, culled);
     Ok(())
 }
 
