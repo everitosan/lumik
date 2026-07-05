@@ -402,3 +402,7 @@ Registrar aquí decisiones/desvíos al ejecutar cada fase (fecha + nota breve).
   behavior-preserving pero conviene probar expulsión de disco y CRUD de proyectos.
   Pendientes: `ImportPhotos` (el más grande, para el final con verificación),
   `manage_projects`, `manage_devices`, `media`.
+- **2026-07-05 · Fase 3 · verificación runtime** — El usuario probó tras el
+  `ProjectRegistry`: expulsión de disco y CRUD de proyectos (create/rename/delete)
+  funcionan. Confirma que el rewire del registry preservó el comportamiento del
+  flujo delicado de eject/mount.
