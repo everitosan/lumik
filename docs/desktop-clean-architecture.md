@@ -272,20 +272,24 @@ Base: puertos `PhotoRepository` (impl para `ProjectDatabase`) y `FileStore`
       devuelve el volumen a invalidar en Spotlight al caller) + test.
 - [x] `ProgressReporter` (diferido de Fase 2): `TauriProgressReporter`; el import
       ya no llama `app.emit` directo.
-- [ ] `use_cases/import_photos.rs` (hoy `start_import`) + test del flujo con fakes.
-      **Pendiente** — es el más grande/entrelazado (pipeline fs+exiftool, auto-rename,
-      relocate) y toca la ruta crítica de import ya verificada; conviene extraerlo
-      con cuidado + verificación en ejecución.
-- [ ] `use_cases/manage_projects.rs` (create/rename/delete/archive/relocate).
-- [ ] `use_cases/manage_devices.rs` (scan/eject/refresh).
-- [ ] `use_cases/media.rs` (thumbnail/preview).
+- [x] `use_cases/import_photos.rs` (antes `start_import`) + `ImportPipeline` port
+      (`StdImportPipeline`) para faker el pipeline. `PhotoRepository` gana
+      `create_batch`; `build_photo_inserts` (DTOs) extraído y testeado. El
+      auto-rename (acoplado al registry) queda en el adaptador. **Requiere
+      verificación en ejecución** (ruta crítica). `commands.rs`: 2041 → 1175 líneas.
+- [ ] `use_cases/manage_projects.rs` / `manage_devices.rs` / `media.rs`:
+      **descartados** — tras el registry esos comandos ya son adaptadores delgados
+      sobre dominio+puertos; extraerlos re-tocaría paths verificados con ganancia
+      marginal. La lógica frágil ya está en use cases testeados.
 - [x] `application/registry.rs`: `ProjectRegistry` encapsula `open_projects`/
       `ejecting_devices`/`rotation_write_gen`; `AppState` y `commands.rs` dejan de
       manipular locks inline. Behavior-preserving.
 
 **Gate 3:** cada caso de uso tiene test con puertos falsos; la lógica ya no vive
-en los comandos. **Estado: parcial** — hechos cull/rate/rotate + ProgressReporter
-+ el `ProjectRegistry`; pendientes import, manage_projects, manage_devices, media.
+en los comandos. ✅ **esencialmente logrado** — cull/rate/rotate/**import** en use
+cases con tests de fakes; `ProjectRegistry` + `ProgressReporter`; los comandos
+son adaptadores delgados. `manage_*`/`media` descartados (adaptadores ya delgados).
+Falta la verificación en ejecución del import.
 
 ---
 
