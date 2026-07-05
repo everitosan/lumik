@@ -299,7 +299,7 @@ Falta la verificación en ejecución del import.
       solo con `AppState` + `refresh_open_projects` + composición (2041 → 101 líneas).
 - [ ] `interface/dto.rs`: DTOs de request/response del borde IPC. *(No hecho: los
       DTOs viven en `db::models`/`import`; separar un `dto.rs` es cosmético.)*
-- [ ] Comandos devuelven `Result<T, AppError>`. **Diferido con Fase 5** (contrato frontend).
+- [x] Comandos devuelven `Result<T, AppError>` (`AppResult`) — hecho en Fase 5.
 - [x] `invoke_handler!` sigue funcionando (los comandos se re-exportan con `pub use`).
 
 **Gate 4:** ✅ `commands.rs` deja de ser módulo-Dios; cada comando es un adaptador
@@ -319,13 +319,19 @@ en vez de `interface/`, para minimizar disrupción.)
   - [x] Test de migración: BD con esquema viejo → actual, + idempotencia.
   - Nota: NO se adopta `PRAGMA user_version` (riesgo de adopción sobre BDs reales
     de discos externos sin fixtures; el enfoque idempotente es seguro).
-- [ ] `AppError` con `thiserror` + `impl Serialize`. **Diferido**: convertir todos
-      los comandos de `Result<T, String>` a `AppError` es amplio y **cambia el
-      contrato con el frontend** (hoy TS recibe strings). Requiere coordinar el
-      manejo de errores del frontend; hacerlo con esa coordinación, no al vuelo.
+- [x] `AppError` (`thiserror`) + `AppResult` en `application/error.rs`, con
+      `From<DomainError/DbError/String/io::Error>`. Todos los comandos devuelven
+      `AppResult` y propagan con `?`, eliminando el patrón repetido
+      `.map_err(|e| { error!(...); e.to_string() })` (~30 closures).
+  - **Decisión clave — serializa como STRING, no `{code,message}`:** el frontend
+    hoy muestra los errores con `String(err)`/`err.message` en ~16 sitios y NO
+    consume códigos; un objeto rompería esa visualización sin aportar valor. Así
+    el contrato del frontend queda intacto (cero cambios, cero re-verificación) y
+    el backend gana el tipo canónico. Migrar a `{code,message}` es una mejora de
+    producto a coordinar con el frontend cuando este necesite códigos.
 
-**Gate 5:** una sola ruta de mapeo ✅; migraciones consolidadas y probadas ✅;
-errores tipados serializables — pendiente (coordinación con frontend).
+**Gate 5:** ✅ una sola ruta de mapeo (`photo_from_row`); migraciones consolidadas
+y probadas; error tipado (`AppError`) en la frontera de comandos.
 
 ---
 
@@ -434,3 +440,15 @@ Registrar aquí decisiones/desvíos al ejecutar cada fase (fecha + nota breve).
   `AppError` queda diferido por el contrato con el frontend. Pendientes de mayor
   valor: `ImportPhotos` (con verificación runtime) y el split de `commands.rs`
   (Fase 4).
+- **2026-07-05 · Fases 3/4/5/6 completadas** — `ImportPhotos` + puerto
+  `ImportPipeline` (orquestación testeable con fake), `commands.rs` dividido en
+  `commands/{device,project,photo,settings,import_cmd}.rs` (2041 → 101 líneas),
+  dedup de `Photo`, migraciones consolidadas, y `cargo check` verde en Linux y
+  aarch64-Android. `CLAUDE.md` del desktop actualizado a la arquitectura por capas.
+- **2026-07-05 · AppError** — Al analizar el frontend (~16 sitios usan
+  `String(err)`/`err.message`, ninguno lee códigos), se decidió que `AppError`
+  **serialice como string**: preserva el contrato del frontend exactamente (cero
+  cambios, cero re-verificación) y da el tipo canónico + propagación con `?` en el
+  backend. Todos los comandos → `AppResult`; ~30 closures de log+to_string
+  eliminadas. `{code,message}` queda como mejora de producto para cuando el
+  frontend consuma códigos.
