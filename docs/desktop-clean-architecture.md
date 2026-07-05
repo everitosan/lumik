@@ -262,17 +262,29 @@ sin warnings. `ProgressReporter` se pospone a Fase 3 (no afecta este gate).
 ### Fase 3 — Extraer casos de uso (de más enredado a menos)
 Cada caso de uso orquesta puertos; sin `std::fs`/SQLite directo.
 
-- [ ] `use_cases/cull_photo.rs` + test con fakes.
-- [ ] `use_cases/rotate_photo.rs` (incluye debounce del write) + test.
-- [ ] `use_cases/rate_photo.rs` (normalización + sidecar) + test.
+Base: puertos `PhotoRepository` (impl para `ProjectDatabase`) y `FileStore`
+(`StdFileStore`), inyectados en `AppState`.
+
+- [x] `use_cases/cull_photo.rs` + test con fakes (mover _media↔_culled + **rollback** si falla BD).
+- [x] `use_cases/rotate_photo.rs` (parte sincrónica; el debounce del write queda en
+      el adaptador porque necesita hilos + estado de generación) + test.
+- [x] `use_cases/rate_photo.rs` (valida stars, normaliza tags, sync de sidecar;
+      devuelve el volumen a invalidar en Spotlight al caller) + test.
+- [x] `ProgressReporter` (diferido de Fase 2): `TauriProgressReporter`; el import
+      ya no llama `app.emit` directo.
 - [ ] `use_cases/import_photos.rs` (hoy `start_import`) + test del flujo con fakes.
+      **Pendiente** — es el más grande/entrelazado (pipeline fs+exiftool, auto-rename,
+      relocate) y toca la ruta crítica de import ya verificada; conviene extraerlo
+      con cuidado + verificación en ejecución.
 - [ ] `use_cases/manage_projects.rs` (create/rename/delete/archive/relocate).
 - [ ] `use_cases/manage_devices.rs` (scan/eject/refresh).
 - [ ] `use_cases/media.rs` (thumbnail/preview).
 - [ ] `application/registry.rs`: encapsular `open_projects`/`ejecting_devices`/`rotation_write_gen`.
 
 **Gate 3:** cada caso de uso tiene test con puertos falsos; la lógica ya no vive
-en los comandos.
+en los comandos. **Estado: parcial** — hechos los 3 use cases de edición de foto
+(cull/rate/rotate) con tests + ProgressReporter; pendientes import, manage_*,
+media y el registry.
 
 ---
 
