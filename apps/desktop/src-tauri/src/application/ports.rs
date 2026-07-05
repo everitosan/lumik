@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 /// moverlo a `domain` es trabajo de una fase posterior.
 pub trait PhotoRepository {
     fn get(&self, id: &str) -> Result<Option<Photo>, String>;
+    fn update_rotation(&self, id: &str, rotation: i32) -> Result<(), String>;
     fn update_rating(
         &self,
         id: &str,

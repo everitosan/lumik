@@ -116,6 +116,9 @@ mod tests {
         fn get(&self, _id: &str) -> Result<Option<Photo>, String> {
             Ok(Some(self.photo.clone()))
         }
+        fn update_rotation(&self, _id: &str, _rotation: i32) -> Result<(), String> {
+            unreachable!("CullPhoto no rota")
+        }
         fn update_rating(
             &self,
             _id: &str,

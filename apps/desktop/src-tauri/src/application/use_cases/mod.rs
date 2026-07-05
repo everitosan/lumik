@@ -3,3 +3,4 @@
 
 pub mod cull_photo;
 pub mod rate_photo;
+pub mod rotate_photo;

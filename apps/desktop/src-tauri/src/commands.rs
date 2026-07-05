@@ -3,6 +3,7 @@ use crate::application::ports::{
 };
 use crate::application::use_cases::cull_photo::CullPhoto;
 use crate::application::use_cases::rate_photo::RatePhoto;
+use crate::application::use_cases::rotate_photo::RotatePhoto;
 use crate::db::models::*;
 use crate::db::{GlobalDatabase, ProjectDatabase, discover_projects_on_device};
 use crate::devices::DetectedDevice;
@@ -21,7 +22,6 @@ use crate::import::{
     is_video_file,
     FailedFile, ImportLogEntry, ImportPhase, ImportProgress, ImportResult, PipelineWorkspace,
 };
-use crate::domain::photo::Rotation;
 use crate::domain::project::{compare_dashboard, ProjectFolder};
 use chrono::Utc;
 use log::{debug, error, info, warn};
@@ -666,38 +666,19 @@ pub fn save_photo_rotation(
     project_id: String,
     rotation: i32,
 ) -> Result<(), String> {
-    let rotation_vo = Rotation::new(rotation).map_err(|e| e.to_string())?;
-
     let t_total = std::time::Instant::now();
 
-    let t = std::time::Instant::now();
     let project_db = state.project_db(&project_id)?;
-    let photo = project_db
-        .get_photo(&photo_id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Photo {} not found", photo_id))?;
-    info!("[rotation] get_photo: {}ms", t.elapsed().as_millis());
 
-    // Delta from DB value — no file read needed. El valor en BD siempre es un
-    // múltiplo recto (lo escribe este mismo comando o el import); si por algún
-    // motivo no lo fuera, se trata como 0° (comportamiento previo tolerante).
-    let old_rotation = Rotation::new(photo.rotation).unwrap_or(Rotation::NONE);
-    let delta = rotation_vo.delta_from(old_rotation).degrees();
-
-    let t = std::time::Instant::now();
-    project_db
-        .update_photo_rotation(&photo_id, rotation)
-        .map_err(|e| e.to_string())?;
-    info!("[rotation] update DB: {}ms", t.elapsed().as_millis());
-
-    let mount = project_db.mount_point.to_string_lossy().to_string();
-    let dng_full = Path::new(&mount).join(&photo.dng_path);
-
-    if delta != 0 {
-        let t = std::time::Instant::now();
-        state.image_processor.rotate_thumbnail(&project_db.project_dir, &photo_id, delta);
-        info!("[rotation] rotate_thumbnail: {}ms", t.elapsed().as_millis());
+    // Parte sincrónica (validar, persistir rotación, rotar thumbnail) en el use case.
+    let dng_rel = RotatePhoto {
+        photos: project_db.as_ref(),
+        images: state.image_processor.as_ref(),
+        project_dir: &project_db.project_dir,
     }
+    .execute(&photo_id, rotation)?;
+
+    let dng_full = project_db.mount_point.join(&dng_rel);
 
     // Write orientation to the file after a short debounce (non-blocking).
     // Rapid successive rotations bump this photo's generation counter; only the
