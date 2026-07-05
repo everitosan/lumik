@@ -20,6 +20,9 @@ use crate::import::{
     is_video_file,
     FailedFile, ImportLogEntry, ImportPhase, ImportProgress, ImportResult, PipelineWorkspace,
 };
+use crate::domain::paths::cull_destination;
+use crate::domain::photo::{normalize_tags, Rotation, Stars};
+use crate::domain::project::{compare_dashboard, ProjectFolder};
 use chrono::Utc;
 use log::{debug, error, info, warn};
 use serde::Deserialize;
@@ -324,14 +327,12 @@ pub fn get_projects_dashboard(state: State<AppState>) -> Result<Vec<ProjectDashb
         }
     }
 
-    // Sort: session_date DESC NULLS LAST, then created_at DESC
+    // Sort: session_date DESC NULLS LAST, then created_at DESC (regla en domain::project)
     dashboard.sort_by(|a, b| {
-        match (&b.session_date, &a.session_date) {
-            (Some(bd), Some(ad)) => bd.cmp(ad).then(b.created_at.cmp(&a.created_at)),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => b.created_at.cmp(&a.created_at),
-        }
+        compare_dashboard(
+            (a.session_date.as_deref(), &a.created_at),
+            (b.session_date.as_deref(), &b.created_at),
+        )
     });
 
     debug!("get_projects_dashboard returning {} projects", dashboard.len());
@@ -360,28 +361,23 @@ pub fn create_project(state: State<AppState>, project: CreateProject) -> Result<
         .ok_or_else(|| format!("Device '{}' is not mounted", project.device_uuid))?;
 
     // Build date-based path: {mount}/lumik/{year}/{month}/{day}_{slug}/project.db
-    // Falls back to today (UTC) if no session_date is set.
-    let date_str = project.session_date
+    // Falls back to today (UTC) if no valid session_date is set.
+    let (year, month, day) = project
+        .session_date
         .as_deref()
-        .filter(|s| s.len() >= 10)
-        .map(|s| s[..10].to_string())
-        .unwrap_or_else(|| Utc::now().format("%Y-%m-%d").to_string());
+        .and_then(ProjectFolder::date_parts)
+        .unwrap_or_else(|| {
+            let today = Utc::now().format("%Y-%m-%d").to_string();
+            ProjectFolder::date_parts(&today).expect("today is a valid date")
+        });
 
-    let parts: Vec<&str> = date_str.splitn(3, '-').collect();
-    let (year, month, day) = if parts.len() == 3 {
-        (parts[0], parts[1], parts[2])
-    } else {
-        ("0000", "00", "00")
-    };
-
-    let slug = project.name.replace('/', "-").trim().to_string();
-    let folder_name = format!("{}_{}", day, slug);
-
-    let project_dir = Path::new(&device.mount_point)
-        .join("lumik")
-        .join(year)
-        .join(month)
-        .join(&folder_name);
+    let project_dir = ProjectFolder::path(
+        Path::new(&device.mount_point),
+        &year,
+        &month,
+        &day,
+        &project.name,
+    );
     let db_path = project_dir.join("project.db");
 
     let project_id = uuid::Uuid::new_v4().to_string();
@@ -562,10 +558,9 @@ pub fn rename_project(state: State<AppState>, id: String, new_name: String) -> R
         .unwrap_or_default()
         .to_string();
     let day_prefix = old_folder.split_once('_').map(|(d, _)| d.to_string());
-    let new_slug = new_name.replace('/', "-").trim().to_string();
     let new_folder = match &day_prefix {
-        Some(day) => format!("{}_{}", day, new_slug),
-        None => new_slug.clone(),
+        Some(day) => ProjectFolder::folder_name(day, &new_name),
+        None => ProjectFolder::slug(&new_name),
     };
     let new_dir = old_dir.with_file_name(&new_folder);
 
@@ -914,12 +909,7 @@ fn read_exif_rotation(dng_full_path: &Path) -> i32 {
             .nth(1)
             .and_then(|s| s.trim().parse().ok())
             .unwrap_or(1);
-        match orientation {
-            6 => 90,
-            3 => 180,
-            8 => 270,
-            _ => 0,
-        }
+        Rotation::from_exif_orientation(orientation).degrees()
     }
 }
 
@@ -1062,9 +1052,7 @@ pub fn save_photo_rotation(
     project_id: String,
     rotation: i32,
 ) -> Result<(), String> {
-    if ![0, 90, 180, 270].contains(&rotation) {
-        return Err(format!("Rotación inválida: {}", rotation));
-    }
+    let rotation_vo = Rotation::new(rotation).map_err(|e| e.to_string())?;
 
     let t_total = std::time::Instant::now();
 
@@ -1076,9 +1064,11 @@ pub fn save_photo_rotation(
         .ok_or_else(|| format!("Photo {} not found", photo_id))?;
     info!("[rotation] get_photo: {}ms", t.elapsed().as_millis());
 
-    // Delta from DB value — no file read needed
-    let old_rotation = photo.rotation;
-    let delta = (rotation - old_rotation + 360) % 360;
+    // Delta from DB value — no file read needed. El valor en BD siempre es un
+    // múltiplo recto (lo escribe este mismo comando o el import); si por algún
+    // motivo no lo fuera, se trata como 0° (comportamiento previo tolerante).
+    let old_rotation = Rotation::new(photo.rotation).unwrap_or(Rotation::NONE);
+    let delta = rotation_vo.delta_from(old_rotation).degrees();
 
     let t = std::time::Instant::now();
     project_db
@@ -1132,7 +1122,9 @@ pub fn save_photo_rotation(
                 Ok(Some(p)) => p.rotation,
                 _ => return,
             };
-            let orientation = match rotation { 90 => 6, 180 => 3, 270 => 8, _ => 1 };
+            let orientation = Rotation::new(rotation)
+                .unwrap_or(Rotation::NONE)
+                .to_exif_orientation();
 
             let t = std::time::Instant::now();
             match exiftool::run_text(&[
@@ -1165,23 +1157,6 @@ pub fn save_photo_rotation(
     Ok(())
 }
 
-/// Normaliza una cadena de tags separada por comas: minúsculas, sin espacios
-/// sobrantes, sin duplicados y preservando el orden. Devuelve `None` si no
-/// queda ningún tag (para guardar NULL en BD).
-fn normalize_tags(raw: &str) -> Option<String> {
-    let mut seen = std::collections::HashSet::new();
-    let normalized: Vec<String> = raw
-        .split(',')
-        .map(|t| t.trim().to_lowercase())
-        .filter(|t| !t.is_empty() && seen.insert(t.clone()))
-        .collect();
-    if normalized.is_empty() {
-        None
-    } else {
-        Some(normalized.join(","))
-    }
-}
-
 #[tauri::command]
 pub fn save_photo_rating(
     state: State<AppState>,
@@ -1191,9 +1166,7 @@ pub fn save_photo_rating(
     color_label: Option<String>,
     tags: Option<String>,
 ) -> Result<(), String> {
-    if !(0..=5).contains(&stars) {
-        return Err(format!("Stars inválidas: {}", stars));
-    }
+    let stars = Stars::new(stars).map_err(|e| e.to_string())?.value();
     // Normalizar tags: minúsculas + trim + dedupe, para evitar duplicados por
     // diferencias de mayúsculas/espacios. Se persiste ya normalizado en BD.
     let tags = tags.as_deref().and_then(normalize_tags);
@@ -1298,29 +1271,20 @@ pub fn save_photo_culled(
 
     let mount = project_db.mount_point.to_string_lossy().to_string();
 
-    // dng_path always reflects the actual file location, so current_path is direct.
-    let dng_rel = Path::new(&photo.dng_path);
-    let filename = dng_rel.file_name().ok_or("dng_path sin nombre de archivo")?;
-    let parent = dng_rel.parent().ok_or("dng_path sin directorio padre")?;
+    // dng_path always reflects the actual file location. La regla _media↔_culled
+    // (subir dos niveles y recolocar bajo la carpeta destino) vive en
+    // domain::paths::cull_destination.
+    let new_dng_path_str = cull_destination(&photo.dng_path, culled).map_err(|e| e.to_string())?;
 
-    // Files live in _media/ or _culled/, both siblings under the project dir.
-    // The project dir is always the grandparent of the file.
-    let project_dir_rel = parent.parent()
-        .ok_or("No se puede determinar el directorio del proyecto")?;
+    let current_path = Path::new(&mount).join(&photo.dng_path);
+    let target_path = Path::new(&mount).join(&new_dng_path_str);
 
-    let current_path = Path::new(&mount).join(dng_rel);
-
-    let (target_path, new_dng_path) = if culled {
-        let culled_dir = Path::new(&mount).join(project_dir_rel).join("_culled");
-        std::fs::create_dir_all(&culled_dir)
-            .map_err(|e| format!("No se pudo crear _culled/: {}", e))?;
-        (culled_dir.join(filename), project_dir_rel.join("_culled").join(filename))
-    } else {
-        let media_dir = Path::new(&mount).join(project_dir_rel).join("_media");
-        std::fs::create_dir_all(&media_dir)
-            .map_err(|e| format!("No se pudo crear _media/: {}", e))?;
-        (media_dir.join(filename), project_dir_rel.join("_media").join(filename))
-    };
+    // Asegura que exista la carpeta destino (_culled/ o _media/).
+    if let Some(target_dir) = target_path.parent() {
+        let sub = if culled { "_culled" } else { "_media" };
+        std::fs::create_dir_all(target_dir)
+            .map_err(|e| format!("No se pudo crear {}/: {}", sub, e))?;
+    }
 
     std::fs::rename(&current_path, &target_path)
         .map_err(|e| format!("Error al mover archivo: {}", e))?;
@@ -1335,8 +1299,6 @@ pub fn save_photo_culled(
     // Move the AppleDouble Finder-tags sidecar (._name) alongside the RAW too, so
     // the color tags stay attached to the file after culling/un-culling.
     let _ = crate::apple_tags::move_sidecar(&current_path, &target_path);
-
-    let new_dng_path_str = path_to_slash(&new_dng_path);
 
     project_db
         .update_photo_culled(&photo_id, culled, &new_dng_path_str)
@@ -1776,15 +1738,15 @@ pub async fn start_import(
             let project = project_db.get_project().ok().flatten()?;
             if project.session_date.is_some() { return None; }
             let oldest = project_db.get_oldest_capture_date().ok().flatten()?;
-            let date_str = oldest.get(..10).unwrap_or(&oldest).replace(':', "-");
-            let parts: Vec<&str> = date_str.splitn(3, '-').collect();
-            if parts.len() != 3 { return None; }
-            let slug = request.project_name.replace('/', "-").trim().to_string();
-            let new_dir = project_db.mount_point
-                .join("lumik")
-                .join(parts[0])
-                .join(parts[1])
-                .join(format!("{}_{}", parts[2], slug));
+            let (year, month, day) = ProjectFolder::date_parts(&oldest)?;
+            let new_dir = ProjectFolder::path(
+                &project_db.mount_point,
+                &year,
+                &month,
+                &day,
+                &request.project_name,
+            );
+            let date_str = format!("{}-{}-{}", year, month, day);
             Some((new_dir, date_str))
         })();
 
@@ -1937,7 +1899,7 @@ fn extract_exif_metadata_batch(paths: &[PathBuf]) -> HashMap<PathBuf, FileMetada
             // exiftool normalizes "IFD0:Orientation" → "orientation" in the CSV header
             let rotation = get("orientation")
                 .and_then(|s| s.parse::<i32>().ok())
-                .map(|o| match o { 6 => 90, 3 => 180, 8 => 270, _ => 0 })
+                .map(|o| Rotation::from_exif_orientation(o).degrees())
                 .unwrap_or(0);
 
             let meta = FileMetadata {

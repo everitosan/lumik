@@ -1,6 +1,7 @@
 mod apple_tags;
 mod commands;
 mod db;
+mod domain;
 mod device_watch;
 mod devices;
 #[cfg(not(target_os = "android"))]
