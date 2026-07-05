@@ -4,6 +4,16 @@
 //! Los `dng_path` se guardan siempre con separador `/` (ver `path_to_slash`).
 
 use super::error::DomainError;
+use std::path::Path;
+
+/// Serializa un `Path` a string con separador `/`, para que `dng_path` en la BD
+/// sea portable entre Linux, macOS y Windows.
+pub fn path_to_slash(path: &Path) -> String {
+    path.components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join("/")
+}
 
 /// Calcula el `dng_path` relativo de destino al cullear (`culled = true`) o
 /// descullear (`culled = false`) una foto, a partir de su ruta relativa actual.

@@ -8,6 +8,7 @@ pub mod finder_tags;
 pub mod folder;
 pub mod fs;
 pub mod imaging;
+pub mod import_pipeline;
 pub mod metadata;
 pub mod persistence;
 pub mod progress;

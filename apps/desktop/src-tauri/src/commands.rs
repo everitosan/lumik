@@ -5,25 +5,16 @@ use crate::application::registry::ProjectRegistry;
 use crate::application::use_cases::cull_photo::CullPhoto;
 use crate::application::use_cases::rate_photo::RatePhoto;
 use crate::application::use_cases::rotate_photo::RotatePhoto;
+use crate::application::use_cases::import_photos::{
+    cache_thumbnails_parallel, ImportParams, ImportPhotos,
+};
 use crate::db::models::*;
 use crate::db::{GlobalDatabase, ProjectDatabase, discover_projects_on_device};
 use crate::devices::DetectedDevice;
-
-/// Serialize a Path to a string with forward slashes so dng_path in the DB
-/// is always portable across Linux, macOS and Windows.
-fn path_to_slash(path: &std::path::Path) -> String {
-    path.components()
-        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-        .collect::<Vec<_>>()
-        .join("/")
-}
-use crate::import::{
-    pipeline_passthrough,
-    pipeline_metadata, pipeline_move_to_dest, pipeline_copy_videos,
-    is_video_file,
-    FailedFile, ImportPhase, ImportProgress, ImportResult, PipelineWorkspace,
-};
+use crate::domain::paths::path_to_slash;
 use crate::domain::project::{compare_dashboard, ProjectFolder};
+use crate::import::{ImportPhase, ImportProgress, ImportResult};
+use crate::infrastructure::import_pipeline::{is_video_file, StdImportPipeline};
 use chrono::Utc;
 use log::{debug, error, info, warn};
 use serde::Deserialize;
@@ -1031,7 +1022,7 @@ pub async fn start_import(
         .map_err(|e| e.to_string())?
         .ok_or("No active photographer configured")?;
 
-    let metadata = if settings.embed_metadata_on_import {
+    let photographer_metadata = if settings.embed_metadata_on_import {
         state
             .global_db
             .get_photographer_metadata(&photographer.id)
@@ -1046,137 +1037,43 @@ pub async fn start_import(
         .flatten()
         .and_then(|p| {
             let desc = p.description.filter(|d| !d.is_empty())?;
-            let year = p.session_date
+            let year = p
+                .session_date
                 .or(Some(p.created_at))
                 .and_then(|d| d.get(..4).map(|y| y.to_string()))
                 .unwrap_or_default();
             Some(format!("{}@{}", desc, year))
         });
 
-    // Photos go into _media/ inside the project directory
-    let dest_folder = project_db.project_dir.join("_media");
-    let video_dest_folder = project_db.project_dir.join("_video");
-
-    let all_paths: Vec<std::path::PathBuf> = request
-        .source_files
-        .iter()
-        .map(|s| std::path::PathBuf::from(s))
-        .collect();
-
-    // Partition into photos and videos
+    // Partition source files into photos and videos.
+    let all_paths: Vec<PathBuf> = request.source_files.iter().map(PathBuf::from).collect();
     let (video_paths, photo_paths): (Vec<PathBuf>, Vec<PathBuf>) =
         all_paths.into_iter().partition(|p| is_video_file(p));
 
-    // === VIDEO: copy directly to _video/ (no conversion, no metadata) ===
-    let videos_copied = if !video_paths.is_empty() {
-        info!("Copying {} video files to _video/", video_paths.len());
-        pipeline_copy_videos(&video_paths, &video_dest_folder)
-            .map_err(|e| format!("Failed to copy videos: {}", e))?
-    } else {
-        0
-    };
+    // Caso de uso: videos + pipeline de fotos + registro en BD + miniaturas.
+    let outcome = ImportPhotos {
+        photos: project_db.as_ref(),
+        metadata: state.metadata.as_ref(),
+        images: state.image_processor.as_ref(),
+        pipeline: &StdImportPipeline,
+        reporter: &reporter,
+    }
+    .execute(&ImportParams {
+        session_id: request.session_id.clone(),
+        photo_paths,
+        video_paths,
+        project_id: request.project_id.clone(),
+        project_name: request.project_name.clone(),
+        device_uuid: request.device_uuid.clone(),
+        mount_point: PathBuf::from(&request.mount_point),
+        dest_folder: project_db.project_dir.join("_media"),
+        video_dest_folder: project_db.project_dir.join("_video"),
+        metadata: photographer_metadata,
+        image_description,
+        rename_on_import: settings.rename_on_import,
+    })?;
 
-    // === PHOTO PIPELINE (skip entirely if no photo files selected) ===
-    let (successful, failed_files) = if photo_paths.is_empty() {
-        info!("No photo files selected, skipping photo pipeline");
-        (0usize, Vec::<FailedFile>::new())
-    } else {
-        // === PHASE 1: Copy files ===
-        emit_progress(&reporter, &request.session_id, 0, 3, "Copiando archivos", ImportPhase::Reading, None);
-
-        let workspace = PipelineWorkspace::create(&request.project_name)
-            .map_err(|e| format!("Failed to create workspace: {}", e))?;
-        emit_log(&reporter, &request.session_id, &format!("Workspace creado: {}", workspace.temp_dir.display()));
-
-        let copied = pipeline_passthrough(&photo_paths, &workspace)
-            .map_err(|e| format!("Failed to copy files: {}", e))?;
-        info!("Copied {} files", copied);
-        emit_log(&reporter, &request.session_id, &format!("{} archivos copiados al workspace", copied));
-
-        // === PHASE 2: Writing metadata ===
-        emit_progress(&reporter, &request.session_id, 1, 3, "Agregando metadatos", ImportPhase::Writing, None);
-
-        emit_log(&reporter, &request.session_id, "Procesando metadatos XMP y nombres de archivo...");
-        pipeline_metadata(&workspace, &request.project_name, &metadata, image_description.as_deref(), settings.rename_on_import)
-            .map_err(|e| format!("Metadata failed: {}", e))?;
-        emit_log(&reporter, &request.session_id, "Metadatos aplicados");
-
-        emit_log(&reporter, &request.session_id, "Moviendo archivos al disco de destino...");
-        let dng_files = pipeline_move_to_dest(&workspace, &dest_folder)
-            .map_err(|e| format!("Move failed: {}", e))?;
-        emit_log(&reporter, &request.session_id, &format!("{} archivos movidos a _media/", dng_files.len()));
-
-        workspace.cleanup();
-
-        // === PHASE 3: Saving (batch EXIF + single-transaction DB + parallel thumbnails) ===
-        emit_progress(&reporter, &request.session_id, 2, 3, "Registrando", ImportPhase::Saving, None);
-
-        let exif_map = state.metadata.extract_batch(&dng_files);
-
-        let mut inserts: Vec<(PathBuf, CreatePhoto)> = Vec::new();
-        for dng_path in dng_files.iter() {
-            let file_name = match dng_path.file_name().and_then(|n| n.to_str()) {
-                Some(n) => n.to_string(),
-                None => continue,
-            };
-
-            let file_size = std::fs::metadata(dng_path).map(|m| m.len() as i64).ok();
-            let meta = exif_map.get(dng_path).cloned().unwrap_or_default();
-            let relative_path = path_to_slash(
-                &dest_folder
-                    .strip_prefix(&request.mount_point)
-                    .unwrap_or(&dest_folder)
-                    .join(&file_name),
-            );
-
-            let original_format = dng_path.extension().and_then(|e| e.to_str()).map(|e| e.to_uppercase());
-
-            inserts.push((dng_path.clone(), CreatePhoto {
-                project_id: request.project_id.clone(),
-                dng_path: relative_path,
-                device_uuid: request.device_uuid.clone(),
-                original_camera: meta.camera,
-                original_format,
-                capture_date: meta.capture_date,
-                width: meta.width,
-                height: meta.height,
-                file_size_bytes: file_size,
-                iso: meta.iso,
-                aperture: meta.aperture,
-                shutter_speed: meta.shutter_speed,
-                exposure_compensation: meta.exposure_compensation,
-                focal_length: meta.focal_length,
-                lens_model: meta.lens_model,
-                rotation: meta.rotation,
-            }));
-        }
-
-        let create_dtos: Vec<CreatePhoto> = inserts.iter().map(|(_, cp)| cp.clone()).collect();
-        match project_db.create_photos_batch(&create_dtos) {
-            Ok(photos) => {
-                emit_log(&reporter, &request.session_id, &format!("{} fotos registradas en BD", photos.len()));
-                let thumb_pairs: Vec<(PathBuf, String)> = inserts.iter()
-                    .zip(photos.iter())
-                    .map(|((path, _), photo)| (path.clone(), photo.id.clone()))
-                    .collect();
-                emit_log(&reporter, &request.session_id, &format!("Generando {} miniaturas...", thumb_pairs.len()));
-                cache_thumbnails_parallel(
-                    state.image_processor.as_ref(),
-                    &thumb_pairs,
-                    Some((&reporter as &dyn ProgressReporter, request.session_id.as_str())),
-                );
-                (photos.len(), Vec::new())
-            }
-            Err(e) => {
-                let all_failed = inserts.iter().map(|(path, _)| FailedFile {
-                    name: path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string(),
-                    path: path.to_string_lossy().to_string(),
-                    error: format!("Database error: {}", e),
-                }).collect::<Vec<_>>();
-                (0, all_failed)
-            }
-        }
-    };
+    let successful = outcome.successful;
 
     // If session_date was not provided, infer it from the oldest imported photo,
     // rename the project folder to match, and update the DB field.
@@ -1234,9 +1131,9 @@ pub async fn start_import(
         session_id: request.session_id.clone(),
         total_files,
         successful,
-        failed: failed_files.len(),
-        failed_files,
-        videos_copied,
+        failed: outcome.failed_files.len(),
+        failed_files: outcome.failed_files,
+        videos_copied: outcome.videos_copied,
     };
 
     info!(
@@ -1250,34 +1147,6 @@ pub async fn start_import(
         if result.failed > 0 { format!(" · {} errores", result.failed) } else { String::new() },
     ));
     Ok(result)
-}
-
-/// Extract thumbnails for multiple photos in parallel, bounded by CPU count (max 8).
-/// Delega la generación en el puerto `ImageProcessor`; emite un log por miniatura
-/// recién creada (usando la rotación que reporta el puerto).
-fn cache_thumbnails_parallel(
-    image_processor: &dyn ImageProcessor,
-    pairs: &[(PathBuf, String)],
-    log_ctx: Option<(&dyn ProgressReporter, &str)>,
-) {
-    let concurrency = std::thread::available_parallelism()
-        .map(|n| n.get().min(8))
-        .unwrap_or(4);
-
-    for chunk in pairs.chunks(concurrency) {
-        std::thread::scope(|s| {
-            for (path, id) in chunk {
-                s.spawn(move || {
-                    if let Some(rotation) = image_processor.cache_thumbnail(path, id) {
-                        if let Some((reporter, session_id)) = log_ctx {
-                            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or(id);
-                            reporter.log(session_id, &format!("Miniatura: {} (rot {}°)", file_name, rotation));
-                        }
-                    }
-                });
-            }
-        });
-    }
 }
 
 /// Adaptadores delgados sobre el puerto `ProgressReporter` (el impl real emite

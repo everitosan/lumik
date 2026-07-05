@@ -138,6 +138,12 @@ mod tests {
                 Ok(())
             }
         }
+        fn create_batch(
+            &self,
+            _photos: &[crate::db::models::CreatePhoto],
+        ) -> Result<Vec<Photo>, String> {
+            unreachable!("CullPhoto no crea fotos")
+        }
     }
 
     #[derive(Default)]

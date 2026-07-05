@@ -135,6 +135,12 @@ mod tests {
         fn update_culled(&self, _id: &str, _culled: bool, _p: &str) -> Result<(), String> {
             unreachable!("RatePhoto no cambia culled")
         }
+        fn create_batch(
+            &self,
+            _photos: &[crate::db::models::CreatePhoto],
+        ) -> Result<Vec<Photo>, String> {
+            unreachable!("RatePhoto no crea fotos")
+        }
     }
 
     struct FakeFinderTags {

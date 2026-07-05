@@ -105,6 +105,12 @@ mod tests {
         fn update_culled(&self, _id: &str, _c: bool, _p: &str) -> Result<(), String> {
             unreachable!("RotatePhoto no cambia culled")
         }
+        fn create_batch(
+            &self,
+            _photos: &[crate::db::models::CreatePhoto],
+        ) -> Result<Vec<Photo>, String> {
+            unreachable!("RotatePhoto no crea fotos")
+        }
     }
 
     #[derive(Default)]

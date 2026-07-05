@@ -4,7 +4,7 @@
 //! tests. La selección de la implementación concreta ocurre en el composition
 //! root (`lib.rs`). Se agregan puertos a medida que se cablean (Fase 2+).
 
-use crate::db::models::Photo;
+use crate::db::models::{CreatePhoto, Photo, PhotographerMetadata};
 use crate::devices::DetectedDevice;
 use crate::import::ImportProgress;
 use std::collections::HashMap;
@@ -34,6 +34,36 @@ pub trait PhotoRepository {
         tags: Option<&str>,
     ) -> Result<(), String>;
     fn update_culled(&self, id: &str, culled: bool, new_dng_path: &str) -> Result<(), String>;
+    /// Inserta un lote de fotos en una sola transacción; devuelve las creadas.
+    fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String>;
+}
+
+/// Parámetros para procesar fotos a través del pipeline de importación.
+pub struct PipelinePhotos<'a> {
+    pub photos: &'a [PathBuf],
+    pub project_name: &'a str,
+    pub metadata: &'a Option<PhotographerMetadata>,
+    pub image_description: Option<&'a str>,
+    pub rename: bool,
+    /// Carpeta destino final (`{project_dir}/_media`).
+    pub dest_folder: &'a Path,
+    pub session_id: &'a str,
+}
+
+/// Pipeline de importación (copia a workspace, embebe metadata/renombra, mueve a
+/// destino, copia videos). Se abstrae para que el caso de uso `ImportPhotos` sea
+/// testeable con un doble, sin tocar exiftool/fs reales.
+pub trait ImportPipeline: Send + Sync {
+    /// Procesa las fotos y devuelve las rutas finales de los archivos movidos
+    /// (sin sidecars XMP). Emite progreso/log de las fases copiar/metadata/mover.
+    fn process_photos(
+        &self,
+        req: PipelinePhotos,
+        reporter: &dyn ProgressReporter,
+    ) -> Result<Vec<PathBuf>, String>;
+
+    /// Copia videos directamente a `dest` (sin conversión ni metadata).
+    fn copy_videos(&self, videos: &[PathBuf], dest: &Path) -> Result<usize, String>;
 }
 
 /// Operaciones de sistema de archivos usadas por los casos de uso (mover una
