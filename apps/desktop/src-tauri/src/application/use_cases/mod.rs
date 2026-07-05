@@ -2,3 +2,4 @@
 //! Sin acceso directo a SQLite/exiftool/fs; testeables con dobles de los puertos.
 
 pub mod cull_photo;
+pub mod rate_photo;

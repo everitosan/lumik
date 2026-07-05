@@ -2,6 +2,7 @@ use crate::application::ports::{
     DeviceScanner, FileStore, FinderTagWriter, ImageProcessor, MetadataTool,
 };
 use crate::application::use_cases::cull_photo::CullPhoto;
+use crate::application::use_cases::rate_photo::RatePhoto;
 use crate::db::models::*;
 use crate::db::{GlobalDatabase, ProjectDatabase, discover_projects_on_device};
 use crate::devices::DetectedDevice;
@@ -20,7 +21,7 @@ use crate::import::{
     is_video_file,
     FailedFile, ImportLogEntry, ImportPhase, ImportProgress, ImportResult, PipelineWorkspace,
 };
-use crate::domain::photo::{normalize_tags, Rotation, Stars};
+use crate::domain::photo::Rotation;
 use crate::domain::project::{compare_dashboard, ProjectFolder};
 use chrono::Utc;
 use log::{debug, error, info, warn};
@@ -757,73 +758,33 @@ pub fn save_photo_rating(
     color_label: Option<String>,
     tags: Option<String>,
 ) -> Result<(), String> {
-    let stars = Stars::new(stars).map_err(|e| e.to_string())?.value();
-    // Normalizar tags: minúsculas + trim + dedupe, para evitar duplicados por
-    // diferencias de mayúsculas/espacios. Se persiste ya normalizado en BD.
-    let tags = tags.as_deref().and_then(normalize_tags);
     let project_db = state.project_db(&project_id)?;
-    project_db
-        .update_photo_rating(&photo_id, stars, color_label.as_deref(), tags.as_deref())
-        .map_err(|e| {
-            error!("save_photo_rating error: {}", e);
-            e.to_string()
-        })?;
+    let mount = project_db.mount_point.clone();
 
-    // Sincronizar los color labels con Finder tags (sidecar AppleDouble) para que se
-    // vean al conectar el disco a un iPad/Mac. Best-effort: la BD es la fuente de
-    // verdad, así que un fallo aquí no debe romper el guardado del rating. En Android
-    // el puerto es no-op.
-    sync_color_sidecar(&state, &project_db, &photo_id, color_label.as_deref());
-
-    Ok(())
-}
-
-/// Escribe o borra el sidecar de Finder tags para el DNG (y el JPG, si existe) de
-/// una foto, según su `color_label`, vía el puerto `FinderTagWriter`. Respeta el
-/// ajuste `finder_tags_sidecar` y nunca falla: solo registra warnings.
-fn sync_color_sidecar(
-    state: &State<AppState>,
-    project_db: &ProjectDatabase,
-    photo_id: &str,
-    color_label: Option<&str>,
-) {
-    match state.global_db.get_app_settings() {
-        Ok(s) if !s.finder_tags_sidecar => return,
-        Ok(_) => {}
+    // El ajuste finder_tags_sidecar decide si se tocan los sidecars.
+    let finder_tags_enabled = match state.global_db.get_app_settings() {
+        Ok(s) => s.finder_tags_sidecar,
         Err(e) => {
             warn!("finder tags: no se pudieron leer ajustes: {}", e);
-            return;
-        }
-    }
-
-    let photo = match project_db.get_photo(photo_id) {
-        Ok(Some(p)) => p,
-        Ok(None) => return,
-        Err(e) => {
-            warn!("finder tags: get_photo falló: {}", e);
-            return;
+            false
         }
     };
 
-    let mount = project_db.mount_point.to_string_lossy().to_string();
-    let mut targets: Vec<PathBuf> = vec![Path::new(&mount).join(&photo.dng_path)];
-    if let Some(jpg) = &photo.jpg_path {
-        targets.push(Path::new(&mount).join(jpg));
+    let spotlight = RatePhoto {
+        photos: project_db.as_ref(),
+        finder_tags: state.finder_tags.as_ref(),
+        mount_point: &mount,
+        finder_tags_enabled,
     }
+    .execute(&photo_id, stars, color_label.as_deref(), tags.as_deref())
+    .map_err(|e| {
+        error!("save_photo_rating error: {}", e);
+        e
+    })?;
 
-    for target in &targets {
-        if let Err(e) = state.finder_tags.sync_color(target, color_label) {
-            warn!("finder tags: sidecar de {:?} falló: {}", target, e);
-        }
-    }
-
-    // Invalidar el índice de Spotlight del volumen para que el iPad/Mac lo
-    // reconstruya al reconectar el disco e indexe los tags recién escritos. Sin
-    // esto, el Finder pinta el punto de color pero el filtro por etiquetas del
-    // sidebar no los encuentra. Best-effort y en segundo plano; solo si el índice
-    // aún existe (auto-limitado a una vez por "generación" del índice).
-    let volume_root = PathBuf::from(&mount);
-    if state.finder_tags.spotlight_index_present(&volume_root) {
+    // Invalidar el índice de Spotlight en segundo plano (best-effort) para que el
+    // iPad/Mac reindexe los tags recién escritos al reconectar el disco.
+    if let Some(volume_root) = spotlight {
         let finder_tags = state.finder_tags.clone();
         std::thread::spawn(move || {
             match finder_tags.invalidate_spotlight_index(&volume_root) {
@@ -832,6 +793,8 @@ fn sync_color_sidecar(
             }
         });
     }
+
+    Ok(())
 }
 
 #[tauri::command]

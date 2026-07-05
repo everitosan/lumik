@@ -116,6 +116,15 @@ mod tests {
         fn get(&self, _id: &str) -> Result<Option<Photo>, String> {
             Ok(Some(self.photo.clone()))
         }
+        fn update_rating(
+            &self,
+            _id: &str,
+            _stars: i32,
+            _color: Option<&str>,
+            _tags: Option<&str>,
+        ) -> Result<(), String> {
+            unreachable!("CullPhoto no califica")
+        }
         fn update_culled(&self, _id: &str, culled: bool, new_dng_path: &str) -> Result<(), String> {
             self.culled_calls
                 .borrow_mut()

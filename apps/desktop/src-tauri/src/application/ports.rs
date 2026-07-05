@@ -15,6 +15,13 @@ use std::path::{Path, PathBuf};
 /// moverlo a `domain` es trabajo de una fase posterior.
 pub trait PhotoRepository {
     fn get(&self, id: &str) -> Result<Option<Photo>, String>;
+    fn update_rating(
+        &self,
+        id: &str,
+        stars: i32,
+        color_label: Option<&str>,
+        tags: Option<&str>,
+    ) -> Result<(), String>;
     fn update_culled(&self, id: &str, culled: bool, new_dng_path: &str) -> Result<(), String>;
 }
 

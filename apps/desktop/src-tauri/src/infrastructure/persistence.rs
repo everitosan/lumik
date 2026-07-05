@@ -11,6 +11,17 @@ impl PhotoRepository for ProjectDatabase {
         self.get_photo(id).map_err(|e| e.to_string())
     }
 
+    fn update_rating(
+        &self,
+        id: &str,
+        stars: i32,
+        color_label: Option<&str>,
+        tags: Option<&str>,
+    ) -> Result<(), String> {
+        self.update_photo_rating(id, stars, color_label, tags)
+            .map_err(|e| e.to_string())
+    }
+
     fn update_culled(&self, id: &str, culled: bool, new_dng_path: &str) -> Result<(), String> {
         self.update_photo_culled(id, culled, new_dng_path)
             .map_err(|e| e.to_string())
