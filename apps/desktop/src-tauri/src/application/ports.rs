@@ -71,3 +71,21 @@ pub trait ImageProcessor: Send + Sync {
     /// Bytes de preview de un JPEG sin caché permanente, con `Orientation` neutralizada.
     fn jpeg_preview_bytes(&self, src: &Path) -> Result<Vec<u8>, String>;
 }
+
+/// Escritura de Finder tags de macOS/iPadOS como sidecars AppleDouble (`._nombre`),
+/// para que los color labels se vean al conectar el disco a un iPad/Mac. La impl de
+/// desktop escribe los sidecars; en Android es no-op (el flujo Apple no aplica).
+pub trait FinderTagWriter: Send + Sync {
+    /// Escribe (o borra, si `color_label` no aporta color) el sidecar de Finder tags
+    /// de `target` según el color de la BD (formato `"1,3,5"`).
+    fn sync_color(&self, target: &Path, color_label: Option<&str>) -> std::io::Result<()>;
+
+    /// Mueve el sidecar `._<nombre>` junto al archivo cuando este se reubica.
+    fn move_sidecar(&self, from: &Path, to: &Path) -> std::io::Result<()>;
+
+    /// ¿Existe un índice de Spotlight en la raíz del volumen? (para no re-invalidar).
+    fn spotlight_index_present(&self, volume_root: &Path) -> bool;
+
+    /// Invalida el índice de Spotlight del volumen para forzar reindexado en Apple.
+    fn invalidate_spotlight_index(&self, volume_root: &Path) -> std::io::Result<()>;
+}

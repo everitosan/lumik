@@ -241,18 +241,21 @@ Colapsar el `#[cfg]` de plataforma al *composition root*.
 - [x] `DeviceScanner`: `SystemDeviceScanner` envuelve `devices.rs` + `os_eject`
       relocado; cableado en AppState + composition root. `#[cfg]` de eject fuera
       de `commands.rs`.
-- [ ] `MetadataTool`: implementarlo para desktop (`exiftool.rs`) y android (`rawler`/`exif_android.rs`).
-  - [ ] Test de `application` con un `FakeMetadataTool`.
-- [ ] `ImageProcessor`: envolver la lógica de `imaging` (thumbnails/previews/tiff).
-- [ ] `FinderTagWriter`: envolver `apple_tags.rs` (conservando sus tests existentes).
-- [ ] `ProgressReporter`: implementación Tauri (`app.emit`) + `FakeReporter` para tests.
-- [ ] `open_project_folder` detrás de infra (saca su `#[cfg]`).
+- [x] `MetadataTool`: `ExiftoolMetadata` (desktop) + `AndroidMetadata` (rawler/exif_android).
+  - [x] Tests de caracterización contra fixtures reales (`tests/fixtures/*.jpg`
+        con EXIF conocido): correctitud + idempotencia. Mejor que un fake.
+- [x] `ImageProcessor`: `DesktopImaging` (exiftool+image) / `AndroidImaging` (rawler);
+      thumbnails/previews/tiff. Con tests de idempotencia contra fixtures.
+- [x] `FinderTagWriter`: `AppleDoubleFinderTags` (desktop) / `NoopFinderTags` (Android);
+      envuelve `apple_tags.rs` (que pasa a ser desktop-only y conserva sus tests).
+- [ ] `ProgressReporter`: **diferido a Fase 3** — no aporta a Gate 2 (el logging no
+      es `#[cfg]`, solo acopla a Tauri). Encaja al extraer `import_photos`.
+- [x] `open_project_folder` detrás de `infrastructure/folder.rs` (saca su `#[cfg]`).
 - [x] Patrón de composition root establecido en `lib.rs` (elige impl por puerto).
 
-**Gate 2:** no queda ningún `#[cfg(target_os)]` en `commands.rs`; la selección de
-plataforma ocurre solo en `lib.rs`. **Estado: parcial** — hecho `DeviceScanner`;
-pendiente el grueso (Metadata/Imaging/Progress), que toca las rutas de
-thumbnails/previews/import y conviene verificar ejecutando la app.
+**Gate 2:** ✅ **alcanzado** — cero `#[cfg(target_os)]` en `commands.rs` (verificado
+por grep); la selección de plataforma ocurre solo en `lib.rs`. 35/35 tests verdes,
+sin warnings. `ProgressReporter` se pospone a Fase 3 (no afecta este gate).
 
 ---
 
@@ -353,3 +356,21 @@ Registrar aquí decisiones/desvíos al ejecutar cada fase (fecha + nota breve).
   runtime-críticas que no se pueden unit-testear con fixtures y conviene validar
   ejecutando la app (disco externo + exiftool). Se abordan como siguiente sub-paso
   con verificación en ejecución.
+- **2026-07-05 · Fase 2 · Gate 2 alcanzado** — Extraídos `MetadataTool`,
+  `ImageProcessor`, `FinderTagWriter` y `open_project_folder`. `commands.rs` ya no
+  contiene ningún `#[cfg(target_os)]`. Enfoque de fixtures (sugerido por el usuario):
+  se agregaron `tests/fixtures/orient_{1,6}.jpg` con EXIF conocido y 9 tests de
+  caracterización que fijan correctitud e idempotencia de la extracción. Tres
+  cambios de comportamiento menores, intencionales y documentados:
+  1. **Escritura de orientación unificada**: antes desktop debounce 600ms + exiftool
+     y Android inmediato + XMP. Ahora ambos usan el mismo debounce y el puerto abstrae
+     exiftool vs XMP. Android gana el debounce (evita carreras de escritura); resultado
+     equivalente.
+  2. **Log por miniatura en import**: antes solo desktop emitía "Miniatura: X (rot N°)".
+     Ahora el caller registra según la rotación que reporta el puerto, así que Android
+     también emite esas líneas (consistencia; cosmético).
+  3. **`open_project_folder` en Android**: si el dispositivo está desmontado, ahora
+     devuelve el error de "no montado" antes que el de "no soportado" (antes siempre
+     "no soportado"). Irrelevante: Android no abre carpetas de todos modos.
+  Además `apple_tags` pasa a ser desktop-only (en Android el `FinderTagWriter` es no-op
+  y no lo referencia). `ProgressReporter` se difiere a Fase 3 (no afecta Gate 2).

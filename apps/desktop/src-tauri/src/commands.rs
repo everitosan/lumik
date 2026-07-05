@@ -1,4 +1,4 @@
-use crate::application::ports::{DeviceScanner, ImageProcessor, MetadataTool};
+use crate::application::ports::{DeviceScanner, FinderTagWriter, ImageProcessor, MetadataTool};
 use crate::db::models::*;
 use crate::db::{GlobalDatabase, ProjectDatabase, discover_projects_on_device};
 use crate::devices::DetectedDevice;
@@ -53,6 +53,8 @@ pub struct AppState {
     pub metadata: Arc<dyn MetadataTool>,
     /// Generación de miniaturas y previews (exiftool+image en desktop, rawler en Android).
     pub image_processor: Arc<dyn ImageProcessor>,
+    /// Escritura de Finder tags (sidecars AppleDouble en desktop, no-op en Android).
+    pub finder_tags: Arc<dyn FinderTagWriter>,
 }
 
 impl AppState {
@@ -519,30 +521,11 @@ pub fn rename_project(state: State<AppState>, id: String, new_name: String) -> R
 }
 
 /// Open the project's folder in the OS file manager. Desktop only — Android has no
-/// standard way to open a directory path in a file browser.
+/// standard way to open a directory path in a file browser (ver `infrastructure::folder`).
 #[tauri::command]
 pub fn open_project_folder(app: AppHandle, state: State<AppState>, id: String) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    {
-        let _ = (app, state, id);
-        return Err("Opening the folder is not supported on Android".to_string());
-    }
-
-    #[cfg(not(target_os = "android"))]
-    {
-        use tauri_plugin_opener::OpenerExt;
-        let project_db = state.project_db(&id)?;
-        let dir = project_db.project_dir.clone();
-        if !dir.exists() {
-            return Err(format!("Project folder not found: {}", dir.display()));
-        }
-        app.opener()
-            .open_path(dir.to_string_lossy().to_string(), None::<&str>)
-            .map_err(|e| {
-                error!("open_project_folder error: {}", e);
-                e.to_string()
-            })
-    }
+    let dir = state.project_db(&id)?.project_dir.clone();
+    crate::infrastructure::folder::open_folder(&app, &dir)
 }
 
 // ============================================================================
@@ -784,17 +767,16 @@ pub fn save_photo_rating(
 
     // Sincronizar los color labels con Finder tags (sidecar AppleDouble) para que se
     // vean al conectar el disco a un iPad/Mac. Best-effort: la BD es la fuente de
-    // verdad, así que un fallo aquí no debe romper el guardado del rating.
-    #[cfg(not(target_os = "android"))]
+    // verdad, así que un fallo aquí no debe romper el guardado del rating. En Android
+    // el puerto es no-op.
     sync_color_sidecar(&state, &project_db, &photo_id, color_label.as_deref());
 
     Ok(())
 }
 
-/// Escribe o borra el sidecar AppleDouble de Finder tags para el DNG (y el JPG, si
-/// existe) de una foto, según su `color_label`. Respeta el ajuste
-/// `finder_tags_sidecar` y nunca falla: solo registra warnings.
-#[cfg(not(target_os = "android"))]
+/// Escribe o borra el sidecar de Finder tags para el DNG (y el JPG, si existe) de
+/// una foto, según su `color_label`, vía el puerto `FinderTagWriter`. Respeta el
+/// ajuste `finder_tags_sidecar` y nunca falla: solo registra warnings.
 fn sync_color_sidecar(
     state: &State<AppState>,
     project_db: &ProjectDatabase,
@@ -825,17 +807,8 @@ fn sync_color_sidecar(
         targets.push(Path::new(&mount).join(jpg));
     }
 
-    let colors = color_label
-        .map(crate::apple_tags::colors_from_label)
-        .unwrap_or_default();
-
     for target in &targets {
-        let res = if colors.is_empty() {
-            crate::apple_tags::remove_tags_sidecar(target)
-        } else {
-            crate::apple_tags::write_color_tags(target, &colors)
-        };
-        if let Err(e) = res {
+        if let Err(e) = state.finder_tags.sync_color(target, color_label) {
             warn!("finder tags: sidecar de {:?} falló: {}", target, e);
         }
     }
@@ -846,9 +819,10 @@ fn sync_color_sidecar(
     // sidebar no los encuentra. Best-effort y en segundo plano; solo si el índice
     // aún existe (auto-limitado a una vez por "generación" del índice).
     let volume_root = PathBuf::from(&mount);
-    if crate::apple_tags::spotlight_index_present(&volume_root) {
+    if state.finder_tags.spotlight_index_present(&volume_root) {
+        let finder_tags = state.finder_tags.clone();
         std::thread::spawn(move || {
-            match crate::apple_tags::invalidate_spotlight_index(&volume_root) {
+            match finder_tags.invalidate_spotlight_index(&volume_root) {
                 Ok(()) => debug!("finder tags: índice Spotlight invalidado en {:?}", volume_root),
                 Err(e) => warn!("finder tags: no se pudo invalidar el índice Spotlight: {}", e),
             }
@@ -902,7 +876,7 @@ pub fn save_photo_culled(
 
     // Move the AppleDouble Finder-tags sidecar (._name) alongside the RAW too, so
     // the color tags stay attached to the file after culling/un-culling.
-    let _ = crate::apple_tags::move_sidecar(&current_path, &target_path);
+    let _ = state.finder_tags.move_sidecar(&current_path, &target_path);
 
     project_db
         .update_photo_culled(&photo_id, culled, &new_dng_path_str)

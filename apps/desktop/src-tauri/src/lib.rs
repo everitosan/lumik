@@ -1,3 +1,6 @@
+// Sidecars AppleDouble: solo desktop. En Android el FinderTagWriter es no-op y
+// no referencia este módulo, así que no se compila allí.
+#[cfg(not(target_os = "android"))]
 mod apple_tags;
 mod application;
 mod commands;
@@ -86,6 +89,13 @@ pub fn run() {
     let image_processor: Arc<dyn application::ports::ImageProcessor> =
         Arc::new(infrastructure::imaging::AndroidImaging);
 
+    #[cfg(not(target_os = "android"))]
+    let finder_tags: Arc<dyn application::ports::FinderTagWriter> =
+        Arc::new(infrastructure::finder_tags::AppleDoubleFinderTags);
+    #[cfg(target_os = "android")]
+    let finder_tags: Arc<dyn application::ports::FinderTagWriter> =
+        Arc::new(infrastructure::finder_tags::NoopFinderTags);
+
     info!("Scanning for project databases on connected devices...");
     refresh_open_projects(device_scanner.as_ref(), &global_db, &open_projects, &ejecting_devices);
     {
@@ -101,6 +111,7 @@ pub fn run() {
         device_scanner,
         metadata,
         image_processor,
+        finder_tags,
     };
 
     info!("Starting Tauri application...");

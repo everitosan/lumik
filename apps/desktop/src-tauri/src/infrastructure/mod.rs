@@ -4,5 +4,7 @@
 //! selección de qué implementación usar ocurre en `lib.rs`.
 
 pub mod devices;
+pub mod finder_tags;
+pub mod folder;
 pub mod imaging;
 pub mod metadata;
