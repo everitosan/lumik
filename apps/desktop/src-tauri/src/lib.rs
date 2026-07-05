@@ -72,6 +72,20 @@ pub fn run() {
     let device_scanner: Arc<dyn application::ports::DeviceScanner> =
         Arc::new(infrastructure::devices::SystemDeviceScanner);
 
+    #[cfg(not(target_os = "android"))]
+    let metadata: Arc<dyn application::ports::MetadataTool> =
+        Arc::new(infrastructure::metadata::ExiftoolMetadata);
+    #[cfg(target_os = "android")]
+    let metadata: Arc<dyn application::ports::MetadataTool> =
+        Arc::new(infrastructure::metadata::AndroidMetadata);
+
+    #[cfg(not(target_os = "android"))]
+    let image_processor: Arc<dyn application::ports::ImageProcessor> =
+        Arc::new(infrastructure::imaging::DesktopImaging);
+    #[cfg(target_os = "android")]
+    let image_processor: Arc<dyn application::ports::ImageProcessor> =
+        Arc::new(infrastructure::imaging::AndroidImaging);
+
     info!("Scanning for project databases on connected devices...");
     refresh_open_projects(device_scanner.as_ref(), &global_db, &open_projects, &ejecting_devices);
     {
@@ -85,6 +99,8 @@ pub fn run() {
         ejecting_devices,
         rotation_write_gen: Arc::new(Mutex::new(HashMap::new())),
         device_scanner,
+        metadata,
+        image_processor,
     };
 
     info!("Starting Tauri application...");

@@ -10,7 +10,7 @@ use rawler::analyze::{extract_preview_pixels, extract_thumbnail_pixels};
 use rawler::decoders::RawDecodeParams;
 use rawler::RawFile;
 
-use crate::commands::FileMetadata;
+use crate::application::ports::FileMetadata;
 
 const PARAMS: RawDecodeParams = RawDecodeParams { image_index: 0 };
 

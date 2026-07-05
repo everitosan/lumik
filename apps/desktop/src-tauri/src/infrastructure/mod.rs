@@ -4,3 +4,5 @@
 //! selección de qué implementación usar ocurre en `lib.rs`.
 
 pub mod devices;
+pub mod imaging;
+pub mod metadata;
