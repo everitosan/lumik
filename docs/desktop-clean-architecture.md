@@ -374,3 +374,8 @@ Registrar aquí decisiones/desvíos al ejecutar cada fase (fecha + nota breve).
      "no soportado"). Irrelevante: Android no abre carpetas de todos modos.
   Además `apple_tags` pasa a ser desktop-only (en Android el `FinderTagWriter` es no-op
   y no lo referencia). `ProgressReporter` se difiere a Fase 3 (no afecta Gate 2).
+- **2026-07-05 · Fase 2 · verificación runtime** — El usuario ejecutó la app tras el
+  refactor de Metadata/Imaging: import, visor (thumbnails/previews) y rotación
+  funcionan correctamente. Confirma que la extracción a puertos preservó el
+  comportamiento en las rutas runtime-críticas (lo que los fixtures no podían cubrir
+  del todo). Falta la verificación cross-platform del build de Android (Gate 6).
