@@ -10,3 +10,4 @@ pub mod fs;
 pub mod imaging;
 pub mod metadata;
 pub mod persistence;
+pub mod progress;

@@ -6,8 +6,18 @@
 
 use crate::db::models::Photo;
 use crate::devices::DetectedDevice;
+use crate::import::ImportProgress;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+/// Canal de progreso/log del import. Desacopla la orquestación de Tauri: la impl
+/// real emite eventos (`app.emit`), y en tests un doble los recopila.
+pub trait ProgressReporter: Send + Sync {
+    /// Emite una línea de log para la sesión de import indicada.
+    fn log(&self, session_id: &str, message: &str);
+    /// Emite un evento de progreso (fase gruesa) del import.
+    fn progress(&self, progress: ImportProgress);
+}
 
 /// Acceso a las fotos de un proyecto (una `ProjectDatabase`). Los casos de uso
 /// dependen de este trait, no de SQLite; en tests se sustituye por un fake.

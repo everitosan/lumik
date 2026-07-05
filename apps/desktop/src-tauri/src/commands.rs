@@ -1,5 +1,5 @@
 use crate::application::ports::{
-    DeviceScanner, FileStore, FinderTagWriter, ImageProcessor, MetadataTool,
+    DeviceScanner, FileStore, FinderTagWriter, ImageProcessor, MetadataTool, ProgressReporter,
 };
 use crate::application::use_cases::cull_photo::CullPhoto;
 use crate::application::use_cases::rate_photo::RatePhoto;
@@ -20,7 +20,7 @@ use crate::import::{
     pipeline_passthrough,
     pipeline_metadata, pipeline_move_to_dest, pipeline_copy_videos,
     is_video_file,
-    FailedFile, ImportLogEntry, ImportPhase, ImportProgress, ImportResult, PipelineWorkspace,
+    FailedFile, ImportPhase, ImportProgress, ImportResult, PipelineWorkspace,
 };
 use crate::domain::project::{compare_dashboard, ProjectFolder};
 use chrono::Utc;
@@ -1068,6 +1068,9 @@ pub async fn start_import(
 
     let total_files = request.source_files.len();
 
+    // Reporter de progreso/log detrás del puerto (desacopla el import de app.emit).
+    let reporter = crate::infrastructure::progress::TauriProgressReporter { app };
+
     // Look up project DB before entering the async body to release the lock immediately
     let project_db = state.project_db(&request.project_id)?;
 
@@ -1130,34 +1133,34 @@ pub async fn start_import(
         (0usize, Vec::<FailedFile>::new())
     } else {
         // === PHASE 1: Copy files ===
-        emit_progress(&app, &request.session_id, 0, 3, "Copiando archivos", ImportPhase::Reading, None);
+        emit_progress(&reporter, &request.session_id, 0, 3, "Copiando archivos", ImportPhase::Reading, None);
 
         let workspace = PipelineWorkspace::create(&request.project_name)
             .map_err(|e| format!("Failed to create workspace: {}", e))?;
-        emit_log(&app, &request.session_id, &format!("Workspace creado: {}", workspace.temp_dir.display()));
+        emit_log(&reporter, &request.session_id, &format!("Workspace creado: {}", workspace.temp_dir.display()));
 
         let copied = pipeline_passthrough(&photo_paths, &workspace)
             .map_err(|e| format!("Failed to copy files: {}", e))?;
         info!("Copied {} files", copied);
-        emit_log(&app, &request.session_id, &format!("{} archivos copiados al workspace", copied));
+        emit_log(&reporter, &request.session_id, &format!("{} archivos copiados al workspace", copied));
 
         // === PHASE 2: Writing metadata ===
-        emit_progress(&app, &request.session_id, 1, 3, "Agregando metadatos", ImportPhase::Writing, None);
+        emit_progress(&reporter, &request.session_id, 1, 3, "Agregando metadatos", ImportPhase::Writing, None);
 
-        emit_log(&app, &request.session_id, "Procesando metadatos XMP y nombres de archivo...");
+        emit_log(&reporter, &request.session_id, "Procesando metadatos XMP y nombres de archivo...");
         pipeline_metadata(&workspace, &request.project_name, &metadata, image_description.as_deref(), settings.rename_on_import)
             .map_err(|e| format!("Metadata failed: {}", e))?;
-        emit_log(&app, &request.session_id, "Metadatos aplicados");
+        emit_log(&reporter, &request.session_id, "Metadatos aplicados");
 
-        emit_log(&app, &request.session_id, "Moviendo archivos al disco de destino...");
+        emit_log(&reporter, &request.session_id, "Moviendo archivos al disco de destino...");
         let dng_files = pipeline_move_to_dest(&workspace, &dest_folder)
             .map_err(|e| format!("Move failed: {}", e))?;
-        emit_log(&app, &request.session_id, &format!("{} archivos movidos a _media/", dng_files.len()));
+        emit_log(&reporter, &request.session_id, &format!("{} archivos movidos a _media/", dng_files.len()));
 
         workspace.cleanup();
 
         // === PHASE 3: Saving (batch EXIF + single-transaction DB + parallel thumbnails) ===
-        emit_progress(&app, &request.session_id, 2, 3, "Registrando", ImportPhase::Saving, None);
+        emit_progress(&reporter, &request.session_id, 2, 3, "Registrando", ImportPhase::Saving, None);
 
         let exif_map = state.metadata.extract_batch(&dng_files);
 
@@ -1202,13 +1205,17 @@ pub async fn start_import(
         let create_dtos: Vec<CreatePhoto> = inserts.iter().map(|(_, cp)| cp.clone()).collect();
         match project_db.create_photos_batch(&create_dtos) {
             Ok(photos) => {
-                emit_log(&app, &request.session_id, &format!("{} fotos registradas en BD", photos.len()));
+                emit_log(&reporter, &request.session_id, &format!("{} fotos registradas en BD", photos.len()));
                 let thumb_pairs: Vec<(PathBuf, String)> = inserts.iter()
                     .zip(photos.iter())
                     .map(|((path, _), photo)| (path.clone(), photo.id.clone()))
                     .collect();
-                emit_log(&app, &request.session_id, &format!("Generando {} miniaturas...", thumb_pairs.len()));
-                cache_thumbnails_parallel(state.image_processor.as_ref(), &thumb_pairs, Some((&app, &request.session_id)));
+                emit_log(&reporter, &request.session_id, &format!("Generando {} miniaturas...", thumb_pairs.len()));
+                cache_thumbnails_parallel(
+                    state.image_processor.as_ref(),
+                    &thumb_pairs,
+                    Some((&reporter as &dyn ProgressReporter, request.session_id.as_str())),
+                );
                 (photos.len(), Vec::new())
             }
             Err(e) => {
@@ -1250,7 +1257,7 @@ pub async fn start_import(
             let db = if needs_move {
                 match relocate_project_folder(&state, &request.project_id, &new_project_dir) {
                     Ok(db) => {
-                        emit_log(&app, &request.session_id, &format!(
+                        emit_log(&reporter, &request.session_id, &format!(
                             "Carpeta movida a {}", new_project_dir.display()
                         ));
                         Some(db)
@@ -1272,7 +1279,7 @@ pub async fn start_import(
         }
     }
 
-    emit_progress(&app, &request.session_id, 3, 3, "Completado", ImportPhase::Complete, None);
+    emit_progress(&reporter, &request.session_id, 3, 3, "Completado", ImportPhase::Complete, None);
 
     let result = ImportResult {
         session_id: request.session_id.clone(),
@@ -1287,7 +1294,7 @@ pub async fn start_import(
         "Import completed: {} successful, {} failed",
         result.successful, result.failed
     );
-    emit_log(&app, &request.session_id, &format!(
+    emit_log(&reporter, &request.session_id, &format!(
         "Importación completada: {} fotos{}{}",
         result.successful,
         if result.videos_copied > 0 { format!(" · {} videos", result.videos_copied) } else { String::new() },
@@ -1302,7 +1309,7 @@ pub async fn start_import(
 fn cache_thumbnails_parallel(
     image_processor: &dyn ImageProcessor,
     pairs: &[(PathBuf, String)],
-    log_ctx: Option<(&AppHandle, &str)>,
+    log_ctx: Option<(&dyn ProgressReporter, &str)>,
 ) {
     let concurrency = std::thread::available_parallelism()
         .map(|n| n.get().min(8))
@@ -1313,9 +1320,9 @@ fn cache_thumbnails_parallel(
             for (path, id) in chunk {
                 s.spawn(move || {
                     if let Some(rotation) = image_processor.cache_thumbnail(path, id) {
-                        if let Some((app, session_id)) = log_ctx {
+                        if let Some((reporter, session_id)) = log_ctx {
                             let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or(id);
-                            emit_log(app, session_id, &format!("Miniatura: {} (rot {}°)", file_name, rotation));
+                            reporter.log(session_id, &format!("Miniatura: {} (rot {}°)", file_name, rotation));
                         }
                     }
                 });
@@ -1324,18 +1331,14 @@ fn cache_thumbnails_parallel(
     }
 }
 
-fn emit_log(app: &AppHandle, session_id: &str, message: &str) {
-    let entry = ImportLogEntry {
-        session_id: session_id.to_string(),
-        message: message.to_string(),
-    };
-    if let Err(e) = app.emit("import-log", &entry) {
-        warn!("Failed to emit log event: {}", e);
-    }
+/// Adaptadores delgados sobre el puerto `ProgressReporter` (el impl real emite
+/// eventos Tauri; en tests, un doble los recopila).
+fn emit_log(reporter: &dyn ProgressReporter, session_id: &str, message: &str) {
+    reporter.log(session_id, message);
 }
 
 fn emit_progress(
-    app: &AppHandle,
+    reporter: &dyn ProgressReporter,
     session_id: &str,
     index: usize,
     total: usize,
@@ -1343,15 +1346,12 @@ fn emit_progress(
     phase: ImportPhase,
     error: Option<String>,
 ) {
-    let progress = ImportProgress {
+    reporter.progress(ImportProgress {
         session_id: session_id.to_string(),
         current_index: index,
         total_files: total,
         current_file: file_name.to_string(),
         phase,
         error,
-    };
-    if let Err(e) = app.emit("import-progress", &progress) {
-        warn!("Failed to emit progress event: {}", e);
-    }
+    });
 }
