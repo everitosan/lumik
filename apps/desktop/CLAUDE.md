@@ -196,6 +196,23 @@ Defaults definidos en `hooks.ts:DEFAULT_KEYBINDINGS`. Se agrupan por contexto
 (`photo_detail.*`, `project.*`). `matchesKey()` compara un `KeyboardEvent` contra
 el valor almacenado (soporta `"Escape"`, `"ArrowLeft"`, `"Ctrl+c"`, etc.).
 
+## Flujos de producto ↔ comando ↔ caso de uso
+
+Los flujos de `docs/useCases/` delegan en un caso de uso de
+`application/use_cases/` (orquestación testeable con fakes). El resto de comandos
+son de soporte/consulta (adaptadores directos a puertos/BD). El `invoke_handler`
+de `lib.rs` está agrupado por flujo para reflejar esto.
+
+| Flujo (`docs/useCases/`) | Comando (entry point)  | Caso de uso                  |
+|--------------------------|------------------------|------------------------------|
+| Importar Imágenes        | `start_import`         | `ImportPhotos`               |
+| Crear Proyecto           | `create_project`       | — (lógica en el comando; `domain::ProjectFolder`) |
+| Culling de imagen        | `save_photo_culled`    | `CullPhoto` (con rollback)   |
+| Rating de estrellas      | `save_photo_rating`    | `RatePhoto`                  |
+| Rotación de imagen       | `save_photo_rotation`  | `RotatePhoto`                |
+
+**Al cambiar un flujo, actualizar su diagrama en `docs/useCases/` y su caso de uso.**
+
 ## Comandos Tauri disponibles
 
 Dispositivos: `scan_connected_devices`, `get_known_devices`

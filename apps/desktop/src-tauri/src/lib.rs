@@ -126,30 +126,49 @@ pub fn run() {
             device_watch::start(app.handle().clone());
             Ok(())
         })
+        // Puntos de entrada (comandos Tauri) agrupados por flujo. Los flujos de
+        // producto (ver docs/useCases/) delegan en un caso de uso de
+        // application/use_cases/; el resto son comandos de soporte/consulta que
+        // son adaptadores directos a los puertos / la BD.
         .invoke_handler(tauri::generate_handler![
+            // ── Flujos de producto (docs/useCases/) ─────────────────────────
+            // Flujo: Importar Imágenes            → use_cases::ImportPhotos
+            commands::start_import,
+            // Flujo: Crear Proyecto               → (lógica en el comando; domain::ProjectFolder)
+            commands::create_project,
+            // Flujo: Culling de imagen            → use_cases::CullPhoto
+            commands::save_photo_culled,
+            // Flujo: Rating de estrellas          → use_cases::RatePhoto
+            commands::save_photo_rating,
+            // Flujo: Rotación de imagen           → use_cases::RotatePhoto
+            commands::save_photo_rotation,
+
+            // ── Dispositivos ────────────────────────────────────────────────
             commands::get_platform,
             commands::scan_connected_devices,
             commands::eject_device,
             commands::get_known_devices,
+
+            // ── Proyectos (gestión / consulta) ──────────────────────────────
             commands::get_projects_dashboard,
             commands::get_project,
-            commands::create_project,
             commands::archive_project,
             commands::delete_project,
             commands::rename_project,
             commands::open_project_folder,
+
+            // ── Fotos (consulta / media) ────────────────────────────────────
             commands::get_project_photos,
             commands::get_project_thumbnails,
             commands::get_thumbnail,
             commands::get_photo_preview,
-            commands::save_photo_rotation,
-            commands::save_photo_rating,
-            commands::save_photo_culled,
             commands::get_project_cover_thumbnail,
             commands::set_project_cover_photo,
             commands::get_project_settings,
             commands::update_project_settings,
             commands::regenerate_project_thumbnails,
+
+            // ── Fotógrafo / ajustes / keybindings ───────────────────────────
             commands::get_active_photographer,
             commands::ensure_default_photographer,
             commands::get_photographer_metadata,
@@ -158,7 +177,6 @@ pub fn run() {
             commands::update_keybinding,
             commands::get_app_settings,
             commands::update_app_settings,
-            commands::start_import,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
