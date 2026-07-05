@@ -1,6 +1,7 @@
+use crate::application::ports::DeviceScanner;
 use crate::db::models::*;
 use crate::db::{GlobalDatabase, ProjectDatabase, discover_projects_on_device};
-use crate::devices::{scan_mounted_devices, DetectedDevice};
+use crate::devices::DetectedDevice;
 #[cfg(not(target_os = "android"))]
 use crate::exiftool;
 #[cfg(not(target_os = "android"))]
@@ -49,6 +50,9 @@ pub struct AppState {
     /// window actually touches the file, avoiding concurrent `exiftool
     /// -overwrite_original` calls racing on the same file.
     pub rotation_write_gen: Arc<Mutex<HashMap<String, u64>>>,
+    /// Detección/expulsión de dispositivos, detrás del puerto `DeviceScanner`.
+    /// La implementación concreta (y su `#[cfg]` de plataforma) se elige en `lib.rs`.
+    pub device_scanner: Arc<dyn DeviceScanner>,
 }
 
 impl AppState {
@@ -69,11 +73,12 @@ impl AppState {
 /// project.db files not yet in the open_projects map.
 /// Also removes projects whose device is no longer mounted.
 pub fn refresh_open_projects(
+    scanner: &dyn DeviceScanner,
     global_db: &Arc<GlobalDatabase>,
     open_projects: &Arc<Mutex<HashMap<String, Arc<ProjectDatabase>>>>,
     ejecting_devices: &Arc<Mutex<HashSet<String>>>,
 ) {
-    let devices = scan_mounted_devices();
+    let devices = scanner.scan();
     let mounted_uuids: std::collections::HashSet<String> =
         devices.iter().map(|d| d.uuid.clone()).collect();
 
@@ -135,8 +140,13 @@ pub fn get_platform() -> &'static str {
 #[tauri::command]
 pub fn scan_connected_devices(state: State<AppState>) -> Vec<DetectedDevice> {
     // debug!("scan_connected_devices called");
-    refresh_open_projects(&state.global_db, &state.open_projects, &state.ejecting_devices);
-    let devices = scan_mounted_devices();
+    refresh_open_projects(
+        state.device_scanner.as_ref(),
+        &state.global_db,
+        &state.open_projects,
+        &state.ejecting_devices,
+    );
+    let devices = state.device_scanner.scan();
     // debug!("scan_connected_devices returning {} devices", devices.len());
 
     // Hide devices that are mid-eject so the UI drops them immediately.
@@ -170,7 +180,9 @@ pub fn eject_device(
 
     // Resolve the mount point now, before we remove anything, so we can hand it
     // to the OS eject call. If the device isn't found it may already be gone.
-    let mount_point = scan_mounted_devices()
+    let mount_point = state
+        .device_scanner
+        .scan()
         .into_iter()
         .find(|d| d.uuid == device_uuid)
         .map(|d| d.mount_point);
@@ -201,7 +213,7 @@ pub fn eject_device(
 
     // 3. Ask the OS to unmount / eject the volume.
     let result = match mount_point.as_deref() {
-        Some(mount) => os_eject(&device_uuid, mount),
+        Some(mount) => state.device_scanner.eject(&device_uuid, mount),
         None => {
             // Already unmounted; nothing more to do.
             info!("eject_device: device {} no longer mounted, treating as ejected", device_uuid);
@@ -219,80 +231,6 @@ pub fn eject_device(
     }
 
     result
-}
-
-/// Platform-specific volume eject. Closes/unmounts the volume at `mount_point`.
-/// The SQLite handles must already be released before this is called.
-#[allow(unused_variables)]
-fn os_eject(device_uuid: &str, mount_point: &str) -> Result<(), String> {
-    #[cfg(target_os = "linux")]
-    {
-        use std::process::Command;
-        // udisksctl is part of udisks2 and works without root for removable media.
-        // Resolve the block device from the UUID symlink udev maintains.
-        let by_uuid = format!("/dev/disk/by-uuid/{}", device_uuid);
-        let block_dev = std::fs::canonicalize(&by_uuid)
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or(by_uuid);
-
-        // Unmount the filesystem first…
-        let unmount = Command::new("udisksctl")
-            .args(["unmount", "-b", &block_dev])
-            .output()
-            .map_err(|e| format!("Failed to run udisksctl unmount: {}", e))?;
-        if !unmount.status.success() {
-            let stderr = String::from_utf8_lossy(&unmount.stderr);
-            // "Not mounted" is fine — the volume may already be unmounted.
-            if !stderr.to_lowercase().contains("not mounted") {
-                return Err(format!("Could not unmount device: {}", stderr.trim()));
-            }
-        }
-
-        // …then power off the drive so it's safe to physically remove.
-        let _ = Command::new("udisksctl")
-            .args(["power-off", "-b", &block_dev])
-            .output();
-
-        Ok(())
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        use std::process::Command;
-        // Use the Shell "Eject" verb via PowerShell. mount_point is like "E:\".
-        let drive = mount_point.trim_end_matches(['\\', '/']);
-        let ps = format!(
-            "$o = New-Object -comObject Shell.Application; \
-             $o.Namespace(17).ParseName('{}').InvokeVerb('Eject')",
-            drive
-        );
-        let out = Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-            .output()
-            .map_err(|e| format!("Failed to run eject: {}", e))?;
-        if !out.status.success() {
-            return Err(format!(
-                "Could not eject device: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            ));
-        }
-        Ok(())
-    }
-
-    #[cfg(target_os = "android")]
-    {
-        // On Android the OS owns mount lifecycle; the app cannot (and must not)
-        // unmount removable storage itself. Releasing the SQLite handles — which
-        // already happened before this call — is all we can and need to do.
-        // The user finishes ejection from the system UI.
-        Ok(())
-    }
-
-    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "android")))]
-    {
-        // macOS and others: not in current scope. Handles are released; treat as ok.
-        Ok(())
-    }
 }
 
 /// Return all devices previously seen (from the global registry).
@@ -354,7 +292,7 @@ pub fn create_project(state: State<AppState>, project: CreateProject) -> Result<
     info!("create_project called: name={}", project.name);
 
     // Resolve the mount point for the requested device
-    let devices = scan_mounted_devices();
+    let devices = state.device_scanner.scan();
     let device = devices
         .iter()
         .find(|d| d.uuid == project.device_uuid)

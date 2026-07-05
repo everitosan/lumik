@@ -1,7 +1,9 @@
 mod apple_tags;
+mod application;
 mod commands;
 mod db;
 mod domain;
+mod infrastructure;
 mod device_watch;
 mod devices;
 #[cfg(not(target_os = "android"))]
@@ -66,8 +68,12 @@ pub fn run() {
         Arc::new(Mutex::new(HashMap::new()));
     let ejecting_devices: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
 
+    // Composition root: se elige aquí la implementación concreta de cada puerto.
+    let device_scanner: Arc<dyn application::ports::DeviceScanner> =
+        Arc::new(infrastructure::devices::SystemDeviceScanner);
+
     info!("Scanning for project databases on connected devices...");
-    refresh_open_projects(&global_db, &open_projects, &ejecting_devices);
+    refresh_open_projects(device_scanner.as_ref(), &global_db, &open_projects, &ejecting_devices);
     {
         let map = open_projects.lock().unwrap();
         info!("Found {} open project(s) at startup", map.len());
@@ -78,6 +84,7 @@ pub fn run() {
         open_projects,
         ejecting_devices,
         rotation_write_gen: Arc::new(Mutex::new(HashMap::new())),
+        device_scanner,
     };
 
     info!("Starting Tauri application...");
