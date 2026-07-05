@@ -1,5 +1,6 @@
 //! Comandos Tauri de proyectos (CRUD, relocalización de carpeta).
 use super::AppState;
+use crate::application::error::{AppError, AppResult};
 use crate::db::models::*;
 use crate::db::ProjectDatabase;
 use crate::domain::paths::path_to_slash;
@@ -15,7 +16,7 @@ use tauri::{AppHandle, State};
 // ============================================================================
 
 #[tauri::command]
-pub fn get_projects_dashboard(state: State<AppState>) -> Result<Vec<ProjectDashboard>, String> {
+pub fn get_projects_dashboard(state: State<AppState>) -> AppResult<Vec<ProjectDashboard>> {
     debug!("get_projects_dashboard called");
 
     let project_dbs = state.registry.all_open();
@@ -42,17 +43,14 @@ pub fn get_projects_dashboard(state: State<AppState>) -> Result<Vec<ProjectDashb
 }
 
 #[tauri::command]
-pub fn get_project(state: State<AppState>, id: String) -> Result<Option<Project>, String> {
+pub fn get_project(state: State<AppState>, id: String) -> AppResult<Option<Project>> {
     debug!("get_project called: {}", id);
     let project_db = state.project_db(&id)?;
-    project_db.get_project().map_err(|e| {
-        error!("get_project error: {}", e);
-        e.to_string()
-    })
+    Ok(project_db.get_project()?)
 }
 
 #[tauri::command]
-pub fn create_project(state: State<AppState>, project: CreateProject) -> Result<Project, String> {
+pub fn create_project(state: State<AppState>, project: CreateProject) -> AppResult<Project> {
     info!("create_project called: name={}", project.name);
 
     // Resolve the mount point for the requested device
@@ -94,11 +92,7 @@ pub fn create_project(state: State<AppState>, project: CreateProject) -> Result<
         project.session_date.as_deref(),
         &project.device_uuid,
         std::path::PathBuf::from(&device.mount_point),
-    )
-    .map_err(|e| {
-        error!("create_project DB error: {}", e);
-        e.to_string()
-    })?;
+    )?;
 
     // Create _exported subfolder inside the project directory
     let exported_dir = project_dir.join("_exported");
@@ -114,7 +108,8 @@ pub fn create_project(state: State<AppState>, project: CreateProject) -> Result<
     );
 
     // Read back the project row to return to the frontend
-    let created = project_db.get_project().map_err(|e| e.to_string())?
+    let created = project_db
+        .get_project()?
         .ok_or("Failed to read created project")?;
 
     // Add to open projects map
@@ -125,20 +120,17 @@ pub fn create_project(state: State<AppState>, project: CreateProject) -> Result<
 }
 
 #[tauri::command]
-pub fn archive_project(state: State<AppState>, id: String) -> Result<(), String> {
+pub fn archive_project(state: State<AppState>, id: String) -> AppResult<()> {
     info!("archive_project called: {}", id);
     let project_db = state.project_db(&id)?;
-    project_db.archive_project().map_err(|e| {
-        error!("archive_project error: {}", e);
-        e.to_string()
-    })
+    Ok(project_db.archive_project()?)
 }
 
 /// Permanently delete a project: removes its folder and all files from disk.
 /// The SQLite handle is closed first (taken out of the open map) so the directory
 /// can be removed on Windows, where an open file blocks folder removal.
 #[tauri::command]
-pub fn delete_project(state: State<AppState>, id: String) -> Result<(), String> {
+pub fn delete_project(state: State<AppState>, id: String) -> AppResult<()> {
     info!("delete_project called: {}", id);
 
     let project_db = state
@@ -151,12 +143,10 @@ pub fn delete_project(state: State<AppState>, id: String) -> Result<(), String> 
     drop(project_db);
 
     if dir.exists() {
-        std::fs::remove_dir_all(&dir).map_err(|e| {
-            error!("delete_project: failed to remove {}: {}", dir.display(), e);
-            // The project is already out of the open map; a future device scan will
-            // re-discover it if the files are still there.
-            format!("Failed to delete project folder: {}", e)
-        })?;
+        // The project is already out of the open map; a future device scan will
+        // re-discover it if the files are still there.
+        std::fs::remove_dir_all(&dir)
+            .map_err(|e| AppError::Message(format!("Failed to delete project folder: {}", e)))?;
     }
 
     info!("delete_project: removed {}", dir.display());
@@ -239,10 +229,10 @@ pub(crate) fn relocate_project_folder(
 
 /// Rename a project: moves its folder on disk and updates the stored name.
 #[tauri::command]
-pub fn rename_project(state: State<AppState>, id: String, new_name: String) -> Result<Project, String> {
+pub fn rename_project(state: State<AppState>, id: String, new_name: String) -> AppResult<Project> {
     let new_name = new_name.trim().to_string();
     if new_name.is_empty() {
-        return Err("Project name cannot be empty".to_string());
+        return Err(AppError::from("Project name cannot be empty"));
     }
     info!("rename_project called: {} -> {}", id, new_name);
 
@@ -263,14 +253,11 @@ pub fn rename_project(state: State<AppState>, id: String, new_name: String) -> R
 
     let db = relocate_project_folder(&state, &id, &new_dir)?;
 
-    if let Err(e) = db.update_name(&new_name) {
-        error!("rename_project: name update failed: {}", e);
-        return Err(format!("Failed to update project name: {}", e));
-    }
+    db.update_name(&new_name)
+        .map_err(|e| AppError::Message(format!("Failed to update project name: {}", e)))?;
 
     let updated = db
-        .get_project()
-        .map_err(|e| e.to_string())?
+        .get_project()?
         .ok_or("Failed to read renamed project")?;
 
     info!("rename_project success: {}", updated.id);
@@ -280,8 +267,8 @@ pub fn rename_project(state: State<AppState>, id: String, new_name: String) -> R
 /// Open the project's folder in the OS file manager. Desktop only — Android has no
 /// standard way to open a directory path in a file browser (ver `infrastructure::folder`).
 #[tauri::command]
-pub fn open_project_folder(app: AppHandle, state: State<AppState>, id: String) -> Result<(), String> {
+pub fn open_project_folder(app: AppHandle, state: State<AppState>, id: String) -> AppResult<()> {
     let dir = state.project_db(&id)?.project_dir.clone();
-    crate::infrastructure::folder::open_folder(&app, &dir)
+    crate::infrastructure::folder::open_folder(&app, &dir).map_err(AppError::from)
 }
 

@@ -1,5 +1,6 @@
 //! Comandos Tauri de fotos (thumbnails, preview, rating/rotación/culling, ajustes).
 use super::AppState;
+use crate::application::error::{AppError, AppResult};
 use crate::application::use_cases::cull_photo::CullPhoto;
 use crate::application::use_cases::import_photos::cache_thumbnails_parallel;
 use crate::application::use_cases::rate_photo::RatePhoto;
@@ -10,39 +11,27 @@ use std::path::{Path, PathBuf};
 use tauri::State;
 
 // ============================================================================
-// THUMBNAIL CACHE HELPERS
-// ============================================================================
-
-// ============================================================================
 // PHOTO COMMANDS
 // ============================================================================
 
 #[tauri::command]
-pub fn get_project_photos(
-    state: State<AppState>,
-    project_id: String,
-) -> Result<Vec<Photo>, String> {
+pub fn get_project_photos(state: State<AppState>, project_id: String) -> AppResult<Vec<Photo>> {
     debug!("get_project_photos called for project: {}", project_id);
     let project_db = state.project_db(&project_id)?;
-    let result = project_db.get_project_photos().map_err(|e| {
-        error!("get_project_photos error: {}", e);
-        e.to_string()
-    });
-    if let Ok(ref photos) = result {
-        debug!("get_project_photos returning {} photos", photos.len());
-    }
-    result
+    let photos = project_db.get_project_photos()?;
+    debug!("get_project_photos returning {} photos", photos.len());
+    Ok(photos)
 }
 
 #[tauri::command]
 pub fn get_project_thumbnails(
     state: State<AppState>,
     project_id: String,
-) -> Result<Vec<String>, String> {
+) -> AppResult<Vec<String>> {
     debug!("get_project_thumbnails called for project: {}", project_id);
 
     let project_db = state.project_db(&project_id)?;
-    let photos = project_db.get_project_photos().map_err(|e| e.to_string())?;
+    let photos = project_db.get_project_photos()?;
 
     let thumbs_dir = project_db.project_dir.join(".thumbs");
     let ids: Vec<String> = photos
@@ -60,8 +49,8 @@ pub fn get_thumbnail(
     state: State<AppState>,
     project_id: String,
     photo_id: String,
-) -> Result<Option<String>, String> {
-    use base64::{Engine, engine::general_purpose::STANDARD};
+) -> AppResult<Option<String>> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
 
     let project_db = state.project_db(&project_id)?;
     let thumb_path = project_db.project_dir.join(".thumbs").join(format!("{}.jpg", photo_id));
@@ -86,14 +75,13 @@ pub fn get_photo_preview(
     state: State<AppState>,
     photo_id: String,
     project_id: String,
-) -> Result<PhotoPreviewResult, String> {
-    use base64::{Engine, engine::general_purpose::STANDARD};
+) -> AppResult<PhotoPreviewResult> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
     debug!("get_photo_preview: photo={} project={}", photo_id, project_id);
 
     let project_db = state.project_db(&project_id)?;
     let photo = project_db
-        .get_photo(&photo_id)
-        .map_err(|e| e.to_string())?
+        .get_photo(&photo_id)?
         .ok_or_else(|| format!("Photo {} not found", photo_id))?;
 
     let mount = project_db.mount_point.to_string_lossy().to_string();
@@ -101,7 +89,8 @@ pub fn get_photo_preview(
     debug!("get_photo_preview: dng_full={:?} exists={}", dng_full, dng_full.exists());
 
     // JPEGs are already viewable — no permanent preview cache needed.
-    let ext = dng_full.extension()
+    let ext = dng_full
+        .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase())
         .unwrap_or_default();
@@ -125,7 +114,7 @@ pub fn get_photo_preview(
     state.metadata.strip_orientation(&preview_path);
 
     let bytes = std::fs::read(&preview_path)
-        .map_err(|e| format!("Failed to read preview: {}", e))?;
+        .map_err(|e| AppError::Message(format!("Failed to read preview: {}", e)))?;
 
     let rotation = state.metadata.read_rotation(&dng_full);
 
@@ -141,7 +130,7 @@ pub fn save_photo_rotation(
     photo_id: String,
     project_id: String,
     rotation: i32,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let t_total = std::time::Instant::now();
 
     let project_db = state.project_db(&project_id)?;
@@ -188,7 +177,7 @@ pub fn save_photo_rotation(
 
             let t = std::time::Instant::now();
             match metadata.set_orientation(&dng_for_thread, rotation) {
-                Ok(_)  => info!("[rotation] orientation write (background): {}ms", t.elapsed().as_millis()),
+                Ok(_) => info!("[rotation] orientation write (background): {}ms", t.elapsed().as_millis()),
                 Err(e) => error!("[rotation] orientation write failed: {}", e),
             }
         });
@@ -206,7 +195,7 @@ pub fn save_photo_rating(
     stars: i32,
     color_label: Option<String>,
     tags: Option<String>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let project_db = state.project_db(&project_id)?;
     let mount = project_db.mount_point.clone();
 
@@ -225,11 +214,7 @@ pub fn save_photo_rating(
         mount_point: &mount,
         finder_tags_enabled,
     }
-    .execute(&photo_id, stars, color_label.as_deref(), tags.as_deref())
-    .map_err(|e| {
-        error!("save_photo_rating error: {}", e);
-        e
-    })?;
+    .execute(&photo_id, stars, color_label.as_deref(), tags.as_deref())?;
 
     // Invalidar el índice de Spotlight en segundo plano (best-effort) para que el
     // iPad/Mac reindexe los tags recién escritos al reconectar el disco.
@@ -252,7 +237,7 @@ pub fn save_photo_culled(
     photo_id: String,
     project_id: String,
     culled: bool,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let project_db = state.project_db(&project_id)?;
     let mount = project_db.mount_point.clone();
 
@@ -262,11 +247,7 @@ pub fn save_photo_culled(
         finder_tags: state.finder_tags.as_ref(),
         mount_point: &mount,
     }
-    .execute(&photo_id, culled)
-    .map_err(|e| {
-        error!("save_photo_culled error: {}", e);
-        e
-    })?;
+    .execute(&photo_id, culled)?;
 
     debug!("save_photo_culled: photo={} culled={}", photo_id, culled);
     Ok(())
@@ -276,23 +257,22 @@ pub fn save_photo_culled(
 pub fn get_project_cover_thumbnail(
     state: State<AppState>,
     project_id: String,
-) -> Result<Option<String>, String> {
-    use base64::{Engine, engine::general_purpose::STANDARD};
+) -> AppResult<Option<String>> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
 
     let project_db = state.project_db(&project_id)?;
-    let cover_path = project_db
-        .get_project()
-        .map_err(|e| e.to_string())?
-        .and_then(|p| p.cover_photo_path);
+    let cover_path = project_db.get_project()?.and_then(|p| p.cover_photo_path);
 
-    let Some(rel_path) = cover_path else { return Ok(None) };
+    let Some(rel_path) = cover_path else {
+        return Ok(None);
+    };
 
     let thumb_path = project_db.project_dir.join(&rel_path);
+    if !thumb_path.exists() {
+        return Ok(None);
+    }
 
-    if !thumb_path.exists() { return Ok(None); }
-    let final_path = thumb_path;
-
-    match std::fs::read(&final_path) {
+    match std::fs::read(&thumb_path) {
         Ok(bytes) => Ok(Some(format!("data:image/jpeg;base64,{}", STANDARD.encode(&bytes)))),
         Err(_) => Ok(None),
     }
@@ -303,45 +283,38 @@ pub fn set_project_cover_photo(
     state: State<AppState>,
     project_id: String,
     photo_id: Option<String>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let project_db = state.project_db(&project_id)?;
     let path = photo_id.map(|id| format!(".thumbs/{}.jpg", id));
-    project_db
-        .set_cover_photo(path.as_deref())
-        .map_err(|e| e.to_string())
+    Ok(project_db.set_cover_photo(path.as_deref())?)
 }
 
 #[tauri::command]
 pub fn get_project_settings(
     state: State<AppState>,
     project_id: String,
-) -> Result<crate::db::models::ProjectSettings, String> {
+) -> AppResult<ProjectSettings> {
     let project_db = state.project_db(&project_id)?;
-    project_db.get_project_settings().map_err(|e| e.to_string())
+    Ok(project_db.get_project_settings()?)
 }
 
 #[tauri::command]
 pub fn update_project_settings(
     state: State<AppState>,
     project_id: String,
-    settings: crate::db::models::ProjectSettings,
-) -> Result<(), String> {
+    settings: ProjectSettings,
+) -> AppResult<()> {
     let project_db = state.project_db(&project_id)?;
-    project_db
-        .update_project_settings(&settings)
-        .map_err(|e| e.to_string())
+    Ok(project_db.update_project_settings(&settings)?)
 }
 
 /// Delete all cached thumbnails for a project and regenerate them with correct
 /// EXIF orientation applied. Intended as a one-time fix for photos imported
 /// before the orientation-aware thumbnail pipeline was in place.
 #[tauri::command]
-pub fn regenerate_project_thumbnails(
-    state: State<AppState>,
-    project_id: String,
-) -> Result<u32, String> {
+pub fn regenerate_project_thumbnails(state: State<AppState>, project_id: String) -> AppResult<u32> {
     let project_db = state.project_db(&project_id)?;
-    let photos = project_db.get_project_photos().map_err(|e| e.to_string())?;
+    let photos = project_db.get_project_photos()?;
 
     let mount = project_db.mount_point.to_string_lossy().to_string();
 
@@ -370,10 +343,7 @@ pub fn regenerate_project_thumbnails(
 
     let pairs: Vec<(PathBuf, String)> = photos
         .iter()
-        .map(|photo| {
-            let dng_full = Path::new(&mount).join(&photo.dng_path);
-            (dng_full, photo.id.clone())
-        })
+        .map(|photo| (Path::new(&mount).join(&photo.dng_path), photo.id.clone()))
         .collect();
 
     cache_thumbnails_parallel(state.image_processor.as_ref(), &pairs, None);
@@ -382,4 +352,3 @@ pub fn regenerate_project_thumbnails(
     info!("regenerate_project_thumbnails: {} thumbnails regenerated for project {}", regenerated, project_id);
     Ok(regenerated)
 }
-

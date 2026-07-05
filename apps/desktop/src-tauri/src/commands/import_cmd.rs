@@ -2,6 +2,7 @@
 //! `application::use_cases::import_photos`; el auto-rename usa `relocate_project_folder`.
 
 use super::{relocate_project_folder, AppState};
+use crate::application::error::AppResult;
 use crate::application::ports::ProgressReporter;
 use crate::application::use_cases::import_photos::{ImportParams, ImportPhotos};
 use crate::domain::project::ProjectFolder;
@@ -27,7 +28,7 @@ pub async fn start_import(
     app: AppHandle,
     state: State<'_, AppState>,
     request: ImportRequest,
-) -> Result<ImportResult, String> {
+) -> AppResult<ImportResult> {
     info!(
         "start_import called: session={}, files={}, project={}",
         request.session_id,
@@ -43,19 +44,15 @@ pub async fn start_import(
     // Look up project DB before entering the async body to release the lock immediately
     let project_db = state.project_db(&request.project_id)?;
 
-    let settings = state.global_db.get_app_settings().map_err(|e| e.to_string())?;
+    let settings = state.global_db.get_app_settings()?;
 
     let photographer = state
         .global_db
-        .get_active_photographer()
-        .map_err(|e| e.to_string())?
+        .get_active_photographer()?
         .ok_or("No active photographer configured")?;
 
     let photographer_metadata = if settings.embed_metadata_on_import {
-        state
-            .global_db
-            .get_photographer_metadata(&photographer.id)
-            .map_err(|e| e.to_string())?
+        state.global_db.get_photographer_metadata(&photographer.id)?
     } else {
         None
     };

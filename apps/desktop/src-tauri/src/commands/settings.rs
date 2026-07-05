@@ -1,7 +1,8 @@
 //! Comandos Tauri de fotógrafo, metadatos, keybindings y ajustes de app.
 use super::AppState;
+use crate::application::error::{AppError, AppResult};
 use crate::db::models::*;
-use log::{debug, error, info};
+use log::{debug, info};
 use tauri::State;
 
 // ============================================================================
@@ -9,12 +10,9 @@ use tauri::State;
 // ============================================================================
 
 #[tauri::command]
-pub fn get_active_photographer(state: State<AppState>) -> Result<Option<Photographer>, String> {
+pub fn get_active_photographer(state: State<AppState>) -> AppResult<Option<Photographer>> {
     debug!("get_active_photographer called");
-    state.global_db.get_active_photographer().map_err(|e| {
-        error!("get_active_photographer error: {}", e);
-        e.to_string()
-    })
+    Ok(state.global_db.get_active_photographer()?)
 }
 
 #[tauri::command]
@@ -22,15 +20,9 @@ pub fn ensure_default_photographer(
     state: State<AppState>,
     email: String,
     alias: String,
-) -> Result<Photographer, String> {
+) -> AppResult<Photographer> {
     info!("ensure_default_photographer called: {} ({})", alias, email);
-    state
-        .global_db
-        .ensure_default_photographer(&email, &alias)
-        .map_err(|e| {
-            error!("ensure_default_photographer error: {}", e);
-            e.to_string()
-        })
+    Ok(state.global_db.ensure_default_photographer(&email, &alias)?)
 }
 
 // ============================================================================
@@ -41,15 +33,9 @@ pub fn ensure_default_photographer(
 pub fn get_photographer_metadata(
     state: State<AppState>,
     photographer_id: String,
-) -> Result<Option<PhotographerMetadata>, String> {
+) -> AppResult<Option<PhotographerMetadata>> {
     debug!("get_photographer_metadata called for: {}", photographer_id);
-    state
-        .global_db
-        .get_photographer_metadata(&photographer_id)
-        .map_err(|e| {
-            error!("get_photographer_metadata error: {}", e);
-            e.to_string()
-        })
+    Ok(state.global_db.get_photographer_metadata(&photographer_id)?)
 }
 
 #[tauri::command]
@@ -57,19 +43,13 @@ pub fn update_photographer_metadata(
     state: State<AppState>,
     photographer_id: String,
     metadata: UpdatePhotographerMetadata,
-) -> Result<PhotographerMetadata, String> {
+) -> AppResult<PhotographerMetadata> {
     info!("update_photographer_metadata called for: {}", photographer_id);
     let result = state
         .global_db
-        .update_photographer_metadata(&photographer_id, &metadata)
-        .map_err(|e| {
-            error!("update_photographer_metadata error: {}", e);
-            e.to_string()
-        });
-    if result.is_ok() {
-        info!("update_photographer_metadata success");
-    }
-    result
+        .update_photographer_metadata(&photographer_id, &metadata)?;
+    info!("update_photographer_metadata success");
+    Ok(result)
 }
 
 // ============================================================================
@@ -77,26 +57,17 @@ pub fn update_photographer_metadata(
 // ============================================================================
 
 #[tauri::command]
-pub fn get_keybindings(state: State<AppState>) -> Result<Vec<Keybinding>, String> {
-    state.global_db.get_keybindings().map_err(|e| {
-        error!("get_keybindings error: {}", e);
-        e.to_string()
-    })
+pub fn get_keybindings(state: State<AppState>) -> AppResult<Vec<Keybinding>> {
+    Ok(state.global_db.get_keybindings()?)
 }
 
 #[tauri::command]
-pub fn update_keybinding(
-    state: State<AppState>,
-    action: String,
-    key: String,
-) -> Result<(), String> {
+pub fn update_keybinding(state: State<AppState>, action: String, key: String) -> AppResult<()> {
     if key.is_empty() {
-        return Err("La tecla no puede estar vacía".to_string());
+        return Err(AppError::from("La tecla no puede estar vacía"));
     }
-    state.global_db.update_keybinding(&action, &key).map_err(|e| {
-        error!("update_keybinding error: {}", e);
-        e.to_string()
-    })
+    state.global_db.update_keybinding(&action, &key)?;
+    Ok(())
 }
 
 // ============================================================================
@@ -104,27 +75,15 @@ pub fn update_keybinding(
 // ============================================================================
 
 #[tauri::command]
-pub fn get_app_settings(state: State<AppState>) -> Result<AppSettings, String> {
+pub fn get_app_settings(state: State<AppState>) -> AppResult<AppSettings> {
     debug!("get_app_settings called");
-    state.global_db.get_app_settings().map_err(|e| {
-        error!("get_app_settings error: {}", e);
-        e.to_string()
-    })
+    Ok(state.global_db.get_app_settings()?)
 }
 
 #[tauri::command]
-pub fn update_app_settings(
-    state: State<AppState>,
-    settings: AppSettings,
-) -> Result<AppSettings, String> {
+pub fn update_app_settings(state: State<AppState>, settings: AppSettings) -> AppResult<AppSettings> {
     info!("update_app_settings called");
-    let result = state.global_db.update_app_settings(&settings).map_err(|e| {
-        error!("update_app_settings error: {}", e);
-        e.to_string()
-    });
-    if result.is_ok() {
-        info!("update_app_settings success");
-    }
-    result
+    let result = state.global_db.update_app_settings(&settings)?;
+    info!("update_app_settings success");
+    Ok(result)
 }
-

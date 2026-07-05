@@ -1,8 +1,9 @@
 //! Comandos Tauri de dispositivos (escaneo, expulsión).
 use super::{refresh_open_projects, AppState};
+use crate::application::error::{AppError, AppResult};
 use crate::db::models::*;
 use crate::devices::DetectedDevice;
-use log::{error, info};
+use log::info;
 use tauri::{AppHandle, Emitter, State};
 
 // ============================================================================
@@ -50,7 +51,7 @@ pub fn eject_device(
     app: AppHandle,
     state: State<AppState>,
     device_uuid: String,
-) -> Result<(), String> {
+) -> AppResult<()> {
     info!("eject_device called: {}", device_uuid);
 
     // Resolve the mount point now, before we remove anything, so we can hand it
@@ -100,16 +101,12 @@ pub fn eject_device(
         let _ = app.emit("devices-changed", &device_uuid);
     }
 
-    result
+    result.map_err(AppError::from)
 }
 
 /// Return all devices previously seen (from the global registry).
 #[tauri::command]
-pub fn get_known_devices(state: State<AppState>) -> Result<Vec<KnownDevice>, String> {
-    // debug!("get_known_devices called");
-    state.global_db.get_known_devices().map_err(|e| {
-        error!("get_known_devices error: {}", e);
-        e.to_string()
-    })
+pub fn get_known_devices(state: State<AppState>) -> AppResult<Vec<KnownDevice>> {
+    Ok(state.global_db.get_known_devices()?)
 }
 
