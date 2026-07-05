@@ -63,6 +63,15 @@ fotos del año", "Portafolio", "Entrega cliente X".
 
 ---
 
+## Arquitectura / Deuda técnica
+
+- **Refactor del backend Rust a Arquitectura Limpia** — descomponer el módulo-Dios
+  `commands.rs` (2041 líneas) en capas (domain / application / infrastructure /
+  interface), blindando las reglas frágiles con tests de dominio. Plan y
+  checkpoints en [desktop-clean-architecture.md](desktop-clean-architecture.md).
+
+---
+
 ## Backlog (sin fecha)
 
 - Batch operations desde el grid (rating/cull en lote)
