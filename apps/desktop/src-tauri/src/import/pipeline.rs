@@ -376,7 +376,9 @@ mod tests {
     #[test]
     fn test_sanitize_name() {
         assert_eq!(sanitize_name("PlatziConf 2025"), "PlatziConf_2025");
-        assert_eq!(sanitize_name("Boda María&José"), "Boda_Mar_a_Jos_");
+        // char::is_alphanumeric() es Unicode-aware: conserva letras acentuadas;
+        // solo el espacio y el '&' se reemplazan por '_'.
+        assert_eq!(sanitize_name("Boda María&José"), "Boda_María_José");
         assert_eq!(sanitize_name("test-project_01"), "test-project_01");
     }
 }
