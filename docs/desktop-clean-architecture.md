@@ -279,12 +279,13 @@ Base: puertos `PhotoRepository` (impl para `ProjectDatabase`) y `FileStore`
 - [ ] `use_cases/manage_projects.rs` (create/rename/delete/archive/relocate).
 - [ ] `use_cases/manage_devices.rs` (scan/eject/refresh).
 - [ ] `use_cases/media.rs` (thumbnail/preview).
-- [ ] `application/registry.rs`: encapsular `open_projects`/`ejecting_devices`/`rotation_write_gen`.
+- [x] `application/registry.rs`: `ProjectRegistry` encapsula `open_projects`/
+      `ejecting_devices`/`rotation_write_gen`; `AppState` y `commands.rs` dejan de
+      manipular locks inline. Behavior-preserving.
 
 **Gate 3:** cada caso de uso tiene test con puertos falsos; la lógica ya no vive
-en los comandos. **Estado: parcial** — hechos los 3 use cases de edición de foto
-(cull/rate/rotate) con tests + ProgressReporter; pendientes import, manage_*,
-media y el registry.
+en los comandos. **Estado: parcial** — hechos cull/rate/rotate + ProgressReporter
++ el `ProjectRegistry`; pendientes import, manage_projects, manage_devices, media.
 
 ---
 
@@ -391,3 +392,13 @@ Registrar aquí decisiones/desvíos al ejecutar cada fase (fecha + nota breve).
   funcionan correctamente. Confirma que la extracción a puertos preservó el
   comportamiento en las rutas runtime-críticas (lo que los fixtures no podían cubrir
   del todo). Falta la verificación cross-platform del build de Android (Gate 6).
+- **2026-07-05 · Fase 3 · parcial** — Base de repos/fs (`PhotoRepository`,
+  `FileStore`) + 3 casos de uso de edición de foto con tests de fakes:
+  `CullPhoto` (con rollback), `RatePhoto` (normaliza tags + sidecar), `RotatePhoto`
+  (delta + thumbnail). `ProgressReporter` cierra el diferido de Fase 2. Los comandos
+  `save_photo_*` quedan como adaptadores delgados. `ProjectRegistry` encapsula el
+  estado de sesión. **A verificar en runtime**: el rewire del registry tocó el flujo
+  de `eject` (mark/close/eject/clear) y de create/rename/delete/relocate — es
+  behavior-preserving pero conviene probar expulsión de disco y CRUD de proyectos.
+  Pendientes: `ImportPhotos` (el más grande, para el final con verificación),
+  `manage_projects`, `manage_devices`, `media`.
