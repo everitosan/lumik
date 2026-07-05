@@ -301,17 +301,23 @@ en los comandos. **Estado: parcial** — hechos cull/rate/rotate + ProgressRepor
 ---
 
 ### Fase 5 — Consolidar persistencia y errores
-- [ ] `infrastructure/persistence/mappers.rs`: unificar el mapeo fila→`Photo`
-      duplicado entre `get_photo` y `get_project_photos`.
-- [ ] `infrastructure/persistence/migrations.rs`: migraciones versionadas con
-      `PRAGMA user_version`; retirar los `ALTER TABLE` de `db/mod.rs` y la
-      `migrate_project_settings` de `queries.rs`.
-  - [ ] Test de migración: abrir una BD "vieja" simulada y verificar que migra.
-- [ ] `application/error.rs`: `AppError` con `thiserror` + `impl Serialize`
-      (`{ code, message }` hacia el frontend).
+- [x] Mapeo fila→`Photo` unificado: `photo_from_row` + const `PHOTO_COLUMNS` en
+      `db/queries.rs` (fuente única para `get_photo` y `get_project_photos`; ~90
+      líneas menos). *(Se dejó en `db/` en vez de `infrastructure/persistence/`
+      para no mover toda la capa de persistencia todavía.)*
+- [x] Migraciones consolidadas en `db/migrations.rs::run_project_migrations`
+      (llamado desde `open()`/`create()`); retirados los `ALTER` de `db/mod.rs` y
+      la `migrate_project_settings` de `queries.rs`.
+  - [x] Test de migración: BD con esquema viejo → actual, + idempotencia.
+  - Nota: NO se adopta `PRAGMA user_version` (riesgo de adopción sobre BDs reales
+    de discos externos sin fixtures; el enfoque idempotente es seguro).
+- [ ] `AppError` con `thiserror` + `impl Serialize`. **Diferido**: convertir todos
+      los comandos de `Result<T, String>` a `AppError` es amplio y **cambia el
+      contrato con el frontend** (hoy TS recibe strings). Requiere coordinar el
+      manejo de errores del frontend; hacerlo con esa coordinación, no al vuelo.
 
-**Gate 5:** una sola ruta de mapeo; migraciones ordenadas y probadas; errores
-tipados y serializables.
+**Gate 5:** una sola ruta de mapeo ✅; migraciones consolidadas y probadas ✅;
+errores tipados serializables — pendiente (coordinación con frontend).
 
 ---
 
@@ -406,3 +412,11 @@ Registrar aquí decisiones/desvíos al ejecutar cada fase (fecha + nota breve).
   `ProjectRegistry`: expulsión de disco y CRUD de proyectos (create/rename/delete)
   funcionan. Confirma que el rewire del registry preservó el comportamiento del
   flujo delicado de eject/mount.
+- **2026-07-05 · Fase 5 · parcial (resecuenciado)** — Tras el registry, los
+  comandos restantes ya son adaptadores delgados sobre dominio+puertos, así que los
+  use cases mecánicos pendientes (manage_*/media) dan rendimientos decrecientes y
+  re-tocarían paths recién verificados. Se avanzó a Fase 5 (no toca comandos):
+  dedup del mapeo `Photo` y consolidación de migraciones con test de BD vieja.
+  `AppError` queda diferido por el contrato con el frontend. Pendientes de mayor
+  valor: `ImportPhotos` (con verificación runtime) y el split de `commands.rs`
+  (Fase 4).
