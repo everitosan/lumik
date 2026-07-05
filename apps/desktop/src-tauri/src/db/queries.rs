@@ -325,37 +325,8 @@ impl ProjectDatabase {
         Ok(result)
     }
 
-    /// Migrates project_settings table by adding missing columns from older databases.
-    /// This is a "lazy migration" that runs on first access, not on schema initialization.
-    fn migrate_project_settings(&self) -> DbResult<()> {
-        let conn = self.conn();
-
-        // Add missing columns if they don't exist
-        let columns_to_add = [
-            ("min_stars", "INTEGER"),
-            ("selected_tags", "TEXT"),
-            ("selected_colors", "TEXT"),
-            ("stars_filter_mode", "TEXT"),
-            ("view_mode", "TEXT"),
-        ];
-
-        for (col_name, col_type) in &columns_to_add {
-            // Try to select the column; if it fails, add it
-            if conn.execute(&format!("SELECT {} FROM project_settings LIMIT 0", col_name), []).is_err() {
-                conn.execute(
-                    &format!("ALTER TABLE project_settings ADD COLUMN {} {} DEFAULT NULL", col_name, col_type),
-                    [],
-                )?;
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn get_project_settings(&self) -> DbResult<ProjectSettings> {
-        // Run migration first (idempotent, safe to run every time)
-        self.migrate_project_settings()?;
-
+        // Las columnas se garantizan al abrir la BD (ver db::migrations).
         let conn = self.conn();
         let result = conn.query_row(
             "SELECT sidebar_open, show_culled, min_stars, selected_tags, selected_colors, stars_filter_mode, view_mode FROM project_settings WHERE id = 1",
