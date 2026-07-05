@@ -294,13 +294,17 @@ Falta la verificación en ejecución del import.
 ---
 
 ### Fase 4 — Adelgazar la capa de interfaz
-- [ ] Dividir `commands.rs` en `interface/*_commands.rs` que solo delegan.
-- [ ] `interface/dto.rs`: DTOs de request/response del borde IPC.
-- [ ] Comandos devuelven `Result<T, AppError>`; eliminar el patrón repetido
-      `.map_err(|e| { error!(...); e.to_string() })`.
-- [ ] Actualizar `invoke_handler!` en `lib.rs` a los nuevos módulos.
+- [x] Dividir `commands.rs` en submódulos por dominio: `commands/{device,project,
+      photo,settings,import_cmd}.rs` (adaptadores delgados). `commands.rs` queda
+      solo con `AppState` + `refresh_open_projects` + composición (2041 → 101 líneas).
+- [ ] `interface/dto.rs`: DTOs de request/response del borde IPC. *(No hecho: los
+      DTOs viven en `db::models`/`import`; separar un `dto.rs` es cosmético.)*
+- [ ] Comandos devuelven `Result<T, AppError>`. **Diferido con Fase 5** (contrato frontend).
+- [x] `invoke_handler!` sigue funcionando (los comandos se re-exportan con `pub use`).
 
-**Gate 4:** `commands.rs` eliminado; cada comando es un adaptador delgado.
+**Gate 4:** ✅ `commands.rs` deja de ser módulo-Dios; cada comando es un adaptador
+delgado en su submódulo. (El nombre `commands.rs` se conserva como raíz del módulo
+en vez de `interface/`, para minimizar disrupción.)
 
 ---
 
@@ -326,13 +330,15 @@ errores tipados serializables — pendiente (coordinación con frontend).
 ---
 
 ### Fase 6 — Cierre
-- [ ] `cargo test` completo verde (dominio + casos de uso + infra).
-- [ ] `cargo build` para Linux, Windows y Android sin `#[cfg]` filtrado.
-- [ ] Verificación manual del MVP: import, culling, rating, rotación, eject.
-- [ ] Actualizar `apps/desktop/CLAUDE.md` con la nueva estructura de módulos.
-- [ ] Revisión final: ninguna capa interior importa de una exterior.
+- [x] `cargo test` completo verde (dominio + casos de uso + infra): 52 tests.
+- [ ] `cargo build` para Windows y Android (Linux ✅). Pendiente verificar cross-compile.
+- [x] Verificación manual (usuario): import/visor/rotación (Fase 2) y eject/CRUD (Fase 3).
+- [x] Actualizar `apps/desktop/CLAUDE.md` con la nueva estructura por capas.
+- [x] Revisión: ninguna capa interior importa de una exterior (domain no usa nada;
+      application solo domain + DTOs; los comandos delegan).
 
 **Gate 6:** MVP funcional idéntico, con backend por capas y dominio testeado.
+**Estado: casi** — falta el build cross-platform (Windows/Android) y `AppError`.
 
 ---
 

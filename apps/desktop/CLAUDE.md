@@ -38,23 +38,50 @@ src/
     CreateProjectModal.tsx          # Modal para crear proyecto (nombre, fecha, dispositivo)
     Layout.tsx / Sidebar.tsx        # Shell de la app
 
-src-tauri/src/
-  main.rs                           # Inicializa BD global, fotógrafo default, open_projects, Tauri builder
-  commands.rs                       # Todos los #[tauri::command] + AppState + lógica de importación
-  db/
-    mod.rs                          # GlobalDatabase y ProjectDatabase (wrappers sobre rusqlite)
-    models.rs                       # Structs Rust (Photographer, Project, Photo, etc.)
-    queries.rs                      # SQL de consulta/inserción
-    global_schema.sql               # Schema de la BD global
-    project_schema.sql              # Schema de la BD por proyecto
-  devices.rs                        # scan_mounted_devices() — detecta discos montados vía lsblk
-  import/
-    pipeline.rs                     # Orquestación del pipeline (copy → metadata → move)
-    converter.rs                    # Constantes de extensiones soportadas y tipos de error
-    xmp.rs                          # Escritura de metadatos XMP con exiftool
-    hasher.rs                       # SHA-256 de archivos
-    progress.rs                     # Tipos ImportProgress / ImportResult / ImportPhase
+El backend Rust sigue una arquitectura por capas (ver
+`docs/desktop-clean-architecture.md`). Las dependencias apuntan hacia adentro:
+`interface → application → domain`, y `infrastructure` implementa los puertos.
+
 ```
+src-tauri/src/
+  main.rs                           # entry point → lumik_lib::run()
+  lib.rs                            # composition root: arma infra, elige impl por plataforma, registra comandos
+
+  domain/                           # núcleo puro (sin SQLite/exiftool/Tauri/fs), 100% testeable
+    photo.rs                        #   VOs: Rotation, Stars, normalize_tags
+    paths.rs                        #   cull_destination (_media↔_culled), path_to_slash
+    project.rs                      #   ProjectFolder (slug/date_parts/path), compare_dashboard
+    error.rs                        #   DomainError
+
+  application/                      # orquestación; define los puertos (traits)
+    ports.rs                        #   DeviceScanner, MetadataTool, ImageProcessor, FinderTagWriter,
+                                    #   FileStore, PhotoRepository, ImportPipeline, ProgressReporter
+    registry.rs                     #   ProjectRegistry (proyectos abiertos, ejecting, rotation-gen)
+    use_cases/                      #   cull_photo, rate_photo, rotate_photo, import_photos (con tests de fakes)
+
+  infrastructure/                   # implementa los puertos (aquí vive el #[cfg] de plataforma)
+    metadata.rs                     #   ExiftoolMetadata (desktop) / AndroidMetadata (rawler)
+    imaging.rs                      #   DesktopImaging / AndroidImaging (thumbnails/previews)
+    devices.rs, finder_tags.rs, folder.rs, fs.rs, progress.rs, import_pipeline.rs, persistence.rs
+
+  commands.rs                       # AppState + refresh_open_projects + declaración de submódulos
+  commands/                         # comandos Tauri (adaptadores delgados) por dominio
+    device.rs, project.rs, photo.rs, settings.rs, import_cmd.rs
+
+  db/                               # persistencia SQLite (GlobalDatabase / ProjectDatabase)
+    mod.rs, models.rs, queries.rs (photo_from_row), migrations.rs, *_schema.sql
+  devices.rs                        # scan_mounted_devices() por plataforma (sysinfo / /proc)
+  device_watch.rs                   # watcher nativo de hotplug
+  apple_tags.rs                     # sidecars AppleDouble (desktop-only)
+  exiftool.rs / exif_android.rs     # herramientas EXIF por plataforma
+  import/                           # pipeline (passthrough → metadata → move), converter, xmp, progress
+  tests/fixtures/                   # JPEGs con EXIF conocido para tests de caracterización
+```
+
+**Nota:** `commands.rs` ya NO es un módulo-Dios: los comandos son adaptadores
+delgados que construyen un caso de uso o llaman un puerto. La lógica frágil
+(rollback de culling, debounce de rotación, normalización de tags, construcción
+de rutas, migraciones) vive en `domain`/`application` con tests.
 
 ## Arquitectura de base de datos
 
@@ -68,12 +95,14 @@ src-tauri/src/
    Una por proyecto, vive en el disco externo. Contiene la tabla `fotografia`
    con paths relativos al mount point.
 
-**`AppState`** mantiene:
-- `global_db: Arc<GlobalDatabase>`
-- `open_projects: Arc<Mutex<HashMap<project_id, Arc<ProjectDatabase>>>>` — se
-  puebla al arrancar y se refresca en cada `scan_connected_devices`. Si el disco
-  se desmonta, sus proyectos desaparecen del mapa. Si el proyecto no está en
-  el mapa, el comando devuelve error "device not mounted".
+**`AppState`** mantiene `global_db`, los puertos de infraestructura
+(`device_scanner`, `metadata`, `image_processor`, `finder_tags`, `file_store`) y
+un **`registry: Arc<ProjectRegistry>`** (`application/registry.rs`) que encapsula
+el estado de sesión: proyectos abiertos (`open_projects`), dispositivos en
+expulsión y el contador de generación del debounce de rotación. El mapa de
+proyectos abiertos se puebla al arrancar y se refresca en cada
+`scan_connected_devices`; si el disco se desmonta, sus proyectos desaparecen y el
+comando devuelve error "device not mounted".
 
 ## Estructura de carpetas en disco externo
 
@@ -113,17 +142,25 @@ src-tauri/src/
 - **Procesamiento de un archivo a la vez en la pipeline** para no saturar RAM
   (un RAW decodificado ≈ 150-200 MB).
 
-## Pipeline de importación (`start_import` en commands.rs)
+## Pipeline de importación
+
+El comando `start_import` (`commands/import_cmd.rs`) es un adaptador delgado que
+particiona fotos/videos y delega en el caso de uso `ImportPhotos`
+(`application/use_cases/import_photos.rs`), que orquesta el pipeline vía el puerto
+`ImportPipeline` (`infrastructure/import_pipeline.rs`):
 
 ```
 source files
   → pipeline_passthrough → workspace temporal (copia en formato original, sin conversión)
   → pipeline_metadata (exiftool embebe XMP del fotógrafo, si embed_metadata=true)
   → pipeline_move_to_dest → carpeta del proyecto en disco externo
-  → extract_exif_metadata_batch (UN proceso exiftool para todos, salida CSV)
-  → create_photos_batch (UNA transacción SQLite)
-  → cache_thumbnails_parallel (exiftool + image crate, paralelo por CPU cores, max 8)
+  → MetadataTool::extract_batch (UN proceso exiftool para todos, salida CSV)
+  → PhotoRepository::create_batch (UNA transacción SQLite)
+  → cache_thumbnails_parallel (ImageProcessor, paralelo por CPU cores, max 8)
 ```
+
+El auto-rename de la carpeta por fecha (usa `relocate_project_folder`, acoplado al
+registry) se queda en el adaptador, tras el caso de uso.
 
 El progreso se emite como evento Tauri `"import-progress"` con 3 fases gruesas
 (no por archivo). El frontend lo recibe en `useImport()` hook.
