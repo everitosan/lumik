@@ -1,3 +1,4 @@
+mod migrations;
 pub mod models;
 pub mod queries;
 mod schema;
@@ -87,36 +88,9 @@ impl ProjectDatabase {
              PRAGMA synchronous = NORMAL;
              PRAGMA foreign_keys = ON;"
         )?;
-        conn.execute_batch(schema::PROJECT_SCHEMA)?;
 
-        // Migrate cover_photo_id → cover_photo_path (idempotent)
-        let needs_migration = {
-            let mut stmt = conn.prepare("PRAGMA table_info(project)")?;
-            let mut rows = stmt.query([])?;
-            let mut found = false;
-            while let Some(row) = rows.next()? {
-                let name: String = row.get(1)?;
-                if name == "cover_photo_id" { found = true; break; }
-            }
-            found
-        };
-        if needs_migration {
-            conn.execute_batch(
-                "ALTER TABLE project RENAME COLUMN cover_photo_id TO cover_photo_path;"
-            )?;
-        }
-
-        // Add rotation column if missing (idempotent)
-        let _ = conn.execute(
-            "ALTER TABLE photo ADD COLUMN rotation INTEGER NOT NULL DEFAULT 0",
-            [],
-        );
-
-        // Ensure the single project_settings row exists (idempotent)
-        conn.execute(
-            "INSERT OR IGNORE INTO project_settings (id) VALUES (1)",
-            [],
-        )?;
+        // Esquema + migraciones idempotentes en un solo lugar (ver db::migrations).
+        migrations::run_project_migrations(&conn)?;
 
         let project_id: String = conn.query_row(
             "SELECT id FROM project LIMIT 1",
@@ -163,7 +137,9 @@ impl ProjectDatabase {
              PRAGMA synchronous = NORMAL;
              PRAGMA foreign_keys = ON;"
         )?;
-        conn.execute_batch(schema::PROJECT_SCHEMA)?;
+
+        // Esquema + migraciones (crea tablas y la fila project_settings id=1).
+        migrations::run_project_migrations(&conn)?;
 
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
@@ -171,7 +147,6 @@ impl ProjectDatabase {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![project_id, name, description, now, session_date, creator_id],
         )?;
-        conn.execute("INSERT INTO project_settings (id) VALUES (1)", [])?;
 
         let project_dir = path.parent()
             .unwrap_or_else(|| Path::new("."))

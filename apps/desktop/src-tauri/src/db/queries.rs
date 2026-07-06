@@ -325,37 +325,8 @@ impl ProjectDatabase {
         Ok(result)
     }
 
-    /// Migrates project_settings table by adding missing columns from older databases.
-    /// This is a "lazy migration" that runs on first access, not on schema initialization.
-    fn migrate_project_settings(&self) -> DbResult<()> {
-        let conn = self.conn();
-
-        // Add missing columns if they don't exist
-        let columns_to_add = [
-            ("min_stars", "INTEGER"),
-            ("selected_tags", "TEXT"),
-            ("selected_colors", "TEXT"),
-            ("stars_filter_mode", "TEXT"),
-            ("view_mode", "TEXT"),
-        ];
-
-        for (col_name, col_type) in &columns_to_add {
-            // Try to select the column; if it fails, add it
-            if conn.execute(&format!("SELECT {} FROM project_settings LIMIT 0", col_name), []).is_err() {
-                conn.execute(
-                    &format!("ALTER TABLE project_settings ADD COLUMN {} {} DEFAULT NULL", col_name, col_type),
-                    [],
-                )?;
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn get_project_settings(&self) -> DbResult<ProjectSettings> {
-        // Run migration first (idempotent, safe to run every time)
-        self.migrate_project_settings()?;
-
+        // Las columnas se garantizan al abrir la BD (ver db::migrations).
         let conn = self.conn();
         let result = conn.query_row(
             "SELECT sidebar_open, show_culled, min_stars, selected_tags, selected_colors, stars_filter_mode, view_mode FROM project_settings WHERE id = 1",
@@ -482,54 +453,15 @@ impl ProjectDatabase {
 
     pub fn get_project_photos(&self) -> DbResult<Vec<Photo>> {
         let conn = self.conn();
-        let mut stmt = conn.prepare(
-            "SELECT id, project_id, dng_path, jpg_path, device_uuid,
-                    original_camera, original_format, import_date, file_hash,
-                    culled, workflow_status, backup_status, backup_url,
-                    backup_date, backup_retries, deleted, stars, color_label,
-                    tags, capture_date, width, height, file_size_bytes,
-                    iso, aperture, shutter_speed, exposure_compensation,
-                    focal_length, lens_model, rotation
-             FROM photo
+        let sql = format!(
+            "SELECT {PHOTO_COLUMNS} FROM photo
              WHERE project_id = ?1 AND deleted = 0
-             ORDER BY capture_date ASC NULLS LAST, import_date ASC",
-        )?;
+             ORDER BY capture_date ASC NULLS LAST, import_date ASC"
+        );
+        let mut stmt = conn.prepare(&sql)?;
 
         let photos = stmt
-            .query_map([&self.project_id], |row| {
-                Ok(Photo {
-                    id: row.get(0)?,
-                    project_id: row.get(1)?,
-                    dng_path: row.get(2)?,
-                    jpg_path: row.get(3)?,
-                    device_uuid: row.get(4)?,
-                    original_camera: row.get(5)?,
-                    original_format: row.get(6)?,
-                    import_date: row.get(7)?,
-                    file_hash: row.get(8)?,
-                    culled: row.get::<_, i32>(9)? != 0,
-                    workflow_status: row.get(10)?,
-                    backup_status: row.get(11)?,
-                    backup_url: row.get(12)?,
-                    backup_date: row.get(13)?,
-                    backup_retries: row.get(14)?,
-                    deleted: row.get::<_, i32>(15)? != 0,
-                    stars: row.get(16)?,
-                    color_label: row.get(17)?,
-                    tags: row.get(18)?,
-                    capture_date: row.get(19)?,
-                    width: row.get(20)?,
-                    height: row.get(21)?,
-                    file_size_bytes: row.get(22)?,
-                    iso: row.get(23)?,
-                    aperture: row.get(24)?,
-                    shutter_speed: row.get(25)?,
-                    exposure_compensation: row.get(26)?,
-                    focal_length: row.get(27)?,
-                    lens_model: row.get(28)?,
-                    rotation: row.get::<_, i32>(29).unwrap_or(0),
-                })
-            })?
+            .query_map([&self.project_id], photo_from_row)?
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(photos)
@@ -537,54 +469,10 @@ impl ProjectDatabase {
 
     pub fn get_photo(&self, id: &str) -> DbResult<Option<Photo>> {
         let conn = self.conn();
-        let mut stmt = conn.prepare(
-            "SELECT id, project_id, dng_path, jpg_path, device_uuid,
-                    original_camera, original_format, import_date, file_hash,
-                    culled, workflow_status, backup_status, backup_url,
-                    backup_date, backup_retries, deleted, stars, color_label,
-                    tags, capture_date, width, height, file_size_bytes,
-                    iso, aperture, shutter_speed, exposure_compensation,
-                    focal_length, lens_model, rotation
-             FROM photo WHERE id = ?1",
-        )?;
+        let sql = format!("SELECT {PHOTO_COLUMNS} FROM photo WHERE id = ?1");
+        let mut stmt = conn.prepare(&sql)?;
 
-        let result = stmt
-            .query_row([id], |row| {
-                Ok(Photo {
-                    id: row.get(0)?,
-                    project_id: row.get(1)?,
-                    dng_path: row.get(2)?,
-                    jpg_path: row.get(3)?,
-                    device_uuid: row.get(4)?,
-                    original_camera: row.get(5)?,
-                    original_format: row.get(6)?,
-                    import_date: row.get(7)?,
-                    file_hash: row.get(8)?,
-                    culled: row.get::<_, i32>(9)? != 0,
-                    workflow_status: row.get(10)?,
-                    backup_status: row.get(11)?,
-                    backup_url: row.get(12)?,
-                    backup_date: row.get(13)?,
-                    backup_retries: row.get(14)?,
-                    deleted: row.get::<_, i32>(15)? != 0,
-                    stars: row.get(16)?,
-                    color_label: row.get(17)?,
-                    tags: row.get(18)?,
-                    capture_date: row.get(19)?,
-                    width: row.get(20)?,
-                    height: row.get(21)?,
-                    file_size_bytes: row.get(22)?,
-                    iso: row.get(23)?,
-                    aperture: row.get(24)?,
-                    shutter_speed: row.get(25)?,
-                    exposure_compensation: row.get(26)?,
-                    focal_length: row.get(27)?,
-                    lens_model: row.get(28)?,
-                    rotation: row.get::<_, i32>(29).unwrap_or(0),
-                })
-            })
-            .optional()?;
-
+        let result = stmt.query_row([id], photo_from_row).optional()?;
         Ok(result)
     }
 
@@ -696,6 +584,52 @@ impl ProjectDatabase {
 // ============================================================================
 // HELPERS
 // ============================================================================
+
+/// Columnas de `photo` en el orden exacto que consume `photo_from_row`.
+/// Centralizar la lista evita que la query y el mapeo se desincronicen.
+const PHOTO_COLUMNS: &str = "id, project_id, dng_path, jpg_path, device_uuid, \
+    original_camera, original_format, import_date, file_hash, culled, \
+    workflow_status, backup_status, backup_url, backup_date, backup_retries, \
+    deleted, stars, color_label, tags, capture_date, width, height, \
+    file_size_bytes, iso, aperture, shutter_speed, exposure_compensation, \
+    focal_length, lens_model, rotation";
+
+/// Mapea una fila de `photo` (seleccionada con `PHOTO_COLUMNS`) a `Photo`.
+/// Fuente única para `get_photo` y `get_project_photos`.
+fn photo_from_row(row: &rusqlite::Row) -> rusqlite::Result<Photo> {
+    Ok(Photo {
+        id: row.get(0)?,
+        project_id: row.get(1)?,
+        dng_path: row.get(2)?,
+        jpg_path: row.get(3)?,
+        device_uuid: row.get(4)?,
+        original_camera: row.get(5)?,
+        original_format: row.get(6)?,
+        import_date: row.get(7)?,
+        file_hash: row.get(8)?,
+        culled: row.get::<_, i32>(9)? != 0,
+        workflow_status: row.get(10)?,
+        backup_status: row.get(11)?,
+        backup_url: row.get(12)?,
+        backup_date: row.get(13)?,
+        backup_retries: row.get(14)?,
+        deleted: row.get::<_, i32>(15)? != 0,
+        stars: row.get(16)?,
+        color_label: row.get(17)?,
+        tags: row.get(18)?,
+        capture_date: row.get(19)?,
+        width: row.get(20)?,
+        height: row.get(21)?,
+        file_size_bytes: row.get(22)?,
+        iso: row.get(23)?,
+        aperture: row.get(24)?,
+        shutter_speed: row.get(25)?,
+        exposure_compensation: row.get(26)?,
+        focal_length: row.get(27)?,
+        lens_model: row.get(28)?,
+        rotation: row.get::<_, i32>(29).unwrap_or(0),
+    })
+}
 
 trait OptionalExt<T> {
     fn optional(self) -> Result<Option<T>, rusqlite::Error>;
