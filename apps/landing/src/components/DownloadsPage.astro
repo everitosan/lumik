@@ -56,7 +56,7 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
       .spinner { width: 28px; height: 28px; border: 2px solid var(--lumik-outline-variant); border-top-color: var(--lumik-primary-container); border-radius: 50%; animation: spin 0.7s linear infinite; }
       @keyframes spin { to { transform: rotate(360deg); } }
 
-      #releases-list { display: flex; flex-direction: column; gap: 24px; }
+      #releases-list, #releases-list-win { display: flex; flex-direction: column; gap: 24px; }
       .release-card { background: var(--lumik-surface-container-low); border: 1px solid var(--lumik-outline-variant); border-radius: 12px; overflow: hidden; }
       .release-header { padding: 24px 28px 20px; border-bottom: 1px solid var(--lumik-outline-variant); }
       .release-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
@@ -96,6 +96,10 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
         .asset-size { display: none; }
       }
     </style>
+
+    <!-- Umami analytics (self-hosted) -->
+    <script is:inline defer src="https://umami.evesan.rocks/script.js" data-website-id="daee8b98-1033-4303-abb1-09eb36b7d768"></script>
+    <script is:inline defer src="https://umami.evesan.rocks/recorder.js" data-website-id="daee8b98-1033-4303-abb1-09eb36b7d768"></script>
   </head>
   <body>
 
