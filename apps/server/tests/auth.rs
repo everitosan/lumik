@@ -22,6 +22,8 @@ fn test_config() -> Config {
         refresh_ttl_secs: 3600,
         rate_max: 1000, // alto para no interferir en los tests
         rate_window_secs: 60,
+        remote_enc_key: "0000000000000000000000000000000000000000000000000000000000000001"
+            .into(),
     }
 }
 

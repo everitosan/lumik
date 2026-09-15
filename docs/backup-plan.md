@@ -207,12 +207,13 @@ Cada proveedor conectado = **un remote de rclone**. Dos tipos:
 
 **Gate 2:** ✅ **alcanzado** — build (tsc + vite) verde; e2e vía el proxy del navegador (`:5173`): register `200`, login `200`, `/me` con token → identidad correcta, sin token → `401`.
 
-### Fase 3 — Configuración de servicios de backup (proveedores)
-- [ ] Server: `GET /v1/providers`, `POST /v1/providers/{type}/connect`, `GET /oauth/callback`, `DELETE /v1/providers/{name}` — remote por `photographer_id`, token cifrado.
-- [ ] Flujo OAuth (state ligado al fotógrafo) para gdrive/dropbox/onedrive; credenciales para mega/nextcloud.
-- [ ] Web: UI "Conectar proveedor" + lista de proveedores conectados.
+### Fase 3 — Configuración de servicios de backup (proveedores) ✅ (credenciales) · ⏳ (OAuth pendiente de apps)
+- [x] Server: `GET /v1/providers`, `POST /v1/providers/{type}/connect`, `DELETE /v1/providers/{id}` — remote por `photographer_id`, **credenciales cifradas en reposo (AES-256-GCM)**, todo scoped por tenant.
+- [x] **Credenciales (Nextcloud/WebDAV, Mega)**: conexión completa y probada (6 tests: connect/list/delete, campos requeridos, auth, **aislamiento entre tenants**).
+- [~] **OAuth (gdrive/dropbox/onedrive)**: `connect`/`oauth/callback` scaffolded pero **gated** → `501` con mensaje claro hasta registrar las apps y definir `client_id/secret`. *(Prerequisito externo pendiente.)*
+- [x] Web: panel "Conectar proveedor" (Nextcloud/Mega) + lista + desconectar.
 
-**Gate 3:** el fotógrafo conecta ≥1 proveedor desde la web y queda guardado en `remote(photographer_id, …)`.
+**Gate 3:** ✅ **alcanzado** (credenciales) — verificado en vivo: conectar Nextcloud → guardado en `remote(photographer_id,…)` con el token **cifrado** (`plano=false` en BD); OAuth responde `501` gated. Cierre OAuth cuando lleguen las apps.
 
 ### Fase 4 — Login en app desktop
 - [ ] Puerto `AuthClient` + impl HTTP (`reqwest`); interceptor que adjunta el access token y refresca en `401`.
@@ -280,6 +281,17 @@ Cada proveedor conectado = **un remote de rclone**. Dos tipos:
 - Plan de cuotas/billing por usuario: fuera de alcance inicial (aunque el modelo multi-tenant lo habilita después).
 
 ## 11. Bitácora
+- **2026-09-15 · Fase 3 · parcial (credenciales completas, OAuth gated)** — Conexión
+  de proveedores con cifrado en reposo (AES-256-GCM, `crypto.rs`; clave por
+  `REMOTE_ENC_KEY`). La config rclone de cada remote se guarda como JSON cifrado en
+  `remote.token`. Endpoints scoped por `photographer_id`. **Nextcloud/WebDAV y Mega**
+  (credenciales) end-to-end + 6 tests (incl. aislamiento de tenants). **OAuth**
+  (gdrive/dropbox/onedrive) queda **gated con 501** hasta registrar las apps
+  (prerequisito externo con lead time). UI web con panel de conexión. 20 tests
+  verdes en total. Verificado en vivo que el token queda cifrado en BD.
+  **Decisión:** la materialización del remote en rclone (crear el remote real vía
+  `rcd config/create` o generarlo on-the-fly desde el JSON cifrado) se hace en Fase 7
+  (backup), donde de verdad se sube; en Fase 3 el catálogo de `remote` es la fuente.
 - **2026-09-15 · Fase 2 · completada** — `apps/web` scaffoldeado con el mismo stack
   que la desktop (React 19 + Vite 6 + `@lumik/ui` + i18next), añadido al workspace
   pnpm. Se reutilizan `Button`/`Input`/`Logo`/`Loader` de `@lumik/ui` (estilos por

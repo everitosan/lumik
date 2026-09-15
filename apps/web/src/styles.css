@@ -89,3 +89,54 @@ body {
   justify-content: space-between;
   gap: 16px;
 }
+
+.providers {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  background-color: var(--lumik-surface-container, #1c1c1f);
+  border: 1px solid var(--lumik-outline-variant, #424654);
+  border-radius: var(--lumik-radius-md, 8px);
+}
+
+.providers h2,
+.providers h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.providers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.provider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--lumik-outline-variant, #424654);
+  border-radius: var(--lumik-radius-sm, 4px);
+}
+
+.providers-type {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--lumik-on-surface-variant, #c2c6d7);
+}
+
+.providers-type select {
+  font-family: var(--lumik-font-primary, Inter);
+  font-size: 14px;
+  color: var(--lumik-on-surface, #e5e2e1);
+  background-color: var(--lumik-surface-container-lowest, #0e0e0e);
+  border: 1px solid var(--lumik-outline-variant, #424654);
+  border-radius: var(--lumik-radius-sm, 4px);
+  padding: 10px 12px;
+  outline: none;
+}

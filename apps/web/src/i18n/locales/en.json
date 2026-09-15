@@ -34,6 +34,28 @@
     "logout": "Sign out",
     "empty": "Your projects and their backup status will appear here (coming soon)."
   },
+  "providers": {
+    "title": "Backup services",
+    "subtitle": "Connect where your photos will be stored",
+    "connected": "Connected",
+    "none": "You haven't connected any provider yet.",
+    "disconnect": "Disconnect",
+    "connect": "Connect provider",
+    "type": "Provider",
+    "types": {
+      "nextcloud": "Nextcloud",
+      "mega": "Mega"
+    },
+    "fields": {
+      "url": "WebDAV URL",
+      "username": "Username",
+      "email": "Email",
+      "password": "Password"
+    },
+    "submit": "Connect",
+    "oauthComingSoon": "Google Drive, Dropbox and OneDrive coming soon.",
+    "error": "Could not connect. Check the details and try again."
+  },
   "common": {
     "loading": "Loading…"
   }

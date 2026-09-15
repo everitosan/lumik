@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Button } from '@lumik/ui';
 import { useAuth } from '../auth/AuthContext';
+import { ProvidersPanel } from '../components/ProvidersPanel';
 
 export default function Dashboard() {
   const { t } = useTranslation();
@@ -20,6 +21,9 @@ export default function Dashboard() {
           {t('dashboard.signedInAs', { email: photographer?.email })}
         </p>
       </div>
+
+      <ProvidersPanel />
+
       <p className="subtitle">{t('dashboard.empty')}</p>
     </div>
   );

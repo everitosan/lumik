@@ -34,6 +34,28 @@
     "logout": "Cerrar sesión",
     "empty": "Aquí verás tus proyectos y su estado de respaldo (próximamente)."
   },
+  "providers": {
+    "title": "Servicios de respaldo",
+    "subtitle": "Conecta dónde se guardarán tus fotos",
+    "connected": "Conectados",
+    "none": "Aún no has conectado ningún proveedor.",
+    "disconnect": "Desconectar",
+    "connect": "Conectar proveedor",
+    "type": "Proveedor",
+    "types": {
+      "nextcloud": "Nextcloud",
+      "mega": "Mega"
+    },
+    "fields": {
+      "url": "URL de WebDAV",
+      "username": "Usuario",
+      "email": "Correo",
+      "password": "Contraseña"
+    },
+    "submit": "Conectar",
+    "oauthComingSoon": "Google Drive, Dropbox y OneDrive llegan pronto.",
+    "error": "No se pudo conectar. Revisa los datos e inténtalo de nuevo."
+  },
   "common": {
     "loading": "Cargando…"
   }

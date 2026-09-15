@@ -18,8 +18,12 @@ pub enum ApiError {
     BadRequest(String),
     #[error("{0}")]
     Conflict(String),
+    #[error("recurso no encontrado")]
+    NotFound,
     #[error("demasiadas solicitudes")]
     TooManyRequests,
+    #[error("{0}")]
+    NotImplemented(String),
     #[error("error interno")]
     Internal(#[from] anyhow::Error),
 }
@@ -37,7 +41,9 @@ impl IntoResponse for ApiError {
             ApiError::InvalidCredentials => (StatusCode::UNAUTHORIZED, self.to_string()),
             ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             ApiError::Conflict(_) => (StatusCode::CONFLICT, self.to_string()),
+            ApiError::NotFound => (StatusCode::NOT_FOUND, self.to_string()),
             ApiError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
+            ApiError::NotImplemented(_) => (StatusCode::NOT_IMPLEMENTED, self.to_string()),
             ApiError::Internal(e) => {
                 tracing::error!(error = %e, "error interno");
                 (StatusCode::INTERNAL_SERVER_ERROR, "error interno".to_string())

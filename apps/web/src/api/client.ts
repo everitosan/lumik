@@ -104,6 +104,24 @@ async function tryRefresh(): Promise<boolean> {
   }
 }
 
+export interface Remote {
+  id: string;
+  provider: string;
+  name: string;
+  created_at: string;
+}
+
+export const providersApi = {
+  list: () => request<Remote[]>('/v1/providers'),
+  connect: (type: string, body: Record<string, string>) =>
+    request<Remote>(`/v1/providers/${type}/connect`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  disconnect: (id: string) =>
+    request<void>(`/v1/providers/${id}`, { method: 'DELETE' }),
+};
+
 export const authApi = {
   register: (email: string, password: string, name?: string) =>
     publicPost<AuthResponse>('/v1/auth/register', { email, password, name }),

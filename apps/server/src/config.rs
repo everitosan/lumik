@@ -20,7 +20,12 @@ pub struct Config {
     pub rate_max: u32,
     /// Ventana del rate limiter en segundos.
     pub rate_window_secs: u64,
+    /// Clave AES-256 (hex, 64 chars) para cifrar credenciales de nube en reposo.
+    pub remote_enc_key: String,
 }
+
+/// Clave de desarrollo INSEGURA (32 bytes en hex). Solo para dev.
+const DEV_ENC_KEY: &str = "0000000000000000000000000000000000000000000000000000000000000001";
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
@@ -46,6 +51,13 @@ impl Config {
             refresh_ttl_secs: parse_env("REFRESH_TTL_SECS", 60 * 60 * 24 * 30),
             rate_max: parse_env("RATE_MAX", 10),
             rate_window_secs: parse_env("RATE_WINDOW_SECS", 60),
+            remote_enc_key: env::var("REMOTE_ENC_KEY").unwrap_or_else(|_| {
+                tracing::warn!(
+                    "REMOTE_ENC_KEY no definido: usando clave de cifrado de desarrollo \
+                     INSEGURA. Define REMOTE_ENC_KEY (openssl rand -hex 32) en producción."
+                );
+                DEV_ENC_KEY.to_string()
+            }),
         })
     }
 }

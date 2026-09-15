@@ -4,21 +4,24 @@
 
 pub mod auth;
 pub mod config;
+pub mod crypto;
 pub mod db;
 pub mod error;
+pub mod providers;
 pub mod rclone;
 pub mod routes;
 
 use std::sync::Arc;
 
 use axum::{
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use sqlx::PgPool;
 
 use crate::auth::middleware::RateLimiter;
 use crate::config::Config;
+use crate::crypto::Crypto;
 
 /// Estado compartido inyectado en los handlers.
 #[derive(Clone)]
@@ -26,12 +29,21 @@ pub struct AppState {
     pub pool: PgPool,
     pub cfg: Config,
     pub rate: Arc<RateLimiter>,
+    pub crypto: Arc<Crypto>,
 }
 
 impl AppState {
     pub fn new(pool: PgPool, cfg: Config) -> Self {
         let rate = Arc::new(RateLimiter::new(cfg.rate_max, cfg.rate_window_secs));
-        Self { pool, cfg, rate }
+        let crypto = Arc::new(
+            Crypto::new(&cfg.remote_enc_key).expect("REMOTE_ENC_KEY inválida (32 bytes hex)"),
+        );
+        Self {
+            pool,
+            cfg,
+            rate,
+            crypto,
+        }
     }
 }
 
@@ -52,8 +64,16 @@ pub fn build_router(state: AppState) -> Router {
         .route("/logout", post(auth::handlers::logout))
         .route("/me", get(auth::handlers::me));
 
+    // Conexión de proveedores de nube (todo scoped por el JWT del fotógrafo).
+    let providers = Router::new()
+        .route("/", get(providers::handlers::list))
+        .route("/oauth/callback", get(providers::handlers::oauth_callback))
+        .route("/:ptype/connect", post(providers::handlers::connect))
+        .route("/:id", delete(providers::handlers::delete));
+
     Router::new()
         .route("/healthz", get(routes::health::healthz))
         .nest("/v1/auth", auth)
+        .nest("/v1/providers", providers)
         .with_state(state)
 }
