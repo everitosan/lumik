@@ -71,6 +71,7 @@ pub async fn connect(
     .fetch_one(&state.pool)
     .await?;
 
+    tracing::info!(photographer_id = %auth.0, provider = %ptype, "proveedor conectado");
     Ok(Json(row))
 }
 
@@ -88,6 +89,7 @@ pub async fn delete(
     if res.rows_affected() == 0 {
         return Err(ApiError::NotFound);
     }
+    tracing::info!(photographer_id = %auth.0, remote_id = %id, "proveedor desconectado");
     Ok(StatusCode::NO_CONTENT)
 }
 

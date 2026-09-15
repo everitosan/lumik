@@ -66,6 +66,7 @@ pub async fn register(
         .fetch_optional(&state.pool)
         .await?;
     if exists.is_some() {
+        tracing::warn!(%email, "registro rechazado: email ya registrado");
         return Err(ApiError::Conflict("email ya registrado".into()));
     }
 
@@ -82,6 +83,7 @@ pub async fn register(
 
     let id = row.id;
     let pair = issue_pair(&state, id).await?;
+    tracing::info!(%email, photographer_id = %id, "registro de fotógrafo exitoso");
     Ok(Json(AuthResponse {
         access: pair.access,
         refresh: pair.refresh,
@@ -102,13 +104,18 @@ pub async fn login(
     .fetch_optional(&state.pool)
     .await?;
 
-    let row = row.ok_or(ApiError::InvalidCredentials)?;
+    let Some(row) = row else {
+        tracing::warn!(%email, "login fallido: email no registrado");
+        return Err(ApiError::InvalidCredentials);
+    };
     if !password::verify_password(&req.password, &row.password_hash) {
+        tracing::warn!(%email, "login fallido: contraseña incorrecta");
         return Err(ApiError::InvalidCredentials);
     }
 
     let id = row.id;
     let pair = issue_pair(&state, id).await?;
+    tracing::info!(%email, photographer_id = %id, "login exitoso");
     Ok(Json(AuthResponse {
         access: pair.access,
         refresh: pair.refresh,
@@ -138,8 +145,12 @@ pub async fn refresh(
     .fetch_optional(&state.pool)
     .await?;
 
-    let row = row.ok_or(ApiError::Unauthorized)?;
+    let Some(row) = row else {
+        tracing::warn!("refresh rechazado: token no encontrado");
+        return Err(ApiError::Unauthorized);
+    };
     if row.revoked || row.expires_at < Utc::now() {
+        tracing::warn!(photographer_id = %row.photographer_id, "refresh rechazado: token revocado o expirado");
         return Err(ApiError::Unauthorized);
     }
 
@@ -150,6 +161,7 @@ pub async fn refresh(
         .await?;
 
     let pair = issue_pair(&state, row.photographer_id).await?;
+    tracing::info!(photographer_id = %row.photographer_id, "refresh exitoso (token rotado)");
     Ok(Json(pair))
 }
 
@@ -159,10 +171,11 @@ pub async fn logout(
     Json(req): Json<RefreshReq>,
 ) -> ApiResult<StatusCode> {
     let token_hash = hash_token(&req.refresh);
-    sqlx::query("UPDATE refresh_token SET revoked = true WHERE token_hash = $1")
+    let res = sqlx::query("UPDATE refresh_token SET revoked = true WHERE token_hash = $1")
         .bind(&token_hash)
         .execute(&state.pool)
         .await?;
+    tracing::info!(revoked = res.rows_affected(), "logout (refresh revocado)");
     Ok(StatusCode::NO_CONTENT)
 }
 

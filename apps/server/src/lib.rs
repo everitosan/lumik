@@ -18,6 +18,8 @@ use axum::{
     Router,
 };
 use sqlx::PgPool;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
 use crate::auth::middleware::RateLimiter;
 use crate::config::Config;
@@ -76,4 +78,10 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/v1/auth", auth)
         .nest("/v1/providers", providers)
         .with_state(state)
+        // Log por request: método, ruta, status y latencia (a nivel INFO).
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        )
 }
