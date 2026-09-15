@@ -110,6 +110,8 @@ pub trait PhotoRepository {
         tags: Option<&str>,
     ) -> Result<(), String>;
     fn update_culled(&self, id: &str, culled: bool, new_dng_path: &str) -> Result<(), String>;
+    /// Enlaza la foto con su JPEG exportado y la marca `edited` (Fase 6).
+    fn set_exported(&self, id: &str, jpg_path: &str) -> Result<(), String>;
     /// Inserta un lote de fotos en una sola transacción; devuelve las creadas.
     fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String>;
 }

@@ -138,6 +138,9 @@ mod tests {
                 Ok(())
             }
         }
+        fn set_exported(&self, _id: &str, _jpg_path: &str) -> Result<(), String> {
+            Ok(())
+        }
         fn create_batch(
             &self,
             _photos: &[crate::db::models::CreatePhoto],

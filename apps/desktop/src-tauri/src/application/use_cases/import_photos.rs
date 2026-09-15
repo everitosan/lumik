@@ -340,6 +340,9 @@ mod tests {
         fn update_culled(&self, _id: &str, _c: bool, _p: &str) -> Result<(), String> {
             unreachable!()
         }
+        fn set_exported(&self, _id: &str, _jpg_path: &str) -> Result<(), String> {
+            Ok(())
+        }
         fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
             *self.created.lock().unwrap() = photos.len();
             // Devuelve un Photo mínimo por cada CreatePhoto, con id sintético.

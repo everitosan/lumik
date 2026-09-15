@@ -515,6 +515,17 @@ impl ProjectDatabase {
         Ok(())
     }
 
+    /// Enlaza una foto con su JPEG exportado (`_exported/`) y la marca `edited`.
+    /// `jpg_path` es relativo al mount point (como `dng_path`). Ver Fase 6.
+    pub fn set_photo_exported(&self, id: &str, jpg_path: &str) -> DbResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE photo SET jpg_path = ?1, workflow_status = 'edited' WHERE id = ?2",
+            params![jpg_path, id],
+        )?;
+        Ok(())
+    }
+
     pub fn set_cover_photo(&self, path: Option<&str>) -> DbResult<()> {
         let conn = self.conn();
         conn.execute(

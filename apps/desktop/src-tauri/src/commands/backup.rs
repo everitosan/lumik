@@ -10,10 +10,17 @@ use super::AppState;
 use crate::application::error::{AppError, AppResult};
 use crate::application::ports::{AuthTokens, CatalogPhoto, CatalogProject};
 use crate::application::use_cases::ensure_catalog_synced::{EnsureCatalogSynced, SyncOutcome};
+use crate::application::use_cases::sync_exported::{
+    ExportedFile, PhotoStem, SyncExported, SyncExportedResult,
+};
+use crate::domain::paths::path_to_slash;
 use crate::domain::project::ProjectFolder;
 use log::{info, warn};
 use serde::Serialize;
 use tauri::State;
+
+/// Extensiones consideradas "exportados" al escanear `_exported/`.
+const EXPORTED_EXTS: &[&str] = &["jpg", "jpeg", "png", "tif", "tiff", "webp"];
 
 // Claves en la tabla `settings` de la BD global.
 const K_SERVER_URL: &str = "backup.server_url";
@@ -220,28 +227,12 @@ fn basename(path: &str) -> String {
     path.rsplit('/').next().unwrap_or(path).to_string()
 }
 
-/// Sesión guardada SIN validar contra el server (sin red): `(server_url, access,
-/// refresh)`. A diferencia de `active_session`, no hace `GET /me`.
-fn stored_session(state: &AppState) -> AppResult<Option<(String, String, Option<String>)>> {
-    let Some(access) = state.global_db.get_setting(K_ACCESS)? else {
-        return Ok(None);
-    };
-    let refresh = state.global_db.get_setting(K_REFRESH)?;
-    Ok(Some((server_url(state), access, refresh)))
-}
-
-/// Asegura que el proyecto exista en el catálogo del server. Se llama al abrir un
-/// proyecto: si no hay sesión o red, degrada a solo-local; si el proyecto falta en
-/// el catálogo, lo publica (proyecto + fotos). Idempotente. Ver Fase 5.
-///
-/// Usa el access token **guardado** (sin `GET /me` por apertura) y solo refresca +
-/// reintenta si el catálogo responde no-autorizado (token expirado).
-#[tauri::command]
-pub fn ensure_project_synced(
-    state: State<AppState>,
-    project_id: String,
-) -> AppResult<SyncOutcome> {
-    let project_db = state.project_db(&project_id)?;
+/// Construye los DTOs del catálogo (proyecto + fotos) desde la BD local.
+fn build_catalog_data(
+    state: &AppState,
+    project_id: &str,
+) -> AppResult<(CatalogProject, Vec<CatalogPhoto>)> {
+    let project_db = state.project_db(project_id)?;
     let project = project_db
         .get_project()?
         .ok_or_else(|| AppError::from("proyecto no encontrado"))?;
@@ -267,6 +258,69 @@ pub fn ensure_project_synced(
             jpg_path: p.jpg_path.clone(),
         })
         .collect();
+    Ok((cat_project, cat_photos))
+}
+
+/// Publica (upsert) proyecto + fotos al catálogo. Best-effort: `Ok(false)` si no
+/// hay sesión o red; refresca una vez ante 401. Se usa tras `sync_exported` para
+/// reflejar los `jpg_path` recién enlazados.
+fn publish_catalog_upsert(state: &AppState, project_id: &str) -> AppResult<bool> {
+    let (cat_project, cat_photos) = build_catalog_data(state, project_id)?;
+    let Some((base, access, refresh)) = stored_session(state)? else {
+        return Ok(false);
+    };
+    let attempt = |access: &str| -> Result<(), String> {
+        state
+            .catalog
+            .publish_projects(&base, access, std::slice::from_ref(&cat_project))?;
+        state
+            .catalog
+            .publish_photos(&base, access, &cat_project.id, &cat_photos)
+    };
+    match attempt(&access) {
+        Ok(()) => Ok(true),
+        Err(e) if is_offline(&e) => Ok(false),
+        Err(_) => match refresh {
+            Some(r) => match state.backup_auth.refresh(&base, &r) {
+                Ok(t) => {
+                    state.global_db.set_setting(K_ACCESS, &t.access)?;
+                    state.global_db.set_setting(K_REFRESH, &t.refresh)?;
+                    match attempt(&t.access) {
+                        Ok(()) => Ok(true),
+                        Err(e2) if is_offline(&e2) => Ok(false),
+                        Err(e2) => Err(AppError::from(e2)),
+                    }
+                }
+                Err(re) if is_offline(&re) => Ok(false),
+                Err(_) => Ok(false), // sesión expirada
+            },
+            None => Ok(false),
+        },
+    }
+}
+
+/// Sesión guardada SIN validar contra el server (sin red): `(server_url, access,
+/// refresh)`. A diferencia de `active_session`, no hace `GET /me`.
+fn stored_session(state: &AppState) -> AppResult<Option<(String, String, Option<String>)>> {
+    let Some(access) = state.global_db.get_setting(K_ACCESS)? else {
+        return Ok(None);
+    };
+    let refresh = state.global_db.get_setting(K_REFRESH)?;
+    Ok(Some((server_url(state), access, refresh)))
+}
+
+/// Asegura que el proyecto exista en el catálogo del server. Se llama al abrir un
+/// proyecto: si no hay sesión o red, degrada a solo-local; si el proyecto falta en
+/// el catálogo, lo publica (proyecto + fotos). Idempotente. Ver Fase 5.
+///
+/// Usa el access token **guardado** (sin `GET /me` por apertura) y solo refresca +
+/// reintenta si el catálogo responde no-autorizado (token expirado).
+#[tauri::command]
+pub fn ensure_project_synced(
+    state: State<AppState>,
+    project_id: String,
+) -> AppResult<SyncOutcome> {
+    let (cat_project, cat_photos) = build_catalog_data(&state, &project_id)?;
 
     let uc = EnsureCatalogSynced {
         catalog: state.catalog.as_ref(),
@@ -307,4 +361,79 @@ pub fn ensure_project_synced(
         cat_photos.len()
     );
     Ok(outcome)
+}
+
+/// Escanea `_exported/` del proyecto y enlaza cada archivo con su foto por *stem*
+/// (fija `jpg_path` + `workflow_status='edited'`). Luego publica al catálogo los
+/// cambios (best-effort). Ver docs/backup-plan.md Fase 6.
+#[tauri::command]
+pub fn sync_exported(
+    state: State<AppState>,
+    project_id: String,
+) -> AppResult<SyncExportedResult> {
+    let project_db = state.project_db(&project_id)?;
+    let photos = project_db.get_project_photos()?;
+    let exported_dir = project_db.project_dir.join("_exported");
+
+    // Lista los archivos de imagen en _exported/ con su ruta relativa al mount.
+    let mut exported: Vec<ExportedFile> = Vec::new();
+    if exported_dir.is_dir() {
+        for entry in std::fs::read_dir(&exported_dir)? {
+            let path = entry?.path();
+            if !path.is_file() {
+                continue;
+            }
+            let is_image = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| EXPORTED_EXTS.contains(&e.to_lowercase().as_str()))
+                .unwrap_or(false);
+            if !is_image {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            // jpg_path relativo al mount (como dng_path), con separador '/'.
+            let jpg_path = match path.strip_prefix(&project_db.mount_point) {
+                Ok(rel) => path_to_slash(rel),
+                Err(_) => continue, // fuera del mount: no debería pasar
+            };
+            exported.push(ExportedFile {
+                stem: stem.to_string(),
+                jpg_path,
+            });
+        }
+    }
+
+    let photo_stems: Vec<PhotoStem> = photos
+        .iter()
+        .map(|p| PhotoStem {
+            id: p.id.clone(),
+            stem: basename(&p.dng_path)
+                .rsplit_once('.')
+                .map(|(s, _)| s.to_string())
+                .unwrap_or_else(|| basename(&p.dng_path)),
+        })
+        .collect();
+
+    let uc = SyncExported {
+        repo: project_db.as_ref(),
+    };
+    let result = uc.run(&photo_stems, &exported)?;
+    info!(
+        "sync_exported({}): {} enlazadas, {} sin emparejar",
+        project_id,
+        result.matched,
+        result.unmatched.len()
+    );
+
+    // Refleja los cambios en el catálogo (si hay sesión/red).
+    if result.matched > 0 {
+        if let Err(e) = publish_catalog_upsert(&state, &project_id) {
+            warn!("sync_exported: publicar catálogo falló: {}", e);
+        }
+    }
+
+    Ok(result)
 }

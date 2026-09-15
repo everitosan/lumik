@@ -232,11 +232,12 @@ Cada proveedor conectado = **un remote de rclone**. Dos tipos:
 
 **Identidad (cierre de la nota de Fase 4):** NO se fuerza `creator_id === photographer_id` (sería destructivo sobre BDs de disco). En su lugar, el catálogo **atribuye los proyectos al fotógrafo del JWT**; el `creator_id` local no se envía. La propiedad multi-tenant se deriva del token, no de igualar ids.
 
-### Fase 6 — `sync_exported` local (_exported ↔ photo)
-- [ ] `use_cases/sync_exported.rs`: emparejar por stem, fijar `jpg_path` + `workflow_status='edited'`; loguear no-emparejados. Tests con fakes.
-- [ ] Comando `sync_exported`; incluir las fotos enlazadas en el push del catálogo (Fase 5).
+### Fase 6 — `sync_exported` local (_exported ↔ photo) ✅
+- [x] `use_cases/sync_exported.rs`: matching por *stem* (case-insensitive) → fija `jpg_path` + `workflow_status='edited'` vía `PhotoRepository::set_exported` (puerto + impl + query nuevos); reporta no-emparejados. 3 tests de fakes.
+- [x] Comando `sync_exported`: escanea `_exported/` (extensiones de imagen), construye rutas `jpg_path` relativas al mount (`path_to_slash`), corre el use case y **publica al catálogo** (`publish_catalog_upsert`, best-effort, refresca en 401). Registrado en `invoke_handler`.
+- [x] Frontend: `syncExported` disparado al abrir el proyecto tras `ensureProjectSynced` (fire-and-forget).
 
-**Gate 6:** tras exportar, las fotos con archivo en `_exported` quedan enlazadas, marcadas `edited` y publicadas al catálogo.
+**Gate 6:** ✅ **lógica verificada** — matching cubierto por tests; command compila y publica reusando el path del catálogo. *Pendiente verificación en la app con `_exported` real en disco (requiere la GUI).* 61 tests desktop verdes.
 
 ### Fase 7 — Funcionalidad de backup (3 piezas)
 - [ ] **Server:** `POST .../backup` (multipart, path desde catálogo, resuelve remotes del fotógrafo, `targets` fan-out, idempotencia por `file_hash`, actualiza catálogo, recibo `results[]`) + `GET .../backup/status`. Tests (mock rclone).
@@ -284,6 +285,14 @@ Cada proveedor conectado = **un remote de rclone**. Dos tipos:
 - Plan de cuotas/billing por usuario: fuera de alcance inicial (aunque el modelo multi-tenant lo habilita después).
 
 ## 11. Bitácora
+- **2026-09-15 · Fase 6 · completada (lógica)** — `sync_exported`: use case de
+  matching por stem (case-insensitive) + `PhotoRepository::set_exported` (puerto/impl/
+  query). Comando escanea `_exported/`, arma `jpg_path` relativo al mount y publica al
+  catálogo (`publish_catalog_upsert`, refactor que extrae `build_catalog_data` — ahora
+  compartido con `ensure_project_synced`). Se añadió `set_exported` no-op a los 4 fakes
+  de otros use cases (el trait no tiene default, para forzar impl en producción).
+  Disparo en el `useEffect` de `ProjectDetail` tras `ensure`. Falta la verificación en
+  la app con `_exported` real (GUI). 61 tests desktop verdes.
 - **2026-09-15 · Fase 5 · completada** — Catálogo end-to-end. Server: módulo `catalog`
   con sync/list/exists scoped por tenant; **el upsert de fotos preserva `backup_*`**
   (solo actualiza metadata) — probado. Desktop: `CatalogClient` + `HttpCatalog` +

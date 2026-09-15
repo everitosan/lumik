@@ -135,6 +135,9 @@ mod tests {
         fn update_culled(&self, _id: &str, _culled: bool, _p: &str) -> Result<(), String> {
             unreachable!("RatePhoto no cambia culled")
         }
+        fn set_exported(&self, _id: &str, _jpg_path: &str) -> Result<(), String> {
+            Ok(())
+        }
         fn create_batch(
             &self,
             _photos: &[crate::db::models::CreatePhoto],

@@ -6,3 +6,4 @@ pub mod ensure_catalog_synced;
 pub mod import_photos;
 pub mod rate_photo;
 pub mod rotate_photo;
+pub mod sync_exported;

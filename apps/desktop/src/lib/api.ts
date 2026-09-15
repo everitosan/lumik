@@ -276,3 +276,18 @@ export async function ensureProjectSynced(
 ): Promise<SyncOutcome> {
   return invoke('ensure_project_synced', { projectId });
 }
+
+export interface SyncExportedResult {
+  matched: number;
+  unmatched: string[];
+}
+
+/**
+ * Escanea _exported/ y enlaza cada archivo con su foto (jpg_path + edited), luego
+ * publica los cambios al catálogo (Fase 6). Fire-and-forget al abrir el proyecto.
+ */
+export async function syncExported(
+  projectId: string
+): Promise<SyncExportedResult> {
+  return invoke('sync_exported', { projectId });
+}

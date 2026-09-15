@@ -194,6 +194,7 @@ pub fn run() {
             commands::backup_logout,
             commands::get_backup_session,
             commands::ensure_project_synced,
+            commands::sync_exported,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

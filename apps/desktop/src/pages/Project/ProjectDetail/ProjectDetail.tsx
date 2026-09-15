@@ -137,12 +137,14 @@ const feedbackStyles: CSSProperties = {
 export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPath, onBack, onCoverPhotoChange }: ProjectDetailProps) {
   const { t, i18n } = useTranslation();
 
-  // Al abrir el proyecto, asegura que exista en el catálogo del server de respaldo
-  // (Fase 5). Fire-and-forget: degrada a solo-local sin sesión/red.
+  // Al abrir el proyecto: (1) asegura que exista en el catálogo (Fase 5) y
+  // (2) enlaza los archivos de _exported/ con sus fotos y publica (Fase 6).
+  // Fire-and-forget: degrada a solo-local sin sesión/red.
   useEffect(() => {
     api
       .ensureProjectSynced(projectId)
-      .catch((e) => console.debug('ensureProjectSynced skipped:', e));
+      .then(() => api.syncExported(projectId))
+      .catch((e) => console.debug('backup sync skipped:', e));
   }, [projectId]);
 
   const [sortBy, setSortBy] = useState<SortOption>('date');
