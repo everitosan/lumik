@@ -241,6 +241,11 @@
     "error": "Error loading projects",
     "noDate": "No date"
   },
+  "backup": {
+    "button": "Back up",
+    "uploading": "Backing up…",
+    "done": "Backed up {{uploaded}}/{{total}}"
+  },
   "projectDetail": {
     "noDate": "No date",
     "photos": "photos",

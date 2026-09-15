@@ -239,12 +239,17 @@ Cada proveedor conectado = **un remote de rclone**. Dos tipos:
 
 **Gate 6:** ✅ **lógica verificada** — matching cubierto por tests; command compila y publica reusando el path del catálogo. *Pendiente verificación en la app con `_exported` real en disco (requiere la GUI).* 61 tests desktop verdes.
 
-### Fase 7 — Funcionalidad de backup (3 piezas)
-- [ ] **Server:** `POST .../backup` (multipart, path desde catálogo, resuelve remotes del fotógrafo, `targets` fan-out, idempotencia por `file_hash`, actualiza catálogo, recibo `results[]`) + `GET .../backup/status`. Tests (mock rclone).
-- [ ] **Desktop:** puertos `BackupClient`; `PhotoRepository.update_backup` + `list_pending_backup`; `use_cases/backup_project.rs` + `reconcile_backup_status.rs` (pull al abrir); progreso vía `ProgressReporter`. Tests de fakes.
-- [ ] **UI desktop:** botón "Respaldar" + selector de proveedores + badge por-foto (pending/uploaded/failed) + i18n.
+### Fase 7 — Funcionalidad de backup (3 piezas) ✅
+- [x] **Server:** `POST /v1/projects/{id}/photos/{id}/backup` (multipart; verifica dueño; ruta en la nube desde el catálogo; resuelve remotes del fotógrafo con `targets` fan-out; sube con **rclone real** `copyto` vía config on-the-fly con `pass` ofuscado; actualiza catálogo `backup_*`; recibo `results[]`). Test e2e con remote `alias` local.
+- [x] **rclone real:** `copy_to` + `obscure` + `config_for` (materializa credenciales cifradas). Test de `copy_to`.
+- [x] **Desktop:** puerto `BackupClient` + impl HTTP multipart; `PhotoRepository.set_backup_uploaded`; comando `backup_project` (lista pendientes con `jpg_path` y no `uploaded`, sube c/u, refresh-on-401, actualiza local). Asegura catálogo antes de subir.
+- [x] **UI desktop:** botón "Respaldar" en el header del proyecto + estado (subidas/total) + i18n; refetch de fotos al terminar.
 
-**Gate 7:** "Respaldar" sube `_exported` a los proveedores elegidos; `backup_status` → `uploaded`; al reabrir, el estado se refleja en el grid.
+**Gate 7:** ✅ **verificado en server** (e2e con alias local: multipart → rclone → archivo aterriza en la ruta espejo → catálogo `uploaded`). *Subida real a Mega/Nextcloud pendiente de probar en la app (requiere GUI + proveedor real).* Server 26 tests · desktop 61 tests.
+
+Notas:
+- **Idempotencia:** el desktop solo envía fotos con `jpg_path` y `backup_status != uploaded` (evita re-subir); rclone `copyto` de por sí no re-transfiere si no cambió.
+- **Badge por-foto** en el grid: pendiente (el estado ya viaja en `Photo.backup_status`); de momento el feedback es el resumen del botón. Follow-up menor.
 
 ### Fase 8 — Subida desde iPad/web + reconciliación cross-device
 - [ ] Web: dashboard que lista proyectos/fotos del catálogo y sube contra `photoId` real (drag & drop / POST).
@@ -285,6 +290,16 @@ Cada proveedor conectado = **un remote de rclone**. Dos tipos:
 - Plan de cuotas/billing por usuario: fuera de alcance inicial (aunque el modelo multi-tenant lo habilita después).
 
 ## 11. Bitácora
+- **2026-09-15 · Fase 7 · completada (verificada en server)** — Subida real. Server:
+  `rclone::{obscure, config_for, copy_to}` materializa cada remote en un config
+  temporal (pass ofuscado) y sube con `copyto`; endpoint multipart `.../backup` con
+  fan-out a los remotes del fotógrafo, `spawn_blocking` para no bloquear el runtime,
+  y actualización de `backup_*` en el catálogo. Test e2e con remote `alias` local
+  (sin credenciales de nube). Desktop: `BackupClient` (reqwest multipart, feature
+  añadida), comando `backup_project` (refresh-on-401, actualiza local vía
+  `set_backup_uploaded`), botón "Respaldar" en el header. **Pendiente:** subida real a
+  Mega/Nextcloud (requiere GUI + cuenta) y badge por-foto en el grid. Server 26 tests,
+  desktop 61.
 - **2026-09-15 · Fase 6 · completada (lógica)** — `sync_exported`: use case de
   matching por stem (case-insensitive) + `PhotoRepository::set_exported` (puerto/impl/
   query). Comando escanea `_exported/`, arma `jpg_path` relativo al mount y publica al

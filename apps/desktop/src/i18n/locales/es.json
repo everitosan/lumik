@@ -241,6 +241,11 @@
     "error": "Error al cargar proyectos",
     "noDate": "Sin fecha"
   },
+  "backup": {
+    "button": "Respaldar",
+    "uploading": "Respaldando…",
+    "done": "Respaldadas {{uploaded}}/{{total}}"
+  },
   "projectDetail": {
     "noDate": "Sin fecha",
     "photos": "fotos",

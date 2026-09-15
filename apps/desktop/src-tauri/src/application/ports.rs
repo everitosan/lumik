@@ -53,6 +53,30 @@ pub struct CatalogPhoto {
     pub jpg_path: Option<String>,
 }
 
+/// Recibo de una subida de foto al server de respaldo (Fase 7).
+#[derive(Debug, Clone)]
+pub struct BackupReceipt {
+    /// `"uploaded"` si todos los proveedores subieron; `"failed"` si alguno falló.
+    pub status: String,
+    /// URL/ruta remota del primer proveedor exitoso, si hubo.
+    pub backup_url: Option<String>,
+}
+
+/// Cliente de subida de fotos al server de respaldo (Fase 7). La impl real hace
+/// `POST` multipart del archivo; el server lo sube a la nube (rclone).
+pub trait BackupClient: Send + Sync {
+    fn upload_photo(
+        &self,
+        base_url: &str,
+        access: &str,
+        project_id: &str,
+        photo_id: &str,
+        file_path: &Path,
+        filename: &str,
+        targets: Option<&str>,
+    ) -> Result<BackupReceipt, String>;
+}
+
 /// Cliente del catálogo del server (Fase 5). La impl real usa HTTP.
 pub trait CatalogClient: Send + Sync {
     /// `true` si el proyecto ya existe en el catálogo del fotógrafo.
@@ -112,6 +136,8 @@ pub trait PhotoRepository {
     fn update_culled(&self, id: &str, culled: bool, new_dng_path: &str) -> Result<(), String>;
     /// Enlaza la foto con su JPEG exportado y la marca `edited` (Fase 6).
     fn set_exported(&self, id: &str, jpg_path: &str) -> Result<(), String>;
+    /// Marca la foto como respaldada (`backup_status='uploaded'` + url) (Fase 7).
+    fn set_backup_uploaded(&self, id: &str, backup_url: Option<&str>) -> Result<(), String>;
     /// Inserta un lote de fotos en una sola transacción; devuelve las creadas.
     fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String>;
 }

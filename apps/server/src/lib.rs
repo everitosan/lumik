@@ -3,6 +3,7 @@
 //! `build_router` con un pool de prueba.
 
 pub mod auth;
+pub mod backup;
 pub mod catalog;
 pub mod config;
 pub mod crypto;
@@ -86,6 +87,10 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/projects/:project_id/photos",
             get(catalog::handlers::list_photos),
+        )
+        .route(
+            "/projects/:project_id/photos/:photo_id/backup",
+            post(backup::handlers::backup_photo),
         );
 
     Router::new()

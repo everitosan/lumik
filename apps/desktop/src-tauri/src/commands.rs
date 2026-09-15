@@ -1,6 +1,6 @@
 use crate::application::ports::{
-    BackupAuthClient, CatalogClient, DeviceScanner, FileStore, FinderTagWriter, ImageProcessor,
-    MetadataTool,
+    BackupAuthClient, BackupClient, CatalogClient, DeviceScanner, FileStore, FinderTagWriter,
+    ImageProcessor, MetadataTool,
 };
 use crate::application::registry::ProjectRegistry;
 use crate::db::{discover_projects_on_device, GlobalDatabase, ProjectDatabase};
@@ -28,6 +28,8 @@ pub struct AppState {
     pub backup_auth: Arc<dyn BackupAuthClient>,
     /// Cliente del catálogo del server de respaldo (Fase 5).
     pub catalog: Arc<dyn CatalogClient>,
+    /// Cliente de subida de fotos al server de respaldo (Fase 7).
+    pub backup: Arc<dyn BackupClient>,
 }
 
 impl AppState {

@@ -9,6 +9,9 @@ export interface ProjectDetailHeaderProps {
   viewMode: 'grid' | 'by-date';
   onViewModeChange: (mode: 'grid' | 'by-date') => void;
   onImport?: () => void;
+  onBackup?: () => void;
+  backingUp?: boolean;
+  backupStatus?: string | null;
 }
 
 const headerStyles: CSSProperties = {
@@ -70,6 +73,9 @@ export function ProjectDetailHeader({
   viewMode,
   onViewModeChange,
   onImport,
+  onBackup,
+  backingUp,
+  backupStatus,
 }: ProjectDetailHeaderProps) {
   const { t } = useTranslation();
 
@@ -140,6 +146,44 @@ export function ProjectDetailHeader({
             <Icon name="projects" size={14} />
           </button>
         </div>
+
+        {onBackup && (
+          <>
+            {backupStatus && (
+              <span
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {backupStatus}
+              </span>
+            )}
+            <button
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                fontFamily: 'var(--lumik-font-primary, Inter)',
+                fontSize: '13px',
+                color: 'var(--lumik-on-surface, #e5e2e1)',
+                background: 'transparent',
+                border: '1px solid var(--lumik-outline-variant, #424654)',
+                borderRadius: 'var(--lumik-radius-sm, 4px)',
+                cursor: backingUp ? 'default' : 'pointer',
+                opacity: backingUp ? 0.6 : 1,
+                whiteSpace: 'nowrap',
+              }}
+              onClick={onBackup}
+              disabled={backingUp}
+            >
+              <Icon name="upload-cloud" size={14} />
+              {backingUp ? t('backup.uploading') : t('backup.button')}
+            </button>
+          </>
+        )}
 
         <button
           style={{

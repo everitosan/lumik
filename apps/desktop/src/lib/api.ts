@@ -291,3 +291,20 @@ export async function syncExported(
 ): Promise<SyncExportedResult> {
   return invoke('sync_exported', { projectId });
 }
+
+export interface BackupSummary {
+  total: number;
+  uploaded: number;
+  failed: number;
+}
+
+/**
+ * Respalda las fotos exportadas y aún no subidas del proyecto (Fase 7). Requiere
+ * sesión de respaldo y ≥1 proveedor conectado.
+ */
+export async function backupProject(
+  projectId: string,
+  targets?: string
+): Promise<BackupSummary> {
+  return invoke('backup_project', { projectId, targets: targets ?? null });
+}

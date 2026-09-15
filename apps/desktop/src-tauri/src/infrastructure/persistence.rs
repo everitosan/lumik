@@ -35,6 +35,11 @@ impl PhotoRepository for ProjectDatabase {
         self.set_photo_exported(id, jpg_path).map_err(|e| e.to_string())
     }
 
+    fn set_backup_uploaded(&self, id: &str, backup_url: Option<&str>) -> Result<(), String> {
+        self.set_photo_backup_uploaded(id, backup_url)
+            .map_err(|e| e.to_string())
+    }
+
     fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
         self.create_photos_batch(photos).map_err(|e| e.to_string())
     }

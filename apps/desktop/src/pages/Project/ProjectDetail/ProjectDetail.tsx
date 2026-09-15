@@ -279,6 +279,23 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
   const thumbnailCache = useRef<Map<string, string>>(new Map());
   const autoRedirectedToImport = useRef(false);
 
+  // Respaldo del proyecto (Fase 7): sube las fotos exportadas a la nube.
+  const [backingUp, setBackingUp] = useState(false);
+  const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  const handleBackup = useCallback(async () => {
+    setBackingUp(true);
+    setBackupStatus(null);
+    try {
+      const s = await api.backupProject(projectId);
+      await refetchPhotos();
+      setBackupStatus(t('backup.done', { uploaded: s.uploaded, total: s.total }));
+    } catch (e) {
+      setBackupStatus(String(e));
+    } finally {
+      setBackingUp(false);
+    }
+  }, [projectId, refetchPhotos, t]);
+
   // Auto-show import when project has no photos (only once per mount)
   useEffect(() => {
     if (!loading && !error && photos && photos.length === 0 && !autoRedirectedToImport.current) {
@@ -491,6 +508,9 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         onImport={() => setShowImport(true)}
+        onBackup={handleBackup}
+        backingUp={backingUp}
+        backupStatus={backupStatus}
       />
 
       <div ref={setScrollEl} style={gridScrollStyles}>
