@@ -122,6 +122,29 @@ export const providersApi = {
     request<void>(`/v1/providers/${id}`, { method: 'DELETE' }),
 };
 
+export interface CatalogProject {
+  id: string;
+  name: string;
+  session_date: string | null;
+  slug: string;
+  created_at: string;
+}
+
+export interface CatalogPhoto {
+  id: string;
+  filename: string;
+  file_hash: string | null;
+  jpg_path: string | null;
+  backup_status: string;
+  backup_url: string | null;
+}
+
+export const catalogApi = {
+  listProjects: () => request<CatalogProject[]>('/v1/projects'),
+  listPhotos: (projectId: string) =>
+    request<CatalogPhoto[]>(`/v1/projects/${projectId}/photos`),
+};
+
 export const authApi = {
   register: (email: string, password: string, name?: string) =>
     publicPost<AuthResponse>('/v1/auth/register', { email, password, name }),

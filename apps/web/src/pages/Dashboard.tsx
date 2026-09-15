@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@lumik/ui';
 import { useAuth } from '../auth/AuthContext';
 import { ProvidersPanel } from '../components/ProvidersPanel';
+import { ProjectsList } from '../components/ProjectsList';
 
 export default function Dashboard() {
   const { t } = useTranslation();
@@ -22,9 +23,9 @@ export default function Dashboard() {
         </p>
       </div>
 
-      <ProvidersPanel />
+      <ProjectsList />
 
-      <p className="subtitle">{t('dashboard.empty')}</p>
+      <ProvidersPanel />
     </div>
   );
 }

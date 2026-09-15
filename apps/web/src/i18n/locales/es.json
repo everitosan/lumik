@@ -34,6 +34,10 @@
     "logout": "Cerrar sesión",
     "empty": "Aquí verás tus proyectos y su estado de respaldo (próximamente)."
   },
+  "projects": {
+    "title": "Proyectos",
+    "empty": "Aún no hay proyectos. Abre un proyecto en la app de escritorio (con sesión iniciada) para que aparezca aquí."
+  },
   "providers": {
     "title": "Servicios de respaldo",
     "subtitle": "Conecta dónde se guardarán tus fotos",
