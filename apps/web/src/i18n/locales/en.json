@@ -1,0 +1,40 @@
+{
+  "auth": {
+    "login": {
+      "title": "Sign in",
+      "subtitle": "Access your Lumik backups",
+      "submit": "Sign in",
+      "noAccount": "Don't have an account?",
+      "goRegister": "Create one"
+    },
+    "register": {
+      "title": "Create your account",
+      "subtitle": "Start backing up your sessions",
+      "submit": "Sign up",
+      "hasAccount": "Already have an account?",
+      "goLogin": "Sign in"
+    },
+    "fields": {
+      "name": "Name",
+      "email": "Email",
+      "password": "Password"
+    },
+    "errors": {
+      "required": "Fill in all fields",
+      "passwordShort": "Password must be at least 8 characters",
+      "invalidCredentials": "Wrong email or password",
+      "emailTaken": "That email is already registered",
+      "generic": "Something went wrong. Please try again."
+    }
+  },
+  "dashboard": {
+    "title": "Backup dashboard",
+    "welcome": "Hi, {{name}}",
+    "signedInAs": "Signed in as {{email}}",
+    "logout": "Sign out",
+    "empty": "Your projects and their backup status will appear here (coming soon)."
+  },
+  "common": {
+    "loading": "Loading…"
+  }
+}

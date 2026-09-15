@@ -32,6 +32,26 @@ dev-landing: ## Levanta la landing (Astro) en dev
 dev-uikit: ## Levanta Storybook del UI kit
 	pnpm --filter @lumik/uikit dev
 
+.PHONY: db-up
+db-up: ## Levanta Postgres del server de respaldo (docker compose)
+	cd apps/server && docker compose up -d
+
+.PHONY: db-down
+db-down: ## Detiene Postgres del server de respaldo
+	cd apps/server && docker compose stop
+
+.PHONY: dev-server
+dev-server: db-up ## Levanta el server de respaldo (Postgres + API en :8787)
+	cd apps/server && cargo run
+
+.PHONY: dev-web
+dev-web: db-up ## Levanta el server de respaldo + el portal web (API :8787, web :5173)
+	@echo "→ API:  http://localhost:8787   web: http://localhost:5173  (Ctrl-C detiene ambos)"
+	@trap 'kill 0' INT TERM EXIT; \
+	( cd apps/server && cargo run ) & \
+	pnpm --filter @lumik/web dev & \
+	wait
+
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------

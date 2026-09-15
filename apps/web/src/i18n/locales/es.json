@@ -1,0 +1,40 @@
+{
+  "auth": {
+    "login": {
+      "title": "Inicia sesión",
+      "subtitle": "Accede a tus respaldos de Lumik",
+      "submit": "Entrar",
+      "noAccount": "¿No tienes cuenta?",
+      "goRegister": "Crea una"
+    },
+    "register": {
+      "title": "Crea tu cuenta",
+      "subtitle": "Empieza a respaldar tus sesiones",
+      "submit": "Registrarme",
+      "hasAccount": "¿Ya tienes cuenta?",
+      "goLogin": "Inicia sesión"
+    },
+    "fields": {
+      "name": "Nombre",
+      "email": "Correo",
+      "password": "Contraseña"
+    },
+    "errors": {
+      "required": "Completa todos los campos",
+      "passwordShort": "La contraseña debe tener al menos 8 caracteres",
+      "invalidCredentials": "Correo o contraseña incorrectos",
+      "emailTaken": "Ese correo ya está registrado",
+      "generic": "Ocurrió un error. Inténtalo de nuevo."
+    }
+  },
+  "dashboard": {
+    "title": "Panel de respaldos",
+    "welcome": "Hola, {{name}}",
+    "signedInAs": "Sesión iniciada como {{email}}",
+    "logout": "Cerrar sesión",
+    "empty": "Aquí verás tus proyectos y su estado de respaldo (próximamente)."
+  },
+  "common": {
+    "loading": "Cargando…"
+  }
+}

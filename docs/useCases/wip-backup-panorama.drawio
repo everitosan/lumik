@@ -1,0 +1,166 @@
+<mxfile host="65bd71144e">
+    <diagram id="wip-backup-panorama" name="WIP · Panorama: Respaldo de _exported a la nube">
+        <mxGraphModel dx="1734" dy="832" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1640" pageHeight="1120" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="WIP · Panorama — Respaldo de _exported a la nube (SaaS multi-tenant)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=18;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="8" width="1560" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="lane1" value="Fotógrafo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eceff1;strokeColor=#546e7a;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=13;fontStyle=1;opacity=45;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="60" width="1560" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="lane2" value="Lumik Desktop (Tauri · Linux/Windows/Android)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5fe;strokeColor=#0288d1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=13;fontStyle=1;opacity=45;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="170" width="760" height="470" as="geometry"/>
+                </mxCell>
+                <mxCell id="lane3" value="Lumik Web / iPad (dashboard)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#8e24aa;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=13;fontStyle=1;opacity=45;" parent="1" vertex="1">
+                    <mxGeometry x="820" y="170" width="780" height="290" as="geometry"/>
+                </mxCell>
+                <mxCell id="lane4" value="Lumik Server SaaS (axum + rclone)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#f57c00;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=13;fontStyle=1;opacity=45;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="660" width="1560" height="300" as="geometry"/>
+                </mxCell>
+                <mxCell id="lane5" value="Nube de terceros (por fotógrafo)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#388e3c;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=13;fontStyle=1;opacity=45;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="980" width="1560" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="b6" value="Fotógrafo&#xa;(escritorio)" style="shape=umlActor;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;html=1;fontSize=11;outlineConnect=0;" parent="1" vertex="1">
+                    <mxGeometry x="165" y="80" width="40" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="b7" value="Fotógrafo&#xa;(campo / iPad)" style="shape=umlActor;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;html=1;fontSize=11;outlineConnect=0;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="80" width="40" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="b8" value="project.db&#xa;(disco externo)&#xa;_media/_culled/_exported" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#d1c4e9;strokeColor=#5e35b1;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="207" width="210" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="b9" value="sync_exported&#xa;(_exported ↔ photo)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b3e5fc;strokeColor=#0288d1;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="378" width="210" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b10" value="ensure_catalog_synced&#xa;(al abrir proyecto)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b3e5fc;strokeColor=#0288d1;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="460" y="550" width="220" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b11" value="backup_project&#xa;(sube _exported)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b3e5fc;strokeColor=#0288d1;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="530" y="470" width="210" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b12" value="login → JWT&#xa;(AuthClient)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b3e5fc;strokeColor=#0288d1;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="296" width="220" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b13" value="badge por-foto&#xa;(pending/uploaded/failed)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b3e5fc;strokeColor=#0288d1;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="480" width="210" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b14" value="login → JWT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#8e24aa;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="850" y="220" width="160" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="b15" value="lista proyectos&#xa;(GET /v1/projects)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#8e24aa;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1030" y="220" width="190" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b16" value="sube contra photoId&#xa;(POST /v1/backup)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#8e24aa;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1250" y="310" width="200" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b17" value="conectar proveedor&#xa;(OAuth / credenciales)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#8e24aa;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1010" y="378" width="410" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b18" value="Auth&#xa;/v1/auth/*  (argon2id, JWT)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="810" width="240" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b19" value="catalog.db (Postgres)&#xa;photographer · project&#xa;photo · remote" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#d1c4e9;strokeColor=#5e35b1;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="844" width="240" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="b20" value="POST /v1/backup&#xa;resuelve remotes del fotógrafo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="700" width="260" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b21" value="sync / listado&#xa;(scoped por photographer_id)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="640" y="790" width="260" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b22" value="rclone rcd&#xa;(copy / fan-out)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1140" y="740" width="220" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b23" value="OAuth connect/callback&#xa;(remote por fotógrafo)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1340" y="840" width="220" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="b24" value="Google Drive" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#388e3c;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="1010" width="150" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="b25" value="Dropbox" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#388e3c;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="1010" width="150" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="b26" value="OneDrive" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#388e3c;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="1010" width="150" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="b27" value="Mega" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#388e3c;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="660" y="1010" width="150" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="b28" value="Nextcloud" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#388e3c;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="840" y="1010" width="150" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="e29" value="0 · usa app" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;" parent="1" source="b6" target="b12" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="40" y="110"/>
+                            <mxPoint x="40" y="218"/>
+                            <mxPoint x="185" y="218"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e30" value="usa iPad" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;" parent="1" source="b7" target="b14" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e31" value="1 · lee/actualiza" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;dashed=1;" parent="1" source="b9" target="b8" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e32" value="login" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;" parent="1" source="b12" target="b18" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="190" y="770"/>
+                            <mxPoint x="190" y="770"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e33" value="2 · check/publish/reconcile" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;" parent="1" source="b10" target="b21" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e34" value="3 · POST archivo" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;" parent="1" source="b11" target="b20" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="635" y="560"/>
+                            <mxPoint x="910" y="560"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e35" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;" parent="1" source="b21" target="b19" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e36" value="actualiza backup_*" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;" parent="1" source="b20" target="b19" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e37" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;" parent="1" source="b20" target="b22" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e38" value="copy" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;" parent="1" source="b22" target="b24" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="310" y="767"/>
+                            <mxPoint x="310" y="1032"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e39" value="fan-out" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;dashed=1;" parent="1" source="b22" target="b28" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e40" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;" parent="1" source="b15" target="b21" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e41" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;" parent="1" source="b16" target="b20" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e42" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;" parent="1" source="b17" target="b23" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e43" value="guarda token" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;dashed=1;" parent="1" source="b23" target="b19" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e44" value="recibo → badge" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=block;strokeColor=#455a64;dashed=1;" parent="1" source="b20" target="b13" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
