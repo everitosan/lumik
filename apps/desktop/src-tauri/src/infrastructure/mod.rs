@@ -4,6 +4,7 @@
 //! selección de qué implementación usar ocurre en `lib.rs`.
 
 pub mod backup_auth;
+pub mod catalog;
 pub mod devices;
 pub mod finder_tags;
 pub mod folder;

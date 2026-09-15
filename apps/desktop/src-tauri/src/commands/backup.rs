@@ -7,8 +7,10 @@
 //! docs/backup-plan.md §4.
 
 use super::AppState;
-use crate::application::error::AppResult;
-use crate::application::ports::AuthTokens;
+use crate::application::error::{AppError, AppResult};
+use crate::application::ports::{AuthTokens, CatalogPhoto, CatalogProject};
+use crate::application::use_cases::ensure_catalog_synced::{EnsureCatalogSynced, SyncOutcome};
+use crate::domain::project::ProjectFolder;
 use log::{info, warn};
 use serde::Serialize;
 use tauri::State;
@@ -169,39 +171,102 @@ fn is_offline(err: &str) -> bool {
     err.contains("no se pudo conectar")
 }
 
-/// Devuelve la sesión persistida validándola contra el server. Si el access
-/// caducó, intenta refrescar; si es un fallo de red, mantiene la sesión; solo si
-/// el server rechaza de verdad (no autorizado) limpia y devuelve None.
-/// Es lo que el frontend llama al arrancar para restaurar la sesión.
-#[tauri::command]
-pub fn get_backup_session(state: State<AppState>) -> AppResult<Option<BackupSession>> {
-    let base = server_url(&state);
+/// Resuelve la sesión activa: devuelve `(server_url, access)` válido, refrescando
+/// el token si hace falta. Mantiene la sesión ante fallos de red; solo devuelve
+/// `None` si no hay sesión o el server la rechaza de verdad (limpia local).
+pub(crate) fn active_session(state: &AppState) -> AppResult<Option<(String, String)>> {
+    let base = server_url(state);
     let Some(access) = state.global_db.get_setting(K_ACCESS)? else {
         return Ok(None);
     };
 
     // 1) ¿El access sigue válido?
     match state.backup_auth.me(&base, &access) {
-        Ok(_) => return session_dto(&state),
-        Err(e) if is_offline(&e) => return session_dto(&state), // offline: no desloguear
-        Err(_) => {} // probablemente 401: intentar refrescar
+        Ok(_) => return Ok(Some((base, access))),
+        Err(e) if is_offline(&e) => return Ok(Some((base, access))), // offline: mantener
+        Err(_) => {} // probablemente 401: refrescar
     }
 
     // 2) Intentar refrescar.
     let Some(refresh) = state.global_db.get_setting(K_REFRESH)? else {
-        clear_session(&state)?;
+        clear_session(state)?;
         return Ok(None);
     };
     match state.backup_auth.refresh(&base, &refresh) {
         Ok(tokens) => {
             state.global_db.set_setting(K_ACCESS, &tokens.access)?;
             state.global_db.set_setting(K_REFRESH, &tokens.refresh)?;
-            session_dto(&state)
+            Ok(Some((base, tokens.access)))
         }
-        Err(e) if is_offline(&e) => session_dto(&state), // offline: mantener sesión
+        Err(e) if is_offline(&e) => Ok(Some((base, access))), // offline: mantener
         Err(_) => {
-            clear_session(&state)?;
+            clear_session(state)?;
             Ok(None)
         }
     }
+}
+
+/// Devuelve la sesión persistida validándola contra el server (refresca en 401,
+/// mantiene si está offline). Lo llama el frontend al arrancar para restaurarla.
+#[tauri::command]
+pub fn get_backup_session(state: State<AppState>) -> AppResult<Option<BackupSession>> {
+    match active_session(&state)? {
+        Some(_) => session_dto(&state),
+        None => Ok(None),
+    }
+}
+
+fn basename(path: &str) -> String {
+    path.rsplit('/').next().unwrap_or(path).to_string()
+}
+
+/// Asegura que el proyecto exista en el catálogo del server. Se llama al abrir un
+/// proyecto: si no hay sesión o red, degrada a solo-local; si el proyecto falta en
+/// el catálogo, lo publica (proyecto + fotos). Idempotente. Ver Fase 5.
+#[tauri::command]
+pub fn ensure_project_synced(
+    state: State<AppState>,
+    project_id: String,
+) -> AppResult<SyncOutcome> {
+    let session = active_session(&state)?;
+    let session_ref = session.as_ref().map(|(u, a)| (u.as_str(), a.as_str()));
+
+    let project_db = state.project_db(&project_id)?;
+    let project = project_db
+        .get_project()?
+        .ok_or_else(|| AppError::from("proyecto no encontrado"))?;
+    let photos = project_db.get_project_photos()?;
+
+    let cat_project = CatalogProject {
+        id: project.id.clone(),
+        name: project.name.clone(),
+        // El server espera YYYY-MM-DD; recorta cualquier hora que traiga.
+        session_date: project
+            .session_date
+            .as_deref()
+            .filter(|s| s.len() >= 10)
+            .map(|s| s[..10].to_string()),
+        slug: ProjectFolder::slug(&project.name),
+    };
+    let cat_photos: Vec<CatalogPhoto> = photos
+        .iter()
+        .map(|p| CatalogPhoto {
+            id: p.id.clone(),
+            filename: basename(p.jpg_path.as_deref().unwrap_or(&p.dng_path)),
+            file_hash: p.file_hash.clone(),
+            jpg_path: p.jpg_path.clone(),
+        })
+        .collect();
+
+    let uc = EnsureCatalogSynced {
+        catalog: state.catalog.as_ref(),
+    };
+    let outcome = uc.run(session_ref, &cat_project, &cat_photos)?;
+    info!(
+        "ensure_project_synced({}) → {:?} ({} fotos)",
+        project_id,
+        outcome,
+        cat_photos.len()
+    );
+    Ok(outcome)
 }

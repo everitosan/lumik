@@ -3,6 +3,7 @@
 //! `build_router` con un pool de prueba.
 
 pub mod auth;
+pub mod catalog;
 pub mod config;
 pub mod crypto;
 pub mod db;
@@ -73,10 +74,25 @@ pub fn build_router(state: AppState) -> Router {
         .route("/:ptype/connect", post(providers::handlers::connect))
         .route("/:id", delete(providers::handlers::delete));
 
+    // Catálogo: sync (desktop→server) + listado (clientes).
+    let catalog = Router::new()
+        .route("/sync/projects", post(catalog::handlers::sync_projects))
+        .route(
+            "/sync/projects/:project_id/photos",
+            post(catalog::handlers::sync_photos),
+        )
+        .route("/projects", get(catalog::handlers::list_projects))
+        .route("/projects/:id", get(catalog::handlers::get_project))
+        .route(
+            "/projects/:project_id/photos",
+            get(catalog::handlers::list_photos),
+        );
+
     Router::new()
         .route("/healthz", get(routes::health::healthz))
         .nest("/v1/auth", auth)
         .nest("/v1/providers", providers)
+        .nest("/v1", catalog)
         .with_state(state)
         // Log por request: método, ruta, status y latencia (a nivel INFO).
         .layer(

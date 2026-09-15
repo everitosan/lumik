@@ -100,6 +100,9 @@ pub fn run() {
     let backup_auth: Arc<dyn application::ports::BackupAuthClient> =
         Arc::new(infrastructure::backup_auth::HttpBackupAuth);
 
+    let catalog: Arc<dyn application::ports::CatalogClient> =
+        Arc::new(infrastructure::catalog::HttpCatalog);
+
     info!("Scanning for project databases on connected devices...");
     refresh_open_projects(device_scanner.as_ref(), &global_db, &registry);
     info!("Found {} open project(s) at startup", registry.open_count());
@@ -113,6 +116,7 @@ pub fn run() {
         finder_tags,
         file_store,
         backup_auth,
+        catalog,
     };
 
     info!("Starting Tauri application...");
@@ -189,6 +193,7 @@ pub fn run() {
             commands::backup_login,
             commands::backup_logout,
             commands::get_backup_session,
+            commands::ensure_project_synced,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

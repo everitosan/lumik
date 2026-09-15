@@ -223,12 +223,14 @@ Cada proveedor conectado = **un remote de rclone**. Dos tipos:
 
 **Gate 4:** ✅ **alcanzado** — verificado con test del cliente HTTP real contra el server (`register → me → login → refresh → login incorrecto`); 53 tests del desktop verdes. La sesión persiste en `settings` entre reinicios (restauración vía `get_backup_session`).
 
-### Fase 5 — Reconciliación de proyectos (catálogo)
-- [ ] Server: `POST /v1/sync/projects` y `.../photos` (upsert; `photographer_id` del JWT); `GET /v1/projects`, `.../photos`, `GET /v1/projects/{id}` (200/404).
-- [ ] Desktop: puerto `CatalogClient` + `use_cases/publish_catalog.rs`.
-- [ ] **`ensure_catalog_synced` enganchado a abrir proyecto**: si `404` publica (crea faltantes); degrada a solo-local sin red/sesión. Tests de fakes.
+### Fase 5 — Reconciliación de proyectos (catálogo) ✅
+- [x] Server: `POST /v1/sync/projects` y `.../projects/{id}/photos` (upsert; `photographer_id` del JWT; **backup_* NO se pisa** al re-sincronizar); `GET /v1/projects`, `GET /v1/projects/{id}` (200/404), `GET /v1/projects/{id}/photos[?backup=]`. 4 tests (incl. preservación de backup_status y aislamiento entre tenants).
+- [x] Desktop: puerto `CatalogClient` + impl HTTP (`infrastructure/catalog.rs`) + use case `ensure_catalog_synced` con 4 tests de fakes (no-session/offline/exists/missing).
+- [x] **`ensure_project_synced` enganchado a abrir proyecto** (efecto en `ProjectDetail`): resuelve sesión (refresca en 401), si `404` publica proyecto + fotos; degrada a solo-local sin red/sesión.
 
-**Gate 5:** al abrir un proyecto, si no existe en el server **se crea** (proyecto + fotos); los proyectos ya aparecen en `GET /v1/projects`.
+**Gate 5:** ✅ **alcanzado** — verificado con test del `HttpCatalog` real contra el server (exists=false → publish → exists=true) + tests del server. Al abrir un proyecto se crea en el catálogo si falta y aparece en `GET /v1/projects`.
+
+**Identidad (cierre de la nota de Fase 4):** NO se fuerza `creator_id === photographer_id` (sería destructivo sobre BDs de disco). En su lugar, el catálogo **atribuye los proyectos al fotógrafo del JWT**; el `creator_id` local no se envía. La propiedad multi-tenant se deriva del token, no de igualar ids.
 
 ### Fase 6 — `sync_exported` local (_exported ↔ photo)
 - [ ] `use_cases/sync_exported.rs`: emparejar por stem, fijar `jpg_path` + `workflow_status='edited'`; loguear no-emparejados. Tests con fakes.
@@ -282,6 +284,16 @@ Cada proveedor conectado = **un remote de rclone**. Dos tipos:
 - Plan de cuotas/billing por usuario: fuera de alcance inicial (aunque el modelo multi-tenant lo habilita después).
 
 ## 11. Bitácora
+- **2026-09-15 · Fase 5 · completada** — Catálogo end-to-end. Server: módulo `catalog`
+  con sync/list/exists scoped por tenant; **el upsert de fotos preserva `backup_*`**
+  (solo actualiza metadata) — probado. Desktop: `CatalogClient` + `HttpCatalog` +
+  use case `EnsureCatalogSynced` (tests de fakes) + comando `ensure_project_synced`
+  disparado en el `useEffect` de `ProjectDetail`. Se refactorizó `active_session`
+  (resolución/refresh de sesión reutilizable) fuera de `get_backup_session`.
+  **Decisión de identidad:** se descarta forzar `creator_id === photographer_id`
+  (destructivo); el catálogo deriva la propiedad del JWT y no envía `creator_id`.
+  **Nota:** el fake del use case usa `AtomicUsize` (no `RefCell`) porque el trait
+  `CatalogClient` exige `Send + Sync`. 57 tests desktop + 24 server, todos verdes.
 - **2026-09-15 · Fase 4 · completada** — Login del desktop contra el server. Puerto
   `BackupAuthClient` (application/ports) + impl `HttpBackupAuth` (reqwest **blocking**,
   rustls — seguro en comandos Tauri síncronos que corren en thread pool, no en el

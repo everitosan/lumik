@@ -260,3 +260,19 @@ export async function backupLogout(): Promise<void> {
 export async function getBackupSession(): Promise<BackupSession | null> {
   return invoke('get_backup_session');
 }
+
+export type SyncOutcome =
+  | 'skipped_no_session'
+  | 'offline'
+  | 'already_exists'
+  | 'published';
+
+/**
+ * Asegura que el proyecto exista en el catálogo del server (Fase 5). Se llama al
+ * abrir un proyecto; degrada a solo-local sin sesión/red. Fire-and-forget.
+ */
+export async function ensureProjectSynced(
+  projectId: string
+): Promise<SyncOutcome> {
+  return invoke('ensure_project_synced', { projectId });
+}

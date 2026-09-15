@@ -136,6 +136,15 @@ const feedbackStyles: CSSProperties = {
 
 export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPath, onBack, onCoverPhotoChange }: ProjectDetailProps) {
   const { t, i18n } = useTranslation();
+
+  // Al abrir el proyecto, asegura que exista en el catálogo del server de respaldo
+  // (Fase 5). Fire-and-forget: degrada a solo-local sin sesión/red.
+  useEffect(() => {
+    api
+      .ensureProjectSynced(projectId)
+      .catch((e) => console.debug('ensureProjectSynced skipped:', e));
+  }, [projectId]);
+
   const [sortBy, setSortBy] = useState<SortOption>('date');
   const [viewMode, setViewMode] = useState<'grid' | 'by-date'>('by-date');
   const [showImport, setShowImport] = useState(false);

@@ -34,6 +34,46 @@ pub struct AccountInfo {
     pub name: Option<String>,
 }
 
+/// Proyecto tal como se publica al catálogo del server (Fase 5).
+#[derive(Debug, Clone)]
+pub struct CatalogProject {
+    pub id: String,
+    pub name: String,
+    /// Fecha de sesión en formato `YYYY-MM-DD`, o `None`.
+    pub session_date: Option<String>,
+    pub slug: String,
+}
+
+/// Foto tal como se publica al catálogo del server (Fase 5).
+#[derive(Debug, Clone)]
+pub struct CatalogPhoto {
+    pub id: String,
+    pub filename: String,
+    pub file_hash: Option<String>,
+    pub jpg_path: Option<String>,
+}
+
+/// Cliente del catálogo del server (Fase 5). La impl real usa HTTP.
+pub trait CatalogClient: Send + Sync {
+    /// `true` si el proyecto ya existe en el catálogo del fotógrafo.
+    fn project_exists(&self, base_url: &str, access: &str, project_id: &str) -> Result<bool, String>;
+    /// Publica (upsert) proyectos del fotógrafo.
+    fn publish_projects(
+        &self,
+        base_url: &str,
+        access: &str,
+        projects: &[CatalogProject],
+    ) -> Result<(), String>;
+    /// Publica (upsert) las fotos de un proyecto.
+    fn publish_photos(
+        &self,
+        base_url: &str,
+        access: &str,
+        project_id: &str,
+        photos: &[CatalogPhoto],
+    ) -> Result<(), String>;
+}
+
 /// Cliente del server de respaldo para autenticación (Fase 4). La impl real usa
 /// HTTP (`reqwest`); `base_url` es la URL del server configurada por el fotógrafo.
 pub trait BackupAuthClient: Send + Sync {
