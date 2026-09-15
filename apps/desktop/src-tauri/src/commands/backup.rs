@@ -220,17 +220,27 @@ fn basename(path: &str) -> String {
     path.rsplit('/').next().unwrap_or(path).to_string()
 }
 
+/// Sesión guardada SIN validar contra el server (sin red): `(server_url, access,
+/// refresh)`. A diferencia de `active_session`, no hace `GET /me`.
+fn stored_session(state: &AppState) -> AppResult<Option<(String, String, Option<String>)>> {
+    let Some(access) = state.global_db.get_setting(K_ACCESS)? else {
+        return Ok(None);
+    };
+    let refresh = state.global_db.get_setting(K_REFRESH)?;
+    Ok(Some((server_url(state), access, refresh)))
+}
+
 /// Asegura que el proyecto exista en el catálogo del server. Se llama al abrir un
 /// proyecto: si no hay sesión o red, degrada a solo-local; si el proyecto falta en
 /// el catálogo, lo publica (proyecto + fotos). Idempotente. Ver Fase 5.
+///
+/// Usa el access token **guardado** (sin `GET /me` por apertura) y solo refresca +
+/// reintenta si el catálogo responde no-autorizado (token expirado).
 #[tauri::command]
 pub fn ensure_project_synced(
     state: State<AppState>,
     project_id: String,
 ) -> AppResult<SyncOutcome> {
-    let session = active_session(&state)?;
-    let session_ref = session.as_ref().map(|(u, a)| (u.as_str(), a.as_str()));
-
     let project_db = state.project_db(&project_id)?;
     let project = project_db
         .get_project()?
@@ -261,7 +271,35 @@ pub fn ensure_project_synced(
     let uc = EnsureCatalogSynced {
         catalog: state.catalog.as_ref(),
     };
-    let outcome = uc.run(session_ref, &cat_project, &cat_photos)?;
+    let run = |access: &str| uc.run(Some((server_url(&state).as_str(), access)), &cat_project, &cat_photos);
+
+    let Some((_base, access, refresh)) = stored_session(&state)? else {
+        // Sin sesión: solo-local.
+        return Ok(uc.run(None, &cat_project, &cat_photos)?);
+    };
+
+    let outcome = match run(&access) {
+        Ok(o) => o,
+        Err(e) if is_offline(&e) => SyncOutcome::Offline,
+        // Posible token expirado: refresca UNA vez y reintenta (sin /me previo).
+        Err(_) => match refresh {
+            Some(refresh) => match state.backup_auth.refresh(&server_url(&state), &refresh) {
+                Ok(tokens) => {
+                    state.global_db.set_setting(K_ACCESS, &tokens.access)?;
+                    state.global_db.set_setting(K_REFRESH, &tokens.refresh)?;
+                    match run(&tokens.access) {
+                        Ok(o) => o,
+                        Err(e2) if is_offline(&e2) => SyncOutcome::Offline,
+                        Err(e2) => return Err(AppError::from(e2)),
+                    }
+                }
+                Err(re) if is_offline(&re) => SyncOutcome::Offline,
+                Err(_) => SyncOutcome::SkippedNoSession, // refresh rechazado: sesión expirada
+            },
+            None => SyncOutcome::SkippedNoSession,
+        },
+    };
+
     info!(
         "ensure_project_synced({}) → {:?} ({} fotos)",
         project_id,
