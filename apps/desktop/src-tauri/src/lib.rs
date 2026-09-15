@@ -97,6 +97,9 @@ pub fn run() {
     let file_store: Arc<dyn application::ports::FileStore> =
         Arc::new(infrastructure::fs::StdFileStore);
 
+    let backup_auth: Arc<dyn application::ports::BackupAuthClient> =
+        Arc::new(infrastructure::backup_auth::HttpBackupAuth);
+
     info!("Scanning for project databases on connected devices...");
     refresh_open_projects(device_scanner.as_ref(), &global_db, &registry);
     info!("Found {} open project(s) at startup", registry.open_count());
@@ -109,6 +112,7 @@ pub fn run() {
         image_processor,
         finder_tags,
         file_store,
+        backup_auth,
     };
 
     info!("Starting Tauri application...");
@@ -177,6 +181,14 @@ pub fn run() {
             commands::update_keybinding,
             commands::get_app_settings,
             commands::update_app_settings,
+
+            // ── Respaldo: cuenta / sesión (Fase 4) ──────────────────────────
+            commands::get_backup_server_url,
+            commands::set_backup_server_url,
+            commands::backup_register,
+            commands::backup_login,
+            commands::backup_logout,
+            commands::get_backup_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

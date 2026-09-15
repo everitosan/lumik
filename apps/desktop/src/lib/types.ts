@@ -199,3 +199,11 @@ export interface Photo {
   lens_model: string | null;
   rotation: number;
 }
+
+// Sesión de la cuenta de respaldo (server de respaldo — Fase 4)
+export interface BackupSession {
+  email: string;
+  photographer_id: string;
+  name: string | null;
+  server_url: string;
+}

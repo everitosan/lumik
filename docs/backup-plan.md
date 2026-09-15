@@ -215,12 +215,13 @@ Cada proveedor conectado = **un remote de rclone**. Dos tipos:
 
 **Gate 3:** ✅ **alcanzado** (credenciales) — verificado en vivo: conectar Nextcloud → guardado en `remote(photographer_id,…)` con el token **cifrado** (`plano=false` en BD); OAuth responde `501` gated. Cierre OAuth cuando lleguen las apps.
 
-### Fase 4 — Login en app desktop
-- [ ] Puerto `AuthClient` + impl HTTP (`reqwest`); interceptor que adjunta el access token y refresca en `401`.
-- [ ] Pantalla de login/registro + estado de sesión; almacenamiento de tokens en `settings`.
-- [ ] Reconciliación de identidad: `creator_id` (local) === `photographer_id` (server).
+### Fase 4 — Login en app desktop ✅
+- [x] Puerto `BackupAuthClient` + impl HTTP (`reqwest::blocking`, rustls) en `infrastructure/backup_auth.rs`; comandos `backup_login/register/logout/get_backup_session` + `get/set_backup_server_url`.
+- [x] Sesión persistente en la tabla `settings` (BD global): access/refresh/photographer_id/email/name/server_url. `get_backup_session` valida con `/me`, refresca en 401, y **no desloguea ante error de red** (offline → mantiene sesión).
+- [x] UI: pestaña "Respaldo" en `SettingsPage` (`BackupAccountSection`) con login/registro/logout + URL del server + i18n es/en.
+- [~] Reconciliación de identidad: se guarda el `photographer_id` del server como puente (el `===` con `creator_id` se realiza en Fase 5 al publicar el catálogo).
 
-**Gate 4:** la desktop inicia sesión con la misma cuenta y conserva la sesión entre reinicios.
+**Gate 4:** ✅ **alcanzado** — verificado con test del cliente HTTP real contra el server (`register → me → login → refresh → login incorrecto`); 53 tests del desktop verdes. La sesión persiste en `settings` entre reinicios (restauración vía `get_backup_session`).
 
 ### Fase 5 — Reconciliación de proyectos (catálogo)
 - [ ] Server: `POST /v1/sync/projects` y `.../photos` (upsert; `photographer_id` del JWT); `GET /v1/projects`, `.../photos`, `GET /v1/projects/{id}` (200/404).
@@ -281,6 +282,18 @@ Cada proveedor conectado = **un remote de rclone**. Dos tipos:
 - Plan de cuotas/billing por usuario: fuera de alcance inicial (aunque el modelo multi-tenant lo habilita después).
 
 ## 11. Bitácora
+- **2026-09-15 · Fase 4 · completada** — Login del desktop contra el server. Puerto
+  `BackupAuthClient` (application/ports) + impl `HttpBackupAuth` (reqwest **blocking**,
+  rustls — seguro en comandos Tauri síncronos que corren en thread pool, no en el
+  runtime async). Sesión persistida en la tabla `settings` de la BD global (se hicieron
+  públicos `get/set_setting` + `delete_setting`). `get_backup_session` distingue 401
+  (refresca / desloguea) de offline (mantiene sesión) por el mensaje de la impl. UI:
+  pestaña "Respaldo" en Settings. Verificación runtime headless: test de `HttpBackupAuth`
+  real contra el server (gated por `LUMIK_TEST_SERVER`). **Nota tooling:** `pkill -f
+  lumik-server` dentro del comando que lo arranca mata su propio shell (su línea contiene
+  el patrón) → no usar pkill en el mismo comando de arranque. **Identidad:** por ahora se
+  guarda `photographer_id` del server como puente; el `creator_id === photographer_id` se
+  concreta en Fase 5.
 - **2026-09-15 · Fase 3 · parcial (credenciales completas, OAuth gated)** — Conexión
   de proveedores con cifrado en reposo (AES-256-GCM, `crypto.rs`; clave por
   `REMOTE_ENC_KEY`). La config rclone de cada remote se guarda como JSON cifrado en

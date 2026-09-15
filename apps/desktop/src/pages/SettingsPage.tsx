@@ -11,6 +11,7 @@ import {
   updateKeybinding,
 } from '../lib/api';
 import type { PhotographerMetadata, AppSettings, Keybinding } from '../lib/types';
+import { BackupAccountSection } from './BackupAccountSection';
 
 const containerStyles: React.CSSProperties = {
   display: 'flex',
@@ -400,6 +401,7 @@ export function SettingsPage() {
     { id: 'import', label: t('settings.tabs.import') },
     { id: 'shortcuts', label: t('settings.tabs.shortcuts') },
     { id: 'appearance', label: t('settings.tabs.appearance') },
+    { id: 'backup', label: t('settings.tabs.backup') },
   ];
 
   return (
@@ -627,6 +629,8 @@ export function SettingsPage() {
           </div>
         </section>
       )}
+
+      {activeTab === 'backup' && <BackupAccountSection />}
     </div>
   );
 }

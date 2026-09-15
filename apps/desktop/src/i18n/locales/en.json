@@ -140,11 +140,30 @@
     "tabs": {
       "import": "Import",
       "shortcuts": "Shortcuts",
-      "appearance": "Appearance"
+      "appearance": "Appearance",
+      "backup": "Backup"
     },
     "appearance": {
       "title": "Appearance",
       "description": "Customize the language and presentation of the app."
+    },
+    "backup": {
+      "title": "Backup account",
+      "description": "Sign in to back up your exported photos to the cloud.",
+      "serverUrl": "Server URL",
+      "server": "Server",
+      "name": "Name",
+      "email": "Email",
+      "password": "Password",
+      "login": "Sign in",
+      "register": "Create account",
+      "logout": "Sign out",
+      "switchToRegister": "No account? Create one",
+      "switchToLogin": "Already have an account? Sign in",
+      "signedInAs": "Signed in as {{email}}",
+      "errors": {
+        "required": "Enter email and password"
+      }
     },
     "keybindings": {
       "title": "Keyboard shortcuts",

@@ -19,6 +19,42 @@ pub trait ProgressReporter: Send + Sync {
     fn progress(&self, progress: ImportProgress);
 }
 
+/// Par de tokens de sesión devueltos por el server de respaldo.
+#[derive(Debug, Clone)]
+pub struct AuthTokens {
+    pub access: String,
+    pub refresh: String,
+}
+
+/// Datos de la cuenta del fotógrafo en el server de respaldo.
+#[derive(Debug, Clone)]
+pub struct AccountInfo {
+    pub id: String,
+    pub email: String,
+    pub name: Option<String>,
+}
+
+/// Cliente del server de respaldo para autenticación (Fase 4). La impl real usa
+/// HTTP (`reqwest`); `base_url` es la URL del server configurada por el fotógrafo.
+pub trait BackupAuthClient: Send + Sync {
+    fn register(
+        &self,
+        base_url: &str,
+        email: &str,
+        password: &str,
+        name: Option<&str>,
+    ) -> Result<(AuthTokens, AccountInfo), String>;
+    fn login(
+        &self,
+        base_url: &str,
+        email: &str,
+        password: &str,
+    ) -> Result<(AuthTokens, AccountInfo), String>;
+    fn me(&self, base_url: &str, access: &str) -> Result<AccountInfo, String>;
+    fn refresh(&self, base_url: &str, refresh: &str) -> Result<AuthTokens, String>;
+    fn logout(&self, base_url: &str, refresh: &str) -> Result<(), String>;
+}
+
 /// Acceso a las fotos de un proyecto (una `ProjectDatabase`). Los casos de uso
 /// dependen de este trait, no de SQLite; en tests se sustituye por un fake.
 /// Nota: por ahora expone el struct `db::models::Photo` como DTO compartido;

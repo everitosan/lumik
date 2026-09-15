@@ -14,6 +14,7 @@ import type {
   UpdatePhotographerMetadata,
   ImportRequest,
   ImportResult,
+  BackupSession,
 } from './types';
 
 // ============================================================================
@@ -223,4 +224,39 @@ export async function updateAppSettings(
 
 export async function startImport(request: ImportRequest): Promise<ImportResult> {
   return invoke('start_import', { request });
+}
+
+// ============================================================================
+// BACKUP ACCOUNT API (server de respaldo — Fase 4)
+// ============================================================================
+
+export async function getBackupServerUrl(): Promise<string> {
+  return invoke('get_backup_server_url');
+}
+
+export async function setBackupServerUrl(url: string): Promise<void> {
+  return invoke('set_backup_server_url', { url });
+}
+
+export async function backupLogin(
+  email: string,
+  password: string
+): Promise<BackupSession> {
+  return invoke('backup_login', { email, password });
+}
+
+export async function backupRegister(
+  email: string,
+  password: string,
+  name?: string
+): Promise<BackupSession> {
+  return invoke('backup_register', { email, password, name: name ?? null });
+}
+
+export async function backupLogout(): Promise<void> {
+  return invoke('backup_logout');
+}
+
+export async function getBackupSession(): Promise<BackupSession | null> {
+  return invoke('get_backup_session');
 }

@@ -1,5 +1,5 @@
 use crate::application::ports::{
-    DeviceScanner, FileStore, FinderTagWriter, ImageProcessor, MetadataTool,
+    BackupAuthClient, DeviceScanner, FileStore, FinderTagWriter, ImageProcessor, MetadataTool,
 };
 use crate::application::registry::ProjectRegistry;
 use crate::db::{discover_projects_on_device, GlobalDatabase, ProjectDatabase};
@@ -23,6 +23,8 @@ pub struct AppState {
     pub finder_tags: Arc<dyn FinderTagWriter>,
     /// Operaciones de sistema de archivos usadas por los casos de uso.
     pub file_store: Arc<dyn FileStore>,
+    /// Cliente del server de respaldo para auth (Fase 4).
+    pub backup_auth: Arc<dyn BackupAuthClient>,
 }
 
 impl AppState {
@@ -93,6 +95,9 @@ pub use photo::*;
 
 mod settings;
 pub use settings::*;
+
+mod backup;
+pub use backup::*;
 
 // ============================================================================
 // IMPORT COMMANDS — ver commands/import_cmd.rs

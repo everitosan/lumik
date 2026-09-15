@@ -3,6 +3,7 @@
 //! única capa que puede contener `#[cfg(target_os)]` de plataforma; la
 //! selección de qué implementación usar ocurre en `lib.rs`.
 
+pub mod backup_auth;
 pub mod devices;
 pub mod finder_tags;
 pub mod folder;

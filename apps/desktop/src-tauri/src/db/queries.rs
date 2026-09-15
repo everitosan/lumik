@@ -120,20 +120,26 @@ impl GlobalDatabase {
     // SETTINGS
     // ------------------------------------------------------------------------
 
-    fn get_setting(&self, key: &str) -> DbResult<Option<String>> {
+    pub fn get_setting(&self, key: &str) -> DbResult<Option<String>> {
         let conn = self.conn();
         let mut stmt = conn.prepare("SELECT value FROM settings WHERE key = ?1")?;
         let value = stmt.query_row([key], |row| row.get(0)).optional()?;
         Ok(value)
     }
 
-    fn set_setting(&self, key: &str, value: &str) -> DbResult<()> {
+    pub fn set_setting(&self, key: &str, value: &str) -> DbResult<()> {
         let conn = self.conn();
         conn.execute(
             "INSERT INTO settings (key, value) VALUES (?1, ?2)
              ON CONFLICT(key) DO UPDATE SET value = ?2",
             params![key, value],
         )?;
+        Ok(())
+    }
+
+    pub fn delete_setting(&self, key: &str) -> DbResult<()> {
+        let conn = self.conn();
+        conn.execute("DELETE FROM settings WHERE key = ?1", params![key])?;
         Ok(())
     }
 

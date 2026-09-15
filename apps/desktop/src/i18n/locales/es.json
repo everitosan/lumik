@@ -140,11 +140,30 @@
     "tabs": {
       "import": "Importar",
       "shortcuts": "Shortcuts",
-      "appearance": "Apariencia"
+      "appearance": "Apariencia",
+      "backup": "Respaldo"
     },
     "appearance": {
       "title": "Apariencia",
       "description": "Personaliza el idioma y la presentación de la aplicación."
+    },
+    "backup": {
+      "title": "Cuenta de respaldo",
+      "description": "Inicia sesión para respaldar tus fotos exportadas en la nube.",
+      "serverUrl": "URL del servidor",
+      "server": "Servidor",
+      "name": "Nombre",
+      "email": "Correo",
+      "password": "Contraseña",
+      "login": "Iniciar sesión",
+      "register": "Crear cuenta",
+      "logout": "Cerrar sesión",
+      "switchToRegister": "¿No tienes cuenta? Crea una",
+      "switchToLogin": "¿Ya tienes cuenta? Inicia sesión",
+      "signedInAs": "Sesión iniciada como {{email}}",
+      "errors": {
+        "required": "Completa correo y contraseña"
+      }
     },
     "keybindings": {
       "title": "Atajos de teclado",
