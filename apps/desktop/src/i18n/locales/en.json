@@ -244,7 +244,15 @@
   "backup": {
     "button": "Back up",
     "uploading": "Backing up…",
-    "done": "Backed up {{uploaded}}/{{total}}"
+    "done": "Backed up {{uploaded}}/{{total}}",
+    "modal": {
+      "title": "Back up exported photos",
+      "subtitle": "{{pending}} to upload of {{total}} in _exported",
+      "empty": "No photos in _exported to back up.",
+      "accept": "Upload {{count}}",
+      "cancel": "Cancel",
+      "close": "Close"
+    }
   },
   "projectDetail": {
     "noDate": "No date",

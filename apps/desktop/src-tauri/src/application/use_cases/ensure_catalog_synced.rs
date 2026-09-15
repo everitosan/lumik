@@ -83,6 +83,14 @@ mod tests {
         fn project_exists(&self, _: &str, _: &str, _: &str) -> Result<bool, String> {
             self.exists.clone()
         }
+        fn list_photos(
+            &self,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> Result<Vec<crate::application::ports::CatalogPhotoStatus>, String> {
+            Ok(vec![])
+        }
         fn publish_projects(&self, _: &str, _: &str, _: &[CatalogProject]) -> Result<(), String> {
             self.published_projects.fetch_add(1, Ordering::SeqCst);
             Ok(())

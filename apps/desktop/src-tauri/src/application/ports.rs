@@ -77,10 +77,24 @@ pub trait BackupClient: Send + Sync {
     ) -> Result<BackupReceipt, String>;
 }
 
+/// Estado de respaldo de una foto en el catálogo (Fase 7).
+#[derive(Debug, Clone)]
+pub struct CatalogPhotoStatus {
+    pub id: String,
+    pub backup_status: String,
+}
+
 /// Cliente del catálogo del server (Fase 5). La impl real usa HTTP.
 pub trait CatalogClient: Send + Sync {
     /// `true` si el proyecto ya existe en el catálogo del fotógrafo.
     fn project_exists(&self, base_url: &str, access: &str, project_id: &str) -> Result<bool, String>;
+    /// Estado de respaldo de las fotos del proyecto (para saber cuáles faltan).
+    fn list_photos(
+        &self,
+        base_url: &str,
+        access: &str,
+        project_id: &str,
+    ) -> Result<Vec<CatalogPhotoStatus>, String>;
     /// Publica (upsert) proyectos del fotógrafo.
     fn publish_projects(
         &self,
@@ -136,8 +150,6 @@ pub trait PhotoRepository {
     fn update_culled(&self, id: &str, culled: bool, new_dng_path: &str) -> Result<(), String>;
     /// Enlaza la foto con su JPEG exportado y la marca `edited` (Fase 6).
     fn set_exported(&self, id: &str, jpg_path: &str) -> Result<(), String>;
-    /// Marca la foto como respaldada (`backup_status='uploaded'` + url) (Fase 7).
-    fn set_backup_uploaded(&self, id: &str, backup_url: Option<&str>) -> Result<(), String>;
     /// Inserta un lote de fotos en una sola transacción; devuelve las creadas.
     fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String>;
 }

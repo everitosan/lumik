@@ -75,19 +75,27 @@ pub async fn backup_photo(
     let file_bytes = file_bytes.ok_or_else(|| ApiError::BadRequest("falta el campo 'file'".into()))?;
     let filename = filename.ok_or_else(|| ApiError::BadRequest("falta 'filename'".into()))?;
 
-    // ---- 2. Verifica que la foto es del fotógrafo (foto→proyecto→dueño) ----
-    let owns: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT p.id FROM photo p JOIN project pr ON pr.id = p.project_id \
-         WHERE p.id = $1 AND pr.id = $2 AND pr.photographer_id = $3",
-    )
-    .bind(photo_id)
-    .bind(project_id)
-    .bind(auth.0)
-    .fetch_optional(&state.pool)
-    .await?;
+    // ---- 2. Verifica que el proyecto es del fotógrafo y asegura la fila photo ----
+    let owns: Option<(Uuid,)> =
+        sqlx::query_as("SELECT id FROM project WHERE id = $1 AND photographer_id = $2")
+            .bind(project_id)
+            .bind(auth.0)
+            .fetch_optional(&state.pool)
+            .await?;
     if owns.is_none() {
         return Err(ApiError::NotFound);
     }
+    // Upsert de la foto (permite respaldar archivos de _exported que no provienen
+    // de un import, p.ej. exports renombrados). No toca backup_*.
+    sqlx::query(
+        "INSERT INTO photo (id, project_id, filename) VALUES ($1, $2, $3) \
+         ON CONFLICT (id) DO UPDATE SET filename = EXCLUDED.filename, updated_at = now()",
+    )
+    .bind(photo_id)
+    .bind(project_id)
+    .bind(&filename)
+    .execute(&state.pool)
+    .await?;
 
     // ---- 3. Ruta en la nube (espeja el disco) ----
     let proj: ProjectPath = sqlx::query_as(

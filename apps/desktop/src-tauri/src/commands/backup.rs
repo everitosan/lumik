@@ -8,7 +8,7 @@
 
 use super::AppState;
 use crate::application::error::{AppError, AppResult};
-use crate::application::ports::{AuthTokens, CatalogPhoto, CatalogProject, PhotoRepository};
+use crate::application::ports::{AuthTokens, CatalogPhoto, CatalogProject};
 use crate::application::use_cases::ensure_catalog_synced::{EnsureCatalogSynced, SyncOutcome};
 use crate::application::use_cases::sync_exported::{
     ExportedFile, PhotoStem, SyncExported, SyncExportedResult,
@@ -17,6 +17,7 @@ use crate::domain::paths::path_to_slash;
 use crate::domain::project::ProjectFolder;
 use log::{info, warn};
 use serde::Serialize;
+use std::collections::HashSet;
 use tauri::State;
 
 /// Extensiones consideradas "exportados" al escanear `_exported/`.
@@ -438,94 +439,138 @@ pub fn sync_exported(
     Ok(result)
 }
 
-/// Resumen de un respaldo de proyecto para el frontend.
+/// Un archivo de `_exported/` como unidad de respaldo, con su estado en el remote.
 #[derive(Debug, Serialize)]
-pub struct BackupSummary {
-    pub total: usize,
-    pub uploaded: usize,
-    pub failed: usize,
+pub struct ExportedBackupItem {
+    /// Id determinista (uuid5 de project_id + filename): estable entre corridas.
+    pub id: String,
+    pub filename: String,
+    /// `true` si ya está respaldado según el catálogo del server.
+    pub uploaded: bool,
 }
 
-/// Respalda las fotos exportadas y aún no subidas de un proyecto: por cada una,
-/// lee el JPEG de `_exported/` y lo sube al server (que lo replica a la nube).
-/// Requiere sesión de respaldo iniciada y al menos un proveedor conectado.
+/// Id determinista para un archivo exportado (no depende del RAW: robusto ante
+/// exports renombrados). Ver docs/backup-plan.md Fase 7.
+fn exported_id(project_id: &str, filename: &str) -> String {
+    let name = format!("{project_id}/{filename}");
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, name.as_bytes()).to_string()
+}
+
+/// Escanea `_exported/` y devuelve sus imágenes (id determinista + nombre).
+fn scan_exported(project_dir: &std::path::Path, project_id: &str) -> Vec<(String, String)> {
+    let dir = project_dir.join("_exported");
+    let mut items: Vec<(String, String)> = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        for entry in rd.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let is_img = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| EXPORTED_EXTS.contains(&e.to_lowercase().as_str()))
+                .unwrap_or(false);
+            if !is_img {
+                continue;
+            }
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                items.push((exported_id(project_id, name), name.to_string()));
+            }
+        }
+    }
+    items.sort_by(|a, b| a.1.cmp(&b.1));
+    items
+}
+
+/// Lista los archivos de `_exported/` y si ya están respaldados en el remote.
+/// Lo consume el modal de respaldo para mostrar qué falta subir.
 #[tauri::command]
-pub fn backup_project(
+pub fn list_exported_backup(
     state: State<AppState>,
     project_id: String,
-    targets: Option<String>,
-) -> AppResult<BackupSummary> {
+) -> AppResult<Vec<ExportedBackupItem>> {
+    let project_db = state.project_db(&project_id)?;
+    let files = scan_exported(&project_db.project_dir, &project_id);
+
+    // Estado de respaldo desde el catálogo (si hay sesión). Sin sesión → todo pendiente.
+    let uploaded: HashSet<String> = match active_session(&state)? {
+        Some((base, access)) => {
+            // Asegura que el proyecto exista en el catálogo para poder consultarlo.
+            if let Ok((cat_project, _)) = build_catalog_data(&state, &project_id) {
+                let _ = state
+                    .catalog
+                    .publish_projects(&base, &access, std::slice::from_ref(&cat_project));
+            }
+            state
+                .catalog
+                .list_photos(&base, &access, &project_id)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|s| s.backup_status == "uploaded")
+                .map(|s| s.id)
+                .collect()
+        }
+        None => HashSet::new(),
+    };
+
+    Ok(files
+        .into_iter()
+        .map(|(id, filename)| ExportedBackupItem {
+            uploaded: uploaded.contains(&id),
+            id,
+            filename,
+        })
+        .collect())
+}
+
+/// Respalda un archivo de `_exported/` (el modal lo llama por archivo para dar
+/// feedback por-foto). Refresca el token si expiró. Devuelve "uploaded" u error.
+#[tauri::command]
+pub fn backup_exported_file(
+    state: State<AppState>,
+    project_id: String,
+    id: String,
+    filename: String,
+) -> AppResult<String> {
     let Some((base, mut access, refresh)) = stored_session(&state)? else {
         return Err(AppError::from("inicia sesión de respaldo primero"));
     };
-
-    // Asegura que el proyecto y sus fotos estén en el catálogo antes de subir.
-    let _ = publish_catalog_upsert(&state, &project_id);
-
     let project_db = state.project_db(&project_id)?;
-    let photos = project_db.get_project_photos()?;
+    let file_path = project_db.project_dir.join("_exported").join(&filename);
+    if !file_path.exists() {
+        return Err(AppError::from(format!("no se encontró {filename}")));
+    }
 
-    // Candidatas: tienen JPEG exportado y no están respaldadas.
-    let pending: Vec<_> = photos
-        .iter()
-        .filter(|p| p.jpg_path.is_some() && p.backup_status != "uploaded")
-        .collect();
-
-    let targets_ref = targets.as_deref();
-    let mut summary = BackupSummary {
-        total: pending.len(),
-        uploaded: 0,
-        failed: 0,
-    };
-
-    for photo in pending {
-        let jpg = photo.jpg_path.as_ref().unwrap();
-        let file_path = project_db.mount_point.join(jpg);
-        if !file_path.exists() {
-            warn!("backup_project: falta el archivo {}", file_path.display());
-            summary.failed += 1;
-            continue;
-        }
-        let filename = basename(jpg);
-
-        // Sube con un refresh-on-401 (renueva `access` si expiró).
-        let mut receipt = state.backup.upload_photo(
-            &base, &access, &project_id, &photo.id, &file_path, &filename, targets_ref,
-        );
-        if let Err(e) = &receipt {
-            if !is_offline(e) {
-                if let Some(r) = &refresh {
-                    if let Ok(tokens) = state.backup_auth.refresh(&base, r) {
-                        state.global_db.set_setting(K_ACCESS, &tokens.access)?;
-                        state.global_db.set_setting(K_REFRESH, &tokens.refresh)?;
-                        access = tokens.access;
-                        receipt = state.backup.upload_photo(
-                            &base, &access, &project_id, &photo.id, &file_path, &filename,
-                            targets_ref,
-                        );
-                    }
+    let mut receipt =
+        state
+            .backup
+            .upload_photo(&base, &access, &project_id, &id, &file_path, &filename, None);
+    // Refresh-on-401.
+    if let Err(e) = &receipt {
+        if !is_offline(e) {
+            if let Some(r) = &refresh {
+                if let Ok(tokens) = state.backup_auth.refresh(&base, r) {
+                    state.global_db.set_setting(K_ACCESS, &tokens.access)?;
+                    state.global_db.set_setting(K_REFRESH, &tokens.refresh)?;
+                    access = tokens.access;
+                    receipt = state.backup.upload_photo(
+                        &base, &access, &project_id, &id, &file_path, &filename, None,
+                    );
                 }
-            }
-        }
-
-        match receipt {
-            Ok(r) if r.status == "uploaded" => {
-                project_db
-                    .set_backup_uploaded(&photo.id, r.backup_url.as_deref())
-                    .map_err(AppError::from)?;
-                summary.uploaded += 1;
-            }
-            Ok(_) => summary.failed += 1,
-            Err(e) => {
-                warn!("backup_project: falló {} → {}", photo.id, e);
-                summary.failed += 1;
             }
         }
     }
 
-    info!(
-        "backup_project({}): {}/{} subidas, {} fallidas",
-        project_id, summary.uploaded, summary.total, summary.failed
-    );
-    Ok(summary)
+    match receipt {
+        Ok(r) if r.status == "uploaded" => {
+            info!("backup_exported_file: {} → {:?}", filename, r.backup_url);
+            Ok("uploaded".into())
+        }
+        Ok(_) => Err(AppError::from("el proveedor no confirmó la subida")),
+        Err(e) => {
+            warn!("backup_exported_file: {} → {}", filename, e);
+            Err(AppError::from(e))
+        }
+    }
 }

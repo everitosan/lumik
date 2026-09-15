@@ -244,7 +244,15 @@
   "backup": {
     "button": "Respaldar",
     "uploading": "Respaldando…",
-    "done": "Respaldadas {{uploaded}}/{{total}}"
+    "done": "Respaldadas {{uploaded}}/{{total}}",
+    "modal": {
+      "title": "Respaldar fotos exportadas",
+      "subtitle": "{{pending}} por subir de {{total}} en _exported",
+      "empty": "No hay fotos en _exported para respaldar.",
+      "accept": "Subir {{count}}",
+      "cancel": "Cancelar",
+      "close": "Cerrar"
+    }
   },
   "projectDetail": {
     "noDate": "Sin fecha",

@@ -199,7 +199,8 @@ pub fn run() {
             commands::get_backup_session,
             commands::ensure_project_synced,
             commands::sync_exported,
-            commands::backup_project,
+            commands::list_exported_backup,
+            commands::backup_exported_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,7 +1,7 @@
 //! Implementación HTTP del puerto `CatalogClient` (Fase 5).
 //! Publica proyectos/fotos al catálogo del server y consulta existencia.
 
-use crate::application::ports::{CatalogClient, CatalogPhoto, CatalogProject};
+use crate::application::ports::{CatalogClient, CatalogPhoto, CatalogPhotoStatus, CatalogProject};
 use serde_json::{json, Value};
 
 pub struct HttpCatalog;
@@ -59,6 +59,45 @@ impl CatalogClient for HttpCatalog {
             404 => Ok(false),
             _ => Err(expect_success(resp).unwrap_err()),
         }
+    }
+
+    fn list_photos(
+        &self,
+        base_url: &str,
+        access: &str,
+        project_id: &str,
+    ) -> Result<Vec<CatalogPhotoStatus>, String> {
+        let url = format!("{}/v1/projects/{}/photos", base(base_url), project_id);
+        let resp = HttpCatalog::client()?
+            .get(url)
+            .bearer_auth(access)
+            .send()
+            .map_err(|e| friendly(&e))?;
+        let status = resp.status();
+        let text = resp.text().unwrap_or_default();
+        if !status.is_success() {
+            let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+            let msg = v
+                .get("error")
+                .and_then(|e| e.as_str())
+                .map(String::from)
+                .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
+            return Err(msg);
+        }
+        let arr: Vec<Value> = serde_json::from_str(&text).unwrap_or_default();
+        Ok(arr
+            .into_iter()
+            .filter_map(|v| {
+                Some(CatalogPhotoStatus {
+                    id: v.get("id")?.as_str()?.to_string(),
+                    backup_status: v
+                        .get("backup_status")
+                        .and_then(|s| s.as_str())
+                        .unwrap_or("pending")
+                        .to_string(),
+                })
+            })
+            .collect())
     }
 
     fn publish_projects(

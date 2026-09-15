@@ -248,8 +248,19 @@ Cada proveedor conectado = **un remote de rclone**. Dos tipos:
 **Gate 7:** ✅ **verificado en server** (e2e con alias local: multipart → rclone → archivo aterriza en la ruta espejo → catálogo `uploaded`). *Subida real a Mega/Nextcloud pendiente de probar en la app (requiere GUI + proveedor real).* Server 26 tests · desktop 61 tests.
 
 Notas:
-- **Idempotencia:** el desktop solo envía fotos con `jpg_path` y `backup_status != uploaded` (evita re-subir); rclone `copyto` de por sí no re-transfiere si no cambió.
-- **Badge por-foto** en el grid: pendiente (el estado ya viaja en `Photo.backup_status`); de momento el feedback es el resumen del botón. Follow-up menor.
+- **La unidad de respaldo es el archivo de `_exported/`, no la fila `photo`.** El
+  emparejamiento por *stem* con el RAW es frágil (los editores renombran al exportar:
+  `..._Clorotipias__.cr2` → `..._Clorotipias_001.jpg`), así que el backup ya **no**
+  depende de él. Cada archivo de `_exported/` es la unidad, con **id determinista
+  `uuid5(project_id + filename)`**. El server **upsertea** la fila `photo` al recibir
+  el archivo (no exige que exista antes).
+- **UI = modal**: el botón "Respaldar" abre un modal que lista los archivos de
+  `_exported/` marcando cuáles ya están en el remote (vía catálogo), con botón
+  "Subir N" y estado por-archivo (spinner → ✓/✗). Comandos `list_exported_backup`
+  + `backup_exported_file` (uno por archivo, para feedback granular).
+- **Límite de body**: `DefaultBodyLimit::max(512MB)` en la ruta de backup (el
+  default de axum, 2MB, cortaba las fotos).
+- **Idempotencia:** el modal solo sube los que el catálogo marca no-`uploaded`.
 
 ### Fase 8 — Subida desde iPad/web + reconciliación cross-device
 - [ ] Web: dashboard que lista proyectos/fotos del catálogo y sube contra `photoId` real (drag & drop / POST).
@@ -290,6 +301,15 @@ Notas:
 - Plan de cuotas/billing por usuario: fuera de alcance inicial (aunque el modelo multi-tenant lo habilita después).
 
 ## 11. Bitácora
+- **2026-09-15 · Fase 7 · rediseño a "backup por archivo de _exported"** — Con datos
+  reales (proyecto Clorotipias) se vio que el editor renombra los exports, así que el
+  emparejamiento por stem fallaba y solo subía 1 de 4. Se pivotó: la unidad de
+  respaldo es el **archivo de `_exported/`** con id determinista `uuid5(project_id+
+  filename)`; el endpoint de backup **upsertea** la fila `photo` (verifica dueño del
+  proyecto, ya no exige photo previa). Comandos nuevos `list_exported_backup` +
+  `backup_exported_file`; se retiró `backup_project` (y `set_backup_uploaded`, sin uso).
+  UI: **modal** con lista + "Subir N" + estado por-archivo. Fix aparte:
+  `DefaultBodyLimit::max(512MB)` en la ruta de backup (el default 2MB cortaba las fotos).
 - **2026-09-15 · Fase 7 · completada (verificada en server)** — Subida real. Server:
   `rclone::{obscure, config_for, copy_to}` materializa cada remote en un config
   temporal (pass ofuscado) y sube con `copyto`; endpoint multipart `.../backup` con

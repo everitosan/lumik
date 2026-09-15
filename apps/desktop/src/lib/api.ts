@@ -292,19 +292,24 @@ export async function syncExported(
   return invoke('sync_exported', { projectId });
 }
 
-export interface BackupSummary {
-  total: number;
-  uploaded: number;
-  failed: number;
+export interface ExportedBackupItem {
+  id: string;
+  filename: string;
+  uploaded: boolean;
 }
 
-/**
- * Respalda las fotos exportadas y aún no subidas del proyecto (Fase 7). Requiere
- * sesión de respaldo y ≥1 proveedor conectado.
- */
-export async function backupProject(
+/** Lista los archivos de _exported/ y si ya están respaldados en el remote. */
+export async function listExportedBackup(
+  projectId: string
+): Promise<ExportedBackupItem[]> {
+  return invoke('list_exported_backup', { projectId });
+}
+
+/** Respalda un archivo de _exported/ (uno por llamada, para feedback por-foto). */
+export async function backupExportedFile(
   projectId: string,
-  targets?: string
-): Promise<BackupSummary> {
-  return invoke('backup_project', { projectId, targets: targets ?? null });
+  id: string,
+  filename: string
+): Promise<string> {
+  return invoke('backup_exported_file', { projectId, id, filename });
 }

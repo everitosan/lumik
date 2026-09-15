@@ -526,17 +526,6 @@ impl ProjectDatabase {
         Ok(())
     }
 
-    /// Marca una foto como respaldada tras subirla al server (Fase 7).
-    pub fn set_photo_backup_uploaded(&self, id: &str, backup_url: Option<&str>) -> DbResult<()> {
-        let conn = self.conn();
-        conn.execute(
-            "UPDATE photo SET backup_status = 'uploaded', backup_url = ?1, \
-             backup_date = datetime('now') WHERE id = ?2",
-            params![backup_url, id],
-        )?;
-        Ok(())
-    }
-
     pub fn set_cover_photo(&self, path: Option<&str>) -> DbResult<()> {
         let conn = self.conn();
         conn.execute(
