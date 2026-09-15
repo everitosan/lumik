@@ -16,6 +16,7 @@ pub mod routes;
 use std::sync::Arc;
 
 use axum::{
+    extract::DefaultBodyLimit,
     routing::{delete, get, post},
     Router,
 };
@@ -90,7 +91,10 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route(
             "/projects/:project_id/photos/:photo_id/backup",
-            post(backup::handlers::backup_photo),
+            // El límite por defecto de axum es 2 MB; una foto pesa más. Subimos el
+            // límite a 512 MB solo para esta ruta de subida.
+            post(backup::handlers::backup_photo)
+                .layer(DefaultBodyLimit::max(512 * 1024 * 1024)),
         );
 
     Router::new()
