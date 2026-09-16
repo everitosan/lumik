@@ -301,6 +301,13 @@ Notas:
 - Plan de cuotas/billing por usuario: fuera de alcance inicial (aunque el modelo multi-tenant lo habilita después).
 
 ## 11. Bitácora
+- **2026-09-15 · Fase 7 · respaldo en segundo plano** — La orquestación de subida se
+  movió del modal a un `BackupProvider` global (montado en `App`), con jobs por
+  `projectId` y el pool de concurrencia. Así el usuario puede **cerrar el modal y seguir
+  usando la app**; al reabrir, el modal lee el job y muestra el **progreso en vivo**
+  (spinner/✓/✗ por foto). Al terminar, reabrir muestra solo las pendientes (excluye las
+  ya subidas). El guard de "subida en curso" en el server + el path determinista evitan
+  duplicados si se reintenta.
 - **2026-09-15 · Fase 7 · fix freeze de UI + compresión más rápida** — Los comandos de
   respaldo eran síncronos → corrían en el hilo principal de Tauri y **congelaban la UI**.
   Se hicieron `async` y su cuerpo se envuelve en `async_runtime::spawn_blocking` (con un

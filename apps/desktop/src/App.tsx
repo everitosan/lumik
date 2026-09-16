@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Layout, type Section } from './components';
 import { Projects, SettingsPage, ProjectDetail, AboutPage } from './pages';
 import { useConnectedDevices } from './lib/hooks';
+import { BackupProvider } from './lib/BackupContext';
 import type { ProjectDashboard } from './lib/types';
 
 function App() {
@@ -51,9 +52,11 @@ function App() {
   };
 
   return (
-    <Layout activeSection={activeSection} onSectionChange={handleSectionChange}>
-      {renderPage}
-    </Layout>
+    <BackupProvider>
+      <Layout activeSection={activeSection} onSectionChange={handleSectionChange}>
+        {renderPage}
+      </Layout>
+    </BackupProvider>
   );
 }
 

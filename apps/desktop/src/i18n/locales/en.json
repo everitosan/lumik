@@ -258,7 +258,12 @@
       "qLow": "Low (max 1280 px)",
       "accept": "Upload {{count}}",
       "cancel": "Cancel",
-      "close": "Close"
+      "close": "Close",
+      "closeKeep": "Close (keeps running)",
+      "canClose": "You can close this and keep using the app; the upload continues.",
+      "progress": "Uploading {{done}}/{{total}}…",
+      "finished": "Done: {{done}}/{{total}} uploaded",
+      "someFailed": "{{failed}} failed; reopen backup to retry."
     }
   },
   "projectDetail": {

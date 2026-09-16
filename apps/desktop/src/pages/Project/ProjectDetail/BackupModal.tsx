@@ -1,15 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Button, Icon, Select, type SelectOption } from '@lumik/ui';
 import * as api from '../../../lib/api';
 import type { ExportedBackupItem, ProviderInfo } from '../../../lib/api';
+import { useBackup, type FileStatus } from '../../../lib/BackupContext';
 
-type RowState = 'pending' | 'uploading' | 'done' | 'error';
 type Quality = 'original' | 'high' | 'medium' | 'low';
-// Subidas simultáneas. Más = más rápido, pero también más CPU de conversión y
-// ancho de banda en el server; 6 es un balance razonable.
-const CONCURRENCY = 6;
 
 interface BackupModalProps {
   projectId: string;
@@ -20,7 +17,7 @@ const listStyles: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '6px',
-  maxHeight: '300px',
+  maxHeight: '260px',
   overflowY: 'auto',
   margin: '4px 0 16px',
 };
@@ -39,76 +36,62 @@ const fieldStyles: CSSProperties = { display: 'flex', flexDirection: 'column', g
 const labelStyles: CSSProperties = { fontSize: '13px', fontWeight: 500, color: 'var(--lumik-on-surface-variant, #c2c6d7)' };
 const toggleRowStyles: CSSProperties = { display: 'flex', gap: '8px', flexWrap: 'wrap' };
 const footerStyles: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' };
-
-/** Ejecuta `worker` sobre `items` con concurrencia limitada. */
-async function runPool<T>(items: T[], limit: number, worker: (t: T) => Promise<void>) {
-  let idx = 0;
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (idx < items.length) {
-      const current = items[idx++];
-      await worker(current);
-    }
-  });
-  await Promise.all(runners);
-}
+const mutedStyles: CSSProperties = { fontSize: '13px', color: 'var(--lumik-on-surface-variant, #c2c6d7)', marginTop: 0 };
 
 export function BackupModal({ projectId, onClose }: BackupModalProps) {
   const { t } = useTranslation();
+  const { jobs, startBackup } = useBackup();
+  const job = jobs[projectId];
+
+  // Si al abrir ya hay un job corriendo, mostramos el progreso directo.
+  const [viewingJob, setViewingJob] = useState<boolean>(job?.running ?? false);
+
   const [items, setItems] = useState<ExportedBackupItem[]>([]);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [quality, setQuality] = useState<Quality>('high');
-  const [rowState, setRowState] = useState<Record<string, RowState>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
-  const [finished, setFinished] = useState(false);
 
+  // Modo configuración: cargar proveedores + pendientes (no subidas).
   useEffect(() => {
+    if (viewingJob) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     Promise.all([api.listExportedBackup(projectId), api.listBackupProviders()])
       .then(([list, provs]) => {
         setItems(list);
         setProviders(provs);
-        setSelected(new Set(provs.map((p) => p.provider))); // todos por defecto
-        const initial: Record<string, RowState> = {};
-        for (const it of list) initial[it.id] = it.in_progress ? 'uploading' : 'pending';
-        setRowState(initial);
+        setSelected(new Set(provs.map((p) => p.provider)));
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [projectId]);
+  }, [projectId, viewingJob]);
 
-  const toggleProvider = (p: string) => {
+  const toggleProvider = (p: string) =>
     setSelected((s) => {
       const next = new Set(s);
       if (next.has(p)) next.delete(p);
       else next.add(p);
       return next;
     });
+
+  const pendingItems = items.filter((i) => !i.in_progress);
+
+  const startUpload = () => {
+    const targets = Array.from(selected).join(',');
+    startBackup(
+      projectId,
+      pendingItems.map((i) => ({ id: i.id, filename: i.filename })),
+      targets,
+      quality
+    );
+    setViewingJob(true);
   };
 
-  const pending = items.filter((i) => rowState[i.id] === 'pending');
-
-  const run = useCallback(async () => {
-    setRunning(true);
-    setError(null);
-    const targets = Array.from(selected).join(',');
-    const todo = items.filter((i) => rowState[i.id] === 'pending');
-    await runPool(todo, CONCURRENCY, async (it) => {
-      setRowState((s) => ({ ...s, [it.id]: 'uploading' }));
-      try {
-        await api.backupExportedFile(projectId, it.id, it.filename, targets, quality);
-        setRowState((s) => ({ ...s, [it.id]: 'done' }));
-      } catch (e) {
-        setRowState((s) => ({ ...s, [it.id]: 'error' }));
-        setError(String(e));
-      }
-    });
-    setRunning(false);
-    setFinished(true);
-  }, [items, rowState, selected, quality, projectId]);
-
-  const renderStatus = (state: RowState) => {
+  const renderStatus = (state: FileStatus) => {
     switch (state) {
       case 'done':
         return <Icon name="check" size={16} />;
@@ -121,17 +104,53 @@ export function BackupModal({ projectId, onClose }: BackupModalProps) {
     }
   };
 
-  const canUpload = !running && pending.length > 0 && selected.size > 0;
+  // ---- Vista PROGRESO (job en curso o recién terminado) ----
+  if (viewingJob && job) {
+    const done = job.files.filter((f) => f.status === 'done').length;
+    const failed = job.files.filter((f) => f.status === 'error').length;
+    return (
+      <Modal title={t('backup.modal.title')} open onClose={onClose}>
+        <p style={mutedStyles}>
+          {job.running
+            ? t('backup.modal.progress', { done, total: job.files.length })
+            : t('backup.modal.finished', { done, total: job.files.length })}
+        </p>
+        {job.running && (
+          <p style={{ ...mutedStyles, fontSize: '12px' }}>{t('backup.modal.canClose')}</p>
+        )}
+        <div style={listStyles}>
+          {job.files.map((f) => (
+            <div key={f.id} style={rowStyles}>
+              <span style={nameStyles}>{f.filename}</span>
+              {renderStatus(f.status)}
+            </div>
+          ))}
+        </div>
+        {failed > 0 && !job.running && (
+          <p style={{ fontSize: '12px', color: 'var(--lumik-error, #ffb4ab)' }}>
+            {t('backup.modal.someFailed', { failed })}
+          </p>
+        )}
+        <div style={footerStyles}>
+          <span />
+          <Button variant="primary" onClick={onClose}>
+            {job.running ? t('backup.modal.closeKeep') : t('backup.modal.close')}
+          </Button>
+        </div>
+      </Modal>
+    );
+  }
 
+  // ---- Vista CONFIGURACIÓN ----
+  const canUpload = pendingItems.length > 0 && selected.size > 0;
   return (
-    <Modal title={t('backup.modal.title')} open onClose={running ? undefined : onClose}>
+    <Modal title={t('backup.modal.title')} open onClose={onClose}>
       {loading ? (
         <div style={{ padding: '32px', display: 'flex', justifyContent: 'center' }}>
           <span className="lumik-spinner lg" />
         </div>
       ) : (
         <>
-          {/* Proveedores destino */}
           <div style={fieldStyles}>
             <span style={labelStyles}>{t('backup.modal.providers')}</span>
             {providers.length === 0 ? (
@@ -146,7 +165,6 @@ export function BackupModal({ projectId, onClose }: BackupModalProps) {
                     variant={selected.has(p.provider) ? 'primary' : 'secondary'}
                     size="sm"
                     onClick={() => toggleProvider(p.provider)}
-                    disabled={running}
                   >
                     {t(`providers.types.${p.provider}`, { defaultValue: p.provider })}
                   </Button>
@@ -155,13 +173,11 @@ export function BackupModal({ projectId, onClose }: BackupModalProps) {
             )}
           </div>
 
-          {/* Calidad */}
           <div style={fieldStyles}>
             <Select
               label={t('backup.modal.quality')}
               value={quality}
               onChange={(v) => setQuality(v as Quality)}
-              disabled={running}
               fullWidth
               options={
                 [
@@ -174,18 +190,17 @@ export function BackupModal({ projectId, onClose }: BackupModalProps) {
             />
           </div>
 
-          {/* Lista de pendientes */}
-          <p style={{ fontSize: '13px', color: 'var(--lumik-on-surface-variant, #c2c6d7)', marginTop: 0 }}>
-            {items.length === 0
+          <p style={mutedStyles}>
+            {pendingItems.length === 0
               ? t('backup.modal.empty')
-              : t('backup.modal.subtitle', { count: items.length })}
+              : t('backup.modal.subtitle', { count: pendingItems.length })}
           </p>
-          {items.length > 0 && (
+          {pendingItems.length > 0 && (
             <div style={listStyles}>
-              {items.map((it) => (
+              {pendingItems.map((it) => (
                 <div key={it.id} style={rowStyles}>
                   <span style={nameStyles}>{it.filename}</span>
-                  {renderStatus(rowState[it.id])}
+                  {renderStatus('pending')}
                 </div>
               ))}
             </div>
@@ -194,14 +209,12 @@ export function BackupModal({ projectId, onClose }: BackupModalProps) {
           {error && <p style={{ fontSize: '12px', color: 'var(--lumik-error, #ffb4ab)' }}>{error}</p>}
 
           <div style={footerStyles}>
-            <Button variant="ghost" onClick={onClose} disabled={running}>
-              {finished ? t('backup.modal.close') : t('backup.modal.cancel')}
+            <Button variant="ghost" onClick={onClose}>
+              {t('backup.modal.cancel')}
             </Button>
-            {!finished && (
-              <Button variant="primary" onClick={run} disabled={!canUpload}>
-                {running ? t('backup.uploading') : t('backup.modal.accept', { count: pending.length })}
-              </Button>
-            )}
+            <Button variant="primary" onClick={startUpload} disabled={!canUpload}>
+              {t('backup.modal.accept', { count: pendingItems.length })}
+            </Button>
           </div>
         </>
       )}

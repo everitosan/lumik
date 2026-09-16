@@ -258,7 +258,12 @@
       "qLow": "Baja (máx. 1280 px)",
       "accept": "Subir {{count}}",
       "cancel": "Cancelar",
-      "close": "Cerrar"
+      "close": "Cerrar",
+      "closeKeep": "Cerrar (sigue en segundo plano)",
+      "canClose": "Puedes cerrar este modal y seguir usando la app; la subida continúa.",
+      "progress": "Subiendo {{done}}/{{total}}…",
+      "finished": "Listo: {{done}}/{{total}} subidas",
+      "someFailed": "{{failed}} fallaron; reintenta abriendo de nuevo el respaldo."
     }
   },
   "projectDetail": {
