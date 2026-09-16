@@ -93,16 +93,24 @@ export function BackupProvider({ children }: { children: ReactNode }) {
           };
         });
 
+      const uploadOne = async (f: { id: string; filename: string }) => {
+        setStatus(f.id, 'uploading');
+        try {
+          await api.backupExportedFile(projectId, f.id, f.filename, targets, quality);
+          setStatus(f.id, 'done');
+        } catch {
+          setStatus(f.id, 'error');
+        }
+      };
+
       void (async () => {
-        await runPool(files, CONCURRENCY, async (f) => {
-          setStatus(f.id, 'uploading');
-          try {
-            await api.backupExportedFile(projectId, f.id, f.filename, targets, quality);
-            setStatus(f.id, 'done');
-          } catch {
-            setStatus(f.id, 'error');
-          }
-        });
+        // Sube el primero en solitario para crear el directorio remoto UNA vez.
+        // Mega permite carpetas con el mismo nombre; si el dir se crea en paralelo
+        // (6 procesos rclone a la vez) se generan `_exported` duplicados. Tras el
+        // primero, el resto reutiliza la carpeta existente.
+        const [first, ...rest] = files;
+        if (first) await uploadOne(first);
+        await runPool(rest, CONCURRENCY, uploadOne);
         setJobs((prev) => {
           const job = prev[projectId];
           if (!job) return prev;
