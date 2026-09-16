@@ -7,7 +7,9 @@ import type { ExportedBackupItem, ProviderInfo } from '../../../lib/api';
 
 type RowState = 'pending' | 'uploading' | 'done' | 'error';
 type Quality = 'original' | 'high' | 'medium' | 'low';
-const CONCURRENCY = 3;
+// Subidas simultáneas. Más = más rápido, pero también más CPU de conversión y
+// ancho de banda en el server; 6 es un balance razonable.
+const CONCURRENCY = 6;
 
 interface BackupModalProps {
   projectId: string;
