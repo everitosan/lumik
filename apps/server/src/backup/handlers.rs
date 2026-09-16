@@ -273,7 +273,9 @@ fn convert_jpeg(bytes: &[u8], max_edge: u32, jpeg_quality: u8) -> Option<Vec<u8>
 
     let img = image::load_from_memory(bytes).ok()?;
     let img = if img.width().max(img.height()) > max_edge {
-        img.resize(max_edge, max_edge, FilterType::Lanczos3)
+        // Triangle (bilineal): mucho más rápido que Lanczos3 con buena calidad
+        // al reducir; el cuello de botella era el filtro.
+        img.resize(max_edge, max_edge, FilterType::Triangle)
     } else {
         img
     };

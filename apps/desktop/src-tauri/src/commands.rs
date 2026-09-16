@@ -7,7 +7,9 @@ use crate::db::{discover_projects_on_device, GlobalDatabase, ProjectDatabase};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-/// Application state
+/// Application state. `Clone` es barato (todo son `Arc`) y permite mover una copia
+/// a `spawn_blocking` para no bloquear el hilo de UI en comandos con I/O de red.
+#[derive(Clone)]
 pub struct AppState {
     pub global_db: Arc<GlobalDatabase>,
     /// Estado de sesión: proyectos abiertos, dispositivos en expulsión y contador

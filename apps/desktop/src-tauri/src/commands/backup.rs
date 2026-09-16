@@ -95,13 +95,13 @@ fn session_dto(state: &AppState) -> AppResult<Option<BackupSession>> {
 
 /// `GET`-like: URL del server de respaldo configurada (o el default).
 #[tauri::command]
-pub fn get_backup_server_url(state: State<AppState>) -> AppResult<String> {
+pub fn get_backup_server_url(state: State<'_, AppState>) -> AppResult<String> {
     Ok(server_url(&state))
 }
 
 /// Configura la URL del server de respaldo.
 #[tauri::command]
-pub fn set_backup_server_url(state: State<AppState>, url: String) -> AppResult<()> {
+pub fn set_backup_server_url(state: State<'_, AppState>, url: String) -> AppResult<()> {
     state
         .global_db
         .set_setting(K_SERVER_URL, url.trim().trim_end_matches('/'))?;
@@ -110,12 +110,15 @@ pub fn set_backup_server_url(state: State<AppState>, url: String) -> AppResult<(
 
 /// Registra una cuenta nueva en el server y deja la sesión iniciada.
 #[tauri::command]
-pub fn backup_register(
-    state: State<AppState>,
+pub async fn backup_register(
+    state: State<'_, AppState>,
     email: String,
     password: String,
     name: Option<String>,
 ) -> AppResult<BackupSession> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || {
+
     let base = server_url(&state);
     info!("backup_register: {} @ {}", email, base);
     let (tokens, account) = state
@@ -134,15 +137,21 @@ pub fn backup_register(
         name: account.name,
         server_url: base,
     })
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
 }
 
 /// Inicia sesión en el server y persiste los tokens.
 #[tauri::command]
-pub fn backup_login(
-    state: State<AppState>,
+pub async fn backup_login(
+    state: State<'_, AppState>,
     email: String,
     password: String,
 ) -> AppResult<BackupSession> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || {
+
     let base = server_url(&state);
     info!("backup_login: {} @ {}", email, base);
     let (tokens, account) = state.backup_auth.login(&base, &email, &password)?;
@@ -159,11 +168,17 @@ pub fn backup_login(
         name: account.name,
         server_url: base,
     })
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
 }
 
 /// Cierra la sesión: revoca el refresh en el server (best-effort) y borra local.
 #[tauri::command]
-pub fn backup_logout(state: State<AppState>) -> AppResult<()> {
+pub async fn backup_logout(state: State<'_, AppState>) -> AppResult<()> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || {
+
     let base = server_url(&state);
     if let Some(refresh) = state.global_db.get_setting(K_REFRESH)? {
         if let Err(e) = state.backup_auth.logout(&base, &refresh) {
@@ -172,6 +187,9 @@ pub fn backup_logout(state: State<AppState>) -> AppResult<()> {
     }
     clear_session(&state)?;
     Ok(())
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
 }
 
 /// El mensaje que emite la impl HTTP cuando no hay conexión (ver `backup_auth.rs`).
@@ -218,11 +236,17 @@ pub(crate) fn active_session(state: &AppState) -> AppResult<Option<(String, Stri
 /// Devuelve la sesión persistida validándola contra el server (refresca en 401,
 /// mantiene si está offline). Lo llama el frontend al arrancar para restaurarla.
 #[tauri::command]
-pub fn get_backup_session(state: State<AppState>) -> AppResult<Option<BackupSession>> {
+pub async fn get_backup_session(state: State<'_, AppState>) -> AppResult<Option<BackupSession>> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || {
+
     match active_session(&state)? {
         Some(_) => session_dto(&state),
         None => Ok(None),
     }
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
 }
 
 fn basename(path: &str) -> String {
@@ -318,10 +342,13 @@ fn stored_session(state: &AppState) -> AppResult<Option<(String, String, Option<
 /// Usa el access token **guardado** (sin `GET /me` por apertura) y solo refresca +
 /// reintenta si el catálogo responde no-autorizado (token expirado).
 #[tauri::command]
-pub fn ensure_project_synced(
-    state: State<AppState>,
+pub async fn ensure_project_synced(
+    state: State<'_, AppState>,
     project_id: String,
 ) -> AppResult<SyncOutcome> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || {
+
     let (cat_project, cat_photos) = build_catalog_data(&state, &project_id)?;
 
     let uc = EnsureCatalogSynced {
@@ -363,16 +390,22 @@ pub fn ensure_project_synced(
         cat_photos.len()
     );
     Ok(outcome)
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
 }
 
 /// Escanea `_exported/` del proyecto y enlaza cada archivo con su foto por *stem*
 /// (fija `jpg_path` + `workflow_status='edited'`). Luego publica al catálogo los
 /// cambios (best-effort). Ver docs/backup-plan.md Fase 6.
 #[tauri::command]
-pub fn sync_exported(
-    state: State<AppState>,
+pub async fn sync_exported(
+    state: State<'_, AppState>,
     project_id: String,
 ) -> AppResult<SyncExportedResult> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || {
+
     let project_db = state.project_db(&project_id)?;
     let photos = project_db.get_project_photos()?;
     let exported_dir = project_db.project_dir.join("_exported");
@@ -438,6 +471,9 @@ pub fn sync_exported(
     }
 
     Ok(result)
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
 }
 
 /// Un archivo de `_exported/` pendiente de respaldo (los ya subidos se excluyen).
@@ -493,10 +529,13 @@ fn scan_exported(project_dir: &std::path::Path, project_id: &str) -> Vec<(String
 /// Lista los archivos de `_exported/` y si ya están respaldados en el remote.
 /// Lo consume el modal de respaldo para mostrar qué falta subir.
 #[tauri::command]
-pub fn list_exported_backup(
-    state: State<AppState>,
+pub async fn list_exported_backup(
+    state: State<'_, AppState>,
     project_id: String,
 ) -> AppResult<Vec<ExportedBackupItem>> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || {
+
     let project_db = state.project_db(&project_id)?;
     let files = scan_exported(&project_db.project_dir, &project_id);
 
@@ -534,13 +573,19 @@ pub fn list_exported_backup(
             filename,
         })
         .collect())
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
 }
 
 /// Lista los proveedores de nube conectados (para los toggles del modal).
 #[tauri::command]
-pub fn list_backup_providers(
-    state: State<AppState>,
+pub async fn list_backup_providers(
+    state: State<'_, AppState>,
 ) -> AppResult<Vec<crate::application::ports::ProviderInfo>> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || {
+
     match active_session(&state)? {
         Some((base, access)) => Ok(state
             .catalog
@@ -548,6 +593,9 @@ pub fn list_backup_providers(
             .unwrap_or_default()),
         None => Ok(vec![]),
     }
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
 }
 
 /// Quita el id del set de "subidas en curso" al salir (cualquier ruta).
@@ -567,14 +615,17 @@ impl Drop for UploadGuard {
 /// para feedback por-foto). Marca la subida en curso (evita duplicados si se reabre
 /// el modal), aplica `targets`/`quality`, y refresca el token si expiró.
 #[tauri::command]
-pub fn backup_exported_file(
-    state: State<AppState>,
+pub async fn backup_exported_file(
+    state: State<'_, AppState>,
     project_id: String,
     id: String,
     filename: String,
     targets: Option<String>,
     quality: Option<String>,
 ) -> AppResult<String> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || {
+
     // Guard de "subida en curso": si ya se está subiendo este archivo, no repetir.
     let key = format!("{project_id}/{id}");
     {
@@ -631,4 +682,7 @@ pub fn backup_exported_file(
             Err(AppError::from(e))
         }
     }
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
 }

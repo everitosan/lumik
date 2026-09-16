@@ -301,7 +301,16 @@ Notas:
 - Plan de cuotas/billing por usuario: fuera de alcance inicial (aunque el modelo multi-tenant lo habilita después).
 
 ## 11. Bitácora
-- **2026-09-15 · Fase 7 · mejoras de UX del modal** — (1) se saltan archivos ocultos
+- **2026-09-15 · Fase 7 · fix freeze de UI + compresión más rápida** — Los comandos de
+  respaldo eran síncronos → corrían en el hilo principal de Tauri y **congelaban la UI**.
+  Se hicieron `async` y su cuerpo se envuelve en `async_runtime::spawn_blocking` (con un
+  clon de `AppState`, ahora `Clone`), porque `reqwest::blocking` dentro de un contexto
+  async paniquea ("runtime within runtime"); spawn_blocking corre en hilo dedicado y no
+  bloquea la UI. Compresión: el filtro de redimensionado pasó de **Lanczos3** (lento) a
+  **Triangle** (bilineal), ~5–10× más rápido con buena calidad. Tradeoff inherente: la
+  conversión es server-side (por decisión), así que el archivo **original** sube completo
+  al server antes de comprimir; si se quisiera minimizar, habría que convertir en el
+  desktop antes de subir o usar decode con escala DCT (mozjpeg). — (1) se saltan archivos ocultos
   al escanear `_exported/`; (2) el modal solo lista los **no** subidos; (3) toggles de
   **proveedores** conectados (`list_backup_providers` → `targets`); (4) **select de
   calidad** con recompresión **en el server** (`image` crate: original/high/medium/low
