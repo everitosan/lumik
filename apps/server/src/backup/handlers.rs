@@ -6,7 +6,7 @@ use axum::{
     Json,
 };
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -100,14 +100,6 @@ pub async fn backup_photo(
     .await?;
 
     // ---- 3. Ruta en la nube (espeja el disco) ----
-    let proj: ProjectPath = sqlx::query_as(
-        "SELECT session_date, slug, created_at FROM project WHERE id = $1",
-    )
-    .bind(project_id)
-    .fetch_one(&state.pool)
-    .await?;
-    let date = proj.session_date.unwrap_or_else(|| proj.created_at.date_naive());
-    let folder = format!("{}_{}", date.format("%d"), proj.slug);
     // Si se recomprime, el archivo remoto será JPEG → ajusta la extensión.
     let quality_preset = quality.as_deref().and_then(quality_preset);
     let effective_filename = if quality_preset.is_some() {
@@ -115,48 +107,15 @@ pub async fn backup_photo(
     } else {
         filename.clone()
     };
-    let dest = format!(
-        "Lumik/{}/{}/{}/_exported/{}",
-        date.format("%Y"),
-        date.format("%m"),
-        folder,
-        effective_filename
-    );
+    let dir = project_dest_dir(&state, project_id).await?;
+    let dest = format!("{dir}/{effective_filename}");
 
     // ---- 4. Remotes del fotógrafo (opcionalmente filtrados por targets) ----
-    let target_set: Option<Vec<String>> = targets
-        .filter(|t| !t.is_empty() && t != "all")
-        .map(|t| t.split(',').map(|s| s.trim().to_string()).collect());
-
-    let remotes: Vec<RemoteRow> =
-        sqlx::query_as("SELECT provider, name, token FROM remote WHERE photographer_id = $1")
-            .bind(auth.0)
-            .fetch_all(&state.pool)
-            .await?;
-    let remotes: Vec<RemoteRow> = remotes
-        .into_iter()
-        .filter(|r| match &target_set {
-            Some(set) => set.contains(&r.provider),
-            None => true,
-        })
-        .collect();
-    if remotes.is_empty() {
+    let prepared = resolve_remotes(&state, auth.0, targets).await?;
+    if prepared.is_empty() {
         return Err(ApiError::BadRequest(
             "no hay proveedores conectados para respaldar".into(),
         ));
-    }
-
-    // Descifra la config de cada remote (rápido, en async).
-    let mut prepared: Vec<(String, String, Value)> = Vec::new(); // (provider, name, cfg)
-    for r in &remotes {
-        let token = r
-            .token
-            .as_deref()
-            .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("remote sin credenciales")))?;
-        let plain = state.crypto.decrypt(token).map_err(ApiError::Internal)?;
-        let cfg: Value = serde_json::from_str(&plain)
-            .map_err(|e| ApiError::Internal(anyhow::anyhow!("config de remote inválida: {e}")))?;
-        prepared.push((r.provider.clone(), r.name.clone(), cfg));
     }
 
     // ---- 5. Subida (rclone es bloqueante → spawn_blocking) ----
@@ -244,6 +203,116 @@ pub async fn backup_photo(
         "backup_status": status,
         "backup_date": backup_date,
     })))
+}
+
+/// Directorio destino en la nube para un proyecto: `Lumik/{año}/{mes}/{día}_{slug}/_exported`.
+async fn project_dest_dir(state: &AppState, project_id: Uuid) -> ApiResult<String> {
+    let proj: ProjectPath =
+        sqlx::query_as("SELECT session_date, slug, created_at FROM project WHERE id = $1")
+            .bind(project_id)
+            .fetch_one(&state.pool)
+            .await?;
+    let date = proj.session_date.unwrap_or_else(|| proj.created_at.date_naive());
+    Ok(format!(
+        "Lumik/{}/{}/{}_{}/_exported",
+        date.format("%Y"),
+        date.format("%m"),
+        date.format("%d"),
+        proj.slug
+    ))
+}
+
+/// Remotes del fotógrafo (opcionalmente filtrados por `targets` csv), con su
+/// config rclone ya descifrada: `(provider, name, cfg)`.
+async fn resolve_remotes(
+    state: &AppState,
+    photographer_id: Uuid,
+    targets: Option<String>,
+) -> ApiResult<Vec<(String, String, Value)>> {
+    let target_set: Option<Vec<String>> = targets
+        .filter(|t| !t.is_empty() && t != "all")
+        .map(|t| t.split(',').map(|s| s.trim().to_string()).collect());
+
+    let remotes: Vec<RemoteRow> =
+        sqlx::query_as("SELECT provider, name, token FROM remote WHERE photographer_id = $1")
+            .bind(photographer_id)
+            .fetch_all(&state.pool)
+            .await?;
+
+    let mut prepared: Vec<(String, String, Value)> = Vec::new();
+    for r in remotes {
+        if let Some(set) = &target_set {
+            if !set.contains(&r.provider) {
+                continue;
+            }
+        }
+        let token = r
+            .token
+            .as_deref()
+            .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("remote sin credenciales")))?;
+        let plain = state.crypto.decrypt(token).map_err(ApiError::Internal)?;
+        let cfg: Value = serde_json::from_str(&plain)
+            .map_err(|e| ApiError::Internal(anyhow::anyhow!("config de remote inválida: {e}")))?;
+        prepared.push((r.provider, r.name, cfg));
+    }
+    Ok(prepared)
+}
+
+#[derive(Deserialize)]
+pub struct PrepareReq {
+    /// Proveedores destino (csv) o `"all"`/ausente = todos.
+    pub targets: Option<String>,
+}
+
+/// `POST /v1/projects/{id}/backup/prepare` — crea el directorio `_exported/` en
+/// cada remote destino ANTES de subir en paralelo, para no duplicar la carpeta
+/// (Mega permite nombres repetidos). Idempotente.
+pub async fn prepare_backup(
+    State(state): State<AppState>,
+    auth: AuthPhotographer,
+    Path(project_id): Path<Uuid>,
+    Json(req): Json<PrepareReq>,
+) -> ApiResult<Json<Value>> {
+    // Verifica dueño del proyecto.
+    let owns: Option<(Uuid,)> =
+        sqlx::query_as("SELECT id FROM project WHERE id = $1 AND photographer_id = $2")
+            .bind(project_id)
+            .bind(auth.0)
+            .fetch_optional(&state.pool)
+            .await?;
+    if owns.is_none() {
+        return Err(ApiError::NotFound);
+    }
+
+    let dir = project_dest_dir(&state, project_id).await?;
+    let prepared = resolve_remotes(&state, auth.0, req.targets).await?;
+    if prepared.is_empty() {
+        return Err(ApiError::BadRequest(
+            "no hay proveedores conectados para respaldar".into(),
+        ));
+    }
+
+    let rclone_bin = state.cfg.rclone_bin.clone();
+    let dir_cl = dir.clone();
+    let created = tokio::task::spawn_blocking(move || {
+        let rc = Rclone::new(rclone_bin);
+        let mut ok = 0usize;
+        for (provider, name, cfg) in prepared {
+            match rc
+                .config_for(&name, &cfg)
+                .and_then(|conf| rc.mkdir(&conf, &name, &dir_cl))
+            {
+                Ok(()) => ok += 1,
+                Err(e) => tracing::warn!(%provider, error = %e, "mkdir remoto falló"),
+            }
+        }
+        ok
+    })
+    .await
+    .map_err(|e| ApiError::Internal(anyhow::anyhow!("tarea mkdir: {e}")))?;
+
+    tracing::info!(photographer_id = %auth.0, %project_id, created, dir = %dir, "prepare backup (mkdir)");
+    Ok(Json(json!({ "prepared": created })))
 }
 
 /// Mapea el nivel de calidad a `(lado mayor máx en px, calidad JPEG)`.

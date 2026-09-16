@@ -202,6 +202,7 @@ pub fn run() {
             commands::sync_exported,
             commands::list_exported_backup,
             commands::list_backup_providers,
+            commands::prepare_backup,
             commands::backup_exported_file,
         ])
         .run(tauri::generate_context!())

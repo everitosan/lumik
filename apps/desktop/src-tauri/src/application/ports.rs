@@ -65,6 +65,16 @@ pub struct BackupReceipt {
 /// Cliente de subida de fotos al server de respaldo (Fase 7). La impl real hace
 /// `POST` multipart del archivo; el server lo sube a la nube (rclone).
 pub trait BackupClient: Send + Sync {
+    /// Crea el directorio `_exported/` en los remotes destino ANTES de subir en
+    /// paralelo (evita carpetas duplicadas en Mega). Idempotente.
+    fn prepare_dir(
+        &self,
+        base_url: &str,
+        access: &str,
+        project_id: &str,
+        targets: Option<&str>,
+    ) -> Result<(), String>;
+
     #[allow(clippy::too_many_arguments)]
     fn upload_photo(
         &self,

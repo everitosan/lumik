@@ -315,6 +315,14 @@ export async function listBackupProviders(): Promise<ProviderInfo[]> {
   return invoke('list_backup_providers');
 }
 
+/** Crea el directorio remoto _exported/ una vez, antes de subir en paralelo. */
+export async function prepareBackup(
+  projectId: string,
+  targets?: string
+): Promise<void> {
+  return invoke('prepare_backup', { projectId, targets: targets ?? null });
+}
+
 /**
  * Respalda un archivo de _exported/ (uno por llamada, para feedback por-foto).
  * `targets`: proveedores separados por coma (o undefined = todos).

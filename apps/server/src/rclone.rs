@@ -69,6 +69,39 @@ impl Rclone {
         Ok(out)
     }
 
+    /// Crea un directorio (y sus padres) en el remote. Idempotente: si ya existe,
+    /// rclone no lo recrea. Se usa para crear la carpeta ANTES de subir en paralelo
+    /// (Mega permite nombres duplicados; crear el dir en paralelo lo duplicaba).
+    pub fn mkdir(
+        &self,
+        config_contents: &str,
+        remote_name: &str,
+        path: &str,
+    ) -> Result<(), String> {
+        let conf_path =
+            std::env::temp_dir().join(format!("lumik-rclone-{}.conf", uuid::Uuid::new_v4()));
+        std::fs::write(&conf_path, config_contents)
+            .map_err(|e| format!("no se pudo escribir config temporal: {e}"))?;
+
+        let target = format!("{remote_name}:{path}");
+        let result = Command::new(&self.bin)
+            .arg("mkdir")
+            .arg("--config")
+            .arg(&conf_path)
+            .arg(&target)
+            .output();
+        let _ = std::fs::remove_file(&conf_path);
+
+        let out = result.map_err(|e| format!("rclone mkdir: {e}"))?;
+        if !out.status.success() {
+            return Err(format!(
+                "rclone mkdir falló: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Ok(())
+    }
+
     /// Sube `local` al remote `remote_name:dest` usando la config dada.
     /// `copyto` copia archivo→archivo (respeta el nombre destino).
     pub fn copy_to(

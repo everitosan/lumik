@@ -598,6 +598,29 @@ pub async fn list_backup_providers(
     .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
 }
 
+/// Crea el directorio `_exported/` en los remotes destino ANTES de subir en
+/// paralelo (evita carpetas duplicadas en Mega). El frontend lo llama una vez
+/// antes de lanzar el pool.
+#[tauri::command]
+pub async fn prepare_backup(
+    state: State<'_, AppState>,
+    project_id: String,
+    targets: Option<String>,
+) -> AppResult<()> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<()> {
+        let Some((base, access)) = active_session(&state)? else {
+            return Err(AppError::from("inicia sesión de respaldo primero"));
+        };
+        state
+            .backup
+            .prepare_dir(&base, &access, &project_id, targets.as_deref())?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
+}
+
 /// Quita el id del set de "subidas en curso" al salir (cualquier ruta).
 struct UploadGuard {
     set: Arc<Mutex<HashSet<String>>>,

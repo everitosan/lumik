@@ -301,6 +301,15 @@ Notas:
 - Plan de cuotas/billing por usuario: fuera de alcance inicial (aunque el modelo multi-tenant lo habilita después).
 
 ## 11. Bitácora
+- **2026-09-16 · Fase 7 · prepare (mkdir) antes de subir en paralelo** — Para evitar
+  las carpetas `_exported` duplicadas de Mega (permite nombres repetidos; el `mkdir`
+  concurrente de 6 procesos rclone las duplicaba), se añadió `POST .../backup/prepare`
+  que hace `rclone mkdir` del dir destino en cada remote **una sola vez** (secuencial)
+  antes del pool. Refactor del server: `project_dest_dir` + `resolve_remotes`
+  compartidos por `backup_photo` y `prepare_backup`. Desktop: puerto
+  `BackupClient::prepare_dir` + comando `prepare_backup`; el `BackupProvider` llama
+  `prepareBackup` y luego sube todo en paralelo (con fallback a "primero en solitario"
+  si el prepare falla).
 - **2026-09-15 · Fase 7 · respaldo en segundo plano** — La orquestación de subida se
   movió del modal a un `BackupProvider` global (montado en `App`), con jobs por
   `projectId` y el pool de concurrencia. Así el usuario puede **cerrar el modal y seguir

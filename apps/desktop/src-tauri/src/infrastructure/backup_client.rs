@@ -2,7 +2,7 @@
 //! por `multipart/form-data`; el server lo replica a la nube vía rclone.
 
 use crate::application::ports::{BackupClient, BackupReceipt};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::path::Path;
 
 pub struct HttpBackup;
@@ -16,6 +16,40 @@ fn friendly(e: &reqwest::Error) -> String {
 }
 
 impl BackupClient for HttpBackup {
+    fn prepare_dir(
+        &self,
+        base_url: &str,
+        access: &str,
+        project_id: &str,
+        targets: Option<&str>,
+    ) -> Result<(), String> {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(60))
+            .build()
+            .map_err(|e| format!("cliente HTTP: {e}"))?;
+        let url = format!(
+            "{}/v1/projects/{}/backup/prepare",
+            base_url.trim_end_matches('/'),
+            project_id
+        );
+        let resp = client
+            .post(url)
+            .bearer_auth(access)
+            .json(&json!({ "targets": targets }))
+            .send()
+            .map_err(|e| friendly(&e))?;
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().unwrap_or_default();
+            let msg = serde_json::from_str::<Value>(&text)
+                .ok()
+                .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(String::from))
+                .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
+            return Err(msg);
+        }
+        Ok(())
+    }
+
     fn upload_photo(
         &self,
         base_url: &str,

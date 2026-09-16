@@ -104,13 +104,23 @@ export function BackupProvider({ children }: { children: ReactNode }) {
       };
 
       void (async () => {
-        // Sube el primero en solitario para crear el directorio remoto UNA vez.
-        // Mega permite carpetas con el mismo nombre; si el dir se crea en paralelo
-        // (6 procesos rclone a la vez) se generan `_exported` duplicados. Tras el
-        // primero, el resto reutiliza la carpeta existente.
-        const [first, ...rest] = files;
-        if (first) await uploadOne(first);
-        await runPool(rest, CONCURRENCY, uploadOne);
+        // 1) Crea el directorio remoto UNA vez (secuencial). Mega permite carpetas
+        //    con el mismo nombre; crearlo en paralelo generaba `_exported` duplicados.
+        try {
+          await api.prepareBackup(projectId, targets);
+        } catch {
+          // Si falla el prepare, seguimos igual: subir el primero en solitario
+          // también crea el directorio antes del pool (fallback).
+          if (files[0]) await uploadOne(files[0]);
+          await runPool(files.slice(1), CONCURRENCY, uploadOne);
+          setJobs((prev) => {
+            const job = prev[projectId];
+            return job ? { ...prev, [projectId]: { ...job, running: false } } : prev;
+          });
+          return;
+        }
+        // 2) Directorio ya creado → subir todo en paralelo.
+        await runPool(files, CONCURRENCY, uploadOne);
         setJobs((prev) => {
           const job = prev[projectId];
           if (!job) return prev;
