@@ -121,6 +121,7 @@ pub fn run() {
         backup_auth,
         catalog,
         backup,
+        uploading: Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
     };
 
     info!("Starting Tauri application...");
@@ -200,6 +201,7 @@ pub fn run() {
             commands::ensure_project_synced,
             commands::sync_exported,
             commands::list_exported_backup,
+            commands::list_backup_providers,
             commands::backup_exported_file,
         ])
         .run(tauri::generate_context!())

@@ -247,8 +247,15 @@
     "done": "Respaldadas {{uploaded}}/{{total}}",
     "modal": {
       "title": "Respaldar fotos exportadas",
-      "subtitle": "{{pending}} por subir de {{total}} en _exported",
-      "empty": "No hay fotos en _exported para respaldar.",
+      "subtitle": "{{count}} por subir en _exported",
+      "empty": "No hay fotos nuevas en _exported para respaldar.",
+      "providers": "Subir a",
+      "noProviders": "Conecta un proveedor en el dashboard web para poder respaldar.",
+      "quality": "Calidad",
+      "qOriginal": "Original (sin recomprimir)",
+      "qHigh": "Alta (máx. 3840 px)",
+      "qMedium": "Media (máx. 2048 px)",
+      "qLow": "Baja (máx. 1280 px)",
       "accept": "Subir {{count}}",
       "cancel": "Cancelar",
       "close": "Cerrar"

@@ -65,6 +65,7 @@ pub struct BackupReceipt {
 /// Cliente de subida de fotos al server de respaldo (Fase 7). La impl real hace
 /// `POST` multipart del archivo; el server lo sube a la nube (rclone).
 pub trait BackupClient: Send + Sync {
+    #[allow(clippy::too_many_arguments)]
     fn upload_photo(
         &self,
         base_url: &str,
@@ -74,7 +75,15 @@ pub trait BackupClient: Send + Sync {
         file_path: &Path,
         filename: &str,
         targets: Option<&str>,
+        quality: Option<&str>,
     ) -> Result<BackupReceipt, String>;
+}
+
+/// Proveedor de nube conectado (para los toggles del modal de respaldo).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProviderInfo {
+    pub provider: String,
+    pub name: String,
 }
 
 /// Estado de respaldo de una foto en el catálogo (Fase 7).
@@ -95,6 +104,8 @@ pub trait CatalogClient: Send + Sync {
         access: &str,
         project_id: &str,
     ) -> Result<Vec<CatalogPhotoStatus>, String>;
+    /// Proveedores de nube conectados del fotógrafo.
+    fn list_providers(&self, base_url: &str, access: &str) -> Result<Vec<ProviderInfo>, String>;
     /// Publica (upsert) proyectos del fotógrafo.
     fn publish_projects(
         &self,

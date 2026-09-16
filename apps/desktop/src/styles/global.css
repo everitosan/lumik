@@ -42,3 +42,27 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--lumik-outline, #8c90a0);
 }
+
+/* Spinner de respaldo (Fase 7) */
+@keyframes lumik-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.lumik-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--lumik-outline-variant, #424654);
+  border-top-color: var(--lumik-primary, #adc6ff);
+  border-radius: 50%;
+  animation: lumik-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.lumik-spinner.lg {
+  width: 28px;
+  height: 28px;
+  border-width: 3px;
+}

@@ -25,6 +25,7 @@ impl BackupClient for HttpBackup {
         file_path: &Path,
         filename: &str,
         targets: Option<&str>,
+        quality: Option<&str>,
     ) -> Result<BackupReceipt, String> {
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(300)) // fotos grandes
@@ -37,6 +38,9 @@ impl BackupClient for HttpBackup {
             .text("filename", filename.to_string());
         if let Some(t) = targets {
             form = form.text("targets", t.to_string());
+        }
+        if let Some(q) = quality {
+            form = form.text("quality", q.to_string());
         }
 
         let url = format!(

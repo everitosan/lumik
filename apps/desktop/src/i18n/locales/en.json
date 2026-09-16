@@ -247,8 +247,15 @@
     "done": "Backed up {{uploaded}}/{{total}}",
     "modal": {
       "title": "Back up exported photos",
-      "subtitle": "{{pending}} to upload of {{total}} in _exported",
-      "empty": "No photos in _exported to back up.",
+      "subtitle": "{{count}} to upload in _exported",
+      "empty": "No new photos in _exported to back up.",
+      "providers": "Upload to",
+      "noProviders": "Connect a provider in the web dashboard to back up.",
+      "quality": "Quality",
+      "qOriginal": "Original (no recompression)",
+      "qHigh": "High (max 3840 px)",
+      "qMedium": "Medium (max 2048 px)",
+      "qLow": "Low (max 1280 px)",
       "accept": "Upload {{count}}",
       "cancel": "Cancel",
       "close": "Close"

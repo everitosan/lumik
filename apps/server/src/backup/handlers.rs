@@ -49,6 +49,7 @@ pub async fn backup_photo(
     let mut file_bytes: Option<Vec<u8>> = None;
     let mut filename: Option<String> = None;
     let mut targets: Option<String> = None;
+    let mut quality: Option<String> = None;
     while let Some(field) = multipart
         .next_field()
         .await
@@ -67,6 +68,7 @@ pub async fn backup_photo(
             }
             Some("filename") => filename = Some(field.text().await.unwrap_or_default()),
             Some("targets") => targets = Some(field.text().await.unwrap_or_default()),
+            Some("quality") => quality = Some(field.text().await.unwrap_or_default()),
             _ => {
                 let _ = field.bytes().await;
             }
@@ -106,12 +108,19 @@ pub async fn backup_photo(
     .await?;
     let date = proj.session_date.unwrap_or_else(|| proj.created_at.date_naive());
     let folder = format!("{}_{}", date.format("%d"), proj.slug);
+    // Si se recomprime, el archivo remoto será JPEG → ajusta la extensión.
+    let quality_preset = quality.as_deref().and_then(quality_preset);
+    let effective_filename = if quality_preset.is_some() {
+        to_jpg_name(&filename)
+    } else {
+        filename.clone()
+    };
     let dest = format!(
         "Lumik/{}/{}/{}/_exported/{}",
         date.format("%Y"),
         date.format("%m"),
         folder,
-        filename
+        effective_filename
     );
 
     // ---- 4. Remotes del fotógrafo (opcionalmente filtrados por targets) ----
@@ -155,8 +164,13 @@ pub async fn backup_photo(
     let dest_cl = dest.clone();
     let results: Vec<BackupItemResult> = tokio::task::spawn_blocking(move || {
         let rc = Rclone::new(rclone_bin);
+        // Recomprime en el server si se pidió una calidad (ahorra espacio en la nube).
+        let bytes = match quality_preset {
+            Some((max_edge, q)) => convert_jpeg(&file_bytes, max_edge, q).unwrap_or(file_bytes),
+            None => file_bytes,
+        };
         let tmp = std::env::temp_dir().join(format!("lumik-up-{}", Uuid::new_v4()));
-        if let Err(e) = std::fs::write(&tmp, &file_bytes) {
+        if let Err(e) = std::fs::write(&tmp, &bytes) {
             // Si no se puede escribir el temporal, todos fallan.
             return prepared
                 .into_iter()
@@ -230,4 +244,43 @@ pub async fn backup_photo(
         "backup_status": status,
         "backup_date": backup_date,
     })))
+}
+
+/// Mapea el nivel de calidad a `(lado mayor máx en px, calidad JPEG)`.
+/// `None` (o "original") → sin recomprimir.
+fn quality_preset(q: &str) -> Option<(u32, u8)> {
+    match q {
+        "high" => Some((3840, 90)),
+        "medium" => Some((2048, 82)),
+        "low" => Some((1280, 75)),
+        _ => None, // "original" u desconocido
+    }
+}
+
+/// Cambia la extensión de un nombre a `.jpg` (para archivos recomprimidos).
+fn to_jpg_name(filename: &str) -> String {
+    match filename.rsplit_once('.') {
+        Some((stem, _)) => format!("{stem}.jpg"),
+        None => format!("{filename}.jpg"),
+    }
+}
+
+/// Decodifica, redimensiona (si excede `max_edge`) y re-encodea como JPEG.
+/// Devuelve `None` si no se puede decodificar (se usará el original).
+fn convert_jpeg(bytes: &[u8], max_edge: u32, jpeg_quality: u8) -> Option<Vec<u8>> {
+    use image::codecs::jpeg::JpegEncoder;
+    use image::imageops::FilterType;
+
+    let img = image::load_from_memory(bytes).ok()?;
+    let img = if img.width().max(img.height()) > max_edge {
+        img.resize(max_edge, max_edge, FilterType::Lanczos3)
+    } else {
+        img
+    };
+    let rgb = img.to_rgb8();
+    let mut out = Vec::new();
+    JpegEncoder::new_with_quality(&mut out, jpeg_quality)
+        .encode_image(&rgb)
+        .ok()?;
+    Some(out)
 }

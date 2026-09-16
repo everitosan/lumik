@@ -295,21 +295,43 @@ export async function syncExported(
 export interface ExportedBackupItem {
   id: string;
   filename: string;
-  uploaded: boolean;
+  in_progress: boolean;
 }
 
-/** Lista los archivos de _exported/ y si ya están respaldados en el remote. */
+export interface ProviderInfo {
+  provider: string;
+  name: string;
+}
+
+/** Archivos de _exported/ pendientes de respaldo (los ya subidos se excluyen). */
 export async function listExportedBackup(
   projectId: string
 ): Promise<ExportedBackupItem[]> {
   return invoke('list_exported_backup', { projectId });
 }
 
-/** Respalda un archivo de _exported/ (uno por llamada, para feedback por-foto). */
+/** Proveedores de nube conectados (para los toggles del modal). */
+export async function listBackupProviders(): Promise<ProviderInfo[]> {
+  return invoke('list_backup_providers');
+}
+
+/**
+ * Respalda un archivo de _exported/ (uno por llamada, para feedback por-foto).
+ * `targets`: proveedores separados por coma (o undefined = todos).
+ * `quality`: 'original' | 'high' | 'medium' | 'low'.
+ */
 export async function backupExportedFile(
   projectId: string,
   id: string,
-  filename: string
+  filename: string,
+  targets?: string,
+  quality?: string
 ): Promise<string> {
-  return invoke('backup_exported_file', { projectId, id, filename });
+  return invoke('backup_exported_file', {
+    projectId,
+    id,
+    filename,
+    targets: targets ?? null,
+    quality: quality ?? null,
+  });
 }

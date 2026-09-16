@@ -301,6 +301,15 @@ Notas:
 - Plan de cuotas/billing por usuario: fuera de alcance inicial (aunque el modelo multi-tenant lo habilita después).
 
 ## 11. Bitácora
+- **2026-09-15 · Fase 7 · mejoras de UX del modal** — (1) se saltan archivos ocultos
+  al escanear `_exported/`; (2) el modal solo lista los **no** subidos; (3) toggles de
+  **proveedores** conectados (`list_backup_providers` → `targets`); (4) **select de
+  calidad** con recompresión **en el server** (`image` crate: original/high/medium/low
+  → redimensiona + JPEG); (5) subida **paralela** (pool de concurrencia 3 en el
+  frontend); (6) **guard de subidas en curso** en `AppState` (`uploading: HashSet`) +
+  Drop guard, para no re-lanzar al reabrir el modal (evita duplicados); (7) **spinner**
+  CSS. El server upsertea la foto y el path remoto es determinista, así que re-subir
+  sobreescribe (no duplica) — el guard es defensa extra.
 - **2026-09-15 · Fase 7 · rediseño a "backup por archivo de _exported"** — Con datos
   reales (proyecto Clorotipias) se vio que el editor renombra los exports, así que el
   emparejamiento por stem fallaba y solo subía 1 de 4. Se pivotó: la unidad de

@@ -18,6 +18,7 @@ use crate::domain::project::ProjectFolder;
 use log::{info, warn};
 use serde::Serialize;
 use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 use tauri::State;
 
 /// Extensiones consideradas "exportados" al escanear `_exported/`.
@@ -439,14 +440,14 @@ pub fn sync_exported(
     Ok(result)
 }
 
-/// Un archivo de `_exported/` como unidad de respaldo, con su estado en el remote.
+/// Un archivo de `_exported/` pendiente de respaldo (los ya subidos se excluyen).
 #[derive(Debug, Serialize)]
 pub struct ExportedBackupItem {
     /// Id determinista (uuid5 de project_id + filename): estable entre corridas.
     pub id: String,
     pub filename: String,
-    /// `true` si ya está respaldado según el catálogo del server.
-    pub uploaded: bool,
+    /// `true` si ya hay una subida en curso para este archivo (no re-subir).
+    pub in_progress: bool,
 }
 
 /// Id determinista para un archivo exportado (no depende del RAW: robusto ante
@@ -466,6 +467,14 @@ fn scan_exported(project_dir: &std::path::Path, project_id: &str) -> Vec<(String
             if !path.is_file() {
                 continue;
             }
+            let name = match path.file_name().and_then(|n| n.to_str()) {
+                Some(n) => n,
+                None => continue,
+            };
+            // Salta archivos ocultos (dotfiles, sidecars AppleDouble ._x, .DS_Store…).
+            if name.starts_with('.') {
+                continue;
+            }
             let is_img = path
                 .extension()
                 .and_then(|e| e.to_str())
@@ -474,9 +483,7 @@ fn scan_exported(project_dir: &std::path::Path, project_id: &str) -> Vec<(String
             if !is_img {
                 continue;
             }
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                items.push((exported_id(project_id, name), name.to_string()));
-            }
+            items.push((exported_id(project_id, name), name.to_string()));
         }
     }
     items.sort_by(|a, b| a.1.cmp(&b.1));
@@ -514,25 +521,74 @@ pub fn list_exported_backup(
         None => HashSet::new(),
     };
 
+    // Ids con subida en curso (para no re-lanzarlas al reabrir el modal).
+    let in_flight = state.uploading.lock().unwrap().clone();
+
+    // Solo los NO subidos; marca los que están subiéndose ahora mismo.
     Ok(files
         .into_iter()
+        .filter(|(id, _)| !uploaded.contains(id))
         .map(|(id, filename)| ExportedBackupItem {
-            uploaded: uploaded.contains(&id),
+            in_progress: in_flight.contains(&format!("{project_id}/{id}")),
             id,
             filename,
         })
         .collect())
 }
 
-/// Respalda un archivo de `_exported/` (el modal lo llama por archivo para dar
-/// feedback por-foto). Refresca el token si expiró. Devuelve "uploaded" u error.
+/// Lista los proveedores de nube conectados (para los toggles del modal).
+#[tauri::command]
+pub fn list_backup_providers(
+    state: State<AppState>,
+) -> AppResult<Vec<crate::application::ports::ProviderInfo>> {
+    match active_session(&state)? {
+        Some((base, access)) => Ok(state
+            .catalog
+            .list_providers(&base, &access)
+            .unwrap_or_default()),
+        None => Ok(vec![]),
+    }
+}
+
+/// Quita el id del set de "subidas en curso" al salir (cualquier ruta).
+struct UploadGuard {
+    set: Arc<Mutex<HashSet<String>>>,
+    key: String,
+}
+impl Drop for UploadGuard {
+    fn drop(&mut self) {
+        if let Ok(mut s) = self.set.lock() {
+            s.remove(&self.key);
+        }
+    }
+}
+
+/// Respalda un archivo de `_exported/` (el modal lo llama por archivo, en paralelo,
+/// para feedback por-foto). Marca la subida en curso (evita duplicados si se reabre
+/// el modal), aplica `targets`/`quality`, y refresca el token si expiró.
 #[tauri::command]
 pub fn backup_exported_file(
     state: State<AppState>,
     project_id: String,
     id: String,
     filename: String,
+    targets: Option<String>,
+    quality: Option<String>,
 ) -> AppResult<String> {
+    // Guard de "subida en curso": si ya se está subiendo este archivo, no repetir.
+    let key = format!("{project_id}/{id}");
+    {
+        let mut set = state.uploading.lock().unwrap();
+        if set.contains(&key) {
+            return Err(AppError::from("esta foto ya se está subiendo"));
+        }
+        set.insert(key.clone());
+    }
+    let _guard = UploadGuard {
+        set: state.uploading.clone(),
+        key,
+    };
+
     let Some((base, mut access, refresh)) = stored_session(&state)? else {
         return Err(AppError::from("inicia sesión de respaldo primero"));
     };
@@ -542,10 +598,11 @@ pub fn backup_exported_file(
         return Err(AppError::from(format!("no se encontró {filename}")));
     }
 
-    let mut receipt =
-        state
-            .backup
-            .upload_photo(&base, &access, &project_id, &id, &file_path, &filename, None);
+    let targets_ref = targets.as_deref();
+    let quality_ref = quality.as_deref();
+    let mut receipt = state.backup.upload_photo(
+        &base, &access, &project_id, &id, &file_path, &filename, targets_ref, quality_ref,
+    );
     // Refresh-on-401.
     if let Err(e) = &receipt {
         if !is_offline(e) {
@@ -555,7 +612,8 @@ pub fn backup_exported_file(
                     state.global_db.set_setting(K_REFRESH, &tokens.refresh)?;
                     access = tokens.access;
                     receipt = state.backup.upload_photo(
-                        &base, &access, &project_id, &id, &file_path, &filename, None,
+                        &base, &access, &project_id, &id, &file_path, &filename, targets_ref,
+                        quality_ref,
                     );
                 }
             }

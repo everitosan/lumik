@@ -5,7 +5,7 @@ use crate::application::ports::{
 use crate::application::registry::ProjectRegistry;
 use crate::db::{discover_projects_on_device, GlobalDatabase, ProjectDatabase};
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Application state
 pub struct AppState {
@@ -30,6 +30,9 @@ pub struct AppState {
     pub catalog: Arc<dyn CatalogClient>,
     /// Cliente de subida de fotos al server de respaldo (Fase 7).
     pub backup: Arc<dyn BackupClient>,
+    /// Ids `project_id/photo_id` con subida en curso (evita duplicados al reabrir
+    /// el modal y re-lanzar la misma subida).
+    pub uploading: Arc<Mutex<HashSet<String>>>,
 }
 
 impl AppState {

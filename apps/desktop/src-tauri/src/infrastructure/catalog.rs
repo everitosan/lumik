@@ -1,7 +1,9 @@
 //! Implementación HTTP del puerto `CatalogClient` (Fase 5).
 //! Publica proyectos/fotos al catálogo del server y consulta existencia.
 
-use crate::application::ports::{CatalogClient, CatalogPhoto, CatalogPhotoStatus, CatalogProject};
+use crate::application::ports::{
+    CatalogClient, CatalogPhoto, CatalogPhotoStatus, CatalogProject, ProviderInfo,
+};
 use serde_json::{json, Value};
 
 pub struct HttpCatalog;
@@ -95,6 +97,30 @@ impl CatalogClient for HttpCatalog {
                         .and_then(|s| s.as_str())
                         .unwrap_or("pending")
                         .to_string(),
+                })
+            })
+            .collect())
+    }
+
+    fn list_providers(&self, base_url: &str, access: &str) -> Result<Vec<ProviderInfo>, String> {
+        let url = format!("{}/v1/providers", base(base_url));
+        let resp = HttpCatalog::client()?
+            .get(url)
+            .bearer_auth(access)
+            .send()
+            .map_err(|e| friendly(&e))?;
+        let status = resp.status();
+        let text = resp.text().unwrap_or_default();
+        if !status.is_success() {
+            return Err(format!("HTTP {}", status.as_u16()));
+        }
+        let arr: Vec<Value> = serde_json::from_str(&text).unwrap_or_default();
+        Ok(arr
+            .into_iter()
+            .filter_map(|v| {
+                Some(ProviderInfo {
+                    provider: v.get("provider")?.as_str()?.to_string(),
+                    name: v.get("name")?.as_str()?.to_string(),
                 })
             })
             .collect())

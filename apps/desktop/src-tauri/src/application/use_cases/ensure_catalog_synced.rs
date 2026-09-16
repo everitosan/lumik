@@ -91,6 +91,13 @@ mod tests {
         ) -> Result<Vec<crate::application::ports::CatalogPhotoStatus>, String> {
             Ok(vec![])
         }
+        fn list_providers(
+            &self,
+            _: &str,
+            _: &str,
+        ) -> Result<Vec<crate::application::ports::ProviderInfo>, String> {
+            Ok(vec![])
+        }
         fn publish_projects(&self, _: &str, _: &str, _: &[CatalogProject]) -> Result<(), String> {
             self.published_projects.fetch_add(1, Ordering::SeqCst);
             Ok(())
