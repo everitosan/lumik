@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Button, Icon } from '@lumik/ui';
+import { Modal, Button, Icon, Select, type SelectOption } from '@lumik/ui';
 import * as api from '../../../lib/api';
 import type { ExportedBackupItem, ProviderInfo } from '../../../lib/api';
 
@@ -36,16 +36,6 @@ const nameStyles: CSSProperties = { overflow: 'hidden', textOverflow: 'ellipsis'
 const fieldStyles: CSSProperties = { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' };
 const labelStyles: CSSProperties = { fontSize: '13px', fontWeight: 500, color: 'var(--lumik-on-surface-variant, #c2c6d7)' };
 const toggleRowStyles: CSSProperties = { display: 'flex', gap: '8px', flexWrap: 'wrap' };
-const selectStyles: CSSProperties = {
-  fontFamily: 'var(--lumik-font-primary, Inter)',
-  fontSize: '14px',
-  color: 'var(--lumik-on-surface, #e5e2e1)',
-  backgroundColor: 'var(--lumik-surface-container-lowest, #0e0e0e)',
-  border: '1px solid var(--lumik-outline-variant, #424654)',
-  borderRadius: 'var(--lumik-radius-sm, 4px)',
-  padding: '8px 10px',
-  outline: 'none',
-};
 const footerStyles: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' };
 
 /** Ejecuta `worker` sobre `items` con concurrencia limitada. */
@@ -165,18 +155,21 @@ export function BackupModal({ projectId, onClose }: BackupModalProps) {
 
           {/* Calidad */}
           <div style={fieldStyles}>
-            <span style={labelStyles}>{t('backup.modal.quality')}</span>
-            <select
-              style={selectStyles}
+            <Select
+              label={t('backup.modal.quality')}
               value={quality}
-              onChange={(e) => setQuality(e.target.value as Quality)}
+              onChange={(v) => setQuality(v as Quality)}
               disabled={running}
-            >
-              <option value="original">{t('backup.modal.qOriginal')}</option>
-              <option value="high">{t('backup.modal.qHigh')}</option>
-              <option value="medium">{t('backup.modal.qMedium')}</option>
-              <option value="low">{t('backup.modal.qLow')}</option>
-            </select>
+              fullWidth
+              options={
+                [
+                  { value: 'original', label: t('backup.modal.qOriginal') },
+                  { value: 'high', label: t('backup.modal.qHigh') },
+                  { value: 'medium', label: t('backup.modal.qMedium') },
+                  { value: 'low', label: t('backup.modal.qLow') },
+                ] as SelectOption[]
+              }
+            />
           </div>
 
           {/* Lista de pendientes */}
