@@ -262,11 +262,14 @@ Notas:
   default de axum, 2MB, cortaba las fotos).
 - **Idempotencia:** el modal solo sube los que el catálogo marca no-`uploaded`.
 
-### Fase 8 — Subida desde iPad/web + reconciliación cross-device
-- [ ] Web: dashboard que lista proyectos/fotos del catálogo y sube contra `photoId` real (drag & drop / POST).
-- [ ] Verificar el ciclo completo: iPad sube → catálogo `uploaded` → desktop reconcilia al abrir.
+### Fase 8 — Subida desde iPad/web + reconciliación cross-device ✅
+- [x] Web: al tocar un proyecto se abre `ProjectBackupModal` — elige fotos del dispositivo, proveedores destino, calidad, y sube (prepare + pool paralelo) reusando el endpoint de backup del server.
+- [x] **Id determinista compartido**: el web usa `uuid5(projectId/filename)` **idéntico** al de la desktop (verificado JS==Python==RFC 4122) → una foto subida desde iPad y desktop **no se duplica** en catálogo ni nube.
+- [x] Reconciliación: el modal de la desktop (`list_exported_backup`) consulta el catálogo y **excluye las ya subidas** (incluidas las que subió el iPad) → cross-device sin re-subir.
 
-**Gate 8:** desde el iPad se elige un proyecto del catálogo, se sube una foto, y al reconectar la desktop la marca `uploaded`.
+**Gate 8:** ✅ **implementado** — build web verde; el web sube contra el `photoId` determinista y el server upsertea+sube; la desktop refleja lo subido por el iPad al listar (excluye uploaded). *Verificación en vivo con Mega/iPad pendiente por el usuario.*
+
+Nota: fotos que existan **solo** en el iPad (no en el disco de la desktop) se respaldan a la nube pero no aparecen en el grid de la desktop (fuera de alcance, ver §10).
 
 ### Fase 9 — Robustez
 - [ ] Reintentos con backoff (`backup_retries`); cola offline-first en desktop (encolar mientras no hay red).
@@ -301,6 +304,15 @@ Notas:
 - Plan de cuotas/billing por usuario: fuera de alcance inicial (aunque el modelo multi-tenant lo habilita después).
 
 ## 11. Bitácora
+- **2026-09-16 · Fase 8 · subida desde web/iPad** — El dashboard web ahora sube fotos:
+  al tocar un proyecto abre `ProjectBackupModal` (elige archivos del dispositivo,
+  proveedores, calidad) y reusa `prepare` + el endpoint de backup del server. Clave:
+  el web calcula el **mismo id determinista** que la desktop (`uuid5(projectId/filename)`,
+  namespace URL RFC 4122) → verificado JS==Python; así no se duplica lo subido desde
+  ambos lados. Sin cambios de server (upsert de photo ya existía). La reconciliación en
+  la desktop ya la da `list_exported_backup` (excluye las uploaded del catálogo). Dep
+  nueva en web: `uuid`. Ajuste en el cliente web: no forzar `content-type: json` con
+  `FormData`.
 - **2026-09-16 · Fase 7 · prepare (mkdir) antes de subir en paralelo** — Para evitar
   las carpetas `_exported` duplicadas de Mega (permite nombres repetidos; el `mkdir`
   concurrente de 6 procesos rclone las duplicaba), se añadió `POST .../backup/prepare`

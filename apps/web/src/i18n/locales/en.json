@@ -38,6 +38,20 @@
     "title": "Projects",
     "empty": "No projects yet. Open a project in the desktop app (while signed in) and it will show up here."
   },
+  "upload": {
+    "title": "Back up to {{project}}",
+    "quality": "Quality",
+    "qOriginal": "Original (no recompression)",
+    "qHigh": "High (max 3840 px)",
+    "qMedium": "Medium (max 2048 px)",
+    "qLow": "Low (max 1280 px)",
+    "pick": "Tap to choose photos to upload",
+    "addMore": "Add more",
+    "submit": "Upload {{count}}",
+    "uploading": "Uploading…",
+    "close": "Close",
+    "noProviders": "Connect a provider below to upload."
+  },
   "providers": {
     "title": "Backup services",
     "subtitle": "Connect where your photos will be stored",

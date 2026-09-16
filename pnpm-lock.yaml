@@ -148,6 +148,9 @@ importers:
       react-router-dom:
         specifier: ^7.1.0
         version: 7.18.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      uuid:
+        specifier: ^11.0.0
+        version: 11.1.1
     devDependencies:
       '@types/react':
         specifier: ^19.0.0
@@ -2777,6 +2780,10 @@ packages:
 
   util@0.12.5:
     resolution: {integrity: sha512-kZf/K6hEIrWHI6XqOFUiiMa+79wE/D8Q+NCNAWclkyg3b4d2k7s0QGepNjiABc+aR3N1PAyHL7p6UcLY6LmrnA==}
+
+  uuid@11.1.1:
+    resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
+    hasBin: true
 
   uuid@9.0.1:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
@@ -5731,6 +5738,8 @@ snapshots:
       is-generator-function: 1.1.2
       is-typed-array: 1.1.15
       which-typed-array: 1.1.21
+
+  uuid@11.1.1: {}
 
   uuid@9.0.1: {}
 

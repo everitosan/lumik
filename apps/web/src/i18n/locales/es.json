@@ -38,6 +38,20 @@
     "title": "Proyectos",
     "empty": "Aún no hay proyectos. Abre un proyecto en la app de escritorio (con sesión iniciada) para que aparezca aquí."
   },
+  "upload": {
+    "title": "Respaldar en {{project}}",
+    "quality": "Calidad",
+    "qOriginal": "Original (sin recomprimir)",
+    "qHigh": "Alta (máx. 3840 px)",
+    "qMedium": "Media (máx. 2048 px)",
+    "qLow": "Baja (máx. 1280 px)",
+    "pick": "Toca para elegir fotos a subir",
+    "addMore": "Añadir más",
+    "submit": "Subir {{count}}",
+    "uploading": "Subiendo…",
+    "close": "Cerrar",
+    "noProviders": "Conecta un proveedor abajo para poder subir."
+  },
   "providers": {
     "title": "Servicios de respaldo",
     "subtitle": "Conecta dónde se guardarán tus fotos",

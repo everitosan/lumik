@@ -1,6 +1,13 @@
 // Cliente HTTP del portal web contra el server de respaldo (apps/server).
 // Guarda los tokens de sesión y refresca de forma transparente en 401.
 
+import { v5 as uuidv5 } from 'uuid';
+
+/** Id determinista de un archivo exportado. Debe coincidir con el de la desktop. */
+export function exportedId(projectId: string, filename: string): string {
+  return uuidv5(`${projectId}/${filename}`, uuidv5.URL);
+}
+
 const ACCESS_KEY = 'lumik.access';
 const REFRESH_KEY = 'lumik.refresh';
 
@@ -62,7 +69,9 @@ export async function request<T>(
   allowRefresh = true
 ): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has('content-type')) {
+  // Solo JSON para cuerpos string; para FormData deja que el navegador ponga
+  // el content-type con su boundary.
+  if (typeof init.body === 'string' && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
   }
   const access = tokens.getAccess();
@@ -143,6 +152,39 @@ export const catalogApi = {
   listProjects: () => request<CatalogProject[]>('/v1/projects'),
   listPhotos: (projectId: string) =>
     request<CatalogPhoto[]>(`/v1/projects/${projectId}/photos`),
+};
+
+/**
+ * Backup desde el navegador/iPad. Usa el MISMO id determinista que la desktop
+ * (uuid5 de `projectId/filename`), así una foto subida desde ambos lados no se
+ * duplica en el catálogo ni en la nube.
+ */
+export const backupApi = {
+  /** Crea el directorio remoto una vez, antes de subir en paralelo. */
+  prepare: (projectId: string, targets?: string) =>
+    request<void>(`/v1/projects/${projectId}/backup/prepare`, {
+      method: 'POST',
+      body: JSON.stringify({ targets: targets ?? null }),
+    }),
+
+  /** Sube un archivo (multipart) al `_exported/` remoto del proyecto. */
+  uploadFile: (
+    projectId: string,
+    photoId: string,
+    file: File,
+    targets?: string,
+    quality?: string
+  ) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    form.append('filename', file.name);
+    if (targets) form.append('targets', targets);
+    if (quality) form.append('quality', quality);
+    return request<{ backup_status: string }>(
+      `/v1/projects/${projectId}/photos/${photoId}/backup`,
+      { method: 'POST', body: form }
+    );
+  },
 };
 
 export const authApi = {
