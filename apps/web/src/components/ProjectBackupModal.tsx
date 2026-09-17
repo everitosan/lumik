@@ -13,6 +13,22 @@ import {
 type Quality = 'original' | 'high' | 'medium' | 'low';
 type RowState = 'pending' | 'uploading' | 'done' | 'error';
 const CONCURRENCY = 6;
+const MAX_ATTEMPTS = 3;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Reintenta `fn` con backoff ante fallos transitorios. */
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (attempt < MAX_ATTEMPTS - 1) await sleep(600 * 2 ** attempt);
+    }
+  }
+  throw lastErr;
+}
 
 async function runPool<T>(items: T[], limit: number, worker: (t: T) => Promise<void>) {
   let idx = 0;
@@ -97,7 +113,7 @@ export function ProjectBackupModal({ project, onClose }: Props) {
       const id = exportedId(project.id, file.name);
       setState((s) => ({ ...s, [file.name]: 'uploading' }));
       try {
-        await backupApi.uploadFile(project.id, id, file, targets, quality);
+        await withRetry(() => backupApi.uploadFile(project.id, id, file, targets, quality));
         setState((s) => ({ ...s, [file.name]: 'done' }));
       } catch (e) {
         setState((s) => ({ ...s, [file.name]: 'error' }));

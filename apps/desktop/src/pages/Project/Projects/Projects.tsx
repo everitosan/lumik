@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchBar, ProjectCard, Button, Icon } from '@lumik/ui';
 import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, matchesKey, usePlatform } from '../../../lib/hooks';
-import { createProject, renameProject, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink } from '../../../lib/api';
+import { createProject, renameProject, relocateBackup, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink } from '../../../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../../../components/CreateProjectModal';
 import { RenameProjectModal } from './RenameProjectModal';
 import { DeleteProjectModal } from './DeleteProjectModal';
@@ -236,9 +236,13 @@ export function Projects({ onProjectClick }: ProjectsProps) {
     setIsRenaming(true);
     setRenameError(null);
     try {
-      await renameProject(editingProject.id, newName);
+      const projectId = editingProject.id;
+      await renameProject(projectId, newName);
       setEditingProject(null);
       refetch();
+      // Mueve la carpeta del backup en la nube para que siga el nuevo nombre.
+      // Best-effort en segundo plano: no bloquea ni falla el rename local.
+      void relocateBackup(projectId).catch(() => {});
     } catch (err) {
       setRenameError(err instanceof Error ? err.message : String(err));
     } finally {

@@ -627,6 +627,24 @@ pub async fn prepare_backup(
     .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
 }
 
+/// Renombra la carpeta del backup en la nube para que coincida con el nombre/
+/// fecha actuales del proyecto (tras un rename). Best-effort: si no hay sesión o
+/// nada se ha respaldado, no hace nada. Se llama tras `rename_project`.
+#[tauri::command]
+pub async fn relocate_backup(state: State<'_, AppState>, project_id: String) -> AppResult<()> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<()> {
+        let Some((base, access)) = active_session(&state)? else {
+            // Sin sesión de respaldo: nada que mover.
+            return Ok(());
+        };
+        state.backup.relocate_dir(&base, &access, &project_id)?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
+}
+
 /// Quita el id del set de "subidas en curso" al salir (cualquier ruta).
 struct UploadGuard {
     set: Arc<Mutex<HashSet<String>>>,
@@ -862,4 +880,37 @@ pub async fn get_backup_folder_link(
     })
     .await
     .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
+}
+
+// ----------------------------------------------------------------------------
+// Cola offline-first: persiste la intención de respaldo por proyecto.
+// ----------------------------------------------------------------------------
+
+/// Encola/actualiza el respaldo de un proyecto (targets + quality).
+#[tauri::command]
+pub fn set_pending_backup(
+    state: State<'_, AppState>,
+    project_id: String,
+    targets: Option<String>,
+    quality: Option<String>,
+) -> AppResult<()> {
+    state
+        .global_db
+        .set_pending_backup(&project_id, targets.as_deref(), quality.as_deref())?;
+    Ok(())
+}
+
+/// Quita un proyecto de la cola (respaldo completado).
+#[tauri::command]
+pub fn clear_pending_backup(state: State<'_, AppState>, project_id: String) -> AppResult<()> {
+    state.global_db.clear_pending_backup(&project_id)?;
+    Ok(())
+}
+
+/// Lista los respaldos pendientes para reanudar al arrancar.
+#[tauri::command]
+pub fn get_pending_backups(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<crate::db::models::PendingBackup>> {
+    Ok(state.global_db.get_pending_backups()?)
 }

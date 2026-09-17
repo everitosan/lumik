@@ -68,3 +68,17 @@ CREATE TABLE IF NOT EXISTS device (
     last_seen       TEXT NOT NULL,          -- ISO 8601 datetime
     registered_at   TEXT NOT NULL           -- ISO 8601 datetime
 );
+
+
+-- ============================================================================
+-- BACKUP QUEUE (cola offline-first)
+-- Intención de respaldo por proyecto: se persiste al iniciar un respaldo y se
+-- borra al completarse. Al arrancar la app se reanudan los pendientes.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS backup_queue (
+    project_id  TEXT PRIMARY KEY,
+    targets     TEXT,                       -- csv de proveedores (o NULL = todos)
+    quality     TEXT,                       -- original/high/medium/low
+    created_at  TEXT NOT NULL               -- ISO 8601 datetime
+);

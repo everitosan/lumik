@@ -146,6 +146,14 @@ pub struct ProjectDashboard {
     pub device_uuid: String,
 }
 
+/// Entrada de la cola de respaldo persistida (para reanudar al arrancar).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingBackup {
+    pub project_id: String,
+    pub targets: Option<String>,
+    pub quality: Option<String>,
+}
+
 // ============================================================================
 // DTOs for create/update
 // ============================================================================

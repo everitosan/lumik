@@ -356,6 +356,15 @@ export async function prepareBackup(
 }
 
 /**
+ * Renombra la carpeta del backup en la nube para que coincida con el nombre/
+ * fecha actuales del proyecto (tras un rename). Best-effort en el server: si no
+ * hay sesión o nada se ha respaldado, no hace nada.
+ */
+export async function relocateBackup(projectId: string): Promise<void> {
+  return invoke('relocate_backup', { projectId });
+}
+
+/**
  * Respalda un archivo de _exported/ (uno por llamada, para feedback por-foto).
  * `targets`: proveedores separados por coma (o undefined = todos).
  * `quality`: 'original' | 'high' | 'medium' | 'low'.
@@ -374,4 +383,37 @@ export async function backupExportedFile(
     targets: targets ?? null,
     quality: quality ?? null,
   });
+}
+
+// ============================================================================
+// BACKUP QUEUE (cola offline-first — Fase 9)
+// ============================================================================
+
+export interface PendingBackup {
+  project_id: string;
+  targets: string | null;
+  quality: string | null;
+}
+
+/** Encola/actualiza la intención de respaldo de un proyecto. */
+export async function setPendingBackup(
+  projectId: string,
+  targets?: string,
+  quality?: string
+): Promise<void> {
+  return invoke('set_pending_backup', {
+    projectId,
+    targets: targets ?? null,
+    quality: quality ?? null,
+  });
+}
+
+/** Quita un proyecto de la cola (respaldo completado). */
+export async function clearPendingBackup(projectId: string): Promise<void> {
+  return invoke('clear_pending_backup', { projectId });
+}
+
+/** Lista los respaldos pendientes (para reanudar al arrancar). */
+export async function getPendingBackups(): Promise<PendingBackup[]> {
+  return invoke('get_pending_backups');
 }

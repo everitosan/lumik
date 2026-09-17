@@ -143,6 +143,40 @@ impl Rclone {
         Ok(url)
     }
 
+    /// Mueve (renombra) la carpeta `from` → `to` en el remote (server-side donde
+    /// el backend lo soporta). Borra la carpeta origen vacía tras mover.
+    pub fn move_dir(
+        &self,
+        config_contents: &str,
+        remote_name: &str,
+        from: &str,
+        to: &str,
+    ) -> Result<(), String> {
+        let conf_path =
+            std::env::temp_dir().join(format!("lumik-rclone-{}.conf", uuid::Uuid::new_v4()));
+        std::fs::write(&conf_path, config_contents)
+            .map_err(|e| format!("no se pudo escribir config temporal: {e}"))?;
+
+        let result = Command::new(&self.bin)
+            .arg("move")
+            .arg("--delete-empty-src-dirs")
+            .arg("--config")
+            .arg(&conf_path)
+            .arg(format!("{remote_name}:{from}"))
+            .arg(format!("{remote_name}:{to}"))
+            .output();
+        let _ = std::fs::remove_file(&conf_path);
+
+        let out = result.map_err(|e| format!("rclone move: {e}"))?;
+        if !out.status.success() {
+            return Err(format!(
+                "rclone move falló: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Ok(())
+    }
+
     /// Sube `local` al remote `remote_name:dest` usando la config dada.
     /// `copyto` copia archivo→archivo (respeta el nombre destino).
     pub fn copy_to(

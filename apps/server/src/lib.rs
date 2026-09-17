@@ -102,6 +102,10 @@ pub fn build_router(state: AppState) -> Router {
             post(backup::handlers::folder_link),
         )
         .route(
+            "/projects/:project_id/backup/relocate",
+            post(backup::handlers::relocate_backup),
+        )
+        .route(
             "/projects/:project_id/photos/:photo_id/backup",
             // El límite por defecto de axum es 2 MB; una foto pesa más. Subimos el
             // límite a 512 MB solo para esta ruta de subida.

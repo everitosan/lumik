@@ -23,14 +23,6 @@ pub struct BackupItemResult {
     pub error: Option<String>,
 }
 
-/// Fila del proyecto necesaria para construir la ruta en la nube.
-#[derive(sqlx::FromRow)]
-struct ProjectPath {
-    session_date: Option<NaiveDate>,
-    slug: String,
-    created_at: DateTime<Utc>,
-}
-
 /// Remote conectado (credenciales cifradas).
 #[derive(sqlx::FromRow)]
 struct RemoteRow {
@@ -107,7 +99,7 @@ pub async fn backup_photo(
     } else {
         filename.clone()
     };
-    let dir = project_dest_dir(&state, project_id).await?;
+    let dir = ensure_backup_dir(&state, project_id).await?;
     let dest = format!("{dir}/{effective_filename}");
 
     // ---- 4. Remotes del fotógrafo (opcionalmente filtrados por targets) ----
@@ -205,21 +197,38 @@ pub async fn backup_photo(
     })))
 }
 
-/// Directorio destino en la nube para un proyecto: `Lumik/{año}/{mes}/{día}_{slug}/_exported`.
-async fn project_dest_dir(state: &AppState, project_id: Uuid) -> ApiResult<String> {
-    let proj: ProjectPath =
-        sqlx::query_as("SELECT session_date, slug, created_at FROM project WHERE id = $1")
-            .bind(project_id)
-            .fetch_one(&state.pool)
-            .await?;
-    let date = proj.session_date.unwrap_or_else(|| proj.created_at.date_naive());
-    Ok(format!(
+/// Ruta calculada a partir del nombre/fecha actuales: `Lumik/{año}/{mes}/{día}_{slug}/_exported`.
+fn computed_dest_dir(session_date: Option<NaiveDate>, slug: &str, created_at: DateTime<Utc>) -> String {
+    let date = session_date.unwrap_or_else(|| created_at.date_naive());
+    format!(
         "Lumik/{}/{}/{}_{}/_exported",
         date.format("%Y"),
         date.format("%m"),
         date.format("%d"),
-        proj.slug
-    ))
+        slug
+    )
+}
+
+/// Directorio destino en la nube del proyecto, **anclado**: si ya hay `backup_dir`
+/// guardado, se reutiliza (path pegajoso); si no, se calcula del nombre/fecha
+/// actuales y se guarda como ancla. Así renombrar no parte la carpeta.
+async fn ensure_backup_dir(state: &AppState, project_id: Uuid) -> ApiResult<String> {
+    let row: (Option<String>, Option<NaiveDate>, String, DateTime<Utc>) = sqlx::query_as(
+        "SELECT backup_dir, session_date, slug, created_at FROM project WHERE id = $1",
+    )
+    .bind(project_id)
+    .fetch_one(&state.pool)
+    .await?;
+    if let Some(dir) = row.0 {
+        return Ok(dir);
+    }
+    let computed = computed_dest_dir(row.1, &row.2, row.3);
+    sqlx::query("UPDATE project SET backup_dir = $1 WHERE id = $2")
+        .bind(&computed)
+        .bind(project_id)
+        .execute(&state.pool)
+        .await?;
+    Ok(computed)
 }
 
 /// Remotes del fotógrafo (opcionalmente filtrados por `targets` csv), con su
@@ -284,7 +293,7 @@ pub async fn prepare_backup(
         return Err(ApiError::NotFound);
     }
 
-    let dir = project_dest_dir(&state, project_id).await?;
+    let dir = ensure_backup_dir(&state, project_id).await?;
     let prepared = resolve_remotes(&state, auth.0, req.targets).await?;
     if prepared.is_empty() {
         return Err(ApiError::BadRequest(
@@ -350,7 +359,7 @@ pub async fn folder_link(
         return Err(ApiError::NotFound);
     }
 
-    let dir = project_dest_dir(&state, project_id).await?;
+    let dir = ensure_backup_dir(&state, project_id).await?;
     let remote = resolve_remotes(&state, auth.0, Some(req.provider.clone()))
         .await?
         .into_iter()
@@ -377,6 +386,82 @@ pub async fn folder_link(
             tracing::warn!(provider = %req.provider, error = %e, "rclone link falló");
             // Fallback silencioso: el cliente abre la web del proveedor.
             Ok(Json(json!({ "url": null, "reason": "link_failed" })))
+        }
+    }
+}
+
+/// `POST /v1/projects/{id}/backup/relocate` — mueve la carpeta del backup en la
+/// nube para que coincida con el nombre/fecha actuales del proyecto (tras un
+/// rename). Actualiza el ancla `backup_dir` y los `backup_url`.
+pub async fn relocate_backup(
+    State(state): State<AppState>,
+    auth: AuthPhotographer,
+    Path(project_id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
+    let row: Option<(Option<String>, Option<NaiveDate>, String, DateTime<Utc>)> = sqlx::query_as(
+        "SELECT backup_dir, session_date, slug, created_at FROM project \
+         WHERE id = $1 AND photographer_id = $2",
+    )
+    .bind(project_id)
+    .bind(auth.0)
+    .fetch_optional(&state.pool)
+    .await?;
+    let Some((stored, session_date, slug, created_at)) = row else {
+        return Err(ApiError::NotFound);
+    };
+    let desired = computed_dest_dir(session_date, &slug, created_at);
+
+    // Sin backup previo: solo fija el ancla al nombre actual.
+    let Some(stored) = stored else {
+        sqlx::query("UPDATE project SET backup_dir = $1 WHERE id = $2")
+            .bind(&desired)
+            .bind(project_id)
+            .execute(&state.pool)
+            .await?;
+        return Ok(Json(json!({ "moved": false })));
+    };
+    if stored == desired {
+        return Ok(Json(json!({ "moved": false })));
+    }
+
+    let prepared = resolve_remotes(&state, auth.0, None).await?;
+    let rclone_bin = state.cfg.rclone_bin.clone();
+    let (from, to) = (stored.clone(), desired.clone());
+    let move_res: Result<(), String> = tokio::task::spawn_blocking(move || {
+        let rc = Rclone::new(rclone_bin);
+        for (_provider, name, cfg) in prepared {
+            let conf = rc.config_for(&name, &cfg)?;
+            rc.move_dir(&conf, &name, &from, &to)?;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| ApiError::Internal(anyhow::anyhow!("tarea move: {e}")))?;
+
+    match move_res {
+        Ok(()) => {
+            sqlx::query("UPDATE project SET backup_dir = $1 WHERE id = $2")
+                .bind(&desired)
+                .bind(project_id)
+                .execute(&state.pool)
+                .await?;
+            sqlx::query(
+                "UPDATE photo SET backup_url = replace(backup_url, $1, $2) \
+                 WHERE project_id = $3 AND backup_url IS NOT NULL",
+            )
+            .bind(&stored)
+            .bind(&desired)
+            .bind(project_id)
+            .execute(&state.pool)
+            .await?;
+            tracing::info!(%project_id, from = %stored, to = %desired, "carpeta de backup movida");
+            Ok(Json(json!({ "moved": true, "from": stored, "to": desired })))
+        }
+        Err(e) => {
+            tracing::warn!(%project_id, error = %e, "relocate de carpeta falló");
+            Err(ApiError::Internal(anyhow::anyhow!(
+                "no se pudo mover la carpeta: {e}"
+            )))
         }
     }
 }

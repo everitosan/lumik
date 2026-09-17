@@ -77,6 +77,16 @@ pub trait BackupClient: Send + Sync {
         targets: Option<&str>,
     ) -> Result<(), String>;
 
+    /// Mueve la carpeta del backup en la nube para que coincida con el
+    /// nombre/fecha actuales del proyecto (tras un rename). Idempotente: si no
+    /// hace falta mover, el server responde `moved: false`.
+    fn relocate_dir(
+        &self,
+        base_url: &str,
+        access: &str,
+        project_id: &str,
+    ) -> Result<(), String>;
+
     /// Enlace **expirable** a la carpeta del proyecto en un proveedor, o `None`
     /// si el proveedor no soporta expiración (el caller abre su web).
     fn folder_link(

@@ -143,6 +143,54 @@ impl GlobalDatabase {
         Ok(())
     }
 
+    // ------------------------------------------------------------------------
+    // BACKUP QUEUE (cola offline-first)
+    // ------------------------------------------------------------------------
+
+    /// Encola/actualiza la intención de respaldo de un proyecto.
+    pub fn set_pending_backup(
+        &self,
+        project_id: &str,
+        targets: Option<&str>,
+        quality: Option<&str>,
+    ) -> DbResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "INSERT INTO backup_queue (project_id, targets, quality, created_at) \
+             VALUES (?1, ?2, ?3, datetime('now')) \
+             ON CONFLICT(project_id) DO UPDATE SET targets = ?2, quality = ?3",
+            params![project_id, targets, quality],
+        )?;
+        Ok(())
+    }
+
+    /// Quita un proyecto de la cola (respaldo completado).
+    pub fn clear_pending_backup(&self, project_id: &str) -> DbResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "DELETE FROM backup_queue WHERE project_id = ?1",
+            params![project_id],
+        )?;
+        Ok(())
+    }
+
+    /// Lista los respaldos pendientes (para reanudar al arrancar).
+    pub fn get_pending_backups(&self) -> DbResult<Vec<PendingBackup>> {
+        let conn = self.conn();
+        let mut stmt =
+            conn.prepare("SELECT project_id, targets, quality FROM backup_queue ORDER BY created_at")?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(PendingBackup {
+                    project_id: row.get(0)?,
+                    targets: row.get(1)?,
+                    quality: row.get(2)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     pub fn get_app_settings(&self) -> DbResult<AppSettings> {
         let embed_metadata = self
             .get_setting("embed_metadata_on_import")?
