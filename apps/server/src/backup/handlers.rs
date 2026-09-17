@@ -113,17 +113,24 @@ pub async fn backup_photo(
     // ---- 5. Subida (rclone es bloqueante → spawn_blocking) ----
     let rclone_bin = state.cfg.rclone_bin.clone();
     let dest_cl = dest.clone();
-    let results: Vec<BackupItemResult> = tokio::task::spawn_blocking(move || {
+    let (results, sha256, size): (Vec<BackupItemResult>, String, i64) =
+        tokio::task::spawn_blocking(move || {
+        use sha2::{Digest, Sha256};
         let rc = Rclone::new(rclone_bin);
         // Recomprime en el server si se pidió una calidad (ahorra espacio en la nube).
         let bytes = match quality_preset {
             Some((max_edge, q)) => convert_jpeg(&file_bytes, max_edge, q).unwrap_or(file_bytes),
             None => file_bytes,
         };
+        // Integridad: hash y tamaño de lo que realmente se sube. `rclone copyto`
+        // verifica el hash origen↔destino al copiar, así que un backup 'uploaded'
+        // con estos valores confirma que el remoto coincide con estos bytes.
+        let size = bytes.len() as i64;
+        let sha256 = format!("{:x}", Sha256::digest(&bytes));
         let tmp = std::env::temp_dir().join(format!("lumik-up-{}", Uuid::new_v4()));
         if let Err(e) = std::fs::write(&tmp, &bytes) {
             // Si no se puede escribir el temporal, todos fallan.
-            return prepared
+            let results = prepared
                 .into_iter()
                 .map(|(provider, _, _)| BackupItemResult {
                     provider,
@@ -132,6 +139,7 @@ pub async fn backup_photo(
                     error: Some(format!("temp: {e}")),
                 })
                 .collect();
+            return (results, sha256, size);
         }
         let mut results = Vec::new();
         for (provider, name, cfg) in prepared {
@@ -154,7 +162,7 @@ pub async fn backup_photo(
             }
         }
         let _ = std::fs::remove_file(&tmp);
-        results
+        (results, sha256, size)
     })
     .await
     .map_err(|e| ApiError::Internal(anyhow::anyhow!("tarea de subida: {e}")))?;
@@ -170,17 +178,26 @@ pub async fn backup_photo(
         .collect::<Vec<_>>()
         .join(",");
     let backup_date: Option<DateTime<Utc>> = if ok.is_empty() { None } else { Some(Utc::now()) };
+    // Registro de integridad solo si al menos un remoto verificó la subida.
+    let (int_sha, int_size): (Option<&str>, Option<i64>) = if ok.is_empty() {
+        (None, None)
+    } else {
+        (Some(sha256.as_str()), Some(size))
+    };
 
     sqlx::query(
         "UPDATE photo SET backup_status = $1, backup_url = COALESCE($2, backup_url), \
          provider = NULLIF($3, ''), backup_date = COALESCE($4, backup_date), \
+         backup_sha256 = COALESCE($5, backup_sha256), backup_size = COALESCE($6, backup_size), \
          backup_retries = CASE WHEN $1 = 'failed' THEN backup_retries + 1 ELSE backup_retries END, \
-         updated_at = now() WHERE id = $5",
+         updated_at = now() WHERE id = $7",
     )
     .bind(status)
     .bind(&backup_url)
     .bind(&providers)
     .bind(backup_date)
+    .bind(int_sha)
+    .bind(int_size)
     .bind(photo_id)
     .execute(&state.pool)
     .await?;
@@ -194,6 +211,8 @@ pub async fn backup_photo(
         "results": results,
         "backup_status": status,
         "backup_date": backup_date,
+        "sha256": int_sha,
+        "size": int_size,
     })))
 }
 
