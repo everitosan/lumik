@@ -19,6 +19,8 @@ pub struct SyncProject {
     pub name: String,
     pub session_date: Option<NaiveDate>,
     pub slug: String,
+    /// Estado del proyecto; si `None` no se toca el existente.
+    pub workflow_status: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -52,6 +54,10 @@ pub struct ProjectSummary {
     pub photo_count: i64,
     /// Cuántas ya están respaldadas.
     pub backed_up: i64,
+    /// Estado del proyecto fijado por la desktop (o `None`).
+    pub workflow_status: Option<String>,
+    /// CSV de proveedores donde hay fotos respaldadas (para los iconos).
+    pub providers: Option<String>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]

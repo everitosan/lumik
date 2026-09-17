@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use axum::{
     extract::DefaultBodyLimit,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Router,
 };
 use sqlx::PgPool;
@@ -86,12 +86,20 @@ pub fn build_router(state: AppState) -> Router {
         .route("/projects", get(catalog::handlers::list_projects))
         .route("/projects/:id", get(catalog::handlers::get_project))
         .route(
+            "/projects/:id/cover",
+            put(catalog::handlers::put_cover).get(catalog::handlers::get_cover),
+        )
+        .route(
             "/projects/:project_id/photos",
             get(catalog::handlers::list_photos),
         )
         .route(
             "/projects/:project_id/backup/prepare",
             post(backup::handlers::prepare_backup),
+        )
+        .route(
+            "/projects/:project_id/backup/link",
+            post(backup::handlers::folder_link),
         )
         .route(
             "/projects/:project_id/photos/:photo_id/backup",

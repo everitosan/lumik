@@ -315,6 +315,72 @@ pub async fn prepare_backup(
     Ok(Json(json!({ "prepared": created })))
 }
 
+/// Proveedores cuyos enlaces compartibles soportan expiración (rclone `--expire`).
+/// Solo estos generan deep-link; el resto abre la web del proveedor.
+const EXPIRING_PROVIDERS: &[&str] = &["dropbox", "onedrive"];
+/// Vigencia del enlace generado.
+const LINK_EXPIRE: &str = "168h"; // 7 días
+
+#[derive(Deserialize)]
+pub struct LinkReq {
+    pub provider: String,
+}
+
+/// `POST /v1/projects/{id}/backup/link` — genera un enlace **expirable** a la
+/// carpeta `_exported/` del proyecto en el proveedor indicado. Si el proveedor no
+/// soporta expiración, responde `{ "url": null }` (el cliente abre su web).
+pub async fn folder_link(
+    State(state): State<AppState>,
+    auth: AuthPhotographer,
+    Path(project_id): Path<Uuid>,
+    Json(req): Json<LinkReq>,
+) -> ApiResult<Json<Value>> {
+    // Solo proveedores con expiración; nunca creamos enlaces permanentes.
+    if !EXPIRING_PROVIDERS.contains(&req.provider.as_str()) {
+        return Ok(Json(json!({ "url": null, "reason": "no_expiring_support" })));
+    }
+
+    let owns: Option<(Uuid,)> =
+        sqlx::query_as("SELECT id FROM project WHERE id = $1 AND photographer_id = $2")
+            .bind(project_id)
+            .bind(auth.0)
+            .fetch_optional(&state.pool)
+            .await?;
+    if owns.is_none() {
+        return Err(ApiError::NotFound);
+    }
+
+    let dir = project_dest_dir(&state, project_id).await?;
+    let remote = resolve_remotes(&state, auth.0, Some(req.provider.clone()))
+        .await?
+        .into_iter()
+        .next();
+    let Some((_provider, name, cfg)) = remote else {
+        return Err(ApiError::BadRequest("proveedor no conectado".into()));
+    };
+
+    let rclone_bin = state.cfg.rclone_bin.clone();
+    let url = tokio::task::spawn_blocking(move || {
+        let rc = Rclone::new(rclone_bin);
+        rc.config_for(&name, &cfg)
+            .and_then(|conf| rc.link(&conf, &name, &dir, LINK_EXPIRE))
+    })
+    .await
+    .map_err(|e| ApiError::Internal(anyhow::anyhow!("tarea link: {e}")))?;
+
+    match url {
+        Ok(url) => {
+            tracing::info!(photographer_id = %auth.0, %project_id, provider = %req.provider, "enlace de carpeta generado");
+            Ok(Json(json!({ "url": url })))
+        }
+        Err(e) => {
+            tracing::warn!(provider = %req.provider, error = %e, "rclone link falló");
+            // Fallback silencioso: el cliente abre la web del proveedor.
+            Ok(Json(json!({ "url": null, "reason": "link_failed" })))
+        }
+    }
+}
+
 /// Mapea el nivel de calidad a `(lado mayor máx en px, calidad JPEG)`.
 /// `None` (o "original") → sin recomprimir.
 fn quality_preset(q: &str) -> Option<(u32, u8)> {

@@ -1,7 +1,10 @@
 //! Handlers del catálogo (sync + listado), todos scoped por `photographer_id`.
 
 use axum::{
+    body::Bytes,
     extract::{Path, Query, State},
+    http::{header, StatusCode},
+    response::IntoResponse,
     Json,
 };
 use serde::Deserialize;
@@ -24,11 +27,13 @@ pub async fn sync_projects(
         // ON CONFLICT: solo actualiza si el proyecto ya pertenece a este fotógrafo
         // (un id de proyecto pertenece a un único tenant).
         sqlx::query(
-            "INSERT INTO project (id, photographer_id, name, session_date, slug) \
-             VALUES ($1, $2, $3, $4, $5) \
+            "INSERT INTO project (id, photographer_id, name, session_date, slug, workflow_status) \
+             VALUES ($1, $2, $3, $4, $5, $6) \
              ON CONFLICT (id) DO UPDATE SET \
                 name = EXCLUDED.name, session_date = EXCLUDED.session_date, \
-                slug = EXCLUDED.slug, updated_at = now() \
+                slug = EXCLUDED.slug, \
+                workflow_status = COALESCE(EXCLUDED.workflow_status, project.workflow_status), \
+                updated_at = now() \
              WHERE project.photographer_id = EXCLUDED.photographer_id",
         )
         .bind(p.id)
@@ -36,6 +41,7 @@ pub async fn sync_projects(
         .bind(&p.name)
         .bind(p.session_date)
         .bind(&p.slug)
+        .bind(&p.workflow_status)
         .execute(&mut *tx)
         .await?;
     }
@@ -98,7 +104,12 @@ pub async fn list_projects(
     let rows: Vec<ProjectSummary> = sqlx::query_as(
         "SELECT p.id, p.name, p.session_date, p.slug, p.created_at, \
             (SELECT count(*) FROM photo ph WHERE ph.project_id = p.id) AS photo_count, \
-            (SELECT count(*) FROM photo ph WHERE ph.project_id = p.id AND ph.backup_status = 'uploaded') AS backed_up \
+            (SELECT count(*) FROM photo ph WHERE ph.project_id = p.id AND ph.backup_status = 'uploaded') AS backed_up, \
+            p.workflow_status, \
+            (SELECT string_agg(DISTINCT unnest_provider, ',') FROM ( \
+                SELECT unnest(string_to_array(ph.provider, ',')) AS unnest_provider \
+                FROM photo ph WHERE ph.project_id = p.id AND ph.provider IS NOT NULL \
+             ) provs) AS providers \
          FROM project p \
          WHERE p.photographer_id = $1 \
          ORDER BY p.session_date DESC NULLS LAST, p.created_at DESC",
@@ -124,6 +135,43 @@ pub async fn get_project(
     .fetch_optional(&state.pool)
     .await?;
     row.map(Json).ok_or(ApiError::NotFound)
+}
+
+/// `PUT /v1/projects/{id}/cover` — guarda el JPEG de portada (body = bytes).
+pub async fn put_cover(
+    State(state): State<AppState>,
+    auth: AuthPhotographer,
+    Path(id): Path<Uuid>,
+    body: Bytes,
+) -> ApiResult<StatusCode> {
+    let res = sqlx::query("UPDATE project SET cover = $1 WHERE id = $2 AND photographer_id = $3")
+        .bind(body.as_ref())
+        .bind(id)
+        .bind(auth.0)
+        .execute(&state.pool)
+        .await?;
+    if res.rows_affected() == 0 {
+        return Err(ApiError::NotFound);
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `GET /v1/projects/{id}/cover` — devuelve el JPEG de portada, o `404` si no hay.
+pub async fn get_cover(
+    State(state): State<AppState>,
+    auth: AuthPhotographer,
+    Path(id): Path<Uuid>,
+) -> ApiResult<impl IntoResponse> {
+    let row: Option<(Option<Vec<u8>>,)> =
+        sqlx::query_as("SELECT cover FROM project WHERE id = $1 AND photographer_id = $2")
+            .bind(id)
+            .bind(auth.0)
+            .fetch_optional(&state.pool)
+            .await?;
+    match row.and_then(|(cover,)| cover) {
+        Some(bytes) => Ok(([(header::CONTENT_TYPE, "image/jpeg")], bytes)),
+        None => Err(ApiError::NotFound),
+    }
 }
 
 #[derive(Debug, Deserialize)]

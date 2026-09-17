@@ -102,6 +102,47 @@ impl Rclone {
         Ok(())
     }
 
+    /// Genera un enlace compartible a `remote_name:path` (`rclone link`), con
+    /// expiración obligatoria (`--expire`). Devuelve la URL. Solo se usa en
+    /// backends que soportan expiración (Dropbox/OneDrive); nunca crea enlaces
+    /// permanentes.
+    pub fn link(
+        &self,
+        config_contents: &str,
+        remote_name: &str,
+        path: &str,
+        expire: &str,
+    ) -> Result<String, String> {
+        let conf_path =
+            std::env::temp_dir().join(format!("lumik-rclone-{}.conf", uuid::Uuid::new_v4()));
+        std::fs::write(&conf_path, config_contents)
+            .map_err(|e| format!("no se pudo escribir config temporal: {e}"))?;
+
+        let target = format!("{remote_name}:{path}");
+        let result = Command::new(&self.bin)
+            .arg("link")
+            .arg("--expire")
+            .arg(expire)
+            .arg("--config")
+            .arg(&conf_path)
+            .arg(&target)
+            .output();
+        let _ = std::fs::remove_file(&conf_path);
+
+        let out = result.map_err(|e| format!("rclone link: {e}"))?;
+        if !out.status.success() {
+            return Err(format!(
+                "rclone link falló: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        let url = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if url.is_empty() {
+            return Err("rclone link no devolvió URL".into());
+        }
+        Ok(url)
+    }
+
     /// Sube `local` al remote `remote_name:dest` usando la config dada.
     /// `copyto` copia archivo→archivo (respeta el nombre destino).
     pub fn copy_to(
