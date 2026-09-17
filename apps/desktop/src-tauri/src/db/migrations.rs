@@ -18,10 +18,19 @@ pub(super) fn run_project_migrations(conn: &Connection) -> DbResult<()> {
 
     migrate_cover_column(conn)?;
     migrate_rotation_column(conn);
+    migrate_project_backup_columns(conn);
     ensure_project_settings_row(conn)?;
     migrate_project_settings_columns(conn)?;
 
     Ok(())
+}
+
+/// Agrega el estado explícito del proyecto y los proveedores de backup (idempotente).
+/// `workflow_status` guarda el estado fijado tras respaldar (override del derivado);
+/// `backup_providers` es la lista csv de proveedores usados.
+fn migrate_project_backup_columns(conn: &Connection) {
+    let _ = conn.execute("ALTER TABLE project ADD COLUMN workflow_status TEXT", []);
+    let _ = conn.execute("ALTER TABLE project ADD COLUMN backup_providers TEXT", []);
 }
 
 /// `cover_photo_id` → `cover_photo_path` (renombre de columna en BDs antiguas).

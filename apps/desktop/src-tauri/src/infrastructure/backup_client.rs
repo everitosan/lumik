@@ -50,6 +50,35 @@ impl BackupClient for HttpBackup {
         Ok(())
     }
 
+    fn folder_link(
+        &self,
+        base_url: &str,
+        access: &str,
+        project_id: &str,
+        provider: &str,
+    ) -> Result<Option<String>, String> {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(60))
+            .build()
+            .map_err(|e| format!("cliente HTTP: {e}"))?;
+        let url = format!(
+            "{}/v1/projects/{}/backup/link",
+            base_url.trim_end_matches('/'),
+            project_id
+        );
+        let resp = client
+            .post(url)
+            .bearer_auth(access)
+            .json(&json!({ "provider": provider }))
+            .send()
+            .map_err(|e| friendly(&e))?;
+        if !resp.status().is_success() {
+            return Err(format!("HTTP {}", resp.status().as_u16()));
+        }
+        let v: Value = resp.json().map_err(|e| format!("respuesta inválida: {e}"))?;
+        Ok(v.get("url").and_then(|u| u.as_str()).map(String::from))
+    }
+
     fn upload_photo(
         &self,
         base_url: &str,

@@ -126,6 +126,24 @@ impl CatalogClient for HttpCatalog {
             .collect())
     }
 
+    fn upload_cover(
+        &self,
+        base_url: &str,
+        access: &str,
+        project_id: &str,
+        jpeg: &[u8],
+    ) -> Result<(), String> {
+        let url = format!("{}/v1/projects/{}/cover", base(base_url), project_id);
+        let resp = HttpCatalog::client()?
+            .put(url)
+            .bearer_auth(access)
+            .header("content-type", "image/jpeg")
+            .body(jpeg.to_vec())
+            .send()
+            .map_err(|e| friendly(&e))?;
+        expect_success(resp)
+    }
+
     fn publish_projects(
         &self,
         base_url: &str,
@@ -140,6 +158,7 @@ impl CatalogClient for HttpCatalog {
                     "name": p.name,
                     "session_date": p.session_date,
                     "slug": p.slug,
+                    "workflow_status": p.workflow_status,
                 })
             })
             .collect();
@@ -215,6 +234,7 @@ mod tests {
                 name: "Boda".into(),
                 session_date: Some("2024-06-15".into()),
                 slug: "Boda".into(),
+                workflow_status: None,
             }],
         )
         .expect("publish_projects");

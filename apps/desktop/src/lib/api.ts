@@ -138,6 +138,38 @@ export async function setProjectCoverPhoto(
   return invoke('set_project_cover_photo', { projectId, photoId });
 }
 
+/** Sube la portada del proyecto al catálogo (para el dashboard web). Fire-and-forget. */
+export async function syncProjectCover(projectId: string): Promise<void> {
+  return invoke('sync_project_cover', { projectId });
+}
+
+/**
+ * Tras un respaldo exitoso, fija el estado del proyecto (respaldado/editando) según
+ * _exported vs _culled y guarda los proveedores usados. Devuelve el estado nuevo.
+ */
+export async function finalizeBackup(
+  projectId: string,
+  providers?: string
+): Promise<string> {
+  return invoke('finalize_backup', { projectId, providers: providers ?? null });
+}
+
+/** Abre una URL externa (web del proveedor) en el navegador del SO. */
+export async function openExternalUrl(url: string): Promise<void> {
+  return invoke('open_external_url', { url });
+}
+
+/**
+ * Enlace expirable a la carpeta del proyecto en un proveedor, o `null` si el
+ * proveedor no soporta expiración (el caller abre la web del proveedor).
+ */
+export async function getBackupFolderLink(
+  projectId: string,
+  provider: string
+): Promise<string | null> {
+  return invoke('get_backup_folder_link', { projectId, provider });
+}
+
 export async function archiveProject(id: string): Promise<void> {
   return invoke('archive_project', { id });
 }

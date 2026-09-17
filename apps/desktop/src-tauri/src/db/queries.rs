@@ -369,13 +369,15 @@ impl ProjectDatabase {
             .query_row(
                 "SELECT p.id, p.name, p.created_at, p.session_date,
                         COUNT(f.id) AS photo_count,
-                        CASE
-                            WHEN COUNT(f.id) = 0 THEN 'imported'
-                            WHEN COUNT(CASE WHEN f.workflow_status = 'imported' THEN 1 END) > 0 THEN 'imported'
-                            WHEN COUNT(CASE WHEN f.workflow_status = 'edited' THEN 1 END) > 0 THEN 'edited'
-                            ELSE 'delivered'
-                        END AS workflow_status,
-                        p.cover_photo_path
+                        COALESCE(p.workflow_status,
+                            CASE
+                                WHEN COUNT(f.id) = 0 THEN 'imported'
+                                WHEN COUNT(CASE WHEN f.workflow_status = 'imported' THEN 1 END) > 0 THEN 'imported'
+                                WHEN COUNT(CASE WHEN f.workflow_status = 'edited' THEN 1 END) > 0 THEN 'edited'
+                                ELSE 'delivered'
+                            END) AS workflow_status,
+                        p.cover_photo_path,
+                        p.backup_providers
                  FROM project p
                  LEFT JOIN photo f ON f.project_id = p.id AND f.deleted = 0
                  WHERE p.deleted = 0 AND p.archived = 0
@@ -391,6 +393,7 @@ impl ProjectDatabase {
                         photo_count: row.get(4)?,
                         workflow_status: row.get(5)?,
                         cover_photo_path: row.get(6)?,
+                        backup_providers: row.get(7)?,
                         device_uuid: String::new(), // filled below
                     })
                 },
@@ -511,6 +514,16 @@ impl ProjectDatabase {
         conn.execute(
             "UPDATE photo SET culled = ?1, dng_path = ?2 WHERE id = ?3",
             params![culled as i32, dng_path, id],
+        )?;
+        Ok(())
+    }
+
+    /// Fija el estado del proyecto y los proveedores usados tras respaldar (Fase 8).
+    pub fn set_project_backup_state(&self, workflow_status: &str, providers: &str) -> DbResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE project SET workflow_status = ?1, backup_providers = ?2",
+            params![workflow_status, providers],
         )?;
         Ok(())
     }

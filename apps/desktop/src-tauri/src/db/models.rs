@@ -140,6 +140,8 @@ pub struct ProjectDashboard {
     pub photo_count: i32,
     pub workflow_status: String,
     pub cover_photo_path: Option<String>,
+    /// CSV de proveedores donde se respaldó (para los iconos de la card).
+    pub backup_providers: Option<String>,
     /// UUID of the device where this project's database lives
     pub device_uuid: String,
 }

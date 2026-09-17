@@ -42,6 +42,8 @@ pub struct CatalogProject {
     /// Fecha de sesión en formato `YYYY-MM-DD`, o `None`.
     pub session_date: Option<String>,
     pub slug: String,
+    /// Estado del proyecto (`imported`/`edited`/`delivered`), o `None` para no tocarlo.
+    pub workflow_status: Option<String>,
 }
 
 /// Foto tal como se publica al catálogo del server (Fase 5).
@@ -74,6 +76,16 @@ pub trait BackupClient: Send + Sync {
         project_id: &str,
         targets: Option<&str>,
     ) -> Result<(), String>;
+
+    /// Enlace **expirable** a la carpeta del proyecto en un proveedor, o `None`
+    /// si el proveedor no soporta expiración (el caller abre su web).
+    fn folder_link(
+        &self,
+        base_url: &str,
+        access: &str,
+        project_id: &str,
+        provider: &str,
+    ) -> Result<Option<String>, String>;
 
     #[allow(clippy::too_many_arguments)]
     fn upload_photo(
@@ -116,6 +128,14 @@ pub trait CatalogClient: Send + Sync {
     ) -> Result<Vec<CatalogPhotoStatus>, String>;
     /// Proveedores de nube conectados del fotógrafo.
     fn list_providers(&self, base_url: &str, access: &str) -> Result<Vec<ProviderInfo>, String>;
+    /// Sube el JPEG de portada del proyecto al catálogo (para el dashboard web).
+    fn upload_cover(
+        &self,
+        base_url: &str,
+        access: &str,
+        project_id: &str,
+        jpeg: &[u8],
+    ) -> Result<(), String>;
     /// Publica (upsert) proyectos del fotógrafo.
     fn publish_projects(
         &self,

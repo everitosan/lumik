@@ -98,6 +98,9 @@ mod tests {
         ) -> Result<Vec<crate::application::ports::ProviderInfo>, String> {
             Ok(vec![])
         }
+        fn upload_cover(&self, _: &str, _: &str, _: &str, _: &[u8]) -> Result<(), String> {
+            Ok(())
+        }
         fn publish_projects(&self, _: &str, _: &str, _: &[CatalogProject]) -> Result<(), String> {
             self.published_projects.fetch_add(1, Ordering::SeqCst);
             Ok(())
@@ -120,6 +123,7 @@ mod tests {
             name: "Boda".into(),
             session_date: Some("2024-06-15".into()),
             slug: "Boda".into(),
+            workflow_status: None,
         }
     }
 

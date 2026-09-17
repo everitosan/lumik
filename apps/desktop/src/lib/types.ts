@@ -29,6 +29,7 @@ export interface ProjectDashboard {
   photo_count: number;
   workflow_status: WorkflowStatus;
   cover_photo_path: string | null;
+  backup_providers: string | null;
   device_uuid: string;
 }
 

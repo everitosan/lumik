@@ -93,14 +93,31 @@ export function BackupProvider({ children }: { children: ReactNode }) {
           };
         });
 
+      let errors = 0;
       const uploadOne = async (f: { id: string; filename: string }) => {
         setStatus(f.id, 'uploading');
         try {
           await api.backupExportedFile(projectId, f.id, f.filename, targets, quality);
           setStatus(f.id, 'done');
         } catch {
+          errors += 1;
           setStatus(f.id, 'error');
         }
+      };
+
+      const finish = async () => {
+        // Solo si todo subió bien: fija el estado del proyecto (respaldado/editando).
+        if (errors === 0 && files.length > 0) {
+          try {
+            await api.finalizeBackup(projectId, targets);
+          } catch {
+            /* best-effort */
+          }
+        }
+        setJobs((prev) => {
+          const job = prev[projectId];
+          return job ? { ...prev, [projectId]: { ...job, running: false } } : prev;
+        });
       };
 
       void (async () => {
@@ -109,23 +126,16 @@ export function BackupProvider({ children }: { children: ReactNode }) {
         try {
           await api.prepareBackup(projectId, targets);
         } catch {
-          // Si falla el prepare, seguimos igual: subir el primero en solitario
-          // también crea el directorio antes del pool (fallback).
+          // Si falla el prepare, subir el primero en solitario también crea el
+          // directorio antes del pool (fallback).
           if (files[0]) await uploadOne(files[0]);
           await runPool(files.slice(1), CONCURRENCY, uploadOne);
-          setJobs((prev) => {
-            const job = prev[projectId];
-            return job ? { ...prev, [projectId]: { ...job, running: false } } : prev;
-          });
+          await finish();
           return;
         }
         // 2) Directorio ya creado → subir todo en paralelo.
         await runPool(files, CONCURRENCY, uploadOne);
-        setJobs((prev) => {
-          const job = prev[projectId];
-          if (!job) return prev;
-          return { ...prev, [projectId]: { ...job, running: false } };
-        });
+        await finish();
       })();
     },
     []

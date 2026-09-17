@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchBar, ProjectCard, Button, Icon } from '@lumik/ui';
 import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, matchesKey, usePlatform } from '../../../lib/hooks';
-import { createProject, renameProject, deleteProject, openProjectFolder } from '../../../lib/api';
+import { createProject, renameProject, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink } from '../../../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../../../components/CreateProjectModal';
 import { RenameProjectModal } from './RenameProjectModal';
 import { DeleteProjectModal } from './DeleteProjectModal';
@@ -348,6 +348,14 @@ export function Projects({ onProjectClick }: ProjectsProps) {
                   status={project.workflow_status}
                   driveName={devices?.find((d) => d.uuid === project.device_uuid)?.name ?? project.device_uuid}
                   thumbnailUrl={coverThumbnails[project.id]}
+                  providers={(project.backup_providers ?? '').split(',').map((s) => s.trim()).filter(Boolean)}
+                  onProviderOpen={(url, provider) => {
+                    // Enlace expirable a la carpeta si el proveedor lo soporta;
+                    // si no, abre la web del proveedor.
+                    void getBackupFolderLink(project.id, provider)
+                      .then((link) => openExternalUrl(link ?? url))
+                      .catch(() => openExternalUrl(url));
+                  }}
                   onClick={() => handleProjectClick(project)}
                   onOpenFolder={canOpenFolder ? () => handleOpenFolder(project) : undefined}
                   onEdit={() => setEditingProject(project)}

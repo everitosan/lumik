@@ -274,6 +274,7 @@ fn build_catalog_data(
             .filter(|s| s.len() >= 10)
             .map(|s| s[..10].to_string()),
         slug: ProjectFolder::slug(&project.name),
+        workflow_status: None,
     };
     let cat_photos: Vec<CatalogPhoto> = photos
         .iter()
@@ -382,6 +383,11 @@ pub async fn ensure_project_synced(
             None => SyncOutcome::SkippedNoSession,
         },
     };
+
+    // Al registrar el proyecto por primera vez, sube también su portada.
+    if matches!(outcome, SyncOutcome::Published) {
+        let _ = upload_project_cover(&state, &project_id);
+    }
 
     info!(
         "ensure_project_synced({}) → {:?} ({} fotos)",
@@ -705,6 +711,154 @@ pub async fn backup_exported_file(
             Err(AppError::from(e))
         }
     }
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
+}
+
+/// Sube al catálogo el JPEG de portada del proyecto (best-effort). Lee el thumb
+/// de la portada del disco y lo envía; sin sesión/archivo, no hace nada.
+fn upload_project_cover(state: &AppState, project_id: &str) -> AppResult<()> {
+    let Some((base, access, _)) = stored_session(state)? else {
+        return Ok(());
+    };
+    let project_db = state.project_db(project_id)?;
+    let Some(project) = project_db.get_project()? else {
+        return Ok(());
+    };
+    let Some(rel) = project.cover_photo_path else {
+        return Ok(());
+    };
+    let path = project_db.project_dir.join(&rel);
+    let Ok(bytes) = std::fs::read(&path) else {
+        return Ok(());
+    };
+    if let Err(e) = state.catalog.upload_cover(&base, &access, project_id, &bytes) {
+        warn!("upload_project_cover({}): {}", project_id, e);
+    }
+    Ok(())
+}
+
+/// Sube la portada del proyecto al catálogo. El frontend lo llama cuando cambia
+/// la portada, para reflejarla en el dashboard web.
+#[tauri::command]
+pub async fn sync_project_cover(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> AppResult<()> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || upload_project_cover(&state, &project_id))
+        .await
+        .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
+}
+
+/// Extensiones consideradas "foto" en _culled (RAW + imagen), para contar.
+const CULLED_EXTS: &[&str] = &[
+    "cr2", "cr3", "nef", "arw", "raf", "orf", "rw2", "dng", "jpg", "jpeg", "png", "tif", "tiff",
+    "webp",
+];
+
+/// Cuenta archivos no-ocultos con extensión en `exts` dentro de `dir`.
+fn count_photos_in(dir: &std::path::Path, exts: &[&str]) -> usize {
+    let mut n = 0;
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for entry in rd.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            if name.starts_with('.') {
+                continue;
+            }
+            let ok = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| exts.contains(&e.to_lowercase().as_str()))
+                .unwrap_or(false);
+            if ok {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
+/// Tras un respaldo exitoso, fija el estado del proyecto según la regla:
+/// `_exported >= _culled` → "delivered" (respaldado); si no → "edited" (editando).
+/// Guarda también los proveedores usados y sincroniza el estado al catálogo.
+#[tauri::command]
+pub async fn finalize_backup(
+    state: State<'_, AppState>,
+    project_id: String,
+    providers: Option<String>,
+) -> AppResult<String> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<String> {
+        let project_db = state.project_db(&project_id)?;
+        let exported = count_photos_in(&project_db.project_dir.join("_exported"), EXPORTED_EXTS);
+        let culled = count_photos_in(&project_db.project_dir.join("_culled"), CULLED_EXTS);
+        let status = if exported >= culled { "delivered" } else { "edited" };
+        let providers_csv = providers.unwrap_or_default();
+
+        project_db
+            .set_project_backup_state(status, &providers_csv)
+            .map_err(AppError::from)?;
+
+        // Refleja el estado en el catálogo (best-effort).
+        if let Some((base, access, _)) = stored_session(&state)? {
+            if let Ok((mut cat_project, _)) = build_catalog_data(&state, &project_id) {
+                cat_project.workflow_status = Some(status.to_string());
+                let _ = state
+                    .catalog
+                    .publish_projects(&base, &access, std::slice::from_ref(&cat_project));
+            }
+        }
+
+        info!(
+            "finalize_backup({}): exported={} culled={} → {}",
+            project_id, exported, culled, status
+        );
+        Ok(status.to_string())
+    })
+    .await
+    .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
+}
+
+/// Abre una URL externa (la web del proveedor) en el navegador del SO.
+#[tauri::command]
+pub fn open_external_url(app: tauri::AppHandle, url: String) -> AppResult<()> {
+    #[cfg(not(target_os = "android"))]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        app.opener()
+            .open_url(url, None::<&str>)
+            .map_err(|e| AppError::from(e.to_string()))?;
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (&app, &url);
+    }
+    Ok(())
+}
+
+/// Devuelve un enlace expirable a la carpeta del proyecto en un proveedor, o
+/// `None` si no soporta expiración (el frontend abre la web del proveedor).
+#[tauri::command]
+pub async fn get_backup_folder_link(
+    state: State<'_, AppState>,
+    project_id: String,
+    provider: String,
+) -> AppResult<Option<String>> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<Option<String>> {
+        let Some((base, access)) = active_session(&state)? else {
+            return Ok(None);
+        };
+        Ok(state
+            .backup
+            .folder_link(&base, &access, &project_id, &provider)
+            .unwrap_or(None))
     })
     .await
     .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?

@@ -207,7 +207,11 @@ export function PhotoDetail({
   const handleCoverToggle = useCallback(() => {
     const newCoverId = isCover ? null : photo.id;
     api.setProjectCoverPhoto(photo.project_id, newCoverId)
-      .then(() => onCoverPhotoChange?.(newCoverId))
+      .then(() => {
+        onCoverPhotoChange?.(newCoverId);
+        // Refleja la nueva portada en el catálogo/dashboard web (fire-and-forget).
+        api.syncProjectCover(photo.project_id).catch(() => undefined);
+      })
       .catch(() => setSaveState('error'));
   }, [isCover, photo.id, photo.project_id, onCoverPhotoChange]);
 
