@@ -40,6 +40,20 @@ pub struct ProjectDto {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
+/// Proyecto con conteos para el listado (alimenta la card del dashboard).
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct ProjectSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub session_date: Option<NaiveDate>,
+    pub slug: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// Total de fotos en el catálogo del proyecto.
+    pub photo_count: i64,
+    /// Cuántas ya están respaldadas.
+    pub backed_up: i64,
+}
+
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct PhotoDto {
     pub id: Uuid,

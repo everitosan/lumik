@@ -34,9 +34,17 @@
     "logout": "Cerrar sesión",
     "empty": "Aquí verás tus proyectos y su estado de respaldo (próximamente)."
   },
+  "nav": {
+    "projects": "Proyectos",
+    "config": "Configuración",
+    "logout": "Cerrar sesión"
+  },
   "projects": {
     "title": "Proyectos",
-    "empty": "Aún no hay proyectos. Abre un proyecto en la app de escritorio (con sesión iniciada) para que aparezca aquí."
+    "empty": "Aún no hay proyectos. Abre un proyecto en la app de escritorio (con sesión iniciada) para que aparezca aquí.",
+    "card": {
+      "backedUp": "{{up}}/{{total}} respaldadas"
+    }
   },
   "upload": {
     "title": "Respaldar en {{project}}",

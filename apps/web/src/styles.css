@@ -258,3 +258,69 @@ body {
   border-radius: 50%;
   animation: lumik-spin 0.7s linear infinite;
 }
+
+/* App shell autenticado (Fase 8 · dashboard) */
+.app-shell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--lumik-outline-variant, #424654);
+  background-color: var(--lumik-surface-container, #1c1c1f);
+}
+.app-header__left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.app-header__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.app-nav {
+  display: flex;
+  gap: 8px;
+}
+.nav-link {
+  padding: 6px 12px;
+  border-radius: var(--lumik-radius-sm, 4px);
+  font-size: 14px;
+  color: var(--lumik-on-surface-variant, #c2c6d7);
+  text-decoration: none;
+}
+.nav-link:hover {
+  color: var(--lumik-on-surface, #e5e2e1);
+}
+.nav-link--active {
+  color: var(--lumik-on-surface, #e5e2e1);
+  background-color: var(--lumik-surface-container-high, #2a2a2e);
+}
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+}
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.page h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}

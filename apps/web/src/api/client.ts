@@ -137,6 +137,8 @@ export interface CatalogProject {
   session_date: string | null;
   slug: string;
   created_at: string;
+  photo_count?: number;
+  backed_up?: number;
 }
 
 export interface CatalogPhoto {

@@ -49,5 +49,8 @@ export type { FileListProps, FileListItem } from './components/FileList';
 export { PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT } from './components/PhotoCard';
 export type { PhotoCardProps, ColorLabel } from './components/PhotoCard';
 
+export { ProviderIcon, providerMeta } from './components/ProviderIcon';
+export type { ProviderIconProps, ProviderMeta } from './components/ProviderIcon';
+
 // i18n for UI components
 export { default as i18n } from './i18n/config';

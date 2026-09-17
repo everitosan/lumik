@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../Icon';
+import { ProviderIcon } from '../ProviderIcon';
 
 export type WorkflowStatus = 'imported' | 'edited' | 'delivered';
 
@@ -12,6 +13,10 @@ export interface ProjectCardProps {
   driveName: string;
   status: WorkflowStatus;
   thumbnailUrl?: string;
+  /** Proveedores de nube donde se respaldó (muestra sus iconos de marca). */
+  providers?: string[];
+  /** Si se pasa, los iconos de proveedor son clickeables (abrir su web). */
+  onProviderOpen?: (url: string, provider: string) => void;
   onClick?: () => void;
   /** Each handler, when provided, adds its item to the 3-dot menu. Omit one to hide
    *  that option (e.g. leave out onOpenFolder on Android). If none are provided the
@@ -214,6 +219,8 @@ export function ProjectCard({
   driveName,
   status,
   thumbnailUrl,
+  providers,
+  onProviderOpen,
   onClick,
   onOpenFolder,
   onEdit,
@@ -367,8 +374,15 @@ export function ProjectCard({
           </span>
         </div>
 
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
           <span style={statusBadgeStyles[status]}>{statusLabels[status]}</span>
+          {providers && providers.length > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              {providers.map((p) => (
+                <ProviderIcon key={p} provider={p} size={16} onOpen={onProviderOpen} />
+              ))}
+            </span>
+          )}
         </div>
       </div>
     </div>

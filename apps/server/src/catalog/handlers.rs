@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthPhotographer;
-use crate::catalog::{PhotoDto, ProjectDto, SyncPhoto, SyncProject};
+use crate::catalog::{PhotoDto, ProjectDto, ProjectSummary, SyncPhoto, SyncProject};
 use crate::error::{ApiError, ApiResult};
 use crate::AppState;
 
@@ -94,11 +94,14 @@ pub async fn sync_photos(
 pub async fn list_projects(
     State(state): State<AppState>,
     auth: AuthPhotographer,
-) -> ApiResult<Json<Vec<ProjectDto>>> {
-    let rows: Vec<ProjectDto> = sqlx::query_as(
-        "SELECT id, name, session_date, slug, created_at FROM project \
-         WHERE photographer_id = $1 \
-         ORDER BY session_date DESC NULLS LAST, created_at DESC",
+) -> ApiResult<Json<Vec<ProjectSummary>>> {
+    let rows: Vec<ProjectSummary> = sqlx::query_as(
+        "SELECT p.id, p.name, p.session_date, p.slug, p.created_at, \
+            (SELECT count(*) FROM photo ph WHERE ph.project_id = p.id) AS photo_count, \
+            (SELECT count(*) FROM photo ph WHERE ph.project_id = p.id AND ph.backup_status = 'uploaded') AS backed_up \
+         FROM project p \
+         WHERE p.photographer_id = $1 \
+         ORDER BY p.session_date DESC NULLS LAST, p.created_at DESC",
     )
     .bind(auth.0)
     .fetch_all(&state.pool)

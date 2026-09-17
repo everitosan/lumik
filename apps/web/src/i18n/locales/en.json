@@ -34,9 +34,17 @@
     "logout": "Sign out",
     "empty": "Your projects and their backup status will appear here (coming soon)."
   },
+  "nav": {
+    "projects": "Projects",
+    "config": "Settings",
+    "logout": "Sign out"
+  },
   "projects": {
     "title": "Projects",
-    "empty": "No projects yet. Open a project in the desktop app (while signed in) and it will show up here."
+    "empty": "No projects yet. Open a project in the desktop app (while signed in) and it will show up here.",
+    "card": {
+      "backedUp": "{{up}}/{{total}} backed up"
+    }
   },
   "upload": {
     "title": "Back up to {{project}}",

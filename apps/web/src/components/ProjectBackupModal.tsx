@@ -4,6 +4,7 @@ import { Modal, Button, Select, type SelectOption } from '@lumik/ui';
 import {
   providersApi,
   backupApi,
+  catalogApi,
   exportedId,
   type Remote,
   type CatalogProject,
@@ -35,6 +36,7 @@ export function ProjectBackupModal({ project, onClose }: Props) {
   const [state, setState] = useState<Record<string, RowState>>({});
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadedIds, setUploadedIds] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -45,7 +47,18 @@ export function ProjectBackupModal({ project, onClose }: Props) {
         setSelected(new Set(p.map((x) => x.provider)));
       })
       .catch(() => setProviders([]));
-  }, []);
+    // Fotos ya subidas: para saltar duplicados por nombre (mismo uuid5).
+    catalogApi
+      .listPhotos(project.id)
+      .then((photos) =>
+        setUploadedIds(
+          new Set(photos.filter((ph) => ph.backup_status === 'uploaded').map((ph) => ph.id))
+        )
+      )
+      .catch(() => setUploadedIds(new Set()));
+  }, [project.id]);
+
+  const isUploaded = (file: File) => uploadedIds.has(exportedId(project.id, file.name));
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -67,6 +80,12 @@ export function ProjectBackupModal({ project, onClose }: Props) {
     setRunning(true);
     setError(null);
     const targets = Array.from(selected).join(',');
+    // Solo las que no están ya en el remote (evita duplicados por nombre).
+    const toUpload = files.filter((f) => !isUploaded(f));
+    if (toUpload.length === 0) {
+      setRunning(false);
+      return;
+    }
     try {
       await backupApi.prepare(project.id, targets);
     } catch (e) {
@@ -74,7 +93,7 @@ export function ProjectBackupModal({ project, onClose }: Props) {
       setRunning(false);
       return;
     }
-    await runPool(files, CONCURRENCY, async (file) => {
+    await runPool(toUpload, CONCURRENCY, async (file) => {
       const id = exportedId(project.id, file.name);
       setState((s) => ({ ...s, [file.name]: 'uploading' }));
       try {
@@ -95,7 +114,8 @@ export function ProjectBackupModal({ project, onClose }: Props) {
     return '·';
   };
 
-  const canUpload = !running && files.length > 0 && selected.size > 0;
+  const pendingCount = files.filter((f) => !isUploaded(f)).length;
+  const canUpload = !running && pendingCount > 0 && selected.size > 0;
 
   return (
     <Modal title={t('upload.title', { project: project.name })} open onClose={running ? undefined : onClose}>
@@ -155,7 +175,7 @@ export function ProjectBackupModal({ project, onClose }: Props) {
           {files.map((f) => (
             <div key={f.name} className="upload-row">
               <span className="upload-name">{f.name}</span>
-              <span>{statusIcon(state[f.name])}</span>
+              <span>{isUploaded(f) ? '✓' : statusIcon(state[f.name])}</span>
             </div>
           ))}
         </div>
@@ -174,7 +194,7 @@ export function ProjectBackupModal({ project, onClose }: Props) {
             </Button>
           )}
           <Button variant="primary" onClick={upload} disabled={!canUpload}>
-            {running ? t('upload.uploading') : t('upload.submit', { count: files.length })}
+            {running ? t('upload.uploading') : t('upload.submit', { count: pendingCount })}
           </Button>
         </div>
       </div>
