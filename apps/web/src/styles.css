@@ -324,3 +324,16 @@ body {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
 }
+
+/* Grupos por año en el dashboard */
+.year-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.year-title {
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--lumik-on-surface-variant, #c2c6d7);
+}

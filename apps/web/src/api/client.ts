@@ -139,6 +139,8 @@ export interface CatalogProject {
   created_at: string;
   photo_count?: number;
   backed_up?: number;
+  workflow_status?: string | null;
+  providers?: string | null;
 }
 
 export interface CatalogPhoto {
@@ -157,6 +159,24 @@ export const catalogApi = {
 };
 
 /**
+ * Descarga el JPEG de portada (con auth) y devuelve un objectURL usable en <img>,
+ * o `null` si el proyecto no tiene portada. Recuerda revocar el URL al desmontar.
+ */
+export async function getProjectCoverUrl(projectId: string): Promise<string | null> {
+  const url = `/v1/projects/${projectId}/cover`;
+  const withAuth = (): RequestInit => {
+    const access = tokens.getAccess();
+    return access ? { headers: { authorization: `Bearer ${access}` } } : {};
+  };
+  let res = await fetch(url, withAuth());
+  if (res.status === 401 && tokens.getRefresh() && (await tryRefresh())) {
+    res = await fetch(url, withAuth());
+  }
+  if (!res.ok) return null;
+  return URL.createObjectURL(await res.blob());
+}
+
+/**
  * Backup desde el navegador/iPad. Usa el MISMO id determinista que la desktop
  * (uuid5 de `projectId/filename`), así una foto subida desde ambos lados no se
  * duplica en el catálogo ni en la nube.
@@ -167,6 +187,16 @@ export const backupApi = {
     request<void>(`/v1/projects/${projectId}/backup/prepare`, {
       method: 'POST',
       body: JSON.stringify({ targets: targets ?? null }),
+    }),
+
+  /**
+   * Enlace expirable a la carpeta del proyecto en un proveedor. `url` es `null`
+   * si el proveedor no soporta expiración (el caller abre su web).
+   */
+  folderLink: (projectId: string, provider: string) =>
+    request<{ url: string | null }>(`/v1/projects/${projectId}/backup/link`, {
+      method: 'POST',
+      body: JSON.stringify({ provider }),
     }),
 
   /** Sube un archivo (multipart) al `_exported/` remoto del proyecto. */

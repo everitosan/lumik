@@ -304,6 +304,40 @@ Nota: fotos que existan **solo** en el iPad (no en el disco de la desktop) se re
 - Plan de cuotas/billing por usuario: fuera de alcance inicial (aunque el modelo multi-tenant lo habilita después).
 
 ## 11. Bitácora
+- **2026-09-16 · Deep-link a la carpeta (solo expirable)** — El icono de proveedor
+  intenta un enlace a la **carpeta exacta** vía `POST /v1/projects/{id}/backup/link`
+  (`rclone link --expire 168h`), pero **solo** en proveedores con expiración
+  documentada (whitelist `dropbox`, `onedrive`); Mega/Drive (link permanente) y
+  cualquier otro → `{url:null}` y el cliente abre la **web del proveedor**. Nunca se
+  crea un enlace público permanente. El enlace no se guarda en BD ni se loguea (solo se
+  loguea que se generó). Decisión del usuario: "si no hay link expirable, abrir el
+  proveedor; si lo hay, generar ese". Vías de fuga de links públicos discutidas (logs,
+  historial/sync, bots de preview, y en Mega la clave va en la URL) → por eso el
+  permanente queda descartado.
+- **2026-09-16 · Estados + iconos de proveedor** — (1) **Estado tras backup**: al
+  terminar exitosamente, `finalize_backup` fija el estado del proyecto según
+  `_exported >= _culled` → `delivered` (Respaldado) o `edited` (Editando). Se guarda en
+  `project.workflow_status` (nueva columna local; el dashboard usa `COALESCE(stored,
+  derivado)`) y se sincroniza al catálogo (columna `workflow_status`, migración 0004).
+  Labels i18n: delivered→"Respaldado", edited→"Editando". (2) **Iconos de proveedor** en
+  ambas cards: nuevo `ProviderIcon` en `@lumik/ui` (react-icons, marca a color:
+  Drive/Dropbox/Mega/Nextcloud; OneDrive usa un icono de nube). `ProjectCard` acepta
+  `providers` + `onProviderOpen`. Web toma los proveedores de `GET /v1/projects`
+  (agregado distinct); la desktop de `project.backup_providers` (csv local). (3) **Link
+  al proveedor**: el icono es clickeable y abre la **web del proveedor** (web:
+  `window.open`; desktop: comando `open_external_url` vía opener). *No* se hace deep-link
+  a la carpeta exacta: requeriría enlaces públicos (rclone `link`), con implicaciones de
+  privacidad — pendiente si se desea.
+- **2026-09-16 · Web · dashboard mejorado (agrupación + portadas)** — El dashboard web
+  agrupa por año (años DESC; dentro ASC, como la desktop) y reusa `ProjectCard` de
+  `@lumik/ui`. `GET /v1/projects` devuelve `photo_count`/`backed_up`. Router con layout
+  protegido + nav; ruta `/config` con el panel de proveedores. El modal de subida
+  **salta duplicados** consultando `GET .../photos` (mismo `uuid5`). **Portada en el
+  server**: columna `project.cover` (bytea, migración 0003) + `PUT/GET /v1/projects/{id}/cover`;
+  la desktop la sube al **registrar** el proyecto (`ensure` → Published) y al **cambiar
+  la portada** (`sync_project_cover` tras `set_project_cover_photo`). El web la muestra
+  con fetch autenticado → objectURL. *Nota:* proyectos ya registrados solo obtienen
+  portada al cambiarla (Published no re-dispara); aceptable por el alcance pedido.
 - **2026-09-16 · Fase 8 · subida desde web/iPad** — El dashboard web ahora sube fotos:
   al tocar un proyecto abre `ProjectBackupModal` (elige archivos del dispositivo,
   proveedores, calidad) y reusa `prepare` + el endpoint de backup del server. Clave:
