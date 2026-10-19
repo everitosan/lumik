@@ -31,6 +31,10 @@ impl PhotoRepository for ProjectDatabase {
             .map_err(|e| e.to_string())
     }
 
+    fn update_dng_path(&self, id: &str, new_dng_path: &str) -> Result<(), String> {
+        self.update_photo_dng_path(id, new_dng_path).map_err(|e| e.to_string())
+    }
+
     fn set_exported(&self, id: &str, jpg_path: &str) -> Result<(), String> {
         self.set_photo_exported(id, jpg_path).map_err(|e| e.to_string())
     }

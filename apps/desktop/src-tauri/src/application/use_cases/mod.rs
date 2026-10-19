@@ -5,5 +5,7 @@ pub mod cull_photo;
 pub mod ensure_catalog_synced;
 pub mod import_photos;
 pub mod rate_photo;
+pub mod rename_project_files;
+pub mod rewrite_project_description;
 pub mod rotate_photo;
 pub mod sync_exported;

@@ -135,6 +135,10 @@ mod tests {
         fn update_culled(&self, _id: &str, _culled: bool, _p: &str) -> Result<(), String> {
             unreachable!("RatePhoto no cambia culled")
         }
+        fn update_dng_path(&self, _id: &str, _new_dng_path: &str) -> Result<(), String> {
+            unimplemented!()
+        }
+
         fn set_exported(&self, _id: &str, _jpg_path: &str) -> Result<(), String> {
             Ok(())
         }

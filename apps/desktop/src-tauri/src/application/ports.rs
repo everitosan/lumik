@@ -199,6 +199,8 @@ pub trait PhotoRepository {
         tags: Option<&str>,
     ) -> Result<(), String>;
     fn update_culled(&self, id: &str, culled: bool, new_dng_path: &str) -> Result<(), String>;
+    /// Cambia la ruta relativa de la foto (renombrado de archivos al editar).
+    fn update_dng_path(&self, id: &str, new_dng_path: &str) -> Result<(), String>;
     /// Enlaza la foto con su JPEG exportado y la marca `edited` (Fase 6).
     fn set_exported(&self, id: &str, jpg_path: &str) -> Result<(), String>;
     /// Inserta un lote de fotos en una sola transacción; devuelve las creadas.
@@ -285,6 +287,11 @@ pub trait MetadataTool: Send + Sync {
 
     /// Fuerza `Orientation=1` en el archivo si tuviera otra (desktop; no-op en Android).
     fn strip_orientation(&self, file: &Path);
+
+    /// Escribe la descripción `{descripción}@{año}` en una foto ya importada
+    /// (desktop: dentro del archivo vía exiftool; Android: sidecar XMP). `None`
+    /// la elimina.
+    fn set_image_description(&self, file: &Path, description: Option<&str>) -> Result<(), String>;
 }
 
 /// Generación de miniaturas y previews a partir de archivos RAW/JPEG/TIFF.

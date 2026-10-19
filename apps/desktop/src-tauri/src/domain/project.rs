@@ -69,6 +69,66 @@ pub fn compare_dashboard(
     }
 }
 
+/// Sanea el nombre del proyecto para usarlo en nombres de archivo: letras y
+/// dígitos (Unicode, conserva acentos), `-` y `_` se mantienen; el resto pasa a
+/// `_`. Lo usan el renombrado al importar y la edición del proyecto.
+pub fn sanitize_file_name(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect()
+}
+
+/// Descripción que se escribe en las fotos: `{descripción}@{año}`, con el año
+/// de la fecha de sesión o, si no hay, de la creación. `None` si la descripción
+/// está vacía.
+pub fn image_description(description: Option<&str>, session_date: Option<&str>, created_at: &str) -> Option<String> {
+    let desc = description.filter(|d| !d.is_empty())?;
+    let year = session_date.unwrap_or(created_at).get(..4).unwrap_or_default();
+    Some(format!("{}@{}", desc, year))
+}
+
+/// Fecha de sesión que se guarda al editar un proyecto. Si no tenía fecha y el
+/// usuario deja la precargada (la de su carpeta, que es la fecha de
+/// `created_at`), sigue sin fecha para que una importación pueda inferirla.
+/// Cualquier otra fecha se considera intencional.
+pub fn effective_session_date(stored: Option<&str>, created_at: &str, submitted: &str) -> Option<String> {
+    if stored.is_none() && created_at.get(..10) == Some(submitted) {
+        None
+    } else {
+        Some(submitted.to_string())
+    }
+}
+
+/// Si `file_name` sigue el patrón del renombrado al importar
+/// (`AAAA-MM-DD__HH-MM-SS__{old}[-NNN].ext`), devuelve el mismo nombre con
+/// `new`. `None` si no coincide o si los nombres son iguales.
+pub fn renamed_photo_file(file_name: &str, old_sanitized: &str, new_sanitized: &str) -> Option<String> {
+    if old_sanitized == new_sanitized || old_sanitized.is_empty() {
+        return None;
+    }
+    let (stem, ext) = file_name.rsplit_once('.')?;
+    // "2024-06-15__14-30-22__" = 22 caracteres ASCII.
+    let prefix = stem.get(..22)?;
+    let shape_ok = prefix.char_indices().all(|(i, c)| match i {
+        4 | 7 | 14 | 17 => c == '-',
+        10 | 11 | 20 | 21 => c == '_',
+        _ => c.is_ascii_digit(),
+    });
+    if !shape_ok {
+        return None;
+    }
+    let rest = stem.get(22..)?;
+    let suffix = rest.strip_prefix(old_sanitized)?;
+    let suffix_ok = suffix.is_empty()
+        || (suffix.len() == 4
+            && suffix.starts_with('-')
+            && suffix[1..].chars().all(|c| c.is_ascii_digit()));
+    if !suffix_ok {
+        return None;
+    }
+    Some(format!("{}{}{}.{}", prefix, new_sanitized, suffix, ext))
+}
+
 /// Dirección de un orden del dashboard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -129,6 +189,76 @@ impl DashboardSort {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sanitize_file_name_keeps_accents_and_replaces_symbols() {
+        assert_eq!(sanitize_file_name("PlatziConf 2025"), "PlatziConf_2025");
+        // char::is_alphanumeric() es Unicode-aware: conserva letras acentuadas;
+        // solo el espacio y el '&' se reemplazan por '_'.
+        assert_eq!(sanitize_file_name("Boda María&José"), "Boda_María_José");
+        assert_eq!(sanitize_file_name("test-project_01"), "test-project_01");
+    }
+
+    #[test]
+    fn image_description_uses_session_year_or_creation_year() {
+        assert_eq!(
+            image_description(Some("Playa"), Some("2024-06-15"), "2026-01-01T00:00:00Z").as_deref(),
+            Some("Playa@2024")
+        );
+        assert_eq!(image_description(Some("Playa"), None, "2026-01-01T00:00:00Z").as_deref(), Some("Playa@2026"));
+        assert_eq!(image_description(Some(""), Some("2024-06-15"), "2026-01-01T00:00:00Z"), None);
+        assert_eq!(image_description(None, Some("2024-06-15"), "2026-01-01T00:00:00Z"), None);
+    }
+
+    #[test]
+    fn effective_date_keeps_none_when_prefilled_date_is_unchanged() {
+        assert_eq!(effective_session_date(None, "2026-10-19T08:00:00Z", "2026-10-19"), None);
+    }
+
+    #[test]
+    fn effective_date_sets_date_chosen_by_user() {
+        assert_eq!(
+            effective_session_date(None, "2026-10-19T08:00:00Z", "2026-09-30").as_deref(),
+            Some("2026-09-30")
+        );
+    }
+
+    #[test]
+    fn effective_date_overwrites_existing_date() {
+        assert_eq!(
+            effective_session_date(Some("2024-06-15"), "2026-10-19T08:00:00Z", "2026-10-19").as_deref(),
+            Some("2026-10-19")
+        );
+    }
+
+    #[test]
+    fn renamed_photo_file_plain_and_suffixed() {
+        assert_eq!(
+            renamed_photo_file("2024-06-15__14-30-22__Boda.cr3", "Boda", "Boda_Ana").as_deref(),
+            Some("2024-06-15__14-30-22__Boda_Ana.cr3")
+        );
+        assert_eq!(
+            renamed_photo_file("2024-06-15__14-30-22__Boda-001.cr3", "Boda", "Boda_Ana").as_deref(),
+            Some("2024-06-15__14-30-22__Boda_Ana-001.cr3")
+        );
+    }
+
+    #[test]
+    fn renamed_photo_file_ignores_other_projects_and_originals() {
+        // Otro proyecto cuyo nombre empieza igual.
+        assert_eq!(renamed_photo_file("2024-06-15__14-30-22__Boda_Ana.cr3", "Boda", "Bodas"), None);
+        assert_eq!(renamed_photo_file("IMG_4821.CR3", "Boda", "Boda_Ana"), None);
+        assert_eq!(renamed_photo_file("2024-06-15__14-30-22__Boda-1.cr3", "Boda", "X"), None);
+        assert_eq!(renamed_photo_file("2024-06-15__14-30-22__Boda.cr3", "Boda", "Boda"), None);
+    }
+
+    #[test]
+    fn renamed_photo_file_with_accents() {
+        assert_eq!(
+            renamed_photo_file("2024-06-15__14-30-22__Boda_García.jpg", "Boda_García", "XV_Sofía").as_deref(),
+            Some("2024-06-15__14-30-22__XV_Sofía.jpg")
+        );
+    }
 
     #[test]
     fn dashboard_sort_defaults_when_nothing_stored() {

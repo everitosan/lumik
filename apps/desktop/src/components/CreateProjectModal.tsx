@@ -1,10 +1,8 @@
-import { useState, useEffect, useRef, useCallback, type ChangeEvent } from 'react';
+import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import flatpickr from 'flatpickr';
-import 'flatpickr/dist/flatpickr.min.css';
-import '../styles/flatpickr.css';
 import { Modal, Input, Button, DriveSelector, type Drive } from '@lumik/ui';
 import type { DetectedDevice } from '../lib/types';
+import { DateField } from './DateField';
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -61,35 +59,6 @@ const fieldErrorStyles: React.CSSProperties = {
   marginTop: '-12px',
 };
 
-const dateFieldStyles: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '8px',
-};
-
-const dateLabelStyles: React.CSSProperties = {
-  fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
-  fontSize: '12px',
-  fontWeight: 500,
-  color: 'var(--lumik-on-surface-variant, #c2c6d7)',
-  textTransform: 'uppercase' as const,
-  letterSpacing: '0.05em',
-};
-
-const dateInputStyles: React.CSSProperties = {
-  width: '100%',
-  padding: '10px 12px',
-  backgroundColor: 'var(--lumik-surface-container, #201f1f)',
-  border: '1px solid var(--lumik-outline-variant, #424654)',
-  borderRadius: 'var(--lumik-radius-sm, 4px)',
-  color: 'var(--lumik-on-surface, #e5e2e1)',
-  fontFamily: 'var(--lumik-font-primary, Inter, sans-serif)',
-  fontSize: '14px',
-  outline: 'none',
-  cursor: 'pointer',
-  boxSizing: 'border-box' as const,
-};
-
 function devicesToDrives(devices: DetectedDevice[]): Drive[] {
   return devices.map((d) => ({
     id: d.uuid,
@@ -118,25 +87,6 @@ export function CreateProjectModal({
   const [errors, setErrors] = useState<Partial<Record<'name' | 'deviceUuid', string>>>({});
 
   const prevOpen = useRef(open);
-  const fpInstance = useRef<ReturnType<typeof flatpickr> | null>(null);
-
-  // Callback ref: fires exactly when the node mounts/unmounts — no timing issues.
-  // appendTo: document.body escapes the modal's overflow:hidden.
-  const dateInputCallbackRef = useCallback((node: HTMLInputElement | null) => {
-    if (node) {
-      fpInstance.current = flatpickr(node, {
-        dateFormat: 'Y-m-d',
-        disableMobile: true,
-        appendTo: document.body,
-        monthSelectorType: 'static',
-        onChange: (_dates, dateStr) => setSessionDate(dateStr),
-      });
-    } else {
-      (fpInstance.current as flatpickr.Instance | null)?.destroy();
-      fpInstance.current = null;
-    }
-  }, []);
-
   // Reset form fields when modal opens
   useEffect(() => {
     if (open && !prevOpen.current) {
@@ -217,21 +167,13 @@ export function CreateProjectModal({
               disabled={loading}
             />
 
-            <div style={dateFieldStyles}>
-              <span style={dateLabelStyles}>{t('project.create.date')}</span>
-              <input
-                ref={dateInputCallbackRef}
-                type="text"
-                placeholder={t('components.createProjectModal.datePlaceholder')}
-                readOnly
-                disabled={loading}
-                style={{
-                  ...dateInputStyles,
-                  opacity: loading ? 0.5 : 1,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                }}
-              />
-            </div>
+            <DateField
+              label={t('project.create.date')}
+              value={sessionDate}
+              onChange={setSessionDate}
+              placeholder={t('components.createProjectModal.datePlaceholder')}
+              disabled={loading}
+            />
           </div>
 
           {/* Right column: device selector */}

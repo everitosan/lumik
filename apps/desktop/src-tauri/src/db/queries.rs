@@ -478,9 +478,18 @@ impl ProjectDatabase {
         Ok(())
     }
 
-    pub fn update_name(&self, new_name: &str) -> DbResult<()> {
+    /// Guarda en una sola sentencia lo editable del proyecto (Editar proyecto).
+    pub fn update_project_details(
+        &self,
+        name: &str,
+        session_date: Option<&str>,
+        description: Option<&str>,
+    ) -> DbResult<()> {
         let conn = self.conn();
-        conn.execute("UPDATE project SET name = ?1", params![new_name])?;
+        conn.execute(
+            "UPDATE project SET name = ?1, session_date = ?2, description = ?3",
+            params![name, session_date, description],
+        )?;
         Ok(())
     }
 
@@ -569,6 +578,12 @@ impl ProjectDatabase {
             "UPDATE photo SET stars = ?1, color_label = ?2, tags = ?3 WHERE id = ?4",
             params![stars, color_label, tags, id],
         )?;
+        Ok(())
+    }
+
+    pub fn update_photo_dng_path(&self, id: &str, dng_path: &str) -> DbResult<()> {
+        let conn = self.conn();
+        conn.execute("UPDATE photo SET dng_path = ?1 WHERE id = ?2", params![dng_path, id])?;
         Ok(())
     }
 

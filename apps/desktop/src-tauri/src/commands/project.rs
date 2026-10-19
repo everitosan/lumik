@@ -227,41 +227,153 @@ pub(crate) fn relocate_project_folder(
     Ok(arc)
 }
 
-/// Rename a project: moves its folder on disk and updates the stored name.
+/// Datos del modal "Editar proyecto".
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct EditProjectRequest {
+    pub id: String,
+    pub name: String,
+    /// Fecha de sesión elegida (obligatoria, `AAAA-MM-DD`).
+    pub session_date: String,
+    pub description: Option<String>,
+    /// Renombrar también las fotos importadas con el nombre anterior.
+    #[serde(default)]
+    pub rename_files: bool,
+    /// Reescribir `{descripción}@{año}` en las fotos ya importadas.
+    #[serde(default)]
+    pub rewrite_metadata: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct EditProjectResult {
+    pub project: Project,
+    pub renamed_files: usize,
+    pub metadata_updated: usize,
+    pub metadata_failed: Vec<crate::import::FailedFile>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct EditProjectProgress {
+    project_id: String,
+    done: usize,
+    total: usize,
+}
+
+/// Edita nombre, fecha de sesión y descripción de un proyecto. Mueve la carpeta
+/// si cambian el nombre o la fecha y, si se pide, renombra las fotos y reescribe
+/// su descripción. Ver `docs/useCases/flujo-editar-proyecto.md`.
 #[tauri::command]
-pub fn rename_project(state: State<AppState>, id: String, new_name: String) -> AppResult<Project> {
-    let new_name = new_name.trim().to_string();
-    if new_name.is_empty() {
+pub async fn edit_project(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: EditProjectRequest,
+) -> AppResult<EditProjectResult> {
+    let state = (*state).clone();
+    tauri::async_runtime::spawn_blocking(move || edit_project_blocking(&app, &state, request))
+        .await
+        .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?
+}
+
+fn edit_project_blocking(app: &AppHandle, state: &AppState, request: EditProjectRequest) -> AppResult<EditProjectResult> {
+    use crate::application::use_cases::rename_project_files::{PhotoFile, RenameProjectFiles};
+    use crate::application::use_cases::rewrite_project_description::RewriteProjectDescription;
+    use crate::domain::project::{effective_session_date, image_description};
+    use tauri::Emitter;
+
+    // 1. Validar.
+    let name = request.name.trim().to_string();
+    if name.is_empty() {
         return Err(AppError::from("Project name cannot be empty"));
     }
-    info!("rename_project called: {} -> {}", id, new_name);
+    let submitted = request.session_date.trim().to_string();
+    let (year, month, day) = ProjectFolder::date_parts(&submitted)
+        .ok_or_else(|| AppError::from(format!("Invalid session date: '{}'", submitted)))?;
+    let description = request
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|d| !d.is_empty())
+        .map(str::to_string);
+    info!("edit_project called: {} -> {} / {}", request.id, name, submitted);
 
-    let old_dir = state.project_db(&id)?.project_dir.clone();
+    let current_db = state.project_db(&request.id)?;
+    let current = current_db.get_project()?.ok_or("Project not found")?;
+    let mount_point = current_db.mount_point.clone();
+    let old_dir = current_db.project_dir.clone();
+    drop(current_db);
 
-    // New folder name: keep the "{day}_" prefix, swap the slug (matches create_project).
-    let old_folder = old_dir
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or_default()
-        .to_string();
-    let day_prefix = old_folder.split_once('_').map(|(d, _)| d.to_string());
-    let new_folder = match &day_prefix {
-        Some(day) => ProjectFolder::folder_name(day, &new_name),
-        None => ProjectFolder::slug(&new_name),
+    // 2. Fecha efectiva y carpeta destino (misma regla que al crear).
+    let session_date = effective_session_date(current.session_date.as_deref(), &current.created_at, &submitted);
+    let new_dir = ProjectFolder::path(&mount_point, &year, &month, &day, &name);
+    let db = if new_dir != old_dir {
+        relocate_project_folder(state, &request.id, &new_dir)?
+    } else {
+        state.project_db(&request.id)?
     };
-    let new_dir = old_dir.with_file_name(&new_folder);
 
-    let db = relocate_project_folder(&state, &id, &new_dir)?;
+    // 3. Datos del proyecto.
+    db.update_project_details(&name, session_date.as_deref(), description.as_deref())
+        .map_err(|e| AppError::Message(format!("Failed to update project: {}", e)))?;
 
-    db.update_name(&new_name)
-        .map_err(|e| AppError::Message(format!("Failed to update project name: {}", e)))?;
+    let photos: Vec<PhotoFile> = if request.rename_files || request.rewrite_metadata {
+        db.get_project_photos()?
+            .into_iter()
+            .map(|p| PhotoFile { id: p.id, dng_path: p.dng_path })
+            .collect()
+    } else {
+        Vec::new()
+    };
 
-    let updated = db
-        .get_project()?
-        .ok_or("Failed to read renamed project")?;
+    // 4. Renombrar archivos (todo o nada).
+    let mut renamed_files = 0;
+    if request.rename_files && current.name.trim() != name {
+        renamed_files = RenameProjectFiles {
+            photos: db.as_ref(),
+            files: state.file_store.as_ref(),
+            finder_tags: state.finder_tags.as_ref(),
+            mount_point: &mount_point,
+        }
+        .execute(&photos, &current.name, &name)
+        .map_err(AppError::from)?;
+    }
 
-    info!("rename_project success: {}", updated.id);
-    Ok(updated)
+    // 5. Reescribir la descripción en las fotos existentes.
+    let mut metadata_updated = 0;
+    let mut metadata_failed = Vec::new();
+    if request.rewrite_metadata {
+        // Tras renombrar, las rutas cambiaron: se releen.
+        let photos: Vec<PhotoFile> = if renamed_files > 0 {
+            db.get_project_photos()?
+                .into_iter()
+                .map(|p| PhotoFile { id: p.id, dng_path: p.dng_path })
+                .collect()
+        } else {
+            photos
+        };
+        let value = image_description(description.as_deref(), session_date.as_deref(), &current.created_at);
+        let project_id = request.id.clone();
+        let outcome = RewriteProjectDescription {
+            metadata: state.metadata.as_ref(),
+            mount_point: &mount_point,
+        }
+        .execute(&photos, value.as_deref(), &|done, total| {
+            let progress = EditProjectProgress { project_id: project_id.clone(), done, total };
+            if let Err(e) = app.emit("edit-project-progress", &progress) {
+                warn!("Failed to emit edit progress: {}", e);
+            }
+        });
+        metadata_updated = outcome.updated;
+        metadata_failed = outcome.failed;
+    }
+
+    let project = db.get_project()?.ok_or("Failed to read edited project")?;
+    info!(
+        "edit_project success: {} (renamed {}, metadata {} ok / {} failed)",
+        project.id,
+        renamed_files,
+        metadata_updated,
+        metadata_failed.len()
+    );
+    Ok(EditProjectResult { project, renamed_files, metadata_updated, metadata_failed })
 }
 
 /// Open the project's folder in the OS file manager. Desktop only — Android has no

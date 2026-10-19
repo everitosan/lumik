@@ -167,7 +167,7 @@ pub fn run() {
             commands::get_project,
             commands::archive_project,
             commands::delete_project,
-            commands::rename_project,
+            commands::edit_project,
             commands::open_project_folder,
 
             // ── Fotos (consulta / media) ────────────────────────────────────

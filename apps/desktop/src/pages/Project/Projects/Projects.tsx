@@ -2,9 +2,9 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchBar, ProjectCard, Button, Icon } from '@lumik/ui';
 import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, useDashboardSort, matchesKey, usePlatform } from '../../../lib/hooks';
-import { createProject, renameProject, relocateBackup, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink } from '../../../lib/api';
+import { createProject, ensureProjectSynced, relocateBackup, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink } from '../../../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../../../components/CreateProjectModal';
-import { RenameProjectModal } from './RenameProjectModal';
+import { EditProjectModal } from './EditProjectModal';
 import { DeleteProjectModal } from './DeleteProjectModal';
 import type { DashboardSort, ProjectDashboard, SortDirection } from '../../../lib/types';
 
@@ -282,8 +282,6 @@ export function Projects({ onProjectClick }: ProjectsProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [editingProject, setEditingProject] = useState<ProjectDashboard | null>(null);
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [renameError, setRenameError] = useState<string | null>(null);
   const [deletingProject, setDeletingProject] = useState<ProjectDashboard | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -385,23 +383,13 @@ export function Projects({ onProjectClick }: ProjectsProps) {
     }
   };
 
-  const handleRename = async (newName: string) => {
-    if (!editingProject) return;
-    setIsRenaming(true);
-    setRenameError(null);
-    try {
-      const projectId = editingProject.id;
-      await renameProject(projectId, newName);
-      setEditingProject(null);
-      refetch();
-      // Mueve la carpeta del backup en la nube para que siga el nuevo nombre.
-      // Best-effort en segundo plano: no bloquea ni falla el rename local.
-      void relocateBackup(projectId).catch(() => {});
-    } catch (err) {
-      setRenameError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsRenaming(false);
-    }
+  const handleEdited = (projectId: string) => {
+    refetch();
+    // Best-effort en segundo plano, sin bloquear ni fallar la edición local:
+    // mueve la carpeta del backup en la nube y actualiza el catálogo del server
+    // (nombre y fecha que ve el portal web).
+    void relocateBackup(projectId).catch(() => {});
+    void ensureProjectSynced(projectId).catch(() => {});
   };
 
   const handleDelete = async () => {
@@ -535,13 +523,10 @@ export function Projects({ onProjectClick }: ProjectsProps) {
         error={createError}
       />
 
-      <RenameProjectModal
-        open={editingProject !== null}
-        currentName={editingProject?.name ?? ''}
-        onClose={() => { setEditingProject(null); setRenameError(null); }}
-        onSubmit={handleRename}
-        loading={isRenaming}
-        error={renameError}
+      <EditProjectModal
+        project={editingProject}
+        onClose={() => setEditingProject(null)}
+        onSaved={(result) => handleEdited(result.project.id)}
       />
 
       <DeleteProjectModal

@@ -90,6 +90,10 @@ mod tests {
         fn update_culled(&self, _: &str, _: bool, _: &str) -> Result<(), String> {
             unimplemented!()
         }
+        fn update_dng_path(&self, _id: &str, _new_dng_path: &str) -> Result<(), String> {
+            unimplemented!()
+        }
+
         fn set_exported(&self, id: &str, jpg_path: &str) -> Result<(), String> {
             self.calls.borrow_mut().push((id.into(), jpg_path.into()));
             Ok(())

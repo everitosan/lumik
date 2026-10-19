@@ -6,7 +6,7 @@ use crate::application::error::AppResult;
 use crate::application::import_settings::{resolve_import_settings, ImportSessionSettings};
 use crate::application::ports::ProgressReporter;
 use crate::application::use_cases::import_photos::{ImportParams, ImportPhotos};
-use crate::domain::project::ProjectFolder;
+use crate::domain::project::{image_description, ProjectFolder};
 use crate::import::{ImportPhase, ImportProgress, ImportResult};
 use crate::infrastructure::import_pipeline::{is_video_file, StdImportPipeline};
 use log::{info, warn};
@@ -68,15 +68,7 @@ pub async fn start_import(
         .get_project()
         .ok()
         .flatten()
-        .and_then(|p| {
-            let desc = p.description.filter(|d| !d.is_empty())?;
-            let year = p
-                .session_date
-                .or(Some(p.created_at))
-                .and_then(|d| d.get(..4).map(|y| y.to_string()))
-                .unwrap_or_default();
-            Some(format!("{}@{}", desc, year))
-        });
+        .and_then(|p| image_description(p.description.as_deref(), p.session_date.as_deref(), &p.created_at));
 
     // Partition source files into photos and videos.
     let all_paths: Vec<PathBuf> = request.source_files.iter().map(PathBuf::from).collect();

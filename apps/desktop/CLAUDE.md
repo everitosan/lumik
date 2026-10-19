@@ -34,8 +34,9 @@ src/
     AboutPage.tsx
     Project/
       Projects/
-        Projects.tsx                # Dashboard: proyectos por año, menú (renombrar, eliminar, abrir carpeta), iconos de proveedor
-        RenameProjectModal.tsx / DeleteProjectModal.tsx
+        Projects.tsx                # Dashboard: proyectos por año, menú (editar, eliminar, abrir carpeta), iconos de proveedor
+        EditProjectModal.tsx          # Editar nombre, fecha y descripción (+ renombrar archivos / reescribir descripción)
+        DeleteProjectModal.tsx
       ProjectDetail/
         ProjectDetail.tsx           # Grid virtual de fotos (TanStack Virtualizer), agrupadas por día o en cuadrícula
         ProjectDetailHeader.tsx     # Barra superior: orden, filtros, modo de vista
@@ -51,6 +52,7 @@ src/
     histogram.worker.ts             # Web Worker: calcula histograma RGB de la imagen
   components/
     CreateProjectModal.tsx          # Modal para crear proyecto (nombre, fecha, dispositivo)
+    DateField.tsx                   # Campo de fecha (flatpickr) compartido por los modales de proyecto
     Layout.tsx / Sidebar.tsx        # Shell de la app
 ```
 
@@ -192,7 +194,7 @@ El progreso se emite como evento Tauri `"import-progress"` con 3 fases gruesas
 ```
 App
 ├── Projects (dashboard por año, renderizado normal con .map())
-│     ├── menú de proyecto → renombrar / eliminar / abrir carpeta
+│     ├── menú de proyecto → editar / eliminar / abrir carpeta
 │     ├── icono de proveedor → carpeta del proyecto en la nube
 │     └── click proyecto → ProjectDetail
 │           ├── click foto → PhotoDetail
@@ -233,6 +235,7 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 |--------------------------|------------------------|------------------------------|
 | Importar Imágenes        | `start_import`         | `ImportPhotos`               |
 | Crear Proyecto           | `create_project`       | — (lógica en el comando; `domain::ProjectFolder`) |
+| Editar Proyecto          | `edit_project`         | `RenameProjectFiles` (con rollback), `RewriteProjectDescription` |
 | Culling de imagen        | `save_photo_culled`    | `CullPhoto` (con rollback)   |
 | Rating de estrellas      | `save_photo_rating`    | `RatePhoto`                  |
 | Rotación de imagen       | `save_photo_rotation`  | `RotatePhoto`                |
@@ -246,7 +249,7 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 
 Plataforma: `get_platform`, `open_external_url`
 Dispositivos: `scan_connected_devices`, `eject_device`, `get_known_devices`
-Proyectos: `get_projects_dashboard`, `get_project`, `create_project`, `rename_project`, `archive_project`, `delete_project`, `open_project_folder`, `get_project_cover_thumbnail`, `set_project_cover_photo`, `get_project_settings`, `update_project_settings`
+Proyectos: `get_projects_dashboard`, `get_project`, `create_project`, `edit_project`, `archive_project`, `delete_project`, `open_project_folder`, `get_project_cover_thumbnail`, `set_project_cover_photo`, `get_project_settings`, `update_project_settings`
 Fotos: `get_project_photos`, `get_project_thumbnails`, `get_thumbnail`, `get_photo_preview`, `save_photo_rotation`, `save_photo_rating`, `save_photo_culled`, `regenerate_project_thumbnails`
 Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`

@@ -159,6 +159,18 @@ impl MetadataTool for ExiftoolMetadata {
         .map(|_| ())
     }
 
+    fn set_image_description(&self, file: &Path, description: Option<&str>) -> Result<(), String> {
+        // Valor vacío: exiftool elimina la etiqueta.
+        let value = description.unwrap_or("");
+        crate::exiftool::run_text(&[
+            format!("-ImageDescription={}", value),
+            format!("-XMP-dc:Description={}", value),
+            "-overwrite_original".to_string(),
+            file.to_string_lossy().to_string(),
+        ])
+        .map(|_| ())
+    }
+
     fn strip_orientation(&self, file: &Path) {
         if self.read_rotation(file) != 0 {
             let _ = crate::exiftool::run_text(&[
@@ -225,6 +237,10 @@ impl MetadataTool for AndroidMetadata {
     fn strip_orientation(&self, _file: &Path) {
         // En Android el preview se sirve tal cual; no se reescribe la orientación.
     }
+
+    fn set_image_description(&self, file: &Path, description: Option<&str>) -> Result<(), String> {
+        crate::import::xmp::update_xmp_description(file, description)
+    }
 }
 
 // ============================================================================
@@ -249,6 +265,31 @@ mod tests {
         assert_eq!(tool.read_rotation(&fixture("orient_6.jpg")), 90);
         // orient_1.jpg tiene Orientation=1 (normal) → 0°.
         assert_eq!(tool.read_rotation(&fixture("orient_1.jpg")), 0);
+    }
+
+    #[test]
+    fn set_image_description_writes_and_removes() {
+        let tool = ExiftoolMetadata;
+        let dir = std::env::temp_dir().join(format!("lumik_desc_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("photo.jpg");
+        std::fs::copy(fixture("orient_1.jpg"), &f).unwrap();
+
+        let read = |f: &Path| {
+            crate::exiftool::run_text(&["-s3".into(), "-ImageDescription".into(), f.to_string_lossy().to_string()])
+                .unwrap()
+                .trim()
+                .to_string()
+        };
+
+        tool.set_image_description(&f, Some("Boda Ana@2024")).unwrap();
+        assert_eq!(read(&f), "Boda Ana@2024");
+
+        tool.set_image_description(&f, None).unwrap();
+        assert_eq!(read(&f), "");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

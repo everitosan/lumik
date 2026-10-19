@@ -174,6 +174,32 @@ export interface FailedFile {
   error: string;
 }
 
+// Editar proyecto
+export interface EditProjectRequest {
+  id: string;
+  name: string;
+  /** AAAA-MM-DD, obligatoria */
+  session_date: string;
+  description?: string;
+  /** Renombrar también las fotos importadas con el nombre anterior */
+  rename_files: boolean;
+  /** Reescribir {descripción}@{año} en las fotos ya importadas */
+  rewrite_metadata: boolean;
+}
+
+export interface EditProjectResult {
+  project: Project;
+  renamed_files: number;
+  metadata_updated: number;
+  metadata_failed: FailedFile[];
+}
+
+export interface EditProjectProgress {
+  project_id: string;
+  done: number;
+  total: number;
+}
+
 export interface ImportResult {
   session_id: string;
   total_files: number;

@@ -108,11 +108,31 @@
       "delete": "Delete",
       "import": "Import photos"
     },
-    "rename": {
+    "edit": {
       "title": "Edit project",
       "name": "Project name",
+      "date": "Session date",
+      "description": "Description",
       "validation": {
-        "nameRequired": "Project name is required"
+        "nameRequired": "Project name is required",
+        "dateRequired": "Session date is required"
+      },
+      "renameFiles": "Also rename the files",
+      "renameFilesHint": "Photos imported with the previous name become …__{{name}}",
+      "externalWarning": "If you edit these photos outside Lumik (Lightroom, Capture One…), your editor may lose track of the renamed files. Files in _exported are not changed.",
+      "rewriteMetadata": "Update the metadata of already imported photos",
+      "rewriteMetadataHint": "Description \"{{value}}\" on {{count}} photos",
+      "rewriteMetadataClearHint": "Remove the description from {{count}} photos",
+      "progress": "Updating metadata {{done}}/{{total}}",
+      "result": {
+        "renamed_one": "{{count}} file renamed",
+        "renamed_other": "{{count}} files renamed",
+        "metadataUpdated_one": "{{count}} photo updated",
+        "metadataUpdated_other": "{{count}} photos updated",
+        "metadataFailed_one": "{{count}} photo could not be updated:",
+        "metadataFailed_other": "{{count}} photos could not be updated:",
+        "retryHint": "Save again with the metadata option checked to retry.",
+        "close": "Close"
       }
     },
     "delete": {

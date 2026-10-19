@@ -1,5 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type {
+  EditProjectProgress,
+  EditProjectRequest,
+  EditProjectResult,
   AppSettings,
   DashboardSort,
   DetectedDevice,
@@ -179,9 +183,23 @@ export async function deleteProject(id: string): Promise<void> {
   return invoke('delete_project', { id });
 }
 
-/// Rename a project: moves its folder on disk and updates the stored name + photo paths.
-export async function renameProject(id: string, newName: string): Promise<Project> {
-  return invoke('rename_project', { id, newName });
+/// Edita nombre, fecha y descripción; mueve la carpeta si hace falta y, si se
+/// pide, renombra las fotos y reescribe su descripción. `onProgress` recibe el
+/// avance de la reescritura de metadatos.
+export async function editProject(
+  request: EditProjectRequest,
+  onProgress?: (progress: EditProjectProgress) => void,
+): Promise<EditProjectResult> {
+  const unlisten = onProgress
+    ? await listen<EditProjectProgress>('edit-project-progress', (e) => {
+        if (e.payload.project_id === request.id) onProgress(e.payload);
+      })
+    : undefined;
+  try {
+    return await invoke('edit_project', { request });
+  } finally {
+    unlisten?.();
+  }
 }
 
 /// Open the project's folder in the OS file manager (desktop only).

@@ -1,4 +1,5 @@
 use chrono::Local;
+use crate::domain::project::sanitize_file_name;
 use log::{debug, info, warn};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,7 +43,7 @@ impl PipelineWorkspace {
     /// Create a new workspace in the system temp directory
     pub fn create(project_name: &str) -> Result<Self, ConvertError> {
         let timestamp = Local::now().format("%Y_%m_%d__%H_%M_%S");
-        let temp_name = format!("{}_{}", sanitize_name(project_name), timestamp);
+        let temp_name = format!("{}_{}", sanitize_file_name(project_name), timestamp);
         let temp_dir = workspace_base_dir().join(&temp_name);
         let dng_dir = temp_dir.join("files");
 
@@ -94,7 +95,7 @@ pub fn pipeline_metadata(
 
     #[cfg(target_os = "android")]
     {
-        let sanitized_project = sanitize_name(project_name);
+        let sanitized_project = sanitize_file_name(project_name);
         let mut files: Vec<PathBuf> = fs::read_dir(&workspace.dng_dir)?
             .filter_map(|e| e.ok())
             .map(|e| e.path())
@@ -146,7 +147,7 @@ fn rename_and_embed_metadata(
     image_description: Option<&str>,
     rename: bool,
 ) -> Result<usize, ConvertError> {
-    let sanitized_name = sanitize_name(project_name);
+    let sanitized_name = sanitize_file_name(project_name);
 
     let mut args: Vec<String> = vec!["-overwrite_original".to_string()];
 
@@ -352,33 +353,4 @@ pub fn is_video_file(path: &Path) -> bool {
         .and_then(|e| e.to_str())
         .map(|e| VIDEO_EXTENSIONS.contains(&e.to_lowercase().as_str()))
         .unwrap_or(false)
-}
-
-/// Sanitize project name for use in filenames
-fn sanitize_name(name: &str) -> String {
-    name.chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else if c.is_whitespace() {
-                '_'
-            } else {
-                '_'
-            }
-        })
-        .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_sanitize_name() {
-        assert_eq!(sanitize_name("PlatziConf 2025"), "PlatziConf_2025");
-        // char::is_alphanumeric() es Unicode-aware: conserva letras acentuadas;
-        // solo el espacio y el '&' se reemplazan por '_'.
-        assert_eq!(sanitize_name("Boda María&José"), "Boda_María_José");
-        assert_eq!(sanitize_name("test-project_01"), "test-project_01");
-    }
 }

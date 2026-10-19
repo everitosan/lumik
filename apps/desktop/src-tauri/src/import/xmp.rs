@@ -163,10 +163,128 @@ pub fn update_xmp_orientation(file_path: &Path, rotation: i32) -> Result<(), Str
     }
 }
 
+/// Actualiza (o quita, con `None`) `dc:description` en el sidecar `.xmp` de la
+/// foto. Crea el sidecar si no existe y hay algo que escribir.
+pub fn update_xmp_description(file_path: &Path, description: Option<&str>) -> Result<(), String> {
+    let xmp_path = file_path.with_extension("xmp");
+    let description = description.filter(|d| !d.is_empty());
+    let tag_value = description.map(|d| {
+        format!(
+            "<dc:description><rdf:Alt><rdf:li xml:lang=\"x-default\">{}</rdf:li></rdf:Alt></dc:description>",
+            xml_escape(d)
+        )
+    });
+
+    if !xmp_path.exists() {
+        let Some(tag_value) = tag_value else {
+            return Ok(());
+        };
+        let content = format!(
+            "<?xpacket begin=\"\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n\
+             <x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"Lumik\">\n  \
+             <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n    \
+             <rdf:Description rdf:about=\"\"\n      \
+             xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n\
+             \n      {}\n\
+             \n    </rdf:Description>\n  \
+             </rdf:RDF>\n\
+             </x:xmpmeta>\n\
+             <?xpacket end=\"w\"?>",
+            tag_value
+        );
+        return std::fs::write(&xmp_path, content).map_err(|e| format!("Write XMP description: {}", e));
+    }
+
+    let content = std::fs::read_to_string(&xmp_path).map_err(|e| format!("Read XMP: {}", e))?;
+
+    // Quita la descripción anterior (con su línea) si la hay.
+    let mut updated = match (content.find("<dc:description>"), content.find("</dc:description>")) {
+        (Some(start), Some(end)) => {
+            let end = end + "</dc:description>".len();
+            let line_start = content[..start].rfind('\n').map(|i| i + 1).unwrap_or(start);
+            let line_end = if content[end..].starts_with('\n') { end + 1 } else { end };
+            format!("{}{}", &content[..line_start], &content[line_end..])
+        }
+        _ => content,
+    };
+
+    if let Some(tag_value) = tag_value {
+        if !updated.contains("xmlns:dc") {
+            updated = updated.replacen(
+                "rdf:about=\"\"",
+                "rdf:about=\"\"\n      xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
+                1,
+            );
+        }
+        updated = updated.replacen(
+            "\n    </rdf:Description>",
+            &format!("\n      {}\n    </rdf:Description>", tag_value),
+            1,
+        );
+    }
+
+    std::fs::write(&xmp_path, updated).map_err(|e| format!("Write XMP: {}", e))
+}
+
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&apos;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn temp_photo(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("lumik_xmp_{}_{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join("IMG_0001.CR3")
+    }
+
+    #[test]
+    fn description_is_created_replaced_and_removed() {
+        let photo = temp_photo("desc");
+        let xmp = photo.with_extension("xmp");
+
+        update_xmp_description(&photo, Some("Boda@2024")).unwrap();
+        let c = std::fs::read_to_string(&xmp).unwrap();
+        assert!(c.contains("xmlns:dc="));
+        assert!(c.contains(">Boda@2024<"));
+
+        update_xmp_description(&photo, Some("Playa & sol@2025")).unwrap();
+        let c = std::fs::read_to_string(&xmp).unwrap();
+        assert!(c.contains(">Playa &amp; sol@2025<"));
+        assert!(!c.contains("Boda@2024"));
+        assert_eq!(c.matches("<dc:description>").count(), 1);
+
+        update_xmp_description(&photo, None).unwrap();
+        let c = std::fs::read_to_string(&xmp).unwrap();
+        assert!(!c.contains("<dc:description>"));
+        assert!(c.contains("</rdf:Description>"));
+    }
+
+    #[test]
+    fn description_keeps_other_fields_of_existing_sidecar() {
+        let photo = temp_photo("keep");
+        write_xmp_sidecar(&photo, None, Some("Viejo@2023")).unwrap();
+        update_xmp_orientation(&photo, 90).unwrap();
+
+        update_xmp_description(&photo, Some("Nuevo@2024")).unwrap();
+        let c = std::fs::read_to_string(photo.with_extension("xmp")).unwrap();
+        assert!(c.contains(">Nuevo@2024<"));
+        assert!(!c.contains("Viejo@2023"));
+        assert!(c.contains("<tiff:Orientation>6</tiff:Orientation>"));
+    }
+
+    #[test]
+    fn no_sidecar_is_created_to_remove_nothing() {
+        let photo = temp_photo("none");
+        update_xmp_description(&photo, None).unwrap();
+        assert!(!photo.with_extension("xmp").exists());
+    }
 }

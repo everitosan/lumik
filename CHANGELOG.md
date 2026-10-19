@@ -17,6 +17,10 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   ver los años y los proyectos de cada año de más recientes a más antiguos o al
   revés. La elección se guarda en la configuración de Lumik y se conserva entre
   reinicios.
+- **Editar proyecto**: además del nombre se pueden cambiar la fecha de sesión y
+  la descripción. Dos opciones extienden el cambio a las fotos ya importadas:
+  renombrar los archivos con el nombre nuevo y actualizar la descripción
+  embebida (`{descripción}@{año}`). Los archivos de `_exported` no cambian.
 
 ### Cambiado
 - **Badge de estado del proyecto**: las tarjetas del dashboard (desktop y portal
