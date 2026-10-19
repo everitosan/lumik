@@ -184,7 +184,7 @@
         "photo_detail.fit": "Ajustar a pantalla",
         "photo_detail.rotate_left": "Rotar izquierda",
         "photo_detail.rotate_right": "Rotar derecha",
-        "photo_detail.cull": "Aprobar foto",
+        "photo_detail.cull": "Aprobar / quitar aprobación",
         "photo_detail.stars_0": "Sin estrellas",
         "photo_detail.stars_1": "1 estrella",
         "photo_detail.stars_2": "2 estrellas",
@@ -192,7 +192,7 @@
         "photo_detail.stars_4": "4 estrellas",
         "photo_detail.stars_5": "5 estrellas",
         "photo_detail.add_tag": "Agregar etiqueta",
-        "project.show_culled": "Mostrar solo fotos culled",
+        "project.show_culled": "Mostrar solo fotos aprobadas",
         "projects.new_project": "Crear nuevo proyecto",
         "projects.focus_search": "Enfocar barra de búsqueda",
         "project.back": "Volver a la lista de proyectos",
@@ -309,7 +309,7 @@
       "rating": "Clasificación",
       "color": "Color",
       "tags": "Etiquetas",
-      "cull": "Revisión"
+      "cull": "Aprobación"
     },
     "viewer": {
       "previous": "Foto anterior (←)",

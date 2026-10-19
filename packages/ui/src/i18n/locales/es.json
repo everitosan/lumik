@@ -52,8 +52,6 @@
   "photo": {
     "rating": "Clasificación",
     "tags": "Etiquetas",
-    "cull": "Seleccionar",
-    "uncull": "Descartar",
     "rotate": "Rotar",
     "saving": "↻ Guardando…",
     "saved": "✓ Guardado",

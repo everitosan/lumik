@@ -52,8 +52,6 @@
   "photo": {
     "rating": "Rating",
     "tags": "Tags",
-    "cull": "Cull",
-    "uncull": "Recover",
     "rotate": "Rotate",
     "saving": "↻ Saving…",
     "saved": "✓ Saved",
