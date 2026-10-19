@@ -109,7 +109,7 @@ El usuario SHALL poder archivar y desarchivar un proyecto desde su tarjeta, sin 
 
 #### Scenario: Estadísticas y búsqueda
 - **WHEN** los archivados están ocultos
-- **THEN** el contador de proyectos y fotos de la cabecera y el buscador no los incluyen
+- **THEN** el contador de proyectos y fotos del dashboard y el buscador no los incluyen
 
 #### Scenario: Proyecto archivado en uso
 - **WHEN** el usuario abre un proyecto archivado e importa fotos en él
