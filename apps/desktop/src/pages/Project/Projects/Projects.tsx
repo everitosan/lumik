@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SearchBar, ProjectCard, Button, Icon } from '@lumik/ui';
+import { SearchBar, ProjectCard, Button, Icon, FilterBar, FilterBarDivider } from '@lumik/ui';
 import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, useDashboardShowArchived, useDashboardSort, matchesKey, usePlatform } from '../../../lib/hooks';
 import { createProject, ensureProjectSynced, setProjectArchived, relocateBackup, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink } from '../../../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../../../components/CreateProjectModal';
@@ -12,6 +12,15 @@ const containerStyles: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   height: '100%',
+  overflow: 'hidden',
+};
+
+// Cabecera + cuadrícula; la barra de filtros queda debajo, a todo el ancho.
+const contentStyles: React.CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  display: 'flex',
+  flexDirection: 'column',
   padding: '24px 32px',
   gap: '24px',
   overflow: 'hidden',
@@ -69,9 +78,10 @@ const sortTriggerStyles: React.CSSProperties = {
 
 const sortPanelStyles: React.CSSProperties = {
   position: 'absolute',
-  top: '100%',
+  // Vive en la barra inferior: abre hacia arriba.
+  bottom: '100%',
   right: 0,
-  marginTop: '4px',
+  marginBottom: '4px',
   padding: '8px',
   display: 'flex',
   flexDirection: 'column',
@@ -456,102 +466,114 @@ export function Projects({ onProjectClick }: ProjectsProps) {
 
   return (
     <div style={containerStyles}>
-      <div style={headerStyles}>
-        <div style={headerLeftStyles}>
-          <h1 style={titleStyles}>{t('dashboard.title')}</h1>
-          <div style={statsStyles}>
-            <span style={statItemStyles}>
-              <span style={statValueStyles}>{shownProjects.length}</span> {t('dashboard.statistics.projects')}
-            </span>
-            <span style={statItemStyles}>
-              <span style={statValueStyles}>{totalPhotos.toLocaleString()}</span> {t('dashboard.statistics.photos')}
-            </span>
+      <div style={contentStyles}>
+        <div style={headerStyles}>
+          <div style={headerLeftStyles}>
+            <h1 style={titleStyles}>{t('dashboard.title')}</h1>
+            <div style={statsStyles}>
+              <span style={statItemStyles}>
+                <span style={statValueStyles}>{shownProjects.length}</span> {t('dashboard.statistics.projects')}
+              </span>
+              <span style={statItemStyles}>
+                <span style={statValueStyles}>{totalPhotos.toLocaleString()}</span> {t('dashboard.statistics.photos')}
+              </span>
+            </div>
           </div>
-        </div>
-        <div style={headerCenterStyles}>
-          <SearchBar
-            ref={searchRef}
-            placeholder={t('dashboard.searchPlaceholder')}
-            onSearch={setSearchQuery}
-          />
-        </div>
-        <div style={headerRightStyles}>
-          {archivedCount > 0 && (
-            <button
-              type="button"
-              style={showArchived ? archivedToggleActiveStyles : sortTriggerStyles}
-              onClick={() => setShowArchived(!showArchived)}
-              aria-pressed={showArchived}
-              title={showArchived ? t('dashboard.archived.hide') : t('dashboard.archived.show')}
+          <div style={headerCenterStyles}>
+            <SearchBar
+              ref={searchRef}
+              placeholder={t('dashboard.searchPlaceholder')}
+              onSearch={setSearchQuery}
+            />
+          </div>
+          <div style={headerRightStyles}>
+            <Button
+              variant="primary"
+              leftIcon={<Icon name="plus" size="sm" />}
+              onClick={() => setShowCreateModal(true)}
             >
-              <Icon name="archive" size="sm" />
-              {t('dashboard.archived.label', { count: archivedCount })}
-            </button>
+              {t('dashboard.newProject')}
+            </Button>
+          </div>
+        </div>
+
+        <div style={gridContainerStyles}>
+          {loading && (
+            <div style={loadingStyles}>{t('dashboard.loading')}</div>
           )}
-          <SortMenu sort={sort} onChange={setSort} />
-          <Button
-            variant="primary"
-            leftIcon={<Icon name="plus" size="sm" />}
-            onClick={() => setShowCreateModal(true)}
-          >
-            {t('dashboard.newProject')}
-          </Button>
+
+          {error && (
+            <div style={loadingStyles}>{t('dashboard.error')}: {error}</div>
+          )}
+
+          {!loading && !error && filteredProjects.length === 0 && (
+            <div style={emptyStyles}>
+              <span>{t('dashboard.empty')}</span>
+              <span style={{ fontSize: '14px' }}>
+                {t('dashboard.emptyHint')}
+              </span>
+            </div>
+          )}
+
+          {!loading && !error && projectsByYear.map(([year, yearProjects]) => (
+            <div key={year} style={yearSectionStyles}>
+              <div style={yearSeparatorStyles}>
+                {year === 'sin-fecha' ? t('dashboard.noDate') : year}
+              </div>
+              <div style={gridStyles}>
+                {yearProjects.map((project) => (
+                  <ProjectCard
+                    key={project.id}
+                    name={project.name}
+                    photoCount={project.photo_count}
+                    date={project.session_date ?? project.created_at}
+                    status={project.workflow_status}
+                    driveName={devices?.find((d) => d.uuid === project.device_uuid)?.name ?? project.device_uuid}
+                    thumbnailUrl={coverThumbnails[project.id]}
+                    providers={(project.backup_providers ?? '').split(',').map((s) => s.trim()).filter(Boolean)}
+                    onProviderOpen={(url, provider) => {
+                      // Enlace expirable a la carpeta si el proveedor lo soporta;
+                      // si no, abre la web del proveedor.
+                      void getBackupFolderLink(project.id, provider)
+                        .then((link) => openExternalUrl(link ?? url))
+                        .catch(() => openExternalUrl(url));
+                    }}
+                    onClick={() => handleProjectClick(project)}
+                    onOpenFolder={canOpenFolder ? () => handleOpenFolder(project) : undefined}
+                    onEdit={() => setEditingProject(project)}
+                    onToggleArchive={() => handleToggleArchive(project)}
+                    onDelete={() => setDeletingProject(project)}
+                    archived={project.archived}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div style={gridContainerStyles}>
-        {loading && (
-          <div style={loadingStyles}>{t('dashboard.loading')}</div>
-        )}
-
-        {error && (
-          <div style={loadingStyles}>{t('dashboard.error')}: {error}</div>
-        )}
-
-        {!loading && !error && filteredProjects.length === 0 && (
-          <div style={emptyStyles}>
-            <span>{t('dashboard.empty')}</span>
-            <span style={{ fontSize: '14px' }}>
-              {t('dashboard.emptyHint')}
-            </span>
-          </div>
-        )}
-
-        {!loading && !error && projectsByYear.map(([year, yearProjects]) => (
-          <div key={year} style={yearSectionStyles}>
-            <div style={yearSeparatorStyles}>
-              {year === 'sin-fecha' ? t('dashboard.noDate') : year}
-            </div>
-            <div style={gridStyles}>
-              {yearProjects.map((project) => (
-                <ProjectCard
-                  key={project.id}
-                  name={project.name}
-                  photoCount={project.photo_count}
-                  date={project.session_date ?? project.created_at}
-                  status={project.workflow_status}
-                  driveName={devices?.find((d) => d.uuid === project.device_uuid)?.name ?? project.device_uuid}
-                  thumbnailUrl={coverThumbnails[project.id]}
-                  providers={(project.backup_providers ?? '').split(',').map((s) => s.trim()).filter(Boolean)}
-                  onProviderOpen={(url, provider) => {
-                    // Enlace expirable a la carpeta si el proveedor lo soporta;
-                    // si no, abre la web del proveedor.
-                    void getBackupFolderLink(project.id, provider)
-                      .then((link) => openExternalUrl(link ?? url))
-                      .catch(() => openExternalUrl(url));
-                  }}
-                  onClick={() => handleProjectClick(project)}
-                  onOpenFolder={canOpenFolder ? () => handleOpenFolder(project) : undefined}
-                  onEdit={() => setEditingProject(project)}
-                  onToggleArchive={() => handleToggleArchive(project)}
-                  onDelete={() => setDeletingProject(project)}
-                  archived={project.archived}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      <FilterBar
+        end={
+          <>
+            {archivedCount > 0 && (
+              <>
+                <button
+                  type="button"
+                  style={showArchived ? archivedToggleActiveStyles : sortTriggerStyles}
+                  onClick={() => setShowArchived(!showArchived)}
+                  aria-pressed={showArchived}
+                  title={showArchived ? t('dashboard.archived.hide') : t('dashboard.archived.show')}
+                >
+                  <Icon name="archive" size="sm" />
+                  {t('dashboard.archived.label', { count: archivedCount })}
+                </button>
+                <FilterBarDivider />
+              </>
+            )}
+            <SortMenu sort={sort} onChange={setSort} />
+          </>
+        }
+      />
 
       <CreateProjectModal
         open={showCreateModal}

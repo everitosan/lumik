@@ -35,6 +35,11 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   Feather a la biblioteca Lucide (su fork mantenido), con el mismo estilo y
   trazos uniformes. Los componentes y nombres de iconos no cambian.
 
+- **Barra de filtros del dashboard**: "Archivados" y "Ordenar" pasan de la
+  cabecera a una barra inferior alineada a la derecha, con el mismo diseño que
+  el pie del detalle de proyecto. La cabecera queda con el título y los
+  contadores, el buscador y "Nuevo proyecto".
+
 ### Corregido
 - No se podía impedir una importación sin espacio suficiente en el disco del
   proyecto: ahora el botón para iniciarla se desactiva y se avisa del espacio

@@ -29,6 +29,10 @@ export { Input } from './components/Input';
 export type { InputProps, InputVariant } from './components/Input';
 export { Checkbox } from './components/Checkbox';
 export type { CheckboxProps } from './components/Checkbox';
+export { FilterBar, FilterBarDivider } from './components/FilterBar';
+export type { FilterBarProps } from './components/FilterBar';
+export { FilterToggle } from './components/FilterToggle';
+export type { FilterToggleProps } from './components/FilterToggle';
 
 export { Stepper } from './components/Stepper';
 export type { StepperProps, Step } from './components/Stepper';
