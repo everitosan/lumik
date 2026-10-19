@@ -1,5 +1,6 @@
 use super::models::*;
 use super::{GlobalDatabase, ProjectDatabase, DbResult};
+use crate::domain::project::DashboardSort;
 use chrono::Utc;
 use rusqlite::params;
 use uuid::Uuid;
@@ -228,6 +229,20 @@ impl GlobalDatabase {
             if settings.finder_tags_sidecar { "true" } else { "false" },
         )?;
         self.get_app_settings()
+    }
+
+    /// Orden del dashboard elegido por el usuario (claves propias, independientes
+    /// de `AppSettings` para que guardar Ajustes no lo restablezca).
+    pub fn get_dashboard_sort(&self) -> DbResult<DashboardSort> {
+        let years = self.get_setting("dashboard_year_order")?;
+        let projects = self.get_setting("dashboard_project_order")?;
+        Ok(DashboardSort::from_stored(years.as_deref(), projects.as_deref()))
+    }
+
+    pub fn update_dashboard_sort(&self, sort: &DashboardSort) -> DbResult<DashboardSort> {
+        self.set_setting("dashboard_year_order", sort.years.as_str())?;
+        self.set_setting("dashboard_project_order", sort.projects.as_str())?;
+        self.get_dashboard_sort()
     }
 
     // ------------------------------------------------------------------------

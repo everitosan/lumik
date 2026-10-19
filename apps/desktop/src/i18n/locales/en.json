@@ -247,7 +247,14 @@
     "empty": "No projects found",
     "emptyHint": "Create a new project to get started",
     "error": "Error loading projects",
-    "noDate": "No date"
+    "noDate": "No date",
+    "sort": {
+      "label": "Sort",
+      "years": "Years",
+      "projects": "Projects within each year",
+      "newestFirst": "Newest first",
+      "oldestFirst": "Oldest first"
+    }
   },
   "backup": {
     "button": "Back up",

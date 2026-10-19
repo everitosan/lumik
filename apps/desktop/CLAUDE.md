@@ -250,7 +250,7 @@ Proyectos: `get_projects_dashboard`, `get_project`, `create_project`, `rename_pr
 Fotos: `get_project_photos`, `get_project_thumbnails`, `get_thumbnail`, `get_photo_preview`, `save_photo_rotation`, `save_photo_rating`, `save_photo_culled`, `regenerate_project_thumbnails`
 Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`
-Ajustes: `get_app_settings`, `update_app_settings`
+Ajustes: `get_app_settings`, `update_app_settings`, `get_dashboard_sort`, `update_dashboard_sort`
 Keybindings: `get_keybindings`, `update_keybinding`
 Import: `start_import`
 Respaldo — cuenta: `get_backup_server_url`, `set_backup_server_url`, `backup_register`, `backup_login`, `backup_logout`, `get_backup_session`

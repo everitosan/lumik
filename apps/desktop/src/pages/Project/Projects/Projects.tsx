@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchBar, ProjectCard, Button, Icon } from '@lumik/ui';
-import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, matchesKey, usePlatform } from '../../../lib/hooks';
+import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, useDashboardSort, matchesKey, usePlatform } from '../../../lib/hooks';
 import { createProject, renameProject, relocateBackup, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink } from '../../../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../../../components/CreateProjectModal';
 import { RenameProjectModal } from './RenameProjectModal';
 import { DeleteProjectModal } from './DeleteProjectModal';
-import type { ProjectDashboard } from '../../../lib/types';
+import type { DashboardSort, ProjectDashboard, SortDirection } from '../../../lib/types';
 
 const containerStyles: React.CSSProperties = {
   display: 'flex',
@@ -44,7 +44,159 @@ const headerCenterStyles: React.CSSProperties = {
 const headerRightStyles: React.CSSProperties = {
   ...headerSectionStyles,
   justifyContent: 'flex-end',
+  gap: '12px',
 };
+
+// Sort menu (mismo lenguaje visual que los filtros del detalle de proyecto)
+const sortMenuWrapperStyles: React.CSSProperties = {
+  position: 'relative',
+};
+
+const sortTriggerStyles: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  padding: '8px 12px',
+  fontFamily: 'var(--lumik-font-primary, Inter)',
+  fontSize: '13px',
+  color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+  background: 'transparent',
+  border: '1px solid var(--lumik-outline-variant, #424654)',
+  borderRadius: 'var(--lumik-radius-sm, 4px)',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+const sortPanelStyles: React.CSSProperties = {
+  position: 'absolute',
+  top: '100%',
+  right: 0,
+  marginTop: '4px',
+  padding: '8px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '8px',
+  minWidth: '240px',
+  backgroundColor: 'var(--lumik-surface-container, #2d2d2d)',
+  border: '1px solid var(--lumik-outline-variant, #424654)',
+  borderRadius: 'var(--lumik-radius-sm, 4px)',
+  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+  zIndex: 1000,
+};
+
+const sortGroupLabelStyles: React.CSSProperties = {
+  padding: '4px 8px 0',
+  fontFamily: 'var(--lumik-font-mono, JetBrains Mono)',
+  fontSize: '11px',
+  fontWeight: 500,
+  color: 'var(--lumik-outline, #8c90a0)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+};
+
+const sortOptionStyles: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  padding: '6px 8px',
+  fontSize: '13px',
+  color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+  borderRadius: '4px',
+  cursor: 'pointer',
+};
+
+const sortOptionSelectedStyles: React.CSSProperties = {
+  ...sortOptionStyles,
+  backgroundColor: 'var(--lumik-surface-bright, #3a3a3a)',
+  color: 'var(--lumik-on-surface, #e5e2e1)',
+};
+
+const sortRadioStyles: React.CSSProperties = {
+  margin: 0,
+  accentColor: 'var(--lumik-primary, #b0c6ff)',
+  cursor: 'pointer',
+};
+
+/** Compara dos claves de fecha ISO en la dirección indicada. */
+const compareIn = (direction: SortDirection, a: string, b: string) =>
+  direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a);
+
+interface SortMenuProps {
+  sort: DashboardSort;
+  onChange: (sort: DashboardSort) => void;
+}
+
+/** Botón "Ordenar" con el orden de los años y de los proyectos de cada año. */
+function SortMenu({ sort, onChange }: SortMenuProps) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  const groups: { key: keyof DashboardSort; label: string }[] = [
+    { key: 'years', label: t('dashboard.sort.years') },
+    { key: 'projects', label: t('dashboard.sort.projects') },
+  ];
+  const options: { value: SortDirection; label: string }[] = [
+    { value: 'desc', label: t('dashboard.sort.newestFirst') },
+    { value: 'asc', label: t('dashboard.sort.oldestFirst') },
+  ];
+
+  return (
+    <div ref={ref} style={sortMenuWrapperStyles}>
+      <button
+        type="button"
+        style={sortTriggerStyles}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
+        <Icon name="sort" size="sm" />
+        {t('dashboard.sort.label')}
+        <Icon name="chevron-down" size="sm" />
+      </button>
+      {open && (
+        <div style={sortPanelStyles} role="group" aria-label={t('dashboard.sort.label')}>
+          {groups.map((group) => (
+            <div key={group.key} role="radiogroup" aria-label={group.label}>
+              <div style={sortGroupLabelStyles}>{group.label}</div>
+              {options.map((option) => {
+                const selected = sort[group.key] === option.value;
+                return (
+                  <label key={option.value} style={selected ? sortOptionSelectedStyles : sortOptionStyles}>
+                    <input
+                      type="radio"
+                      name={`dashboard-sort-${group.key}`}
+                      checked={selected}
+                      onChange={() => onChange({ ...sort, [group.key]: option.value })}
+                      style={sortRadioStyles}
+                    />
+                    {option.label}
+                  </label>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const titleStyles: React.CSSProperties = {
   fontSize: '28px',
@@ -141,6 +293,7 @@ export function Projects({ onProjectClick }: ProjectsProps) {
   const canOpenFolder = platform !== 'android';
 
   const kb = useContextKeybindings('projects');
+  const { sort, setSort } = useDashboardSort();
 
   useEffect(() => {
     if (showCreateModal) return;
@@ -201,17 +354,18 @@ export function Projects({ onProjectClick }: ProjectsProps) {
       .sort(([a], [b]) => {
         if (a === 'sin-fecha') return 1;
         if (b === 'sin-fecha') return -1;
-        return b.localeCompare(a); // newest year first
+        return compareIn(sort.years, a, b);
       })
       .map(([year, list]) => [
         year,
         [...list].sort((a, b) => {
           const da = a.session_date ?? a.created_at;
           const db = b.session_date ?? b.created_at;
-          return da.localeCompare(db); // oldest first within the year
+          // Mismo día: desempata por fecha de creación en la misma dirección.
+          return compareIn(sort.projects, da, db) || compareIn(sort.projects, a.created_at, b.created_at);
         }),
       ] as [string, typeof list]);
-  }, [filteredProjects]);
+  }, [filteredProjects, sort]);
 
   const totalPhotos = useMemo(() => {
     if (!projects) return 0;
@@ -309,6 +463,7 @@ export function Projects({ onProjectClick }: ProjectsProps) {
           />
         </div>
         <div style={headerRightStyles}>
+          <SortMenu sort={sort} onChange={setSort} />
           <Button
             variant="primary"
             leftIcon={<Icon name="plus" size="sm" />}

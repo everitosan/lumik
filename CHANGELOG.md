@@ -13,6 +13,10 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   copyright, URL) antes de importar. Parten de la configuración global y lo que
   se cambie ahí solo aplica a esa importación. El resumen de confirmación
   muestra lo elegido.
+- **Orden del dashboard configurable**: el botón Ordenar del dashboard permite
+  ver los años y los proyectos de cada año de más recientes a más antiguos o al
+  revés. La elección se guarda en la configuración de Lumik y se conserva entre
+  reinicios.
 
 ### Cambiado
 - **Badge de estado del proyecto**: las tarjetas del dashboard (desktop y portal

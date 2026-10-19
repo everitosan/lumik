@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   AppSettings,
+  DashboardSort,
   DetectedDevice,
   Keybinding,
   KnownDevice,
@@ -248,6 +249,14 @@ export async function updateAppSettings(
   settings: AppSettings
 ): Promise<AppSettings> {
   return invoke('update_app_settings', { settings });
+}
+
+export async function getDashboardSort(): Promise<DashboardSort> {
+  return invoke('get_dashboard_sort');
+}
+
+export async function updateDashboardSort(sort: DashboardSort): Promise<DashboardSort> {
+  return invoke('update_dashboard_sort', { sort });
 }
 
 // ============================================================================

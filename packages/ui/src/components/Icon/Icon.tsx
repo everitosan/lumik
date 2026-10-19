@@ -1,6 +1,7 @@
 import type { ComponentType, CSSProperties, SVGProps } from 'react';
 import {
   Aperture,
+  ArrowUpDown,
   Calendar,
   Check,
   ChevronDown,
@@ -61,7 +62,8 @@ export type IconName =
   | 'rotate-cw'
   | 'info'
   | 'tags'
-  | 'eject';
+  | 'eject'
+  | 'sort';
 
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
@@ -124,6 +126,7 @@ const icons: Record<IconName, IconComponent> = {
   'rotate-cw': RotateCw,
   tags: Tag,
   eject: Eject,
+  sort: ArrowUpDown,
 };
 
 export const iconNames = Object.keys(icons) as IconName[];

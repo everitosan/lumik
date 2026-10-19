@@ -1,7 +1,8 @@
 //! Reglas de proyecto: derivación del slug y de la carpeta por fecha en disco,
-//! y orden del dashboard. Puras (sin reloj ni sistema de archivos); el reloj
+//! y orden del dashboard (incluido el orden elegido por el usuario). Puras (sin reloj ni sistema de archivos); el reloj
 //! (fecha de hoy como fallback) lo resuelve el llamador.
 
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
@@ -68,9 +69,95 @@ pub fn compare_dashboard(
     }
 }
 
+/// Dirección de un orden del dashboard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
+impl SortDirection {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SortDirection::Asc => "asc",
+            SortDirection::Desc => "desc",
+        }
+    }
+
+    /// Interpreta un valor guardado; `None` si falta o es desconocido.
+    pub fn parse(value: Option<&str>) -> Option<Self> {
+        match value? {
+            "asc" => Some(SortDirection::Asc),
+            "desc" => Some(SortDirection::Desc),
+            _ => None,
+        }
+    }
+}
+
+/// Orden elegido por el usuario para el dashboard: secciones de año y
+/// proyectos dentro de cada año. Se guarda en la configuración global.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DashboardSort {
+    pub years: SortDirection,
+    pub projects: SortDirection,
+}
+
+impl Default for DashboardSort {
+    /// El orden histórico del dashboard: años recientes primero y, dentro de
+    /// cada año, proyectos antiguos primero.
+    fn default() -> Self {
+        Self {
+            years: SortDirection::Desc,
+            projects: SortDirection::Asc,
+        }
+    }
+}
+
+impl DashboardSort {
+    /// Construye el orden desde los valores guardados; cada clave ausente o
+    /// desconocida toma su valor por defecto.
+    pub fn from_stored(years: Option<&str>, projects: Option<&str>) -> Self {
+        let default = Self::default();
+        Self {
+            years: SortDirection::parse(years).unwrap_or(default.years),
+            projects: SortDirection::parse(projects).unwrap_or(default.projects),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dashboard_sort_defaults_when_nothing_stored() {
+        let sort = DashboardSort::from_stored(None, None);
+        assert_eq!(sort, DashboardSort::default());
+        assert_eq!(sort.years, SortDirection::Desc);
+        assert_eq!(sort.projects, SortDirection::Asc);
+    }
+
+    #[test]
+    fn dashboard_sort_reads_stored_values() {
+        let sort = DashboardSort::from_stored(Some("asc"), Some("desc"));
+        assert_eq!(sort.years, SortDirection::Asc);
+        assert_eq!(sort.projects, SortDirection::Desc);
+    }
+
+    #[test]
+    fn dashboard_sort_unknown_value_falls_back_per_key() {
+        let sort = DashboardSort::from_stored(Some("sideways"), Some("desc"));
+        assert_eq!(sort.years, SortDirection::Desc);
+        assert_eq!(sort.projects, SortDirection::Desc);
+    }
+
+    #[test]
+    fn sort_direction_round_trips_as_str() {
+        for d in [SortDirection::Asc, SortDirection::Desc] {
+            assert_eq!(SortDirection::parse(Some(d.as_str())), Some(d));
+        }
+    }
 
     #[test]
     fn slug_replaces_slash_and_trims() {

@@ -190,6 +190,8 @@ pub fn run() {
             commands::update_keybinding,
             commands::get_app_settings,
             commands::update_app_settings,
+            commands::get_dashboard_sort,
+            commands::update_dashboard_sort,
 
             // ── Respaldo: cuenta / sesión (Fase 4) ──────────────────────────
             commands::get_backup_server_url,

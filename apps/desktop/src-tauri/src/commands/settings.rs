@@ -2,6 +2,7 @@
 use super::AppState;
 use crate::application::error::{AppError, AppResult};
 use crate::db::models::*;
+use crate::domain::project::DashboardSort;
 use log::{debug, info};
 use tauri::State;
 
@@ -86,4 +87,16 @@ pub fn update_app_settings(state: State<AppState>, settings: AppSettings) -> App
     let result = state.global_db.update_app_settings(&settings)?;
     info!("update_app_settings success");
     Ok(result)
+}
+
+#[tauri::command]
+pub fn get_dashboard_sort(state: State<AppState>) -> AppResult<DashboardSort> {
+    debug!("get_dashboard_sort called");
+    Ok(state.global_db.get_dashboard_sort()?)
+}
+
+#[tauri::command]
+pub fn update_dashboard_sort(state: State<AppState>, sort: DashboardSort) -> AppResult<DashboardSort> {
+    info!("update_dashboard_sort called: {:?}", sort);
+    Ok(state.global_db.update_dashboard_sort(&sort)?)
 }

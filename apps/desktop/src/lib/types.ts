@@ -101,6 +101,19 @@ export interface AppSettings {
   finder_tags_sidecar: boolean;
 }
 
+// Orden del dashboard elegido por el usuario (BD global)
+export type SortDirection = 'asc' | 'desc';
+
+export interface DashboardSort {
+  /** Secciones de año */
+  years: SortDirection;
+  /** Proyectos dentro de cada año */
+  projects: SortDirection;
+}
+
+/** Orden histórico: años recientes primero, proyectos antiguos primero. */
+export const DEFAULT_DASHBOARD_SORT: DashboardSort = { years: 'desc', projects: 'asc' };
+
 // Per-project UI and workflow settings
 export interface ProjectSettings {
   sidebar_open: boolean;

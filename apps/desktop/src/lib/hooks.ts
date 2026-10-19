@@ -3,8 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 import * as api from './api';
+import { DEFAULT_DASHBOARD_SORT } from './types';
 import type {
   AppSettings,
+  DashboardSort,
   DetectedDevice,
   KeybindingMap,
   Photo,
@@ -316,6 +318,43 @@ export function useAppSettings() {
   }, [refetch]);
 
   return { ...state, refetch };
+}
+
+/**
+ * Orden del dashboard. Mientras carga usa el orden por defecto (el histórico),
+ * así no hay salto visual. Los cambios se aplican al momento y se guardan; si
+ * guardar falla, vuelve al valor anterior.
+ */
+export function useDashboardSort() {
+  const [sort, setSortState] = useState<DashboardSort>(DEFAULT_DASHBOARD_SORT);
+  const sortRef = useRef(sort);
+  sortRef.current = sort;
+  // Si el usuario cambia el orden antes de que llegue el guardado, gana su cambio.
+  const touchedRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getDashboardSort()
+      .then((stored) => {
+        if (!cancelled && !touchedRef.current) setSortState(stored);
+      })
+      .catch((err) => console.error('getDashboardSort failed:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const setSort = useCallback((next: DashboardSort) => {
+    const previous = sortRef.current;
+    touchedRef.current = true;
+    setSortState(next);
+    api.updateDashboardSort(next).catch((err) => {
+      console.error('updateDashboardSort failed:', err);
+      setSortState(previous);
+    });
+  }, []);
+
+  return { sort, setSort };
 }
 
 // ============================================================================
