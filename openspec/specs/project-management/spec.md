@@ -47,7 +47,7 @@ El sistema SHALL listar los proyectos encontrados en los dispositivos montados y
 - **THEN** sus proyectos dejan de aparecer en el dashboard
 
 ### Requirement: Orden del dashboard
-El dashboard SHALL agrupar los proyectos en secciones por el año de su fecha de sesión o, si no la tienen, de su fecha de creación. Las secciones y los proyectos de cada sección SHALL ordenarse en la dirección elegida por el usuario. Dentro de una sección, los proyectos SHALL ordenarse por esa misma fecha y desempatarse por fecha de creación en la misma dirección. Los proyectos archivados o eliminados lógicamente SHALL quedar fuera del dashboard.
+El dashboard SHALL agrupar los proyectos en secciones por el año de su fecha de sesión o, si no la tienen, de su fecha de creación. Las secciones y los proyectos de cada sección SHALL ordenarse en la dirección elegida por el usuario. Dentro de una sección, los proyectos SHALL ordenarse por esa misma fecha y desempatarse por fecha de creación en la misma dirección. Los proyectos eliminados lógicamente SHALL quedar fuera del dashboard, y los archivados SHALL mostrarse u ocultarse según la elección del usuario.
 
 #### Scenario: Mezcla de proyectos con y sin fecha
 - **WHEN** existe un proyecto sin fecha de sesión creado el 2026-05-20 y proyectos con fecha de sesión en 2026
@@ -56,6 +56,10 @@ El dashboard SHALL agrupar los proyectos en secciones por el año de su fecha de
 #### Scenario: Misma fecha de sesión
 - **WHEN** dos proyectos comparten fecha de sesión y el orden de proyectos es de más antiguo a más reciente
 - **THEN** aparece primero el creado antes
+
+#### Scenario: Archivados mostrados en orden
+- **WHEN** se muestran los archivados y un proyecto archivado es del 2026-03-02, entre dos activos del 2026-01-10 y del 2026-08-10
+- **THEN** dentro de la sección 2026 aparece entre ambos, en el orden elegido
 
 ### Requirement: Orden configurable del dashboard
 El usuario SHALL poder elegir desde el dashboard si las secciones de año se muestran de la más reciente a la más antigua o al revés, y lo mismo para los proyectos dentro de cada año. La elección SHALL aplicarse al momento y guardarse en la configuración de la instalación, no en los discos, de modo que se conserve entre reinicios. En una instalación nueva, los años SHALL ir de más reciente a más antiguo y los proyectos de más antiguo a más reciente.
@@ -79,6 +83,37 @@ El usuario SHALL poder elegir desde el dashboard si las secciones de año se mue
 #### Scenario: Independiente de los discos
 - **WHEN** el usuario cambia el orden y después conecta otro disco con proyectos
 - **THEN** los proyectos de ese disco se muestran con el mismo orden
+
+### Requirement: Archivar proyectos
+El usuario SHALL poder archivar y desarchivar un proyecto desde su tarjeta, sin confirmación. El dashboard SHALL ocultar los archivados salvo que el usuario elija mostrarlos con un control que indica cuántos hay y que solo aparece si hay alguno. Esa elección SHALL guardarse en la configuración de la instalación. Archivar no SHALL cambiar nada más del proyecto.
+
+#### Scenario: Archivar un proyecto
+- **WHEN** el usuario elige "Archivar" en la tarjeta de un proyecto con los archivados ocultos
+- **THEN** el proyecto desaparece del dashboard y el control muestra un archivado más
+
+#### Scenario: Mostrar archivados
+- **WHEN** hay proyectos archivados y el usuario activa el control de archivados
+- **THEN** los archivados aparecen en su año y en su orden, atenuados y con la etiqueta "Archivado"
+
+#### Scenario: Desarchivar
+- **WHEN** el usuario elige "Desarchivar" en la tarjeta de un proyecto archivado
+- **THEN** el proyecto vuelve a mostrarse como los demás aunque los archivados estén ocultos
+
+#### Scenario: Preferencia persistente
+- **WHEN** el usuario activa el control de archivados y reinicia la app
+- **THEN** el dashboard sigue mostrando los archivados
+
+#### Scenario: Sin archivados
+- **WHEN** ningún proyecto está archivado
+- **THEN** el control de archivados no se muestra
+
+#### Scenario: Estadísticas y búsqueda
+- **WHEN** los archivados están ocultos
+- **THEN** el contador de proyectos y fotos de la cabecera y el buscador no los incluyen
+
+#### Scenario: Proyecto archivado en uso
+- **WHEN** el usuario abre un proyecto archivado e importa fotos en él
+- **THEN** la importación funciona igual que en un proyecto activo y el proyecto sigue archivado
 
 ### Requirement: Información del proyecto en el dashboard
 Cada entrada del dashboard SHALL mostrar nombre, fecha de sesión, número de fotos, portada y estado de flujo agregado: `imported` si no hay fotos o alguna está importada sin editar, `edited` si alguna está editada y ninguna sin editar, y `delivered` en otro caso.
