@@ -5,14 +5,25 @@ Backend SaaS multi-tenant para el respaldo de `_exported` a la nube. Stack: **Ru
 
 Plan y decisiones: [../../docs/backup-plan.md](../../docs/backup-plan.md).
 
-## Estado — Fase 0 (infra)
+## Estado — beta (fases 0–9 del plan)
 
-- Server axum con `GET /healthz` (verifica la BD).
-- Postgres (catálogo) vía `docker-compose`, con migraciones (`migrations/`).
-- Integración con rclone + smoke test de subida.
+- **Infra**: `GET /healthz` (verifica la BD), Postgres vía `docker-compose`,
+  migraciones al arrancar y rclone como backend de subida.
+- **Cuentas** (`/v1/auth/*`): registro, login, refresh con rotación, logout y `me`.
+  Contraseñas argon2id, JWT de acceso + refresh, rate limit por IP y aislamiento por
+  fotógrafo.
+- **Proveedores** (`/v1/providers`): Nextcloud y Mega por credenciales (cifradas con
+  AES-256-GCM). Google Drive, Dropbox y OneDrive responden 501 hasta registrar sus apps
+  OAuth.
+- **Catálogo** (`/v1/sync/*`, `/v1/projects*`): el desktop publica proyectos, fotos y
+  portada; los clientes listan proyectos y fotos con su estado de respaldo.
+- **Respaldo** (`/v1/projects/:id/backup/*`, `.../photos/:photo_id/backup`): subida
+  con fan-out a varios proveedores, recompresión opcional, SHA-256 + tamaño, carpeta
+  fija por proyecto (`prepare`), traslado al renombrar (`relocate`) y enlace con
+  caducidad a la carpeta (`link`).
 
-Las capas de **auth**, **catálogo/sync** y **backup** se añaden en fases
-posteriores (ver el plan).
+Comportamiento esperado: [`openspec/specs/`](../../openspec/specs/) (`backup-accounts`,
+`backup-providers`, `catalog-sync`, `cloud-backup`).
 
 ## Puesta en marcha (dev)
 
@@ -38,7 +49,10 @@ curl -s localhost:8787/healthz     # → {"status":"ok","db":"up"}
 ./scripts/rclone_smoke.sh          # → ✅ SMOKE OK
 ```
 
-## Esquema del catálogo (`migrations/0001_init.sql`)
+También se puede levantar desde la raíz con `make dev-server` (Postgres + API).
 
-`photographer` (cuenta) · `project` · `photo` (con `backup_*`) · `remote`
-(credenciales de nube por fotógrafo). Todo scoped por `photographer_id`.
+## Esquema del catálogo (`migrations/`)
+
+`photographer` (cuenta) · `refresh_token` · `project` (con portada, estado de flujo y
+`backup_dir`) · `photo` (con `backup_*`, hash y tamaño) · `remote` (credenciales de
+nube por fotógrafo, cifradas). Todo scoped por `photographer_id`.

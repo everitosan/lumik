@@ -1,8 +1,11 @@
 # Lumik Roadmap
 
-## Estado actual — MVP (v0.1.0-beta)
+## Estado actual — v0.1.3-beta
 
-Funcional en Linux, Windows y Android. Las features core del flujo de culling están implementadas.
+Funcional en Linux, Windows y Android. Las features core del flujo de culling están
+implementadas y el respaldo en la nube está en beta (server + portal web).
+
+La especificación de referencia de cada capability vive en [`openspec/specs/`](../openspec/specs/).
 
 | Feature | Estado |
 |---------|--------|
@@ -12,7 +15,10 @@ Funcional en Linux, Windows y Android. Las features core del flujo de culling es
 | Histograma RGB en tiempo real | ✅ Linux · Windows · Android |
 | Rating: estrellas, etiquetas de color | ✅ Linux · Windows · Android |
 | Tags personalizados | ✅ Linux · Windows · Android |
-| Culling: mover a `_culled/` y revertir | ✅ Linux · Windows · Android |
+| Filtros por aprobadas, estrellas, tags y color | ✅ Linux · Windows · Android |
+| Culling: aprobar (mover a `_culled/`) y quitar aprobación | ✅ Linux · Windows · Android |
+| Proyectos: renombrar, eliminar, portada | ✅ Linux · Windows · Android |
+| Abrir la carpeta del proyecto en el explorador | ✅ Linux · Windows |
 | Videos organizados en `_video/` | ✅ Linux · Windows · Android |
 | Detección de discos por UUID | ✅ Linux · Windows · Android |
 | Metadatos XMP del fotógrafo en import | ✅ Linux · Windows (embed en DNG) · Android (sidecar .xmp) |
@@ -20,6 +26,9 @@ Funcional en Linux, Windows y Android. Las features core del flujo de culling es
 | Gestos touch (pinch, swipe) | ✅ Android |
 | Thumbnails y previews de JPEG | ✅ Linux · Windows · Android |
 | Metadata EXIF de JPEG en BD | ✅ Linux · Windows · Android |
+| Internacionalización (es / en) | ✅ Linux · Windows · Android |
+| Respaldo de `_exported` a la nube (Mega, Nextcloud) | ✅ beta — desktop + server + portal web |
+| Portal web: dashboard de proyectos y subida desde iPad | ✅ beta |
 
 ---
 
@@ -37,18 +46,17 @@ La app funciona en tablet física (Huawei MatePad DBR-W09) pero tiene issues con
 
 ## Próximos pasos
 
-### Search by Tag
-Permitir buscar y filtrar fotos por tag dentro de un proyecto. El objetivo es que el
-fotógrafo pueda marcar fotos con tags semánticos durante el culling ("perfil", "grupal",
-"detalle") y luego filtrar la sesión por ellos para entregarlos por separado o editarlos
-en lote.
+### Proveedores OAuth (Google Drive, Dropbox, OneDrive)
+El server ya los reconoce pero responde 501 hasta registrar las apps OAuth de Lumik en
+cada proveedor. Detalle en [backup-plan.md](backup-plan.md) (Fase 3).
 
-**Alcance:**
-- Barra de búsqueda/filtro en la vista de proyecto
-- Filtrado por uno o más tags simultáneamente
-- Combinable con filtros existentes (culled, rating)
+### Cuentas de respaldo — endurecimiento
+Verificación de email, recuperación de contraseña y revocación de sesiones desde la UI.
 
----
+### Proyectos archivados
+El backend ya tiene `archive_project`, pero no hay UI. Idea inicial: una sección aparte de
+"archivadas" para que no aparezcan en el dashboard principal pero sigan consultables.
+Por definir.
 
 ### Albums
 Agrupaciones manuales de fotos que cruzan proyectos y sesiones. A diferencia de los
@@ -65,17 +73,17 @@ fotos del año", "Portafolio", "Entrega cliente X".
 
 ## Arquitectura / Deuda técnica
 
-- **Refactor del backend Rust a Arquitectura Limpia** — descomponer el módulo-Dios
-  `commands.rs` (2041 líneas) en capas (domain / application / infrastructure /
-  interface), blindando las reglas frágiles con tests de dominio. Plan y
-  checkpoints en [desktop-clean-architecture.md](desktop-clean-architecture.md).
+- ✅ **Refactor del backend Rust a Arquitectura Limpia** — completado (PR #1). Plan y
+  checkpoints en [desktop-clean-architecture.md](desktop-clean-architecture.md); quedan
+  diferidos `ProgressReporter`, los casos de uso de proyectos/dispositivos y los DTOs del
+  borde IPC.
+- URL del server de respaldo por defecto en el desktop (`http://localhost:8787`): cambiarla
+  antes de distribuir.
 
 ---
 
 ## Backlog (sin fecha)
 
-- Batch operations desde el grid (rating/cull en lote)
-- Servidor de respaldo con API offline-first
-- Portal web de entrega al cliente
-- App iPad para campo (requiere Mac para compilar)
+- Batch operations desde el grid (rating/aprobación en lote)
+- App iPad nativa para campo (requiere Mac para compilar; hoy el iPad usa el portal web)
 - macOS version

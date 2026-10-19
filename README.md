@@ -9,7 +9,15 @@ Suite de aplicaciones para que fotógrafos profesionales organicen, seleccionen,
 ![Storybook](https://img.shields.io/badge/Storybook-FF4785?logo=storybook&logoColor=white)
 ![pnpm](https://img.shields.io/badge/pnpm-F69220?logo=pnpm&logoColor=white)
 
-Monorepo pnpm con la app desktop (Tauri), la landing (Astro) y el UI kit (Storybook).
+Monorepo pnpm con:
+
+- **Desktop** (Tauri v2 · Linux, Windows, Android): importación, culling, calificación y respaldo.
+- **Server de respaldo** (Rust + axum + Postgres + rclone): cuentas, catálogo y subida a la nube.
+- **Portal web** (React + Vite): dashboard de proyectos y subida desde el navegador o el iPad.
+- **Landing** (Astro) y **UI kit** (Storybook de `@lumik/ui`).
+
+El comportamiento de cada capability está especificado en [`openspec/specs/`](openspec/specs/);
+el plan y el estado están en [`docs/ROADMAP.md`](docs/ROADMAP.md) y el [CHANGELOG](CHANGELOG.md).
 
 ## Comandos
 
@@ -20,6 +28,9 @@ make clean          # Limpia artefactos de build (dist)
 make dev-desktop    # App desktop en modo Tauri dev
 make dev-landing    # Landing (Astro) en dev
 make dev-uikit      # Storybook del UI kit
+make db-up          # Postgres del server de respaldo (docker compose)
+make dev-server     # Server de respaldo (Postgres + API en :8787)
+make dev-web        # Server de respaldo + portal web (API :8787, web :5173)
 
 make build-ui       # Compila @lumik/ui (dependencia de las apps)
 make build-desktop  # Build de producción de la app desktop (Tauri)

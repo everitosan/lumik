@@ -7,23 +7,30 @@ Permite organizar sesiones en proyectos, seleccionar, etiquetar, calificar y tag
 
 | App | Ubicacion | Stack | Estado |
 |-----|-----------|-------|--------|
-| Desktop Linux | `apps/desktop/` | Tauri (Rust + Web) | MVP en desarrollo |
-| Servidor backups | `apps/server/` | Por definir | Planificado |
-| Portal web clientes | `apps/web/` | Por definir | Planificado |
-| App iPad | `apps/ios/` | Swift/SwiftUI | Planificado (requiere Mac) |
+| Desktop (Linux, Windows, Android) | `apps/desktop/` | Tauri v2 (Rust + React) | Beta (v0.1.3) |
+| Servidor de respaldo | `apps/server/` | Rust + axum + Postgres + rclone | Beta |
+| Portal web de respaldo | `apps/web/` | React 19 + Vite | Beta |
+| Landing | `apps/landing/` | Astro | Publicada |
+| UI kit (Storybook) | `apps/uikit/` | Storybook + Vite | Activo |
+| App iPad | `apps/ios/` | Swift/SwiftUI | Planificado (requiere Mac); hoy el iPad usa el portal web |
+
+La especificación de comportamiento de cada capability vive en `openspec/specs/`.
 
 ## Estructura del monorepo
 
 ```
 lumik/
 ├── apps/
-│   ├── desktop/      # App Linux - importacion y culling
-│   ├── server/       # API de respaldo
-│   ├── web/          # Portal de entrega a clientes
-│   └── ios/          # App iPad para campo
+│   ├── desktop/      # App Tauri - importacion, culling y respaldo
+│   ├── server/       # API de respaldo (axum + Postgres + rclone)
+│   ├── web/          # Portal web de respaldo (tambien para iPad)
+│   ├── landing/      # Sitio publico (Astro)
+│   ├── uikit/        # Storybook de @lumik/ui
+│   └── ios/          # App iPad nativa (vacia, planificada)
 ├── packages/
-│   ├── ts-types/ # Tipos compartidos (TS)
+│   ├── ts-types/     # Tipos compartidos (TS)
 │   └── ui/           # Componentes UI reutilizables
+├── openspec/         # Specs de comportamiento y changes (OpenSpec)
 └── docs/             # Documentacion compartida
 ```
 

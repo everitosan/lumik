@@ -5,17 +5,28 @@ el server de respaldo (`apps/server`).
 
 Plan: [../../docs/backup-plan.md](../../docs/backup-plan.md).
 
-## Estado — Fase 2 (login en web)
+## Estado — beta (fases 2, 3 y 8 del plan)
 
-- Registro / inicio de sesión / cierre de sesión contra `/v1/auth/*`.
-- Sesión persistente (tokens en `localStorage`) con **refresh transparente en 401**.
-- Ruta protegida de ejemplo (`/`) que consume `GET /v1/auth/me`.
+- **Cuenta**: registro, inicio y cierre de sesión contra `/v1/auth/*`. Sesión en
+  `localStorage` con **refresh transparente en 401**.
+- **Dashboard (`/`)**: proyectos del catálogo agrupados por año, con portada, fotos
+  respaldadas, estado e iconos de proveedor. El icono abre la carpeta en la nube
+  (enlace con caducidad en Dropbox/OneDrive) o la web del proveedor.
+- **Subida desde el navegador / iPad**: al abrir un proyecto se eligen fotos,
+  proveedores y calidad; 6 subidas en paralelo con reintentos y sin duplicar lo ya
+  respaldado (mismo id determinista que el desktop).
+- **Configuración (`/config`)**: conectar/desconectar Nextcloud y Mega. Los
+  proveedores OAuth (Google Drive, Dropbox, OneDrive) aún no están disponibles.
 
-El dashboard de proyectos/respaldos llega en fases posteriores.
+Comportamiento esperado: [`openspec/specs/web-portal`](../../openspec/specs/web-portal/spec.md).
 
 ## Dev
 
 ```bash
+# Todo junto desde la raíz (Postgres + API :8787 + web :5173)
+make dev-web
+
+# O por separado:
 # 1. Server de respaldo corriendo (otra terminal)
 cd apps/server && docker compose up -d && cargo run
 

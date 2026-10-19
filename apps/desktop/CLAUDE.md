@@ -2,14 +2,17 @@
 
 App de escritorio para importar y hacer culling de fotografías RAW.
 Importa sesiones desde tarjetas o discos, escribe metadatos XMP al fotógrafo,
-y permite filtrar qué fotos vale la pena editar. No entrega a clientes —
-eso corresponde a otros componentes de la suite (servidor, portal web).
+y permite aprobar y filtrar qué fotos vale la pena editar. También respalda la
+carpeta `_exported/` de cada proyecto en la nube a través del server de respaldo
+(`apps/server`), que comparte catálogo con el portal web (`apps/web`).
+
+Comportamiento esperado por capability: `openspec/specs/` en la raíz del monorepo.
 
 ## Stack
 
 - **Framework**: Tauri v2 (backend Rust, frontend React+TypeScript)
 - **Bundler**: Vite
-- **BD global**: SQLite en `~/.local/share/lumik/lumik.db` (fotógrafo, ajustes, keybindings, dispositivos conocidos)
+- **BD global**: SQLite en `~/.local/share/lumik/lumik.db` (fotógrafo, ajustes, keybindings, dispositivos conocidos, sesión y cola de respaldo)
 - **BD proyectos**: SQLite por proyecto, en cada disco externo (`project.db`)
 - **Metadatos EXIF/XMP**: `exiftool` (dependencia externa en runtime — debe estar instalado)
 - **UI**: `@lumik/ui` (paquete interno del monorepo en `packages/ui/`)
@@ -18,25 +21,38 @@ eso corresponde a otros componentes de la suite (servidor, portal web).
 
 ```
 src/
-  App.tsx                           # Raíz: routing entre Dashboard / ProjectDetail / Settings
+  App.tsx                           # Raíz: secciones projects / settings / about (useState, sin router)
   lib/
     api.ts                          # Todas las llamadas invoke() a Tauri (una función por comando)
     hooks.ts                        # Custom hooks async para datos + useImport + useKeybindings
     types.ts                        # Tipos TypeScript que espeja los modelos Rust
+    BackupContext.tsx               # Estado global de respaldos en segundo plano (progreso por archivo, cola)
   pages/
-    Dashboard.tsx                   # Grid de proyectos agrupados por año (renderizado normal, sin virtual scroll)
     ImportPage.tsx                  # Wizard de importación (2-3 pasos)
-    SettingsPage.tsx                # Metadatos XMP, toggles, keybindings editables
-    ProjectDetail/
-      ProjectDetail.tsx             # Grid virtual de fotos (TanStack Virtualizer), agrupadas por día
-      PhotoDetailView.tsx           # Visor canvas con zoom/pan/rotate + panel info + culling
-      ProjectDetailHeader.tsx       # Barra superior con sort, filtro culled
-      ProjectDetailFooter.tsx       # Contador de fotos, botón importar
+    SettingsPage.tsx                # Tabs: Importación, Atajos, Apariencia, Respaldo
+    BackupAccountSection.tsx        # Tab Respaldo: URL del server, registro/login/logout
+    AboutPage.tsx
+    Project/
+      Projects/
+        Projects.tsx                # Dashboard: proyectos por año, menú (renombrar, eliminar, abrir carpeta), iconos de proveedor
+        RenameProjectModal.tsx / DeleteProjectModal.tsx
+      ProjectDetail/
+        ProjectDetail.tsx           # Grid virtual de fotos (TanStack Virtualizer), agrupadas por día o en cuadrícula
+        ProjectDetailHeader.tsx     # Barra superior: orden, filtros, modo de vista
+        FilterPopovers.tsx          # Filtros por estrellas, tags y color
+        ProjectDetailFooter.tsx     # Contador de fotos/aprobadas, filtro de aprobadas, importar
+        BackupModal.tsx             # Modal de respaldo de _exported (proveedores, calidad, progreso)
+      PhotoDetail/
+        PhotoDetail.tsx             # Visor: atajos, aprobación, navegación
+        PhotoViewer.tsx             # Canvas con zoom/pan/rotate
+        PhotoViewerToolbar.tsx
+        PhotoSidebar.tsx            # Panel info: histograma, EXIF, rating, color, tags, aprobación
   workers/
     histogram.worker.ts             # Web Worker: calcula histograma RGB de la imagen
   components/
     CreateProjectModal.tsx          # Modal para crear proyecto (nombre, fecha, dispositivo)
     Layout.tsx / Sidebar.tsx        # Shell de la app
+```
 
 El backend Rust sigue una arquitectura por capas (ver
 `docs/desktop-clean-architecture.md`). Las dependencias apuntan hacia adentro:
@@ -57,16 +73,18 @@ src-tauri/src/
     ports.rs                        #   DeviceScanner, MetadataTool, ImageProcessor, FinderTagWriter,
                                     #   FileStore, PhotoRepository, ImportPipeline, ProgressReporter
     registry.rs                     #   ProjectRegistry (proyectos abiertos, ejecting, rotation-gen)
-    use_cases/                      #   cull_photo, rate_photo, rotate_photo, import_photos (con tests de fakes)
+    use_cases/                      #   cull_photo, rate_photo, rotate_photo, import_photos,
+                                    #   ensure_catalog_synced, sync_exported (con tests de fakes)
 
   infrastructure/                   # implementa los puertos (aquí vive el #[cfg] de plataforma)
     metadata.rs                     #   ExiftoolMetadata (desktop) / AndroidMetadata (rawler)
     imaging.rs                      #   DesktopImaging / AndroidImaging (thumbnails/previews)
     devices.rs, finder_tags.rs, folder.rs, fs.rs, progress.rs, import_pipeline.rs, persistence.rs
+    backup_auth.rs, catalog.rs, backup_client.rs   # clientes HTTP del server de respaldo
 
   commands.rs                       # AppState + refresh_open_projects + declaración de submódulos
   commands/                         # comandos Tauri (adaptadores delgados) por dominio
-    device.rs, project.rs, photo.rs, settings.rs, import_cmd.rs
+    device.rs, project.rs, photo.rs, settings.rs, import_cmd.rs, backup.rs
 
   db/                               # persistencia SQLite (GlobalDatabase / ProjectDatabase)
     mod.rs, models.rs, queries.rs (photo_from_row), migrations.rs, *_schema.sql
@@ -89,11 +107,13 @@ de rutas, migraciones) vive en `domain`/`application` con tests.
 
 1. **BD Global** (`~/.local/share/lumik/lumik.db`):
    Fotógrafo activo, metadatos del fotógrafo, ajustes de la app (`AppSettings`),
-   keybindings, registro de dispositivos conocidos (`known_device`).
+   keybindings, registro de dispositivos conocidos (`device`), cola de respaldos
+   pendientes (`backup_queue`) y la sesión del server de respaldo (claves
+   `backup.*` en `settings`: URL, tokens, fotógrafo).
 
-2. **BD de Proyecto** (`{mount}/{año}/{mes}/{día}_{nombre}/project.db`):
-   Una por proyecto, vive en el disco externo. Contiene la tabla `fotografia`
-   con paths relativos al mount point.
+2. **BD de Proyecto** (`{mount}/lumik/{año}/{mes}/{día}_{nombre}/project.db`):
+   Una por proyecto, vive en el disco externo. Contiene las tablas `project`,
+   `photo` (paths relativos al mount point) y `project_settings`.
 
 **`AppState`** mantiene `global_db`, los puertos de infraestructura
 (`device_scanner`, `metadata`, `image_processor`, `finder_tags`, `file_store`) y
@@ -169,16 +189,20 @@ El progreso se emite como evento Tauri `"import-progress"` con 3 fases gruesas
 
 ```
 App
-├── Dashboard (lista proyectos, renderizado normal con .map())
+├── Projects (dashboard por año, renderizado normal con .map())
+│     ├── menú de proyecto → renombrar / eliminar / abrir carpeta
+│     ├── icono de proveedor → carpeta del proyecto en la nube
 │     └── click proyecto → ProjectDetail
-│           ├── click foto → PhotoDetailView
+│           ├── click foto → PhotoDetail
+│           ├── botón respaldo → BackupModal
 │           └── botón importar → ImportPage (embedded, sin paso "destino")
-└── Settings
+├── Settings (Importación · Atajos · Apariencia · Respaldo)
+└── About
 ```
 
 `App.tsx` maneja el routing con `useState`. No hay React Router.
 
-## Visor de fotos (PhotoDetailView / PhotoViewer)
+## Visor de fotos (PhotoDetail / PhotoViewer)
 
 - Renderiza en `<canvas>`, nunca en `<img>`. Esto evita el flash blanco entre fotos.
 - Zoom/pan con refs (sin re-renders). Solo `displayScale` y `isDragging` son estado React.
@@ -210,21 +234,29 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 | Culling de imagen        | `save_photo_culled`    | `CullPhoto` (con rollback)   |
 | Rating de estrellas      | `save_photo_rating`    | `RatePhoto`                  |
 | Rotación de imagen       | `save_photo_rotation`  | `RotatePhoto`                |
+| Sync catálogo (wip)      | `ensure_project_synced`| `EnsureCatalogSynced`        |
+| Enlazar `_exported` ↔ fotos (wip) | `sync_exported`   | `SyncExported`               |
+| Respaldar `_exported` (wip) | `prepare_backup` → `backup_exported_file` → `finalize_backup` | — (lógica en `commands/backup.rs`) |
 
 **Al cambiar un flujo, actualizar su diagrama en `docs/useCases/` y su caso de uso.**
 
 ## Comandos Tauri disponibles
 
-Dispositivos: `scan_connected_devices`, `get_known_devices`
-Proyectos: `get_projects_dashboard`, `get_project`, `create_project`, `archive_project`, `delete_project`
-Fotos: `get_project_photos`, `get_project_thumbnails`, `get_photo_preview`, `save_photo_rotation`, `save_photo_rating`, `save_photo_culled`, `regenerate_project_thumbnails`
+Plataforma: `get_platform`, `open_external_url`
+Dispositivos: `scan_connected_devices`, `eject_device`, `get_known_devices`
+Proyectos: `get_projects_dashboard`, `get_project`, `create_project`, `rename_project`, `archive_project`, `delete_project`, `open_project_folder`, `get_project_cover_thumbnail`, `set_project_cover_photo`, `get_project_settings`, `update_project_settings`
+Fotos: `get_project_photos`, `get_project_thumbnails`, `get_thumbnail`, `get_photo_preview`, `save_photo_rotation`, `save_photo_rating`, `save_photo_culled`, `regenerate_project_thumbnails`
 Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`
 Ajustes: `get_app_settings`, `update_app_settings`
 Keybindings: `get_keybindings`, `update_keybinding`
 Import: `start_import`
+Respaldo — cuenta: `get_backup_server_url`, `set_backup_server_url`, `backup_register`, `backup_login`, `backup_logout`, `get_backup_session`
+Respaldo — catálogo: `ensure_project_synced`, `sync_exported`, `sync_project_cover`
+Respaldo — subida: `list_exported_backup`, `list_backup_providers`, `prepare_backup`, `backup_exported_file`, `finalize_backup`, `relocate_backup`, `get_backup_folder_link`
+Respaldo — cola: `set_pending_backup`, `clear_pending_backup`, `get_pending_backups`
 
-## Estado del MVP — qué está implementado
+## Estado (v0.1.3-beta) — qué está implementado
 
 | Feature | Estado |
 |---------|--------|
@@ -232,12 +264,15 @@ Import: `start_import`
 | Grid virtual de fotos agrupadas por día | ✓ Funcional |
 | Visor canvas (zoom / pan / rotate / histograma) | ✓ Funcional |
 | Rating: estrellas, etiquetas de color, tags | ✓ Funcional |
-| Culling: mover a `_culled/` y revertir | ✓ Funcional |
+| Culling: aprobar (mover a `_culled/`) y quitar aprobación | ✓ Funcional |
+| Filtros (aprobadas, estrellas, tags, color) y modos de vista | ✓ Funcional |
 | Keybindings configurables en Settings | ✓ Funcional |
 | Metadata XMP del fotógrafo en import | ✓ Funcional |
-| Menú contextual de proyectos en Dashboard | ✗ TODO (stub con console.log) |
+| Menú de proyectos (renombrar, eliminar, abrir carpeta) | ✓ Funcional (abrir carpeta: no en Android) |
+| Respaldo de `_exported` en la nube (cuenta, modal, cola offline) | ✓ Beta |
+| Archivar proyectos | ✗ Backend listo (`archive_project`), sin UI |
 | Operaciones en lote desde el grid | ✗ No implementado |
-| Respaldo/API/portal web/iOS | ✗ Planificado (fuera del MVP) |
+| App iPad nativa | ✗ Planificado |
 
 ## Convenciones de código
 
