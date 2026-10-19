@@ -1,11 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Icon, type IconName } from '@lumik/ui';
-
-const allIcons: IconName[] = [
-  'search', 'projects', 'import', 'settings', 'drive', 'image', 'photo',
-  'menu', 'calendar', 'aperture', 'check', 'x', 'chevron-down', 'chevron-right',
-  'plus', 'star', 'star-filled', 'trash', 'edit', 'folder', 'folder-open',
-];
+import { Icon, iconNames } from '@lumik/ui';
 
 const meta: Meta<typeof Icon> = {
   title: 'Components/Icon',
@@ -17,7 +11,7 @@ const meta: Meta<typeof Icon> = {
   argTypes: {
     name: {
       control: 'select',
-      options: allIcons,
+      options: iconNames,
     },
     size: {
       control: 'select',
@@ -42,7 +36,7 @@ export const Default: Story = {
 export const AllIcons: Story = {
   render: () => (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '24px' }}>
-      {allIcons.map((name) => (
+      {iconNames.map((name) => (
         <div
           key={name}
           style={{

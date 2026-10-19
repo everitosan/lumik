@@ -13,6 +13,13 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   que se leen como semáforo de trabajo: importado en amarillo, editado en azul
   y entregado en gris. La etiqueta "Editando" pasa a "Editado" ("Edited" en
   inglés).
+- **Iconos sobre Lucide**: los iconos de la interfaz pasan de SVGs copiados de
+  Feather a la biblioteca Lucide (su fork mantenido), con el mismo estilo y
+  trazos uniformes. Los componentes y nombres de iconos no cambian.
+
+### Corregido
+- El icono de importar mostraba una flecha de *subir*; ahora muestra una flecha
+  que entra en una bandeja (botones de importar y badge "Importado").
 
 ## [0.1.3-beta] — 2026-09-20
 

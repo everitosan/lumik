@@ -1,5 +1,5 @@
 // Components
-export { Icon } from './components/Icon';
+export { Icon, iconNames } from './components/Icon';
 export type { IconProps, IconName } from './components/Icon';
 export { Loader } from './components/Loader';
 export type { LoaderProps } from './components/Loader';
