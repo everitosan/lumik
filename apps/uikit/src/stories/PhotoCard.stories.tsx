@@ -80,6 +80,37 @@ export const NoThumbnail: Story = {
   decorators: [(Story) => <div style={{ width: 220 }}><Story /></div>],
 };
 
+export const WithMenu: Story = {
+  args: {
+    filename: 'IMG_0047.dng',
+    thumbnailUrl:
+      'https://images.unsplash.com/photo-1519741497674-611481863552?w=400&h=300&fit=crop',
+    stars: 3,
+    captureDate: '2024-03-15T10:42:33',
+    colorLabels: [3],
+    onClick: () => console.log('[PhotoCard] open viewer'),
+    onRevealInFolder: () => console.log('[PhotoCard] reveal in folder'),
+    onTrash: () => console.log('[PhotoCard] move to trash'),
+  },
+  decorators: [(Story) => <div style={{ width: 220 }}><Story /></div>],
+};
+
+/** Vista de papelera: el menú ofrece Restaurar en lugar de Mover a la papelera. */
+export const InTrash: Story = {
+  args: {
+    filename: 'IMG_0099.dng',
+    thumbnailUrl:
+      'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=400&h=300&fit=crop',
+    stars: 1,
+    captureDate: '2024-03-15T14:22:09',
+    colorLabels: [],
+    onClick: () => console.log('[PhotoCard] open viewer'),
+    onRevealInFolder: () => console.log('[PhotoCard] reveal in folder'),
+    onRestore: () => console.log('[PhotoCard] restore'),
+  },
+  decorators: [(Story) => <div style={{ width: 220 }}><Story /></div>],
+};
+
 export const Grid: Story = {
   render: () => (
     <div

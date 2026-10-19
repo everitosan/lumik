@@ -162,6 +162,15 @@ mod tests {
         fn set_exported(&self, _id: &str, _j: &str) -> Result<(), String> {
             unreachable!()
         }
+        fn set_deleted(
+            &self,
+            _id: &str,
+            _deleted: bool,
+            _dng_path: &str,
+            _jpg_path: Option<&str>,
+        ) -> Result<(), String> {
+            unreachable!()
+        }
         fn create_batch(&self, _p: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
             unreachable!()
         }

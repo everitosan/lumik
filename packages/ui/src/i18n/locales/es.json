@@ -30,6 +30,14 @@
         "delete": "Eliminar"
       }
     },
+    "photoCard": {
+      "menu": {
+        "label": "Opciones de la foto",
+        "revealInFolder": "Mostrar en carpeta",
+        "trash": "Mover a la papelera",
+        "restore": "Restaurar"
+      }
+    },
     "dropzone": {
       "filesSelected": "fotos seleccionadas",
       "total": "total"

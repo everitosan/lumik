@@ -323,7 +323,18 @@
       "groupByDate": "Agrupar por fecha",
       "gridView": "Vista cuadrícula"
     },
-    "filterToggle": "Cambiar entre exacto (=) e inclusivo (≥)"
+    "filterToggle": "Cambiar entre exacto (=) e inclusivo (≥)",
+    "revealError": "No se pudo mostrar la foto en su carpeta: {{error}}",
+    "trashPhoto": {
+      "title": "Mover foto a la papelera",
+      "message": "«{{name}}» se moverá a la papelera del proyecto (_trash/).",
+      "hint": "Podrás restaurarla desde el filtro «Papelera».",
+      "cancel": "Cancelar",
+      "confirm": "Mover a la papelera",
+      "error": "No se pudo mover la foto a la papelera: {{error}}"
+    },
+    "restoreError": "No se pudo restaurar la foto: {{error}}",
+    "showTrash": "Papelera ({{count}})"
   },
   "photo": {
     "colors": {

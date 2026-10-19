@@ -1,4 +1,6 @@
 import { type CSSProperties, type MouseEvent } from 'react';
+import { useTranslation } from 'react-i18next';
+import { CardMenu, type CardMenuItem } from '../CardMenu';
 import { Icon } from '../Icon';
 
 export type ColorLabel = 1 | 2 | 3 | 4 | 5;
@@ -12,6 +14,12 @@ export interface PhotoCardProps {
   colorLabels?: ColorLabel[];
   onClick?: () => void;
   onStarClick?: (value: number, e: MouseEvent) => void;
+  /** Each handler, when provided, adds its item to the 3-dot menu in the header.
+   *  Omit one to hide that option (e.g. onRevealInFolder on Android). If none are
+   *  provided the menu button is hidden entirely. */
+  onRevealInFolder?: () => void;
+  onTrash?: () => void;
+  onRestore?: () => void;
   className?: string;
   style?: CSSProperties;
 }
@@ -101,13 +109,22 @@ const footerStyles: CSSProperties = {
 };
 
 const headerStyles: CSSProperties = {
-  padding: '6px 8px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '6px 4px 6px 8px',
   borderBottom: '1px solid var(--lumik-outline-variant, #424654)',
   fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
   fontSize: '11px',
   fontWeight: 500,
   letterSpacing: '0.03em',
   color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+};
+
+const filenameStyles: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  lineHeight: '16px',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
@@ -219,13 +236,28 @@ export function PhotoCard({
   colorLabels = [],
   onClick,
   onStarClick,
+  onRevealInFolder,
+  onTrash,
+  onRestore,
   className,
   style,
 }: PhotoCardProps) {
+  const { t } = useTranslation();
   const clampedStars = Math.max(0, Math.min(MAX_STARS, Math.round(stars)));
   const { date: captureDay, time: captureTime } = captureDate
     ? parseCaptureDate(captureDate)
     : { date: '—', time: '—' };
+
+  const menuItems: CardMenuItem[] = [];
+  if (onRevealInFolder) {
+    menuItems.push({ icon: 'folder-open', label: t('components.photoCard.menu.revealInFolder'), onSelect: onRevealInFolder });
+  }
+  if (onRestore) {
+    menuItems.push({ icon: 'archive-restore', label: t('components.photoCard.menu.restore'), onSelect: onRestore });
+  }
+  if (onTrash) {
+    menuItems.push({ icon: 'trash', label: t('components.photoCard.menu.trash'), onSelect: onTrash, danger: true });
+  }
 
   return (
     <div
@@ -240,7 +272,10 @@ export function PhotoCard({
       role="button"
       tabIndex={0}
     >
-      <div style={headerStyles} title={filename}>{basename(filename)}</div>
+      <div style={headerStyles}>
+        <span style={filenameStyles} title={filename}>{basename(filename)}</span>
+        <CardMenu label={t('components.photoCard.menu.label')} items={menuItems} buttonSize={16} />
+      </div>
 
       <div style={thumbnailWrapStyles}>
         {thumbnailUrl ? (

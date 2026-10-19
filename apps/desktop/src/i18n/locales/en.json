@@ -323,7 +323,18 @@
       "groupByDate": "Group by date",
       "gridView": "Grid view"
     },
-    "filterToggle": "Toggle between exact (=) and inclusive (≥)"
+    "filterToggle": "Toggle between exact (=) and inclusive (≥)",
+    "revealError": "Could not show the photo in its folder: {{error}}",
+    "trashPhoto": {
+      "title": "Move photo to trash",
+      "message": "\"{{name}}\" will be moved to the project's trash (_trash/).",
+      "hint": "You can restore it from the \"Trash\" filter.",
+      "cancel": "Cancel",
+      "confirm": "Move to trash",
+      "error": "Could not move the photo to the trash: {{error}}"
+    },
+    "restoreError": "Could not restore the photo: {{error}}",
+    "showTrash": "Trash ({{count}})"
   },
   "photo": {
     "colors": {

@@ -9,3 +9,4 @@ pub mod rename_project_files;
 pub mod rewrite_project_description;
 pub mod rotate_photo;
 pub mod sync_exported;
+pub mod trash_photo;

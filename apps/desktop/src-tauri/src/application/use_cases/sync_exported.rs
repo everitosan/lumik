@@ -98,6 +98,15 @@ mod tests {
             self.calls.borrow_mut().push((id.into(), jpg_path.into()));
             Ok(())
         }
+        fn set_deleted(
+            &self,
+            _id: &str,
+            _deleted: bool,
+            _dng_path: &str,
+            _jpg_path: Option<&str>,
+        ) -> Result<(), String> {
+            unreachable!()
+        }
         fn create_batch(&self, _: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
             unimplemented!()
         }

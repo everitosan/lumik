@@ -5,10 +5,11 @@ use crate::application::use_cases::cull_photo::CullPhoto;
 use crate::application::use_cases::import_photos::cache_thumbnails_parallel;
 use crate::application::use_cases::rate_photo::RatePhoto;
 use crate::application::use_cases::rotate_photo::RotatePhoto;
+use crate::application::use_cases::trash_photo::{RestorePhoto, TrashPhoto};
 use crate::db::models::*;
 use log::{debug, error, info, warn};
 use std::path::{Path, PathBuf};
-use tauri::State;
+use tauri::{AppHandle, State};
 
 // ============================================================================
 // PHOTO COMMANDS
@@ -21,6 +22,13 @@ pub fn get_project_photos(state: State<AppState>, project_id: String) -> AppResu
     let photos = project_db.get_project_photos()?;
     debug!("get_project_photos returning {} photos", photos.len());
     Ok(photos)
+}
+
+/// Fotos en la papelera (borrado lógico) del proyecto, para el filtro "Papelera".
+#[tauri::command]
+pub fn get_project_trashed_photos(state: State<AppState>, project_id: String) -> AppResult<Vec<Photo>> {
+    let project_db = state.project_db(&project_id)?;
+    Ok(project_db.get_project_trashed_photos()?)
 }
 
 #[tauri::command]
@@ -228,6 +236,59 @@ pub fn save_photo_rating(
         });
     }
 
+    Ok(())
+}
+
+/// Abre el explorador del SO con el archivo original de la foto seleccionado.
+/// Desktop only (ver `infrastructure::folder`).
+#[tauri::command]
+pub fn reveal_photo(
+    app: AppHandle,
+    state: State<AppState>,
+    project_id: String,
+    photo_id: String,
+) -> AppResult<()> {
+    let project_db = state.project_db(&project_id)?;
+    let photo = project_db
+        .get_photo(&photo_id)?
+        .ok_or_else(|| format!("Photo {} not found", photo_id))?;
+    let file = project_db.mount_point.join(&photo.dng_path);
+    crate::infrastructure::folder::reveal_file(&app, &file).map_err(AppError::from)
+}
+
+/// Mueve una foto a la papelera (borrado lógico): la aparta en `_trash/` con su exportado.
+#[tauri::command]
+pub fn trash_photo(state: State<AppState>, project_id: String, photo_id: String) -> AppResult<()> {
+    let project_db = state.project_db(&project_id)?;
+    let mount = project_db.mount_point.clone();
+
+    TrashPhoto {
+        photos: project_db.as_ref(),
+        files: state.file_store.as_ref(),
+        finder_tags: state.finder_tags.as_ref(),
+        mount_point: &mount,
+    }
+    .execute(&photo_id)?;
+
+    info!("trash_photo: photo={} project={}", photo_id, project_id);
+    Ok(())
+}
+
+/// Restaura una foto de la papelera a `_media/` o `_culled/` (y su exportado a `_exported/`).
+#[tauri::command]
+pub fn restore_photo(state: State<AppState>, project_id: String, photo_id: String) -> AppResult<()> {
+    let project_db = state.project_db(&project_id)?;
+    let mount = project_db.mount_point.clone();
+
+    RestorePhoto {
+        photos: project_db.as_ref(),
+        files: state.file_store.as_ref(),
+        finder_tags: state.finder_tags.as_ref(),
+        mount_point: &mount,
+    }
+    .execute(&photo_id)?;
+
+    info!("restore_photo: photo={} project={}", photo_id, project_id);
     Ok(())
 }
 

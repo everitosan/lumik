@@ -77,6 +77,21 @@ export async function getProjectPhotos(projectId: string): Promise<Photo[]> {
   return invoke('get_project_photos', { projectId });
 }
 
+/// Photos in the trash (logical delete), for the "Trash" filter.
+export async function getProjectTrashedPhotos(projectId: string): Promise<Photo[]> {
+  return invoke('get_project_trashed_photos', { projectId });
+}
+
+/// Logical delete: moves the photo (and its export) to the project's trash, `_trash/`.
+export async function trashPhoto(projectId: string, photoId: string): Promise<void> {
+  return invoke('trash_photo', { projectId, photoId });
+}
+
+/// Moves a trashed photo back to `_media/`/`_culled/` (and its export to `_exported/`).
+export async function restorePhoto(projectId: string, photoId: string): Promise<void> {
+  return invoke('restore_photo', { projectId, photoId });
+}
+
 export async function getProjectThumbnails(projectId: string): Promise<string[]> {
   return invoke('get_project_thumbnails', { projectId });
 }
@@ -213,6 +228,11 @@ export async function editProject(
 /// Open the project's folder in the OS file manager (desktop only).
 export async function openProjectFolder(id: string): Promise<void> {
   return invoke('open_project_folder', { id });
+}
+
+/// Open the OS file manager with the photo's original file selected (desktop only).
+export async function revealPhoto(projectId: string, photoId: string): Promise<void> {
+  return invoke('reveal_photo', { projectId, photoId });
 }
 
 // ============================================================================

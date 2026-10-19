@@ -4,11 +4,12 @@ import type { CSSProperties } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT, type ColorLabel } from '@lumik/ui';
 import type { Photo } from '../../../lib/types';
-import { useProjectPhotos, useProjectThumbnails, useContextKeybindings, matchesKey } from '../../../lib/hooks';
+import { useProjectPhotos, useProjectTrashedPhotos, useProjectThumbnails, useContextKeybindings, matchesKey, usePlatform } from '../../../lib/hooks';
 import * as api from '../../../lib/api';
 import { ProjectDetailHeader } from './ProjectDetailHeader';
 import { ProjectDetailFooter } from './ProjectDetailFooter';
 import { BackupModal } from './BackupModal';
+import { TrashPhotoModal } from './TrashPhotoModal';
 import { ImportPage } from '../../ImportPage';
 import { PhotoDetail } from '../PhotoDetail';
 
@@ -27,6 +28,10 @@ function parseColorLabels(raw: string | null): ColorLabel[] {
     .split(',')
     .map((n) => parseInt(n.trim(), 10))
     .filter((n) => n >= 1 && n <= 5) as ColorLabel[];
+}
+
+function fileNameOf(path: string): string {
+  return path.split('/').pop() ?? path;
 }
 
 type SortOption = 'date' | 'name' | 'stars';
@@ -63,9 +68,12 @@ interface LazyPhotoCardProps {
   hasThumbnail: boolean;
   cache: { current: Map<string, string> };
   onClick: () => void;
+  onRevealInFolder?: () => void;
+  onTrash?: () => void;
+  onRestore?: () => void;
 }
 
-function LazyPhotoCard({ projectId, photo, hasThumbnail, cache, onClick }: LazyPhotoCardProps) {
+function LazyPhotoCard({ projectId, photo, hasThumbnail, cache, onClick, onRevealInFolder, onTrash, onRestore }: LazyPhotoCardProps) {
   const cached = cache.current.get(photo.id) ?? null;
   const [url, setUrl] = useState<string | null>(cached);
 
@@ -90,6 +98,9 @@ function LazyPhotoCard({ projectId, photo, hasThumbnail, cache, onClick }: LazyP
       captureDate={photo.capture_date ?? undefined}
       colorLabels={parseColorLabels(photo.color_label)}
       onClick={onClick}
+      onRevealInFolder={onRevealInFolder}
+      onTrash={onTrash}
+      onRestore={onRestore}
     />
   );
 }
@@ -159,6 +170,18 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [selectedColors, setSelectedColors] = useState<Set<number>>(new Set());
   const kb = useContextKeybindings('project');
+  const platform = usePlatform();
+  // Revealing a file in a file manager isn't available on Android.
+  const canRevealInFolder = platform !== 'android';
+
+  const handleRevealInFolder = useCallback(async (photoId: string) => {
+    try {
+      await api.revealPhoto(projectId, photoId);
+    } catch (err) {
+      console.error('reveal photo failed', err);
+      alert(t('projectDetail.revealError', { error: String(err) }));
+    }
+  }, [projectId, t]);
 
   // Load project settings from DB on mount
   useEffect(() => {
@@ -275,7 +298,14 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
     return () => document.removeEventListener('keydown', onKey);
   }, [selectedPhotoId, showImport, kb, onBack, projectId, sidebarOpen]);
 
-  const { data: photos, loading, error, refetch: refetchPhotos } = useProjectPhotos(projectId);
+  const photosState = useProjectPhotos(projectId);
+  const { data: photos, refetch: refetchPhotos } = photosState;
+  // Fotos en la papelera (borrado lógico): fuente del grid con el filtro "Papelera".
+  // El filtro no se guarda en project_settings: al abrir el proyecto empieza apagado.
+  const trashState = useProjectTrashedPhotos(projectId);
+  const { data: trashedPhotos, refetch: refetchTrash } = trashState;
+  const [showTrash, setShowTrash] = useState(false);
+  const { loading, error } = showTrash ? trashState : photosState;
   const { thumbnailIds, refetch: refetchThumbnails } = useProjectThumbnails(projectId);
   const thumbnailCache = useRef<Map<string, string>>(new Map());
   const autoRedirectedToImport = useRef(false);
@@ -285,11 +315,11 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
   // Auto-show import when project has no photos (only once per mount)
   useEffect(() => {
-    if (!loading && !error && photos && photos.length === 0 && !autoRedirectedToImport.current) {
+    if (!photosState.loading && !photosState.error && photos && photos.length === 0 && !autoRedirectedToImport.current) {
       autoRedirectedToImport.current = true;
       setShowImport(true);
     }
-  }, [loading, error, photos]);
+  }, [photosState.loading, photosState.error, photos]);
 
   // Optimistic overrides: merged on top of the DB-loaded photos array so that
   // edits made in PhotoDetailView are reflected immediately when navigating back.
@@ -302,13 +332,61 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
     }));
   };
 
-  const photosWithOverrides = useMemo(() => {
-    if (!photos) return photos;
-    if (Object.keys(photoOverrides).length === 0) return photos;
-    return photos.map((p) =>
+  const applyOverrides = useCallback((list: Photo[] | null) => {
+    if (!list) return list;
+    if (Object.keys(photoOverrides).length === 0) return list;
+    return list.map((p) =>
       photoOverrides[p.id] ? { ...p, ...photoOverrides[p.id] } : p,
     );
-  }, [photos, photoOverrides]);
+  }, [photoOverrides]);
+
+  // Una foto movida a la papelera o restaurada en esta sesión lleva `deleted` en
+  // sus overrides; se filtra al instante sin recargar (y sin perder el scroll).
+  const activePhotos = useMemo(
+    () => applyOverrides(photos)?.filter((p) => !p.deleted) ?? null,
+    [photos, applyOverrides],
+  );
+  const trashWithOverrides = useMemo(
+    () => applyOverrides(trashedPhotos)?.filter((p) => p.deleted) ?? null,
+    [trashedPhotos, applyOverrides],
+  );
+  const photosWithOverrides = showTrash ? trashWithOverrides : activePhotos;
+
+  // ── Papelera / restaurar ────────────────────────────────────────────────────
+  const [pendingTrash, setPendingTrash] = useState<Photo | null>(null);
+  const [trashing, setTrashing] = useState(false);
+  const [trashError, setTrashError] = useState<string | null>(null);
+
+  const handleConfirmTrash = async () => {
+    if (!pendingTrash) return;
+    const photoId = pendingTrash.id;
+    setTrashing(true);
+    setTrashError(null);
+    try {
+      await api.trashPhoto(projectId, photoId);
+      handlePhotoChanged(photoId, { deleted: true });
+      if (selectedPhotoId === photoId) setSelectedPhotoId(null);
+      if (coverPhotoPath === `.thumbs/${photoId}.jpg`) onCoverPhotoChange?.(null);
+      setPendingTrash(null);
+      refetchTrash();
+    } catch (err) {
+      console.error('trash photo failed', err);
+      setTrashError(t('projectDetail.trashPhoto.error', { error: String(err) }));
+    } finally {
+      setTrashing(false);
+    }
+  };
+
+  const handleRestore = async (photoId: string) => {
+    try {
+      await api.restorePhoto(projectId, photoId);
+      handlePhotoChanged(photoId, { deleted: false });
+      refetchPhotos();
+    } catch (err) {
+      console.error('restore photo failed', err);
+      alert(t('projectDetail.restoreError', { error: String(err) }));
+    }
+  };
 
   const prevShowImport = useRef(false);
   useEffect(() => {
@@ -564,6 +642,9 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
                         hasThumbnail={thumbnailIds.has(photo.id)}
                         cache={thumbnailCache}
                         onClick={() => setSelectedPhotoId(photo.id)}
+                        onRevealInFolder={canRevealInFolder ? () => handleRevealInFolder(photo.id) : undefined}
+                        onTrash={showTrash ? undefined : () => { setTrashError(null); setPendingTrash(photo); }}
+                        onRestore={showTrash ? () => handleRestore(photo.id) : undefined}
                       />
                     );
                   })}
@@ -575,7 +656,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
       </div>
 
       <ProjectDetailFooter
-        totalPhotos={photos?.length ?? 0}
+        totalPhotos={activePhotos?.length ?? 0}
         culledCount={culledCount}
         showCulledOnly={showCulledOnly}
         onShowCulledOnlyChange={handleShowCulledChange}
@@ -588,6 +669,18 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         onSelectedTagsChange={handleSelectedTagsChange}
         selectedColors={selectedColors}
         onSelectedColorsChange={handleSelectedColorsChange}
+        trashCount={trashWithOverrides?.length ?? 0}
+        showTrash={showTrash}
+        onShowTrashChange={setShowTrash}
+      />
+
+      <TrashPhotoModal
+        open={pendingTrash !== null}
+        fileName={pendingTrash ? fileNameOf(pendingTrash.dng_path) : ''}
+        onClose={() => setPendingTrash(null)}
+        onConfirm={handleConfirmTrash}
+        loading={trashing}
+        error={trashError}
       />
 
       {showBackup && (

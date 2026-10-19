@@ -19,6 +19,9 @@ export type { SectionButtonProps } from './components/SectionButton';
 export { DriveInfo } from './components/DriveInfo';
 export type { DriveInfoProps } from './components/DriveInfo';
 
+export { CardMenu } from './components/CardMenu';
+export type { CardMenuProps, CardMenuItem } from './components/CardMenu';
+
 export { ProjectCard } from './components/ProjectCard';
 export type { ProjectCardProps, WorkflowStatus } from './components/ProjectCard';
 

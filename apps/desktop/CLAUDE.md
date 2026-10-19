@@ -41,7 +41,8 @@ src/
         ProjectDetail.tsx           # Grid virtual de fotos (TanStack Virtualizer), agrupadas por día o en cuadrícula
         ProjectDetailHeader.tsx     # Barra superior: orden, filtros, modo de vista
         FilterPopovers.tsx          # Filtros por estrellas, tags y color
-        ProjectDetailFooter.tsx     # Contador de fotos/aprobadas, filtro de aprobadas, importar
+        ProjectDetailFooter.tsx     # Contador de fotos/aprobadas, filtros de aprobadas y papelera
+        TrashPhotoModal.tsx         # Confirmación de mover foto a la papelera (borrado lógico a _trash/)
         BackupModal.tsx             # Modal de respaldo de _exported (proveedores, calidad, progreso)
       PhotoDetail/
         PhotoDetail.tsx             # Visor: atajos, aprobación, navegación
@@ -67,7 +68,7 @@ src-tauri/src/
 
   domain/                           # núcleo puro (sin SQLite/exiftool/Tauri/fs), 100% testeable
     photo.rs                        #   VOs: Rotation, Stars, normalize_tags
-    paths.rs                        #   cull_destination (_media↔_culled), path_to_slash
+    paths.rs                        #   cull_destination (_media↔_culled), destinos de _trash/, path_to_slash
     project.rs                      #   ProjectFolder (slug/date_parts/path), compare_dashboard
     error.rs                        #   DomainError
 
@@ -75,7 +76,7 @@ src-tauri/src/
     ports.rs                        #   DeviceScanner, MetadataTool, ImageProcessor, FinderTagWriter,
                                     #   FileStore, PhotoRepository, ImportPipeline, ProgressReporter
     registry.rs                     #   ProjectRegistry (proyectos abiertos, ejecting, rotation-gen)
-    use_cases/                      #   cull_photo, rate_photo, rotate_photo, import_photos,
+    use_cases/                      #   cull_photo, trash_photo, rate_photo, rotate_photo, import_photos,
                                     #   ensure_catalog_synced, sync_exported (con tests de fakes)
 
   infrastructure/                   # implementa los puertos (aquí vive el #[cfg] de plataforma)
@@ -136,6 +137,9 @@ comando devuelve error "device not mounted".
     IMG_0002.dng
   _culled/
     IMG_0047.dng
+  _trash/                    # papelera: fotos apartadas (borrado lógico), restaurables
+    IMG_0003.dng
+    _exported/               # exportados de fotos en la papelera
   _video/
     CLIP_001.mp4
   .thumbs/
@@ -237,6 +241,7 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 | Crear Proyecto           | `create_project`       | — (lógica en el comando; `domain::ProjectFolder`) |
 | Editar Proyecto          | `edit_project`         | `RenameProjectFiles` (con rollback), `RewriteProjectDescription` |
 | Culling de imagen        | `save_photo_culled`    | `CullPhoto` (con rollback)   |
+| Papelera / restaurar foto | `trash_photo`, `restore_photo` | `TrashPhoto` / `RestorePhoto` (con rollback) |
 | Rating de estrellas      | `save_photo_rating`    | `RatePhoto`                  |
 | Rotación de imagen       | `save_photo_rotation`  | `RotatePhoto`                |
 | Sync catálogo (wip)      | `ensure_project_synced`| `EnsureCatalogSynced`        |
@@ -250,7 +255,7 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 Plataforma: `get_platform`, `open_external_url`
 Dispositivos: `scan_connected_devices`, `eject_device`, `get_known_devices`
 Proyectos: `get_projects_dashboard`, `get_project`, `create_project`, `edit_project`, `set_project_archived`, `delete_project`, `open_project_folder`, `get_project_cover_thumbnail`, `set_project_cover_photo`, `get_project_settings`, `update_project_settings`
-Fotos: `get_project_photos`, `get_project_thumbnails`, `get_thumbnail`, `get_photo_preview`, `save_photo_rotation`, `save_photo_rating`, `save_photo_culled`, `regenerate_project_thumbnails`
+Fotos: `get_project_photos`, `get_project_trashed_photos`, `trash_photo`, `restore_photo`, `reveal_photo`, `get_project_thumbnails`, `get_thumbnail`, `get_photo_preview`, `save_photo_rotation`, `save_photo_rating`, `save_photo_culled`, `regenerate_project_thumbnails`
 Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`
 Ajustes: `get_app_settings`, `update_app_settings`, `get_dashboard_sort`, `update_dashboard_sort`, `get_dashboard_show_archived`, `set_dashboard_show_archived`
@@ -270,6 +275,7 @@ Respaldo — cola: `set_pending_backup`, `clear_pending_backup`, `get_pending_ba
 | Visor canvas (zoom / pan / rotate / histograma) | ✓ Funcional |
 | Rating: estrellas, etiquetas de color, tags | ✓ Funcional |
 | Culling: aprobar (mover a `_culled/`) y quitar aprobación | ✓ Funcional |
+| Menú de la foto: mostrar en carpeta, mover a la papelera (`_trash/`) y restaurar | ✓ Funcional (mostrar en carpeta: no en Android) |
 | Filtros (aprobadas, estrellas, tags, color) y modos de vista | ✓ Funcional |
 | Keybindings configurables en Settings | ✓ Funcional |
 | Metadata XMP del fotógrafo en import | ✓ Funcional |

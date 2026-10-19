@@ -39,6 +39,17 @@ impl PhotoRepository for ProjectDatabase {
         self.set_photo_exported(id, jpg_path).map_err(|e| e.to_string())
     }
 
+    fn set_deleted(
+        &self,
+        id: &str,
+        deleted: bool,
+        dng_path: &str,
+        jpg_path: Option<&str>,
+    ) -> Result<(), String> {
+        self.set_photo_deleted(id, deleted, dng_path, jpg_path)
+            .map_err(|e| e.to_string())
+    }
+
     fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
         self.create_photos_batch(photos).map_err(|e| e.to_string())
     }

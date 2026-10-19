@@ -17,6 +17,9 @@ export interface ProjectDetailFooterProps {
   onSelectedTagsChange: (tags: Set<string>) => void;
   selectedColors: Set<number>;
   onSelectedColorsChange: (colors: Set<number>) => void;
+  trashCount: number;
+  showTrash: boolean;
+  onShowTrashChange: (value: boolean) => void;
 }
 
 const statsStyles: CSSProperties = {
@@ -56,6 +59,9 @@ export function ProjectDetailFooter({
   onSelectedTagsChange,
   selectedColors,
   onSelectedColorsChange,
+  trashCount,
+  showTrash,
+  onShowTrashChange,
 }: ProjectDetailFooterProps) {
   const { t } = useTranslation();
   return (
@@ -74,6 +80,12 @@ export function ProjectDetailFooter({
             label={t('projectDetail.showCulled')}
             checked={showCulledOnly}
             onChange={onShowCulledOnlyChange}
+          />
+
+          <FilterToggle
+            label={t('projectDetail.showTrash', { count: trashCount })}
+            checked={showTrash}
+            onChange={onShowTrashChange}
           />
         </>
       }

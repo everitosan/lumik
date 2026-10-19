@@ -216,6 +216,9 @@ export function PhotoDetail({
   }, [isCover, photo.id, photo.project_id, onCoverPhotoChange]);
 
   const handleCulledChange = useCallback((culled: boolean) => {
+    // Una foto en la papelera no se aprueba (el backend también lo rechaza): sin
+    // actualización optimista, para no mostrar un cambio que no ocurrirá.
+    if (photo.deleted) return;
     setLocalCulled(culled);
     setSaveState('saving');
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -229,7 +232,7 @@ export function PhotoDetail({
         setLocalCulled(!culled);
         setSaveState('error');
       });
-  }, [photo.id, photo.project_id, onPhotoChanged]);
+  }, [photo.id, photo.project_id, photo.deleted, onPhotoChanged]);
 
   // Global keyboard shortcuts
   useEffect(() => {

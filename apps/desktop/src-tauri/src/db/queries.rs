@@ -513,21 +513,30 @@ impl ProjectDatabase {
         Ok(())
     }
 
-    /// Rewrite every photo's relative `dng_path` so the leading `old_prefix`
-    /// segment is swapped for `new_prefix`. Uses an exact prefix match (not
-    /// `LIKE`) so `_`/`%` characters in slugs aren't treated as wildcards, and
-    /// only rewrites paths that actually start with `old_prefix`.
+    /// Rewrite every photo's relative `dng_path` (and `jpg_path`, when set) so the
+    /// leading `old_prefix` segment is swapped for `new_prefix`. Uses an exact
+    /// prefix match (not `LIKE`) so `_`/`%` characters in slugs aren't treated as
+    /// wildcards, and only rewrites paths that actually start with `old_prefix`.
+    /// `jpg_path` matters for deleted photos: `sync_exported` doesn't re-link them.
+    /// Returns how many `dng_path`s were rewritten.
     pub fn update_photo_paths_prefix(&self, old_prefix: &str, new_prefix: &str) -> DbResult<usize> {
         if old_prefix == new_prefix {
             return Ok(0);
         }
         let conn = self.conn();
         let old_len = old_prefix.chars().count() as i64;
-        let n = conn.execute(
+        let tx = conn.unchecked_transaction()?;
+        let n = tx.execute(
             "UPDATE photo SET dng_path = ?1 || SUBSTR(dng_path, ?2) \
              WHERE SUBSTR(dng_path, 1, ?3) = ?4",
             params![new_prefix, old_len + 1, old_len, old_prefix],
         )?;
+        tx.execute(
+            "UPDATE photo SET jpg_path = ?1 || SUBSTR(jpg_path, ?2) \
+             WHERE jpg_path IS NOT NULL AND SUBSTR(jpg_path, 1, ?3) = ?4",
+            params![new_prefix, old_len + 1, old_len, old_prefix],
+        )?;
+        tx.commit()?;
         Ok(n)
     }
 
@@ -559,6 +568,21 @@ impl ProjectDatabase {
             .query_map([&self.project_id], photo_from_row)?
             .collect::<Result<Vec<_>, _>>()?;
 
+        Ok(photos)
+    }
+
+    /// Fotos en la papelera (borrado lógico), en el mismo orden que `get_project_photos`.
+    pub fn get_project_trashed_photos(&self) -> DbResult<Vec<Photo>> {
+        let conn = self.conn();
+        let sql = format!(
+            "SELECT {PHOTO_COLUMNS} FROM photo
+             WHERE project_id = ?1 AND deleted = 1
+             ORDER BY capture_date ASC NULLS LAST, import_date ASC"
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let photos = stmt
+            .query_map([&self.project_id], photo_from_row)?
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(photos)
     }
 
@@ -628,6 +652,31 @@ impl ProjectDatabase {
             "UPDATE photo SET jpg_path = ?1, workflow_status = 'edited' WHERE id = ?2",
             params![jpg_path, id],
         )?;
+        Ok(())
+    }
+
+    /// Mete o saca una foto de la papelera (columna `deleted`) y fija sus rutas, en
+    /// una sola transacción. Al meterla, si era la portada (`.thumbs/{id}.jpg`), la quita.
+    pub fn set_photo_deleted(
+        &self,
+        id: &str,
+        deleted: bool,
+        dng_path: &str,
+        jpg_path: Option<&str>,
+    ) -> DbResult<()> {
+        let conn = self.conn();
+        let tx = conn.unchecked_transaction()?;
+        tx.execute(
+            "UPDATE photo SET deleted = ?1, dng_path = ?2, jpg_path = ?3 WHERE id = ?4",
+            params![deleted as i32, dng_path, jpg_path, id],
+        )?;
+        if deleted {
+            tx.execute(
+                "UPDATE project SET cover_photo_path = NULL WHERE cover_photo_path = ?1",
+                params![format!(".thumbs/{}.jpg", id)],
+            )?;
+        }
+        tx.commit()?;
         Ok(())
     }
 

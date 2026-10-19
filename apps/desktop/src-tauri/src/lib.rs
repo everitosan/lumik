@@ -155,6 +155,9 @@ pub fn run() {
             commands::save_photo_rating,
             // Flujo: Rotación de imagen           → use_cases::RotatePhoto
             commands::save_photo_rotation,
+            // Flujo: Papelera / restaurar foto   → use_cases::TrashPhoto / RestorePhoto
+            commands::trash_photo,
+            commands::restore_photo,
 
             // ── Dispositivos ────────────────────────────────────────────────
             commands::get_platform,
@@ -172,6 +175,7 @@ pub fn run() {
 
             // ── Fotos (consulta / media) ────────────────────────────────────
             commands::get_project_photos,
+            commands::get_project_trashed_photos,
             commands::get_project_thumbnails,
             commands::get_thumbnail,
             commands::get_photo_preview,
@@ -180,6 +184,7 @@ pub fn run() {
             commands::get_project_settings,
             commands::update_project_settings,
             commands::regenerate_project_thumbnails,
+            commands::reveal_photo,
 
             // ── Fotógrafo / ajustes / keybindings ───────────────────────────
             commands::get_active_photographer,

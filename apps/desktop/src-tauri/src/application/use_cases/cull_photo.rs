@@ -22,6 +22,12 @@ impl CullPhoto<'_> {
             .get(photo_id)?
             .ok_or_else(|| format!("Photo {} not found", photo_id))?;
 
+        // Una foto en la papelera vive en `_trash/`: aprobarla la sacaría de ahí sin
+        // restaurarla. Se rechaza antes de mover nada.
+        if photo.deleted {
+            return Err(format!("Photo {} is in the trash; restore it before approving", photo_id));
+        }
+
         // Sin cambio de estado: nada que hacer.
         if photo.culled == culled {
             return Ok(());
@@ -145,6 +151,15 @@ mod tests {
         fn set_exported(&self, _id: &str, _jpg_path: &str) -> Result<(), String> {
             Ok(())
         }
+        fn set_deleted(
+            &self,
+            _id: &str,
+            _deleted: bool,
+            _dng_path: &str,
+            _jpg_path: Option<&str>,
+        ) -> Result<(), String> {
+            unreachable!()
+        }
         fn create_batch(
             &self,
             _photos: &[crate::db::models::CreatePhoto],
@@ -217,6 +232,28 @@ mod tests {
         let calls = repo.culled_calls.borrow();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0], (true, "lumik/2024/06/15_boda/_culled/IMG.dng".to_string()));
+    }
+
+    #[test]
+    fn trashed_photo_is_rejected_without_moving() {
+        let mut photo = make_photo("lumik/x/_trash/IMG.dng", false);
+        photo.deleted = true;
+        let repo = FakePhotoRepo {
+            photo,
+            fail_update: false,
+            culled_calls: RefCell::new(vec![]),
+        };
+        let files = FakeFileStore::default();
+        let uc = CullPhoto {
+            photos: &repo,
+            files: &files,
+            finder_tags: &FakeFinderTags,
+            mount_point: Path::new("/mnt"),
+        };
+
+        assert!(uc.execute("p1", true).is_err());
+        assert!(files.renames.lock().unwrap().is_empty());
+        assert!(repo.culled_calls.borrow().is_empty());
     }
 
     #[test]

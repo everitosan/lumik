@@ -250,6 +250,7 @@ pub fn get_default_db_path() -> DbResult<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::models::CreatePhoto;
 
     #[test]
     fn archived_project_stays_in_dashboard_entry_and_can_be_restored() {
@@ -269,6 +270,116 @@ mod tests {
 
         db.set_archived(false).unwrap();
         assert!(!db.get_project_dashboard_entry().unwrap().unwrap().archived);
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn temp_project(tag: &str) -> (PathBuf, ProjectDatabase) {
+        let dir = std::env::temp_dir().join(format!("lumik_{}_{}", tag, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let db = ProjectDatabase::create(
+            dir.join("project.db"), "p1", "Boda", "creator", None, Some("2024-06-15"), "dev", dir.clone(),
+        )
+        .unwrap();
+        (dir, db)
+    }
+
+    fn new_photo(dng_path: &str) -> CreatePhoto {
+        CreatePhoto {
+            project_id: "p1".into(),
+            dng_path: dng_path.into(),
+            device_uuid: "dev".into(),
+            original_camera: None,
+            original_format: None,
+            capture_date: None,
+            width: None,
+            height: None,
+            file_size_bytes: None,
+            iso: None,
+            aperture: None,
+            shutter_speed: None,
+            exposure_compensation: None,
+            focal_length: None,
+            lens_model: None,
+            rotation: 0,
+        }
+    }
+
+    #[test]
+    fn trashed_photo_leaves_listing_count_and_cover() {
+        let (dir, db) = temp_project("trash_photo");
+        let photos = db
+            .create_photos_batch(&[new_photo("lumik/Boda/_media/A.dng"), new_photo("lumik/Boda/_media/B.dng")])
+            .unwrap();
+        let (a, b) = (&photos[0], &photos[1]);
+        db.set_cover_photo(Some(&format!(".thumbs/{}.jpg", a.id))).unwrap();
+
+        db.set_photo_deleted(&a.id, true, "lumik/Boda/_trash/A.dng", Some("lumik/Boda/_trash/_exported/A.jpg"))
+            .unwrap();
+
+        let listed: Vec<String> = db.get_project_photos().unwrap().into_iter().map(|p| p.id).collect();
+        assert_eq!(listed, vec![b.id.clone()]);
+        let entry = db.get_project_dashboard_entry().unwrap().unwrap();
+        assert_eq!(entry.photo_count, 1);
+        assert_eq!(entry.cover_photo_path, None);
+
+        let trashed = db.get_project_trashed_photos().unwrap();
+        assert_eq!(trashed.len(), 1);
+        assert!(trashed[0].deleted);
+        assert_eq!(trashed[0].dng_path, "lumik/Boda/_trash/A.dng");
+        assert_eq!(trashed[0].jpg_path.as_deref(), Some("lumik/Boda/_trash/_exported/A.jpg"));
+        assert_eq!(db.get_project_trashed_photos().unwrap().len(), 1);
+
+        // Restaurar: vuelve al listado; la portada no se recupera.
+        db.set_photo_deleted(&a.id, false, "lumik/Boda/_media/A.dng", None).unwrap();
+        assert_eq!(db.get_project_photos().unwrap().len(), 2);
+        assert!(db.get_project_trashed_photos().unwrap().is_empty());
+        assert_eq!(db.get_project_dashboard_entry().unwrap().unwrap().cover_photo_path, None);
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn trashing_another_photo_keeps_the_cover() {
+        let (dir, db) = temp_project("trash_keeps_cover");
+        let photos = db
+            .create_photos_batch(&[new_photo("lumik/Boda/_media/A.dng"), new_photo("lumik/Boda/_media/B.dng")])
+            .unwrap();
+        let cover = format!(".thumbs/{}.jpg", photos[0].id);
+        db.set_cover_photo(Some(&cover)).unwrap();
+
+        db.set_photo_deleted(&photos[1].id, true, "lumik/Boda/_trash/B.dng", None).unwrap();
+
+        assert_eq!(db.get_project_dashboard_entry().unwrap().unwrap().cover_photo_path, Some(cover));
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prefix_update_rewrites_dng_and_jpg_paths_of_trashed_photos() {
+        let (dir, db) = temp_project("prefix_jpg");
+        let photos = db
+            .create_photos_batch(&[new_photo("lumik/2024/06/15_Boda/_media/A.dng")])
+            .unwrap();
+        let id = &photos[0].id;
+        db.set_photo_deleted(
+            id,
+            true,
+            "lumik/2024/06/15_Boda/_trash/A.dng",
+            Some("lumik/2024/06/15_Boda/_trash/_exported/A.jpg"),
+        )
+        .unwrap();
+
+        let n = db
+            .update_photo_paths_prefix("lumik/2024/06/15_Boda", "lumik/2024/06/16_Boda_Ana")
+            .unwrap();
+
+        assert_eq!(n, 1);
+        let photo = db.get_photo(id).unwrap().unwrap();
+        assert_eq!(photo.dng_path, "lumik/2024/06/16_Boda_Ana/_trash/A.dng");
+        assert_eq!(photo.jpg_path.as_deref(), Some("lumik/2024/06/16_Boda_Ana/_trash/_exported/A.jpg"));
 
         drop(db);
         let _ = std::fs::remove_dir_all(&dir);

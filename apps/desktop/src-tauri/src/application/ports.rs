@@ -203,6 +203,16 @@ pub trait PhotoRepository {
     fn update_dng_path(&self, id: &str, new_dng_path: &str) -> Result<(), String>;
     /// Enlaza la foto con su JPEG exportado y la marca `edited` (Fase 6).
     fn set_exported(&self, id: &str, jpg_path: &str) -> Result<(), String>;
+    /// Mete la foto en la papelera (borrado lógico, columna `deleted`) o la restaura,
+    /// fijando a la vez las rutas de su original y de su exportado. Al meterla, si
+    /// la foto era la portada del proyecto, el proyecto queda sin portada.
+    fn set_deleted(
+        &self,
+        id: &str,
+        deleted: bool,
+        dng_path: &str,
+        jpg_path: Option<&str>,
+    ) -> Result<(), String>;
     /// Inserta un lote de fotos en una sola transacción; devuelve las creadas.
     fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String>;
 }

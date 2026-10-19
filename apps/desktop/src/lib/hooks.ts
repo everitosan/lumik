@@ -167,6 +167,30 @@ export function useProjectPhotos(projectId: string) {
   return { ...state, refetch };
 }
 
+export function useProjectTrashedPhotos(projectId: string) {
+  const [state, setState] = useState<AsyncState<Photo[]>>({
+    data: null,
+    loading: true,
+    error: null,
+  });
+
+  const refetch = useCallback(async () => {
+    setState((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const data = await api.getProjectTrashedPhotos(projectId);
+      setState({ data, loading: false, error: null });
+    } catch (err) {
+      setState({ data: null, loading: false, error: String(err) });
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  return { ...state, refetch };
+}
+
 export function useProjectThumbnails(projectId: string) {
   const [thumbnailIds, setThumbnailIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
