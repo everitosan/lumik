@@ -246,3 +246,31 @@ pub fn get_default_db_path() -> DbResult<PathBuf> {
         Ok(data_dir.join("com.lumik.app").join("lumik.db"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn archived_project_stays_in_dashboard_entry_and_can_be_restored() {
+        let dir = std::env::temp_dir().join(format!("lumik_archive_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let db = ProjectDatabase::create(
+            dir.join("project.db"), "p1", "Boda", "creator", None, Some("2024-06-15"), "dev", dir.clone(),
+        )
+        .unwrap();
+
+        assert!(!db.get_project_dashboard_entry().unwrap().unwrap().archived);
+
+        db.set_archived(true).unwrap();
+        let entry = db.get_project_dashboard_entry().unwrap().expect("archived projects are still listed");
+        assert!(entry.archived);
+        assert!(db.get_project().unwrap().unwrap().archived);
+
+        db.set_archived(false).unwrap();
+        assert!(!db.get_project_dashboard_entry().unwrap().unwrap().archived);
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

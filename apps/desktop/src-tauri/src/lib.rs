@@ -165,7 +165,7 @@ pub fn run() {
             // ── Proyectos (gestión / consulta) ──────────────────────────────
             commands::get_projects_dashboard,
             commands::get_project,
-            commands::archive_project,
+            commands::set_project_archived,
             commands::delete_project,
             commands::edit_project,
             commands::open_project_folder,
@@ -192,6 +192,8 @@ pub fn run() {
             commands::update_app_settings,
             commands::get_dashboard_sort,
             commands::update_dashboard_sort,
+            commands::get_dashboard_show_archived,
+            commands::set_dashboard_show_archived,
 
             // ── Respaldo: cuenta / sesión (Fase 4) ──────────────────────────
             commands::get_backup_server_url,

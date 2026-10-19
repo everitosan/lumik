@@ -23,7 +23,11 @@ export interface ProjectCardProps {
    *  menu button is hidden entirely. */
   onOpenFolder?: () => void;
   onEdit?: () => void;
+  /** Archivar / desarchivar (el texto del menú depende de `archived`). */
+  onToggleArchive?: () => void;
   onDelete?: () => void;
+  /** Proyecto archivado: se muestra atenuado y con la etiqueta "Archivado". */
+  archived?: boolean;
   className?: string;
   style?: CSSProperties;
 }
@@ -164,6 +168,22 @@ const metaItemFullStyles: CSSProperties = {
   gridColumn: '1 / -1',
 };
 
+const archivedLabelStyles: CSSProperties = {
+  position: 'absolute',
+  top: '8px',
+  left: '8px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '2px 8px',
+  fontFamily: 'var(--lumik-font-primary, Inter)',
+  fontSize: '11px',
+  fontWeight: 500,
+  color: 'var(--lumik-on-surface, #e5e2e1)',
+  backgroundColor: 'rgba(14, 14, 14, 0.75)',
+  borderRadius: 'var(--lumik-radius-full, 9999px)',
+};
+
 const statusBadgeBaseStyles: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -220,7 +240,9 @@ export function ProjectCard({
   onClick,
   onOpenFolder,
   onEdit,
+  onToggleArchive,
   onDelete,
+  archived = false,
   className,
   style,
 }: ProjectCardProps) {
@@ -230,7 +252,8 @@ export function ProjectCard({
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuDropdownRef = useRef<HTMLDivElement>(null);
 
-  const hasMenu = Boolean(onOpenFolder || onEdit || onDelete);
+  const [hovered, setHovered] = useState(false);
+  const hasMenu = Boolean(onOpenFolder || onEdit || onToggleArchive || onDelete);
 
   const statusLabels = {
     imported: t('components.projectCard.status.imported'),
@@ -287,9 +310,16 @@ export function ProjectCard({
 
   return (
     <div
-      style={{ ...cardStyles, ...style }}
+      style={{
+        ...cardStyles,
+        // Archivado: atenuado, pero legible al pasar el ratón.
+        ...(archived ? { opacity: hovered ? 0.85 : 0.55 } : null),
+        ...style,
+      }}
       className={className}
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } }}
       role="button"
       tabIndex={0}
@@ -301,6 +331,12 @@ export function ProjectCard({
           <div style={placeholderStyles}>
             <Icon name="image" size={48} />
           </div>
+        )}
+        {archived && (
+          <span style={archivedLabelStyles}>
+            <Icon name="archive" size="sm" aria-hidden="true" />
+            {t('components.projectCard.archived')}
+          </span>
         )}
       </div>
 
@@ -338,6 +374,12 @@ export function ProjectCard({
                     <button style={menuItemStyles} role="menuitem" onClick={(e) => runAction(e, onEdit)}>
                       <Icon name="edit" size="sm" />
                       {t('components.projectCard.menu.edit')}
+                    </button>
+                  )}
+                  {onToggleArchive && (
+                    <button style={menuItemStyles} role="menuitem" onClick={(e) => runAction(e, onToggleArchive)}>
+                      <Icon name={archived ? 'archive-restore' : 'archive'} size="sm" />
+                      {archived ? t('components.projectCard.menu.unarchive') : t('components.projectCard.menu.archive')}
                     </button>
                   )}
                   {onDelete && (

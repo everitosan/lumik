@@ -274,6 +274,11 @@
       "projects": "Proyectos dentro del año",
       "newestFirst": "Más recientes primero",
       "oldestFirst": "Más antiguos primero"
+    },
+    "archived": {
+      "label": "Archivados ({{count}})",
+      "show": "Mostrar proyectos archivados",
+      "hide": "Ocultar proyectos archivados"
     }
   },
   "backup": {

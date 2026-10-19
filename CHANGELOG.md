@@ -21,6 +21,9 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   la descripción. Dos opciones extienden el cambio a las fotos ya importadas:
   renombrar los archivos con el nombre nuevo y actualizar la descripción
   embebida (`{descripción}@{año}`). Los archivos de `_exported` no cambian.
+- **Archivar proyectos**: el menú de la tarjeta permite archivar y desarchivar un
+  proyecto. Los archivados se ocultan del dashboard y el botón "Archivados (N)"
+  los muestra atenuados en su año; la elección se conserva al reabrir la app.
 
 ### Cambiado
 - **Badge de estado del proyecto**: las tarjetas del dashboard (desktop y portal

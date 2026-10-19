@@ -357,6 +357,42 @@ export function useDashboardSort() {
   return { sort, setSort };
 }
 
+/**
+ * Si el dashboard muestra los proyectos archivados (por defecto, no). Mismo
+ * comportamiento que `useDashboardSort`: optimista, vuelve atrás si guardar
+ * falla y el cambio del usuario gana a una carga tardía.
+ */
+export function useDashboardShowArchived() {
+  const [showArchived, setState] = useState(false);
+  const valueRef = useRef(showArchived);
+  valueRef.current = showArchived;
+  const touchedRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getDashboardShowArchived()
+      .then((stored) => {
+        if (!cancelled && !touchedRef.current) setState(stored);
+      })
+      .catch((err) => console.error('getDashboardShowArchived failed:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const setShowArchived = useCallback((next: boolean) => {
+    const previous = valueRef.current;
+    touchedRef.current = true;
+    setState(next);
+    api.setDashboardShowArchived(next).catch((err) => {
+      console.error('setDashboardShowArchived failed:', err);
+      setState(previous);
+    });
+  }, []);
+
+  return { showArchived, setShowArchived };
+}
+
 // ============================================================================
 // KEYBINDING HOOK
 // ============================================================================

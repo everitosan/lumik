@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchBar, ProjectCard, Button, Icon } from '@lumik/ui';
-import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, useDashboardSort, matchesKey, usePlatform } from '../../../lib/hooks';
-import { createProject, ensureProjectSynced, relocateBackup, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink } from '../../../lib/api';
+import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, useDashboardShowArchived, useDashboardSort, matchesKey, usePlatform } from '../../../lib/hooks';
+import { createProject, ensureProjectSynced, setProjectArchived, relocateBackup, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink } from '../../../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../../../components/CreateProjectModal';
 import { EditProjectModal } from './EditProjectModal';
 import { DeleteProjectModal } from './DeleteProjectModal';
@@ -115,6 +115,12 @@ const sortRadioStyles: React.CSSProperties = {
   margin: 0,
   accentColor: 'var(--lumik-primary, #b0c6ff)',
   cursor: 'pointer',
+};
+
+const archivedToggleActiveStyles: React.CSSProperties = {
+  ...sortTriggerStyles,
+  color: 'var(--lumik-tertiary, #ffb690)',
+  borderColor: 'var(--lumik-tertiary, #ffb690)',
 };
 
 /** Compara dos claves de fecha ISO en la dirección indicada. */
@@ -292,6 +298,7 @@ export function Projects({ onProjectClick }: ProjectsProps) {
 
   const kb = useContextKeybindings('projects');
   const { sort, setSort } = useDashboardSort();
+  const { showArchived, setShowArchived } = useDashboardShowArchived();
 
   useEffect(() => {
     if (showCreateModal) return;
@@ -332,12 +339,24 @@ export function Projects({ onProjectClick }: ProjectsProps) {
     if (changed) refetch();
   }, [devices, refetch]);
 
-  const filteredProjects = useMemo(() => {
-    if (!projects) return [];
-    return projects.filter((project) =>
-      project.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [projects, searchQuery]);
+  // Archivados ocultos salvo que se elija mostrarlos.
+  const shownProjects = useMemo(
+    () => (projects ?? []).filter((project) => showArchived || !project.archived),
+    [projects, showArchived]
+  );
+
+  const archivedCount = useMemo(
+    () => (projects ?? []).filter((project) => project.archived).length,
+    [projects]
+  );
+
+  const filteredProjects = useMemo(
+    () =>
+      shownProjects.filter((project) =>
+        project.name.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [shownProjects, searchQuery]
+  );
 
   const projectsByYear = useMemo(() => {
     const groups = new Map<string, ProjectDashboard[]>();
@@ -365,10 +384,16 @@ export function Projects({ onProjectClick }: ProjectsProps) {
       ] as [string, typeof list]);
   }, [filteredProjects, sort]);
 
-  const totalPhotos = useMemo(() => {
-    if (!projects) return 0;
-    return projects.reduce((sum, p) => sum + p.photo_count, 0);
-  }, [projects]);
+  const totalPhotos = useMemo(
+    () => shownProjects.reduce((sum, p) => sum + p.photo_count, 0),
+    [shownProjects]
+  );
+
+  const handleToggleArchive = (project: ProjectDashboard) => {
+    void setProjectArchived(project.id, !project.archived)
+      .then(() => refetch())
+      .catch((err) => console.error('setProjectArchived failed:', err));
+  };
 
   const handleProjectClick = (project: ProjectDashboard) => {
     onProjectClick?.(project);
@@ -436,7 +461,7 @@ export function Projects({ onProjectClick }: ProjectsProps) {
           <h1 style={titleStyles}>{t('dashboard.title')}</h1>
           <div style={statsStyles}>
             <span style={statItemStyles}>
-              <span style={statValueStyles}>{projects?.length ?? 0}</span> {t('dashboard.statistics.projects')}
+              <span style={statValueStyles}>{shownProjects.length}</span> {t('dashboard.statistics.projects')}
             </span>
             <span style={statItemStyles}>
               <span style={statValueStyles}>{totalPhotos.toLocaleString()}</span> {t('dashboard.statistics.photos')}
@@ -451,6 +476,18 @@ export function Projects({ onProjectClick }: ProjectsProps) {
           />
         </div>
         <div style={headerRightStyles}>
+          {archivedCount > 0 && (
+            <button
+              type="button"
+              style={showArchived ? archivedToggleActiveStyles : sortTriggerStyles}
+              onClick={() => setShowArchived(!showArchived)}
+              aria-pressed={showArchived}
+              title={showArchived ? t('dashboard.archived.hide') : t('dashboard.archived.show')}
+            >
+              <Icon name="archive" size="sm" />
+              {t('dashboard.archived.label', { count: archivedCount })}
+            </button>
+          )}
           <SortMenu sort={sort} onChange={setSort} />
           <Button
             variant="primary"
@@ -506,7 +543,9 @@ export function Projects({ onProjectClick }: ProjectsProps) {
                   onClick={() => handleProjectClick(project)}
                   onOpenFolder={canOpenFolder ? () => handleOpenFolder(project) : undefined}
                   onEdit={() => setEditingProject(project)}
+                  onToggleArchive={() => handleToggleArchive(project)}
                   onDelete={() => setDeletingProject(project)}
+                  archived={project.archived}
                 />
               ))}
             </div>

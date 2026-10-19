@@ -90,6 +90,17 @@ pub fn update_app_settings(state: State<AppState>, settings: AppSettings) -> App
 }
 
 #[tauri::command]
+pub fn get_dashboard_show_archived(state: State<AppState>) -> AppResult<bool> {
+    Ok(state.global_db.get_dashboard_show_archived()?)
+}
+
+#[tauri::command]
+pub fn set_dashboard_show_archived(state: State<AppState>, show: bool) -> AppResult<bool> {
+    info!("set_dashboard_show_archived called: {}", show);
+    Ok(state.global_db.set_dashboard_show_archived(show)?)
+}
+
+#[tauri::command]
 pub fn get_dashboard_sort(state: State<AppState>) -> AppResult<DashboardSort> {
     debug!("get_dashboard_sort called");
     Ok(state.global_db.get_dashboard_sort()?)

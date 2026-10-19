@@ -25,7 +25,7 @@ pub fn get_projects_dashboard(state: State<AppState>) -> AppResult<Vec<ProjectDa
     for project_db in &project_dbs {
         match project_db.get_project_dashboard_entry() {
             Ok(Some(entry)) => dashboard.push(entry),
-            Ok(None) => {} // archived or deleted
+            Ok(None) => {} // deleted
             Err(e) => warn!("Dashboard entry error for project {}: {}", project_db.project_id, e),
         }
     }
@@ -120,10 +120,10 @@ pub fn create_project(state: State<AppState>, project: CreateProject) -> AppResu
 }
 
 #[tauri::command]
-pub fn archive_project(state: State<AppState>, id: String) -> AppResult<()> {
-    info!("archive_project called: {}", id);
+pub fn set_project_archived(state: State<AppState>, id: String, archived: bool) -> AppResult<()> {
+    info!("set_project_archived called: {} -> {}", id, archived);
     let project_db = state.project_db(&id)?;
-    Ok(project_db.archive_project()?)
+    Ok(project_db.set_archived(archived)?)
 }
 
 /// Permanently delete a project: removes its folder and all files from disk.

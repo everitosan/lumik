@@ -142,6 +142,8 @@ pub struct ProjectDashboard {
     pub cover_photo_path: Option<String>,
     /// CSV de proveedores donde se respaldó (para los iconos de la card).
     pub backup_providers: Option<String>,
+    /// Archivado: el dashboard lo oculta salvo que se elija mostrar archivados.
+    pub archived: bool,
     /// UUID of the device where this project's database lives
     pub device_uuid: String,
 }

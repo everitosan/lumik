@@ -20,10 +20,13 @@
         "edited": "Edited",
         "delivered": "Delivered"
       },
+      "archived": "Archived",
       "menu": {
         "label": "Project options",
         "openFolder": "Open folder",
         "edit": "Edit",
+        "archive": "Archive",
+        "unarchive": "Unarchive",
         "delete": "Delete"
       }
     },

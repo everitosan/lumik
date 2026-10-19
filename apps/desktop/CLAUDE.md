@@ -249,11 +249,11 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 
 Plataforma: `get_platform`, `open_external_url`
 Dispositivos: `scan_connected_devices`, `eject_device`, `get_known_devices`
-Proyectos: `get_projects_dashboard`, `get_project`, `create_project`, `edit_project`, `archive_project`, `delete_project`, `open_project_folder`, `get_project_cover_thumbnail`, `set_project_cover_photo`, `get_project_settings`, `update_project_settings`
+Proyectos: `get_projects_dashboard`, `get_project`, `create_project`, `edit_project`, `set_project_archived`, `delete_project`, `open_project_folder`, `get_project_cover_thumbnail`, `set_project_cover_photo`, `get_project_settings`, `update_project_settings`
 Fotos: `get_project_photos`, `get_project_thumbnails`, `get_thumbnail`, `get_photo_preview`, `save_photo_rotation`, `save_photo_rating`, `save_photo_culled`, `regenerate_project_thumbnails`
 Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`
-Ajustes: `get_app_settings`, `update_app_settings`, `get_dashboard_sort`, `update_dashboard_sort`
+Ajustes: `get_app_settings`, `update_app_settings`, `get_dashboard_sort`, `update_dashboard_sort`, `get_dashboard_show_archived`, `set_dashboard_show_archived`
 Keybindings: `get_keybindings`, `update_keybinding`
 Import: `start_import`
 Respaldo — cuenta: `get_backup_server_url`, `set_backup_server_url`, `backup_register`, `backup_login`, `backup_logout`, `get_backup_session`
@@ -275,7 +275,7 @@ Respaldo — cola: `set_pending_backup`, `clear_pending_backup`, `get_pending_ba
 | Metadata XMP del fotógrafo en import | ✓ Funcional |
 | Menú de proyectos (renombrar, eliminar, abrir carpeta) | ✓ Funcional (abrir carpeta: no en Android) |
 | Respaldo de `_exported` en la nube (cuenta, modal, cola offline) | ✓ Beta |
-| Archivar proyectos | ✗ Backend listo (`archive_project`), sin UI |
+| Archivar proyectos | ✓ Funcional (menú de la tarjeta + botón "Archivados" en el dashboard) |
 | Operaciones en lote desde el grid | ✗ No implementado |
 | App iPad nativa | ✗ Planificado |
 

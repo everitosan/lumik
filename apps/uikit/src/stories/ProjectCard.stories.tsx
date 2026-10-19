@@ -49,6 +49,21 @@ export const Entregada: Story = {
   },
 };
 
+export const Archived: Story = {
+  args: {
+    name: 'Corporativo TechCorp',
+    photoCount: 89,
+    date: '2024-02-28',
+    driveName: 'WD_Photos',
+    status: 'delivered',
+    archived: true,
+    thumbnailUrl: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=400&h=300&fit=crop',
+    onEdit: () => {},
+    onToggleArchive: () => {},
+    onDelete: () => {},
+  },
+};
+
 export const WithThumbnail: Story = {
   args: {
     name: 'Boda Martinez-Lopez',

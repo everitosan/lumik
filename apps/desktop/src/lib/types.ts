@@ -30,6 +30,8 @@ export interface ProjectDashboard {
   workflow_status: WorkflowStatus;
   cover_photo_path: string | null;
   backup_providers: string | null;
+  /** Archivado: oculto en el dashboard salvo que se muestren los archivados */
+  archived: boolean;
   device_uuid: string;
 }
 

@@ -239,6 +239,16 @@ impl GlobalDatabase {
         Ok(DashboardSort::from_stored(years.as_deref(), projects.as_deref()))
     }
 
+    /// Si el dashboard muestra los proyectos archivados (por defecto, no).
+    pub fn get_dashboard_show_archived(&self) -> DbResult<bool> {
+        Ok(self.get_setting("dashboard_show_archived")?.as_deref() == Some("true"))
+    }
+
+    pub fn set_dashboard_show_archived(&self, show: bool) -> DbResult<bool> {
+        self.set_setting("dashboard_show_archived", if show { "true" } else { "false" })?;
+        self.get_dashboard_show_archived()
+    }
+
     pub fn update_dashboard_sort(&self, sort: &DashboardSort) -> DbResult<DashboardSort> {
         self.set_setting("dashboard_year_order", sort.years.as_str())?;
         self.set_setting("dashboard_project_order", sort.projects.as_str())?;
@@ -425,7 +435,8 @@ impl ProjectDatabase {
     }
 
     /// Returns the dashboard entry for this project (with photo count + workflow status).
-    /// Returns None if the project is archived or deleted.
+    /// Returns None if the project is deleted. Archived projects are included (with
+    /// `archived = true`); the dashboard decides whether to show them.
     pub fn get_project_dashboard_entry(&self) -> DbResult<Option<ProjectDashboard>> {
         let conn = self.conn();
         let result = conn
@@ -440,10 +451,11 @@ impl ProjectDatabase {
                                 ELSE 'delivered'
                             END) AS workflow_status,
                         p.cover_photo_path,
-                        p.backup_providers
+                        p.backup_providers,
+                        p.archived
                  FROM project p
                  LEFT JOIN photo f ON f.project_id = p.id AND f.deleted = 0
-                 WHERE p.deleted = 0 AND p.archived = 0
+                 WHERE p.deleted = 0
                  GROUP BY p.id
                  LIMIT 1",
                 [],
@@ -457,6 +469,7 @@ impl ProjectDatabase {
                         workflow_status: row.get(5)?,
                         cover_photo_path: row.get(6)?,
                         backup_providers: row.get(7)?,
+                        archived: row.get::<_, i32>(8)? != 0,
                         device_uuid: String::new(), // filled below
                     })
                 },
@@ -469,11 +482,12 @@ impl ProjectDatabase {
         }))
     }
 
-    pub fn archive_project(&self) -> DbResult<()> {
+    /// Archiva o desarchiva el proyecto (solo afecta a su visibilidad en el dashboard).
+    pub fn set_archived(&self, archived: bool) -> DbResult<()> {
         let conn = self.conn();
         conn.execute(
-            "UPDATE project SET archived = 1 WHERE id = ?1",
-            [&self.project_id],
+            "UPDATE project SET archived = ?1 WHERE id = ?2",
+            params![archived as i32, self.project_id],
         )?;
         Ok(())
     }

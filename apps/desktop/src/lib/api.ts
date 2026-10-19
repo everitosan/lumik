@@ -175,8 +175,16 @@ export async function getBackupFolderLink(
   return invoke('get_backup_folder_link', { projectId, provider });
 }
 
-export async function archiveProject(id: string): Promise<void> {
-  return invoke('archive_project', { id });
+export async function setProjectArchived(id: string, archived: boolean): Promise<void> {
+  return invoke('set_project_archived', { id, archived });
+}
+
+export async function getDashboardShowArchived(): Promise<boolean> {
+  return invoke('get_dashboard_show_archived');
+}
+
+export async function setDashboardShowArchived(show: boolean): Promise<boolean> {
+  return invoke('set_dashboard_show_archived', { show });
 }
 
 export async function deleteProject(id: string): Promise<void> {
