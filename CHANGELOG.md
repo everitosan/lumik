@@ -34,7 +34,6 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 - **Iconos sobre Lucide**: los iconos de la interfaz pasan de SVGs copiados de
   Feather a la biblioteca Lucide (su fork mantenido), con el mismo estilo y
   trazos uniformes. Los componentes y nombres de iconos no cambian.
-
 - **Barra de filtros del dashboard**: "Archivados" y "Ordenar" pasan de la
   cabecera a una barra inferior alineada a la derecha, con el mismo diseño que
   el pie del detalle de proyecto. La cabecera queda con el título y los
