@@ -17,7 +17,7 @@
     "projectCard": {
       "status": {
         "imported": "Importado",
-        "edited": "Editando",
+        "edited": "Editado",
         "delivered": "Entregado"
       },
       "menu": {

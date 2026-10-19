@@ -5,6 +5,15 @@ Todos los cambios notables de Lumik se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [Sin publicar]
+
+### Cambiado
+- **Badge de estado del proyecto**: las tarjetas del dashboard (desktop y portal
+  web) muestran el estado de flujo con un icono además del texto, y con colores
+  que se leen como semáforo de trabajo: importado en amarillo, editado en azul
+  y entregado en gris. La etiqueta "Editando" pasa a "Editado" ("Edited" en
+  inglés).
+
 ## [0.1.3-beta] — 2026-09-20
 
 ### Añadido

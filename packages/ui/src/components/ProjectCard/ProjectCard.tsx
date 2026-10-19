@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Icon } from '../Icon';
+import { Icon, type IconName } from '../Icon';
 import { ProviderIcon } from '../ProviderIcon';
 
 export type WorkflowStatus = 'imported' | 'edited' | 'delivered';
@@ -164,37 +164,33 @@ const metaItemFullStyles: CSSProperties = {
   gridColumn: '1 / -1',
 };
 
-const statusBadgeStyles: Record<WorkflowStatus, CSSProperties> = {
-  imported: {
-    padding: '2px 8px',
-    fontSize: '11px',
-    fontWeight: 500,
-    borderRadius: 'var(--lumik-radius-full, 9999px)',
-    backgroundColor: 'rgba(176, 198, 255, 0.15)',
-    color: 'var(--lumik-primary, #b0c6ff)',
-  },
-  edited: {
-    padding: '2px 8px',
-    fontSize: '11px',
-    fontWeight: 500,
-    borderRadius: 'var(--lumik-radius-full, 9999px)',
-    backgroundColor: 'rgba(233, 195, 73, 0.15)',
-    color: 'var(--lumik-secondary, #e9c349)',
-  },
-  delivered: {
-    padding: '2px 8px',
-    fontSize: '11px',
-    fontWeight: 500,
-    borderRadius: 'var(--lumik-radius-full, 9999px)',
-    backgroundColor: 'rgba(255, 182, 144, 0.15)',
-    color: 'var(--lumik-tertiary, #ffb690)',
-  },
+const statusBadgeBaseStyles: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '2px 8px',
+  fontSize: '11px',
+  fontWeight: 500,
+  borderRadius: 'var(--lumik-radius-full, 9999px)',
 };
 
-const statusLabels: Record<WorkflowStatus, string> = {
-  imported: 'Imported',
-  edited: 'Editing',
-  delivered: 'Delivered',
+// Semáforo de trabajo: amarillo = pendiente, azul = en curso, gris = terminado.
+const statusBadgeConfig: Record<WorkflowStatus, { color: string; backgroundColor: string; icon: IconName }> = {
+  imported: {
+    color: 'var(--lumik-secondary, #e9c349)',
+    backgroundColor: 'rgba(233, 195, 73, 0.15)',
+    icon: 'import',
+  },
+  edited: {
+    color: 'var(--lumik-primary, #b0c6ff)',
+    backgroundColor: 'rgba(176, 198, 255, 0.15)',
+    icon: 'edit',
+  },
+  delivered: {
+    color: 'var(--lumik-outline, #8c90a0)',
+    backgroundColor: 'rgba(140, 144, 160, 0.15)',
+    icon: 'check',
+  },
 };
 
 function formatDate(dateString: string): string {
@@ -375,7 +371,16 @@ export function ProjectCard({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-          <span style={statusBadgeStyles[status]}>{statusLabels[status]}</span>
+          <span
+            style={{
+              ...statusBadgeBaseStyles,
+              color: statusBadgeConfig[status].color,
+              backgroundColor: statusBadgeConfig[status].backgroundColor,
+            }}
+          >
+            <Icon name={statusBadgeConfig[status].icon} size="sm" aria-hidden="true" />
+            {statusLabels[status]}
+          </span>
           {providers && providers.length > 0 && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
               {providers.map((p) => (
