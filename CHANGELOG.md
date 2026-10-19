@@ -5,7 +5,7 @@ Todos los cambios notables de Lumik se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
-## [Sin publicar]
+## [0.1.4-beta] — pendiente (en pruebas)
 
 ### Añadido
 - **Ajustes de cada importación**: el wizard de importación tiene un paso nuevo,

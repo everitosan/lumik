@@ -1,6 +1,6 @@
 [package]
 name = "lumik"
-version = "0.1.0"
+version = "0.1.4"
 description = "App de escritorio para administrar fotografías profesionales"
 authors = ["Lumik"]
 edition = "2021"
