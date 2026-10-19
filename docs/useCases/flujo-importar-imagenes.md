@@ -2,7 +2,7 @@
 
 Lumik Desktop · Linux · Windows · Android
 
-Wizard de 3 pasos en el frontend y un pipeline de 5 fases en Rust: copia a un workspace
+Wizard de 3 pasos en el frontend (origen, ajustes, confirmar; solo desde un proyecto) y un pipeline de 5 fases en Rust: copia a un workspace
 temporal, metadatos y renombrado, movimiento a `_media/`, extracción EXIF e inserción en
 `project.db`, y generación de miniaturas.
 
@@ -40,19 +40,19 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    start(["Usuario en pantalla Importar<br/>o en Detalle de proyecto"])
-    s1["Paso 1 — Seleccionar archivos<br/>• Clic en 'Browse' o arrastrar archivos (DropZone)<br/>• Validar extensiones: RAW, DNG, JPEG, video (MP4, MOV…)<br/>• Mostrar FileList con tamaño total acumulado"]
-    s2["Paso 2 — Seleccionar destino<br/>(solo modo desktop completo)<br/>• Elegir dispositivo destino (useConnectedDevices)<br/>• Elegir proyecto existente o crear uno nuevo<br/>• Validar espacio libre ≥ tamaño total"]
-    s3["Paso 3 — Confirmar e iniciar<br/>• Resumen: N fotos + M videos, dispositivo, proyecto<br/>• Usuario confirma → genera session_id único"]
-    invoke["api.startImport()<br/>listen('import-progress') + invoke('start_import', ImportRequest)<br/>{ session_id, source_files[], project_id,<br/>device_uuid, mount_point, project_name }"]
+    start(["Usuario en Detalle de proyecto<br/>pulsa Importar (el proyecto es el destino)"])
+    s1["Paso 1 — Origen: seleccionar archivos<br/>• Clic en 'Browse' o arrastrar archivos (DropZone)<br/>• Validar extensiones: RAW, DNG, JPEG, video (MP4, MOV…)<br/>• Mostrar FileList con tamaño total acumulado"]
+    s2["Paso 2 — Ajustes de esta importación<br/>• Precargados de AppSettings + metadatos del fotógrafo<br/>• Renombrar sí/no (ejemplo con el nombre del proyecto)<br/>• Firmar sí/no + autor, copyright, URL editables<br/>• Restablecer a la configuración global<br/>• No modifica la configuración global"]
+    s3["Paso 3 — Confirmar e iniciar<br/>• Resumen: N fotos + M videos, proyecto, disco,<br/>espacio libre, renombrado y firma elegidos<br/>• Botón desactivado si no hay espacio suficiente<br/>• Usuario confirma → genera session_id único"]
+    invoke["api.startImport()<br/>listen('import-progress') + invoke('start_import', ImportRequest)<br/>{ session_id, source_files[], project_id,<br/>device_uuid, mount_point, project_name, settings? }"]
     next(["continúa en §2"])
 
     n_uri["Android: DocumentsUI devuelve<br/>content://… URIs<br/>→ resolveContentUri()<br/>→ /storage/{UUID}/DCIM/…"]
-    n_emb["Paso 2 se omite en modo embedded<br/>(desde ProjectDetail,<br/>el proyecto ya se conoce)"]
+    n_set["settings = ImportSessionSettings<br/>{ rename_on_import, embed_metadata,<br/>artist, copyright, contact_url }"]
 
     start --> s1 --> s2 --> s3 --> invoke --> next
     s1 -.- n_uri
-    s2 -.- n_emb
+    s2 -.- n_set
 
     classDef term fill:#d5e8d4,stroke:#82b366,color:#102a12
     classDef ui fill:#dae8fc,stroke:#6c8ebf,color:#10243d
@@ -61,7 +61,7 @@ flowchart TD
     class start,next term
     class s1,s2,s3 ui
     class invoke ipc
-    class n_uri,n_emb note
+    class n_uri,n_set note
 ```
 
 ## 2. Arranque del backend y particionado
@@ -71,7 +71,7 @@ sin registro en base de datos.
 
 ```mermaid
 flowchart TD
-    be_load["Cargar ProjectDatabase por project_id<br/>+ AppSettings (embed_metadata)<br/>+ datos del fotógrafo + descripción del proyecto"]
+    be_load["Cargar ProjectDatabase por project_id<br/>+ AppSettings + metadatos del fotógrafo<br/>→ resolve_import_settings(globales, settings?)<br/>(sin settings = globales; con settings = los de la sesión)<br/>+ descripción del proyecto"]
     part{"Particionar archivos<br/>videos vs fotos"}
     video_copy["pipeline_copy_videos()<br/>Copiar directamente a _video/<br/>Sin conversión · Sin XMP · Sin BD"]
     video_done(["videos_copied count<br/>→ ImportResult"])
@@ -200,9 +200,9 @@ flowchart LR
 
 | Fase | Archivos |
 |------|----------|
-| Wizard (§1) | `src/pages/ImportPage.tsx` — wizard 3 pasos, DropZone, FileList, `handleBrowse()`, `resolveContentUri()` (Android); auto-muestra importación si el proyecto está vacío |
+| Wizard (§1) | `src/pages/ImportPage.tsx` — wizard 3 pasos (origen, ajustes de la importación, confirmar), DropZone, FileList, `handleBrowse()`, `resolveContentUri()` (Android); auto-muestra importación si el proyecto está vacío |
 | IPC (§1) | `src/lib/api.ts` — `startImport()`, `listen('import-progress')` · `src/lib/hooks.ts` — `useImport()`, `session_id` |
-| Arranque (§2) | `src-tauri/src/commands.rs` — `start_import()`, `AppSettings(embed_metadata)`, particionado, `image_description = {desc}@{year}` |
+| Arranque (§2) | `src-tauri/src/commands/import_cmd.rs` — `start_import()`, particionado, `image_description = {desc}@{year}` · `src-tauri/src/application/import_settings.rs` — `resolve_import_settings()` (ajustes de la sesión contra los globales) |
 | Workspace (§2–3) | `src-tauri/src/import/pipeline.rs` — `PipelineWorkspace::create()` (solo `files/`), `pipeline_passthrough()`; temp dir `/tmp` (Linux/Win) o `$HOME/cache` (Android) |
 | Metadatos (§3) | `src-tauri/src/import/pipeline.rs` — `pipeline_metadata()`, split Linux vs Android, `rename_and_embed_metadata()` · `src-tauri/src/import/xmp.rs` — `write_xmp_sidecar()` (Rust puro) |
 | Movimiento (§3) | `src-tauri/src/import/pipeline.rs` — `pipeline_move_to_dest()`, `move_dng_files()`, Copy + Delete cross-FS, `.xmp` excluidos de la lista EXIF, `workspace.cleanup()` |

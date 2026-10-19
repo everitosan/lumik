@@ -3,6 +3,7 @@
 
 use super::{relocate_project_folder, AppState};
 use crate::application::error::AppResult;
+use crate::application::import_settings::{resolve_import_settings, ImportSessionSettings};
 use crate::application::ports::ProgressReporter;
 use crate::application::use_cases::import_photos::{ImportParams, ImportPhotos};
 use crate::domain::project::ProjectFolder;
@@ -21,6 +22,10 @@ pub struct ImportRequest {
     pub device_uuid: String,
     pub mount_point: String,
     pub project_name: String,
+    /// Ajustes elegidos en el wizard para esta importación. Sin ellos se usan
+    /// los globales.
+    #[serde(default)]
+    pub settings: Option<ImportSessionSettings>,
 }
 
 #[tauri::command]
@@ -44,18 +49,20 @@ pub async fn start_import(
     // Look up project DB before entering the async body to release the lock immediately
     let project_db = state.project_db(&request.project_id)?;
 
-    let settings = state.global_db.get_app_settings()?;
+    let global_settings = state.global_db.get_app_settings()?;
 
     let photographer = state
         .global_db
         .get_active_photographer()?
         .ok_or("No active photographer configured")?;
 
-    let photographer_metadata = if settings.embed_metadata_on_import {
-        state.global_db.get_photographer_metadata(&photographer.id)?
-    } else {
-        None
-    };
+    let stored_metadata = state.global_db.get_photographer_metadata(&photographer.id)?;
+    let settings = resolve_import_settings(
+        &global_settings,
+        stored_metadata,
+        &photographer.id,
+        request.settings.as_ref(),
+    );
 
     let image_description: Option<String> = project_db
         .get_project()
@@ -94,7 +101,7 @@ pub async fn start_import(
         mount_point: PathBuf::from(&request.mount_point),
         dest_folder: project_db.project_dir.join("_media"),
         video_dest_folder: project_db.project_dir.join("_video"),
-        metadata: photographer_metadata,
+        metadata: settings.metadata,
         image_description,
         rename_on_import: settings.rename_on_import,
     })?;

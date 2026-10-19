@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Input, Button, Icon, Tabs, type TabItem } from '@lumik/ui';
+import { Input, Button, Checkbox, Icon, Tabs, type TabItem } from '@lumik/ui';
 import { useActivePhotographer, useLanguage } from '../lib/hooks';
 import {
   getPhotographerMetadata,
@@ -139,27 +139,6 @@ const loadingStyles: React.CSSProperties = {
   justifyContent: 'center',
   height: '200px',
   color: 'var(--lumik-on-surface-variant, #c2c6d7)',
-};
-
-const checkboxContainerStyles: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '12px',
-  padding: '12px 0',
-};
-
-const checkboxStyles: React.CSSProperties = {
-  width: '20px',
-  height: '20px',
-  accentColor: 'var(--lumik-primary, #a8c7fa)',
-  cursor: 'pointer',
-};
-
-const checkboxLabelStyles: React.CSSProperties = {
-  fontSize: '14px',
-  color: 'var(--lumik-on-surface, #e5e2e1)',
-  cursor: 'pointer',
-  userSelect: 'none',
 };
 
 const kbRowStyles: React.CSSProperties = {
@@ -421,18 +400,12 @@ export function SettingsPage() {
               </p>
             </div>
 
-            <label style={checkboxContainerStyles}>
-              <input
-                type="checkbox"
-                checked={renameOnImport}
-                onChange={(e) => setRenameOnImport(e.target.checked)}
-                style={checkboxStyles}
-                disabled={saving}
-              />
-              <span style={checkboxLabelStyles}>
-                {t('settings.importOptions.renameOnImport')}
-              </span>
-            </label>
+            <Checkbox
+              label={t('settings.importOptions.renameOnImport')}
+              checked={renameOnImport}
+              onChange={setRenameOnImport}
+              disabled={saving}
+            />
 
             {renameOnImport && (
               <div style={renameExampleStyles}>
@@ -445,18 +418,12 @@ export function SettingsPage() {
               </div>
             )}
 
-            <label style={checkboxContainerStyles}>
-              <input
-                type="checkbox"
-                checked={finderTags}
-                onChange={(e) => setFinderTags(e.target.checked)}
-                style={checkboxStyles}
-                disabled={saving}
-              />
-              <span style={checkboxLabelStyles}>
-                {t('settings.importOptions.finderTags')}
-              </span>
-            </label>
+            <Checkbox
+              label={t('settings.importOptions.finderTags')}
+              checked={finderTags}
+              onChange={setFinderTags}
+              disabled={saving}
+            />
             <p style={sectionDescriptionStyles}>
               {t('settings.importOptions.finderTagsHint')}
             </p>
@@ -470,18 +437,12 @@ export function SettingsPage() {
               </p>
             </div>
 
-            <label style={checkboxContainerStyles}>
-              <input
-                type="checkbox"
-                checked={embedMetadata}
-                onChange={(e) => setEmbedMetadata(e.target.checked)}
-                style={checkboxStyles}
-                disabled={saving}
-              />
-              <span style={checkboxLabelStyles}>
-                {t('settings.photographer.embedMetadata')}
-              </span>
-            </label>
+            <Checkbox
+              label={t('settings.photographer.embedMetadata')}
+              checked={embedMetadata}
+              onChange={setEmbedMetadata}
+              disabled={saving}
+            />
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
               <Input

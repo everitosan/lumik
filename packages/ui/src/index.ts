@@ -27,6 +27,8 @@ export type { ModalProps } from './components/Modal';
 
 export { Input } from './components/Input';
 export type { InputProps, InputVariant } from './components/Input';
+export { Checkbox } from './components/Checkbox';
+export type { CheckboxProps } from './components/Checkbox';
 
 export { Stepper } from './components/Stepper';
 export type { StepperProps, Step } from './components/Stepper';

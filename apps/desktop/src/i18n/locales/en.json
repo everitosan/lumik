@@ -3,7 +3,7 @@
     "title": "Import photos",
     "steps": {
       "origin": "Source",
-      "destination": "Destination",
+      "settings": "Settings",
       "confirm": "Confirm"
     },
     "origin": {
@@ -13,16 +13,19 @@
       "supportedFormats": "Supports RAW, CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG, TIFF, MP4, MOV and more",
       "selectFiles": "Selected files"
     },
-    "destination": {
-      "title": "Select destination",
-      "selectProject": "Select a project",
-      "createNew": "+ Create new project"
+    "settings": {
+      "title": "Settings for this import",
+      "description": "They start from your global settings. Changes here only apply to this import.",
+      "rename": "Rename photos by capture date",
+      "renameExampleLabel": "They'll look like:",
+      "renameExample": "IMG_4821.CR3 → 2024-06-15__14-30-22__{{project}}.cr3",
+      "embed": "Sign photos with my details",
+      "reset": "Reset to global settings"
     },
     "confirm": {
       "title": "Confirm import",
       "ready": "Ready. Files will be copied to destination drive.",
-      "project": "Project",
-      "drive": "Drive"
+      "project": "Project"
     },
     "progress": {
       "importing": "Importing...",
@@ -52,7 +55,13 @@
       "availableSpace": "Available space",
       "ready": "Ready. Files will be copied to destination drive.",
       "failedFiles": "files failed",
-      "moreFiles": "more..."
+      "moreFiles": "more...",
+      "rename": "Renaming",
+      "renameYes": "By capture date",
+      "renameNo": "Original names",
+      "signedBy": "Signature",
+      "notSigned": "Not signed",
+      "notEnoughSpace": "Not enough space on the project's drive: {{required}} needed, {{available}} free."
     },
     "header": {
       "title": "Import photos",
@@ -62,7 +71,6 @@
       "back": "Back",
       "next": "Next",
       "accept": "Accept",
-      "newImport": "New import",
       "import": "Start import",
       "photo_one": "photo",
       "photo_other": "photos",

@@ -116,6 +116,15 @@ export interface ProjectSettings {
 // IMPORT TYPES
 // ============================================================================
 
+/** Ajustes elegidos en el wizard solo para esta importación. */
+export interface ImportSessionSettings {
+  rename_on_import: boolean;
+  embed_metadata: boolean;
+  artist?: string;
+  copyright?: string;
+  contact_url?: string;
+}
+
 export interface ImportRequest {
   session_id: string;
   source_files: string[];
@@ -123,6 +132,8 @@ export interface ImportRequest {
   device_uuid: string;
   mount_point: string;
   project_name: string;
+  /** Sin ajustes, el backend usa la configuración global. */
+  settings?: ImportSessionSettings;
 }
 
 export type ImportPhase =

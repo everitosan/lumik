@@ -28,7 +28,7 @@ src/
     types.ts                        # Tipos TypeScript que espeja los modelos Rust
     BackupContext.tsx               # Estado global de respaldos en segundo plano (progreso por archivo, cola)
   pages/
-    ImportPage.tsx                  # Wizard de importación (2-3 pasos)
+    ImportPage.tsx                  # Wizard de importación: origen → ajustes de la importación → confirmar (solo desde un proyecto)
     SettingsPage.tsx                # Tabs: Importación, Atajos, Apariencia, Respaldo
     BackupAccountSection.tsx        # Tab Respaldo: URL del server, registro/login/logout
     AboutPage.tsx
@@ -165,14 +165,16 @@ comando devuelve error "device not mounted".
 ## Pipeline de importación
 
 El comando `start_import` (`commands/import_cmd.rs`) es un adaptador delgado que
-particiona fotos/videos y delega en el caso de uso `ImportPhotos`
+resuelve los ajustes de la importación (`application/import_settings.rs`: los que
+manda el wizard en `ImportRequest.settings` o, si no llegan, los globales, sin
+modificarlos), particiona fotos/videos y delega en el caso de uso `ImportPhotos`
 (`application/use_cases/import_photos.rs`), que orquesta el pipeline vía el puerto
 `ImportPipeline` (`infrastructure/import_pipeline.rs`):
 
 ```
 source files
   → pipeline_passthrough → workspace temporal (copia en formato original, sin conversión)
-  → pipeline_metadata (exiftool embebe XMP del fotógrafo, si embed_metadata=true)
+  → pipeline_metadata (exiftool renombra y embebe XMP del fotógrafo según los ajustes resueltos)
   → pipeline_move_to_dest → carpeta del proyecto en disco externo
   → MetadataTool::extract_batch (UN proceso exiftool para todos, salida CSV)
   → PhotoRepository::create_batch (UNA transacción SQLite)
@@ -195,7 +197,7 @@ App
 │     └── click proyecto → ProjectDetail
 │           ├── click foto → PhotoDetail
 │           ├── botón respaldo → BackupModal
-│           └── botón importar → ImportPage (embedded, sin paso "destino")
+│           └── botón importar → ImportPage (origen → ajustes → confirmar)
 ├── Settings (Importación · Atajos · Apariencia · Respaldo)
 └── About
 ```

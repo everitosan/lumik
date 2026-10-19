@@ -3,7 +3,7 @@
     "title": "Importar fotos",
     "steps": {
       "origin": "Origen",
-      "destination": "Destino",
+      "settings": "Ajustes",
       "confirm": "Confirmar"
     },
     "origin": {
@@ -13,16 +13,19 @@
       "supportedFormats": "Compatible con RAW, CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG, TIFF, MP4, MOV y más",
       "selectFiles": "Archivos seleccionados"
     },
-    "destination": {
-      "title": "Seleccionar destino",
-      "selectProject": "Selecciona un proyecto",
-      "createNew": "+ Crear nuevo proyecto"
+    "settings": {
+      "title": "Ajustes de esta importación",
+      "description": "Parten de tu configuración global. Lo que cambies aquí solo aplica a esta importación.",
+      "rename": "Renombrar las fotos por fecha de captura",
+      "renameExampleLabel": "Quedarán así:",
+      "renameExample": "IMG_4821.CR3 → 2024-06-15__14-30-22__{{project}}.cr3",
+      "embed": "Firmar las fotos con mis datos",
+      "reset": "Restablecer a la configuración global"
     },
     "confirm": {
       "title": "Confirmar importación",
       "ready": "Todo listo. Los archivos se copiarán al disco de destino.",
-      "project": "Proyecto",
-      "drive": "Disco"
+      "project": "Proyecto"
     },
     "progress": {
       "importing": "Importando...",
@@ -52,7 +55,13 @@
       "availableSpace": "Espacio disponible",
       "ready": "Todo listo. Los archivos se copiarán al disco de destino.",
       "failedFiles": "archivos fallaron",
-      "moreFiles": "más..."
+      "moreFiles": "más...",
+      "rename": "Renombrado",
+      "renameYes": "Por fecha de captura",
+      "renameNo": "Nombres originales",
+      "signedBy": "Firma",
+      "notSigned": "Sin firma",
+      "notEnoughSpace": "No hay espacio suficiente en el disco del proyecto: se necesitan {{required}} y hay {{available}} libres."
     },
     "header": {
       "title": "Importar fotos",
@@ -62,7 +71,6 @@
       "back": "Atrás",
       "next": "Siguiente",
       "accept": "Aceptar",
-      "newImport": "Nueva importación",
       "import": "Iniciar importación",
       "photo_one": "fotografía",
       "photo_other": "fotografías",

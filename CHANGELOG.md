@@ -7,6 +7,13 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+- **Ajustes de cada importación**: el wizard de importación tiene un paso nuevo,
+  entre Origen y Confirmar, para revisar el renombrado y la firma (autor,
+  copyright, URL) antes de importar. Parten de la configuración global y lo que
+  se cambie ahí solo aplica a esa importación. El resumen de confirmación
+  muestra lo elegido.
+
 ### Cambiado
 - **Badge de estado del proyecto**: las tarjetas del dashboard (desktop y portal
   web) muestran el estado de flujo con un icono además del texto, y con colores
@@ -18,6 +25,9 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   trazos uniformes. Los componentes y nombres de iconos no cambian.
 
 ### Corregido
+- No se podía impedir una importación sin espacio suficiente en el disco del
+  proyecto: ahora el botón para iniciarla se desactiva y se avisa del espacio
+  que falta.
 - El icono de importar mostraba una flecha de *subir*; ahora muestra una flecha
   que entra en una bandeja (botones de importar y badge "Importado").
 

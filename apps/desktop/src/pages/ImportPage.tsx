@@ -1,26 +1,24 @@
-import { useState, useMemo, useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, type ChangeEvent, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Stepper,
   Button,
+  Checkbox,
   Icon,
-  Select,
-  DriveSelector,
+  Input,
   DropZone,
   DropZoneSummary,
   FileList,
   isAllowedRawFile,
   type Step,
   type Drive,
-  type SelectOption,
 } from '@lumik/ui';
 import { open } from '@tauri-apps/plugin-dialog';
 import { stat } from '@tauri-apps/plugin-fs';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { useConnectedDevices, useProjectsDashboard, useActivePhotographer, useImport, usePlatform } from '../lib/hooks';
-import { createProject } from '../lib/api';
-import { CreateProjectModal, type ProjectFormData } from '../components/CreateProjectModal';
-import type { FailedFile } from '../lib/types';
+import { useConnectedDevices, useProjectsDashboard, useActivePhotographer, useAppSettings, useImport, usePlatform } from '../lib/hooks';
+import { getPhotographerMetadata } from '../lib/api';
+import type { FailedFile, ImportSessionSettings } from '../lib/types';
 
 const pathBasename = (p: string) => p.replace(/\\/g, '/').split('/').pop() || p;
 
@@ -46,12 +44,13 @@ function resolveContentUri(uri: string): string | null {
   }
 }
 
+// Misma regla que `sanitize_name` en Rust (import/pipeline.rs): letras y dígitos
+// Unicode, `-` y `_` se conservan; todo lo demás pasa a `_`.
+const sanitizeProjectName = (name: string) => name.replace(/[^\p{L}\p{N}_-]/gu, '_');
+
 const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mts', '.m2ts', '.mkv', '.mxf'];
 const isVideoFile = (filename: string) =>
   VIDEO_EXTENSIONS.some((ext) => filename.toLowerCase().endsWith(ext));
-
-// Import wizard steps
-type ImportStep = 'origin' | 'destination' | 'confirm';
 
 interface SourceFile {
   name: string;
@@ -61,8 +60,6 @@ interface SourceFile {
 
 interface ImportState {
   sourceFiles: SourceFile[];
-  selectedProjectId: string | null;
-  selectedDriveId: string | null;
 }
 
 // Styles
@@ -184,6 +181,39 @@ const hintStyles: CSSProperties = {
   fontFamily: 'var(--lumik-font-mono, JetBrains Mono)',
   fontSize: '12px',
   color: 'var(--lumik-outline, #8c90a0)',
+};
+
+// Settings step styles
+const settingsHintStyles: CSSProperties = {
+  fontFamily: 'var(--lumik-font-primary, Inter)',
+  fontSize: '13px',
+  color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+  margin: 0,
+};
+
+const renameExampleStyles: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  marginLeft: '32px',
+  marginTop: '-12px',
+};
+
+const renameExampleLabelStyles: CSSProperties = {
+  fontSize: '12px',
+  color: 'var(--lumik-outline, #8c90a0)',
+};
+
+const renameExampleCodeStyles: CSSProperties = {
+  fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
+  fontSize: '12px',
+  color: 'var(--lumik-outline, #8c90a0)',
+};
+
+const fieldsGridStyles: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, 1fr)',
+  gap: '16px',
 };
 
 // Confirm step styles
@@ -322,13 +352,13 @@ function formatElapsedTime(ms: number): string {
 }
 
 interface ImportPageProps {
-  /** Pre-select a project — skips the destination step entirely */
-  initialProjectId?: string;
-  initialProjectName?: string;
-  /** Pre-select the device where the project lives */
-  initialDeviceId?: string;
-  /** Called when the user wants to go back (when launched from ProjectDetail) */
-  onClose?: () => void;
+  /** Proyecto destino: el import siempre se abre desde un proyecto */
+  initialProjectId: string;
+  initialProjectName: string;
+  /** Disco donde vive el proyecto */
+  initialDeviceId: string;
+  /** Vuelve al detalle del proyecto */
+  onClose: () => void;
 }
 
 export function ImportPage({
@@ -336,48 +366,69 @@ export function ImportPage({
   initialProjectName,
   initialDeviceId,
   onClose,
-}: ImportPageProps = {}) {
+}: ImportPageProps) {
   const { t } = useTranslation();
-  const embedded = !!initialProjectId;
 
-  const ALL_STEPS: Step[] = [
+  const IMPORT_STEPS: Step[] = [
     { id: 'origin', label: t('import.steps.origin') },
-    { id: 'destination', label: t('import.steps.destination') },
+    { id: 'settings', label: t('import.steps.settings') },
     { id: 'confirm', label: t('import.steps.confirm') },
   ];
-
-  const EMBEDDED_STEPS: Step[] = [
-    { id: 'origin', label: t('import.steps.origin') },
-    { id: 'confirm', label: t('import.steps.confirm') },
-  ];
-
-  const IMPORT_STEPS = embedded ? EMBEDDED_STEPS : ALL_STEPS;
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const logEndRef = useRef<HTMLDivElement>(null);
   const [importState, setImportState] = useState<ImportState>({
     sourceFiles: [],
-    selectedProjectId: initialProjectId ?? null,
-    selectedDriveId: initialDeviceId ?? null,
   });
-
-  // Create project modal state
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
 
   // Import timing
   const [elapsedTime, setElapsedTime] = useState<number | null>(null);
 
-  const { data: devices, loading: devicesLoading } = useConnectedDevices();
-  const { data: projects, loading: projectsLoading, refetch: refetchProjects } = useProjectsDashboard();
+  // Ajustes de esta importación: parten de los globales y no los modifican.
+  const [sessionSettings, setSessionSettings] = useState<ImportSessionSettings | null>(null);
+  const globalSettingsRef = useRef<ImportSessionSettings | null>(null);
+
+  const { data: devices } = useConnectedDevices();
+  const { data: projects } = useProjectsDashboard();
   const { data: photographer } = useActivePhotographer();
-  const { progress, importLog, result, isImporting, error: importError, startImport, reset: resetImport } = useImport();
+  const { data: appSettings } = useAppSettings();
+  const { progress, importLog, result, isImporting, error: importError, startImport } = useImport();
   const platform = usePlatform();
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [importLog]);
+
+  // Arma los valores iniciales una sola vez, cuando llegan ajustes y fotógrafo.
+  useEffect(() => {
+    if (!appSettings || !photographer || globalSettingsRef.current) return;
+    let cancelled = false;
+    getPhotographerMetadata(photographer.id)
+      .catch(() => null)
+      .then((metadata) => {
+        if (cancelled || globalSettingsRef.current) return;
+        const initial: ImportSessionSettings = {
+          rename_on_import: appSettings.rename_on_import,
+          embed_metadata: appSettings.embed_metadata_on_import,
+          artist: metadata?.artist ?? '',
+          copyright: metadata?.copyright ?? '',
+          contact_url: metadata?.contact_url ?? '',
+        };
+        globalSettingsRef.current = initial;
+        setSessionSettings(initial);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [appSettings, photographer]);
+
+  const updateSessionSettings = (patch: Partial<ImportSessionSettings>) => {
+    setSessionSettings((s) => (s ? { ...s, ...patch } : s));
+  };
+
+  const handleResetSettings = () => {
+    setSessionSettings(globalSettingsRef.current);
+  };
 
   // Tauri intercepts OS drag-drop before the WebView sees the files.
   // dataTransfer.files is empty in the HTML5 drop event when dragDropEnabled is true.
@@ -423,7 +474,7 @@ export function ImportPage({
     return () => { unlisten?.(); };
   }, []);
 
-  // Convert devices to Drive format for DriveSelector
+  // Convert devices to Drive format (disk info for the project's device)
   const drives: Drive[] = useMemo(() => {
     if (!devices) return [];
     return devices.map((device) => ({
@@ -436,25 +487,6 @@ export function ImportPage({
       mountPath: device.mount_point,
     }));
   }, [devices]);
-
-  // Convert projects to Select options
-  const projectOptions: SelectOption[] = useMemo(() => {
-    const options: SelectOption[] = [];
-    if (projects) {
-      projects.forEach((project) => {
-        options.push({
-          value: project.id,
-          label: project.name,
-        });
-      });
-    }
-    options.push({
-      value: '__new__',
-      label: `+ ${t('project.create.title')}`,
-      isAction: true,
-    });
-    return options;
-  }, [projects]);
 
   // Calculate total import size
   const totalImportSize = useMemo(() => {
@@ -473,14 +505,14 @@ export function ImportPage({
 
   // Get selected drive
   const selectedDrive = useMemo(() => {
-    return drives.find((d) => d.id === importState.selectedDriveId);
-  }, [drives, importState.selectedDriveId]);
+    return drives.find((d) => d.id === initialDeviceId);
+  }, [drives, initialDeviceId]);
 
   // Get selected project
   const selectedProject = useMemo(() => {
-    if (!projects || !importState.selectedProjectId) return null;
-    return projects.find((p) => p.id === importState.selectedProjectId);
-  }, [projects, importState.selectedProjectId]);
+    if (!projects) return null;
+    return projects.find((p) => p.id === initialProjectId);
+  }, [projects, initialProjectId]);
 
   // Validation
   const hasEnoughSpace = useMemo(() => {
@@ -490,11 +522,6 @@ export function ImportPage({
   }, [selectedDrive, totalImportSize]);
 
   const canProceedFromOrigin = importState.sourceFiles.length > 0;
-  const canProceedFromDestination =
-    importState.selectedProjectId !== null &&
-    importState.selectedProjectId !== '__new__' &&
-    importState.selectedDriveId !== null &&
-    hasEnoughSpace;
 
   // Handlers
   const handleStepClick = (stepIndex: number) => {
@@ -513,44 +540,6 @@ export function ImportPage({
     if (currentStepIndex > 0) {
       setCurrentStepIndex(currentStepIndex - 1);
     }
-  };
-
-  const handleProjectChange = (value: string) => {
-    if (value === '__new__') {
-      setShowCreateModal(true);
-      return;
-    }
-    setImportState((s) => ({ ...s, selectedProjectId: value }));
-  };
-
-  const handleCreateProject = async (data: ProjectFormData) => {
-    setIsCreating(true);
-    setCreateError(null);
-
-    try {
-      const newProject = await createProject({
-        name: data.name,
-        description: data.description || undefined,
-        session_date: data.sessionDate || undefined,
-        creator_id: photographer!.id,
-        device_uuid: data.deviceUuid,
-      });
-
-      // Select the newly created project
-      setImportState((s) => ({ ...s, selectedProjectId: newProject.id }));
-      setShowCreateModal(false);
-
-      // Refresh projects list
-      refetchProjects();
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : t('import.errors.createProject'));
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  const handleDriveSelect = (drive: Drive) => {
-    setImportState((s) => ({ ...s, selectedDriveId: drive.id }));
   };
 
   // Tauri dialog for selecting RAW files
@@ -638,6 +627,7 @@ export function ImportPage({
         device_uuid: selectedDrive.uuid,
         mount_point: selectedDrive.mountPath!,
         project_name: selectedProject.name,
+        settings: sessionSettings ?? undefined,
       });
     } catch (e) {
       console.error('startImport error:', e);
@@ -646,29 +636,11 @@ export function ImportPage({
     setElapsedTime(Date.now() - startTime);
   };
 
-  const handleNewImport = () => {
-    resetImport();
-    setElapsedTime(null);
-    setImportState({
-      sourceFiles: [],
-      selectedProjectId: initialProjectId ?? null,
-      selectedDriveId: initialDeviceId ?? null,
-    });
-    setCurrentStepIndex(0);
-  };
-
   // Render step content
   const renderStepContent = () => {
-    if (embedded) {
-      switch (currentStepIndex) {
-        case 0: return renderOriginStep();
-        case 1: return renderConfirmStep();
-        default: return null;
-      }
-    }
     switch (currentStepIndex) {
       case 0: return renderOriginStep();
-      case 1: return renderDestinationStep();
+      case 1: return renderSettingsStep();
       case 2: return renderConfirmStep();
       default: return null;
     }
@@ -698,56 +670,81 @@ export function ImportPage({
     </div>
   );
 
-  // Step 2: Destination
-  const renderDestinationStep = () => (
-    <div style={stepContentStyles}>
-      <div style={sectionStyles}>
-        <Select
-          label={t('import.destination.selectProject')}
-          options={projectOptions}
-          value={importState.selectedProjectId ?? undefined}
-          onChange={handleProjectChange}
-          placeholder={t('import.destination.selectProject')}
-          fullWidth
-          disabled={projectsLoading}
-        />
-      </div>
-
-      <div style={sectionStyles}>
-        <DriveSelector
-          label={t('import.confirm.drive')}
-          drives={drives}
-          selectedId={importState.selectedDriveId ?? undefined}
-          onSelect={handleDriveSelect}
-          requiredBytes={totalImportSize}
-        />
-        {devicesLoading && (
+  // Step 2: Settings (solo para esta importación)
+  const renderSettingsStep = () => {
+    if (!sessionSettings) {
+      return (
+        <div style={stepContentStyles}>
           <span style={hintStyles}>{t('common.loading')}</span>
-        )}
-      </div>
-
-      {selectedDrive && importState.selectedProjectId && (
-        <div style={validationCardStyles(hasEnoughSpace)}>
-          <div style={validationIconStyles(hasEnoughSpace)}>
-            <Icon
-              name={hasEnoughSpace ? 'check' : 'x'}
-              size="md"
-              color={
-                hasEnoughSpace
-                  ? 'var(--lumik-secondary, #e9c349)'
-                  : 'var(--lumik-error, #ffb4ab)'
-              }
-            />
-          </div>
-          <span style={validationTextStyles}>
-            {hasEnoughSpace
-              ? t('import.destination.title')
-              : `${t('import.destination.title')} ${selectedDrive.name}. ${t('common.error')} ${formatBytes(totalImportSize)}`}
-          </span>
         </div>
-      )}
-    </div>
-  );
+      );
+    }
+    const signDisabled = !sessionSettings.embed_metadata;
+    return (
+      <div style={stepContentStyles}>
+        <div style={sectionStyles}>
+          <span style={sectionTitleStyles}>{t('import.settings.title')}</span>
+          <p style={settingsHintStyles}>{t('import.settings.description')}</p>
+        </div>
+
+        <div style={summaryCardStyles}>
+          <Checkbox
+            label={t('import.settings.rename')}
+            checked={sessionSettings.rename_on_import}
+            onChange={(checked) => updateSessionSettings({ rename_on_import: checked })}
+          />
+          {sessionSettings.rename_on_import && (
+            <div style={renameExampleStyles}>
+              <span style={renameExampleLabelStyles}>{t('import.settings.renameExampleLabel')}</span>
+              <span style={renameExampleCodeStyles}>
+                {t('import.settings.renameExample', { project: sanitizeProjectName(initialProjectName) })}
+              </span>
+            </div>
+          )}
+
+          <Checkbox
+            label={t('import.settings.embed')}
+            checked={sessionSettings.embed_metadata}
+            onChange={(checked) => updateSessionSettings({ embed_metadata: checked })}
+          />
+          <div style={fieldsGridStyles}>
+            <Input
+              label={t('settings.photographer.name')}
+              placeholder={t('settings.placeholders.photographerName')}
+              value={sessionSettings.artist ?? ''}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => updateSessionSettings({ artist: e.target.value })}
+              fullWidth
+              disabled={signDisabled}
+            />
+            <Input
+              label={t('settings.photographer.copyright')}
+              placeholder={t('settings.placeholders.copyright')}
+              value={sessionSettings.copyright ?? ''}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => updateSessionSettings({ copyright: e.target.value })}
+              fullWidth
+              disabled={signDisabled}
+            />
+            <div style={{ gridColumn: '1 / -1' }}>
+              <Input
+                label={t('settings.photographer.credits')}
+                placeholder={t('settings.placeholders.website')}
+                value={sessionSettings.contact_url ?? ''}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => updateSessionSettings({ contact_url: e.target.value })}
+                fullWidth
+                disabled={signDisabled}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <Button variant="secondary" size="sm" onClick={handleResetSettings}>
+            {t('import.settings.reset')}
+          </Button>
+        </div>
+      </div>
+    );
+  };
 
   // Step 3: Confirm
   const renderConfirmStep = () => {
@@ -927,19 +924,42 @@ export function ImportPage({
                 </span>
               </div>
             )}
+            {sessionSettings && (
+              <>
+                <div style={summaryRowStyles}>
+                  <span style={summaryLabelStyles}>{t('import.summary.rename')}</span>
+                  <span style={summaryValueStyles}>
+                    {sessionSettings.rename_on_import ? t('import.summary.renameYes') : t('import.summary.renameNo')}
+                  </span>
+                </div>
+                <div style={summaryRowStyles}>
+                  <span style={summaryLabelStyles}>{t('import.summary.signedBy')}</span>
+                  <span style={summaryValueStyles}>
+                    {sessionSettings.embed_metadata && sessionSettings.artist?.trim()
+                      ? sessionSettings.artist.trim()
+                      : t('import.summary.notSigned')}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        <div style={validationCardStyles(true)}>
-          <div style={validationIconStyles(true)}>
+        <div style={validationCardStyles(hasEnoughSpace)}>
+          <div style={validationIconStyles(hasEnoughSpace)}>
             <Icon
-              name="check"
+              name={hasEnoughSpace ? 'check' : 'x'}
               size="md"
-              color="var(--lumik-secondary, #e9c349)"
+              color={hasEnoughSpace ? 'var(--lumik-secondary, #e9c349)' : 'var(--lumik-error, #ffb4ab)'}
             />
           </div>
           <span style={validationTextStyles}>
-            {t('import.summary.ready')}
+            {hasEnoughSpace
+              ? t('import.summary.ready')
+              : t('import.summary.notEnoughSpace', {
+                  required: formatBytes(totalImportSize),
+                  available: formatBytes(selectedDrive ? selectedDrive.totalBytes - selectedDrive.usedBytes : 0),
+                })}
           </span>
         </div>
       </div>
@@ -947,30 +967,23 @@ export function ImportPage({
   };
 
   // Determine if we can proceed
-  const canProceed = embedded
-    ? currentStepIndex === 0 ? canProceedFromOrigin : true
-    : currentStepIndex === 0
-      ? canProceedFromOrigin
-      : currentStepIndex === 1
-        ? canProceedFromDestination
-        : true;
+  const canProceed =
+    currentStepIndex === 0 ? canProceedFromOrigin
+      : currentStepIndex === 1 ? sessionSettings !== null
+        : hasEnoughSpace;
 
   return (
     <div style={pageStyles}>
       <header style={headerStyles}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {onClose && (
-            <Button variant="ghost" size="sm" onClick={onClose} leftIcon={<Icon name="chevron-right" size="sm" style={{ transform: 'rotate(180deg)' }} />}>
-              {t('import.header.back')}
-            </Button>
-          )}
+          <Button variant="ghost" size="sm" onClick={onClose} leftIcon={<Icon name="chevron-right" size="sm" style={{ transform: 'rotate(180deg)' }} />}>
+            {t('import.header.back')}
+          </Button>
           <h1 style={titleStyles}>
             {t('import.header.title')}
-            {initialProjectName && (
-              <span style={{ fontWeight: 400, color: 'var(--lumik-on-surface-variant, #c2c6d7)', fontSize: '18px', marginLeft: '12px' }}>
-                → {initialProjectName}
-              </span>
-            )}
+            <span style={{ fontWeight: 400, color: 'var(--lumik-on-surface-variant, #c2c6d7)', fontSize: '18px', marginLeft: '12px' }}>
+              → {initialProjectName}
+            </span>
           </h1>
         </div>
         <div style={stepperContainerStyles}>
@@ -1013,9 +1026,9 @@ export function ImportPage({
               <Icon name="chevron-right" size="sm" />
             </Button>
           ) : result ? (
-            <Button variant="primary" onClick={embedded ? onClose : handleNewImport}>
-              <Icon name={embedded ? 'check' : 'import'} size="sm" />
-              {embedded ? t('import.footer.accept') : t('import.footer.newImport')}
+            <Button variant="primary" onClick={onClose}>
+              <Icon name="check" size="sm" />
+              {t('import.footer.accept')}
             </Button>
           ) : (
             <Button
@@ -1030,14 +1043,6 @@ export function ImportPage({
         </div>
       </footer>
 
-      <CreateProjectModal
-        open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSubmit={handleCreateProject}
-        devices={devices ?? []}
-        loading={isCreating}
-        error={createError}
-      />
     </div>
   );
 }
