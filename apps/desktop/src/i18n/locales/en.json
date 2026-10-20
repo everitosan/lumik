@@ -177,21 +177,22 @@
     },
     "backup": {
       "title": "Backup account",
-      "description": "Sign in to back up your exported photos to the cloud.",
+      "description": "Server and account Lumik uses to back up your exported photos to the cloud.",
       "serverUrl": "Server URL",
-      "server": "Server",
       "name": "Name",
       "email": "Email",
       "password": "Password",
       "login": "Sign in",
       "register": "Create account",
-      "logout": "Sign out",
       "switchToRegister": "No account? Create one",
       "switchToLogin": "Already have an account? Sign in",
-      "signedInAs": "Signed in as {{email}}",
       "errors": {
         "required": "Enter email and password"
-      }
+      },
+      "saveUrl": "Save URL",
+      "urlSaved": "URL saved",
+      "sessionStatus": "Signed in as {{email}} on {{server}}.",
+      "logout": "Sign out"
     },
     "keybindings": {
       "title": "Keyboard shortcuts",
@@ -257,7 +258,16 @@
     "noDevices": "No devices connected",
     "closeMenu": "Close menu",
     "openMenu": "Open menu",
-    "ejectError": "Could not eject the drive: {{error}}"
+    "ejectError": "Could not eject the drive: {{error}}",
+    "backups": {
+      "title": "Backups",
+      "summaryRunning": "{{count}} · {{done}}/{{total}}",
+      "summaryFailed_one": "{{count}} with errors",
+      "summaryFailed_other": "{{count}} with errors",
+      "notMounted": "Connect the drive of \"{{name}}\" to retry."
+    },
+    "storageSummary_one": "{{count}} drive",
+    "storageSummary_other": "{{count}} drives"
   },
   "dashboard": {
     "title": "Projects",
@@ -303,7 +313,22 @@
       "canClose": "You can close this and keep using the app; the upload continues.",
       "progress": "Uploading {{done}}/{{total}}…",
       "finished": "Done: {{done}}/{{total}} uploaded",
-      "someFailed": "{{failed}} failed; reopen backup to retry."
+      "someFailed": "{{failed}} could not be uploaded.",
+      "retry": "Retry",
+      "notMounted": "Connect the project's drive to retry."
+    },
+    "closeConfirm": {
+      "title": "Backups in progress",
+      "message_one": "{{count}} backup is uploading files. If you close Lumik, the upload stops and will resume next time you open it.",
+      "message_other": "{{count}} backups are uploading files. If you close Lumik, the uploads stop and will resume next time you open it.",
+      "confirm": "Close anyway",
+      "cancel": "Keep backing up"
+    },
+    "noSession": {
+      "title": "You need a backup account",
+      "message": "To back up this project's exported photos to your clouds, sign in or create an account in Settings → Backup.",
+      "goToSettings": "Go to Settings",
+      "cancel": "Cancel"
     }
   },
   "projectDetail": {

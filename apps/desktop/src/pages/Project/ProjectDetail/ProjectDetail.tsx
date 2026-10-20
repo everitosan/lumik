@@ -8,7 +8,7 @@ import { useProjectPhotos, useProjectTrashedPhotos, useProjectThumbnails, useCon
 import * as api from '../../../lib/api';
 import { ProjectDetailHeader } from './ProjectDetailHeader';
 import { ProjectDetailFooter } from './ProjectDetailFooter';
-import { BackupModal } from './BackupModal';
+import { useBackup } from '../../../lib/BackupContext';
 import { TrashPhotoModal } from './TrashPhotoModal';
 import { ImportPage } from '../../ImportPage';
 import { PhotoDetail } from '../PhotoDetail';
@@ -310,8 +310,10 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
   const thumbnailCache = useRef<Map<string, string>>(new Map());
   const autoRedirectedToImport = useRef(false);
 
-  // Respaldo del proyecto (Fase 7): modal que lista _exported/ y sube lo faltante.
-  const [showBackup, setShowBackup] = useState(false);
+  // Respaldo del proyecto (Fase 7): el modal que lista _exported/ y sube lo
+  // faltante se monta a nivel de app (BackupModalHost), para abrirlo también
+  // desde la barra lateral.
+  const { openBackupDetail } = useBackup();
 
   // Auto-show import when project has no photos (only once per mount)
   useEffect(() => {
@@ -573,7 +575,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         onImport={() => setShowImport(true)}
-        onBackup={() => setShowBackup(true)}
+        onBackup={() => openBackupDetail(projectId, projectName)}
       />
 
       <div ref={setScrollEl} style={gridScrollStyles}>
@@ -682,10 +684,6 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         loading={trashing}
         error={trashError}
       />
-
-      {showBackup && (
-        <BackupModal projectId={projectId} onClose={() => setShowBackup(false)} />
-      )}
     </div>
   );
 }

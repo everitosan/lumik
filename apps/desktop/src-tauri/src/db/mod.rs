@@ -24,6 +24,9 @@ pub enum DbError {
 
     #[error("Project already exists at path: {0}")]
     ProjectAlreadyExists(String),
+
+    #[error("Invalid value: {0}")]
+    InvalidValue(String),
 }
 
 pub type DbResult<T> = Result<T, DbError>;
@@ -250,7 +253,7 @@ pub fn get_default_db_path() -> DbResult<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::models::CreatePhoto;
+    use crate::db::models::{CreatePhoto, SidebarSections};
 
     #[test]
     fn archived_project_stays_in_dashboard_entry_and_can_be_restored() {
@@ -270,6 +273,36 @@ mod tests {
 
         db.set_archived(false).unwrap();
         assert!(!db.get_project_dashboard_entry().unwrap().unwrap().archived);
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn sidebar_sections_default_expanded_and_persist() {
+        let dir = std::env::temp_dir().join(format!("lumik_sidebar_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = GlobalDatabase::new(dir.join("lumik.db")).unwrap();
+
+        assert_eq!(db.get_sidebar_sections().unwrap(), SidebarSections::default());
+
+        let after = db.set_sidebar_section_collapsed("storage", true).unwrap();
+        assert!(after.storage_collapsed);
+        assert!(!after.backups_collapsed);
+
+        // Sobrevive a reabrir la BD (equivale a reiniciar la app).
+        drop(db);
+        let db = GlobalDatabase::new(dir.join("lumik.db")).unwrap();
+        assert!(db.get_sidebar_sections().unwrap().storage_collapsed);
+
+        db.set_sidebar_section_collapsed("storage", false).unwrap();
+        assert!(!db.get_sidebar_sections().unwrap().storage_collapsed);
+
+        assert!(matches!(
+            db.set_sidebar_section_collapsed("photos", true),
+            Err(DbError::InvalidValue(_))
+        ));
 
         drop(db);
         let _ = std::fs::remove_dir_all(&dir);

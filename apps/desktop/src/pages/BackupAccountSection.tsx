@@ -1,15 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input, Button } from '@lumik/ui';
-import {
-  getBackupSession,
-  getBackupServerUrl,
-  setBackupServerUrl,
-  backupLogin,
-  backupRegister,
-  backupLogout,
-} from '../lib/api';
-import type { BackupSession } from '../lib/types';
+import { getBackupServerUrl, setBackupServerUrl } from '../lib/api';
+import { useBackupSession } from '../lib/BackupSessionContext';
+import { BackupAccountForm } from '../components/BackupAccountForm';
 
 const sectionHeaderStyles: React.CSSProperties = {
   display: 'flex',
@@ -45,56 +39,46 @@ const errorStyles: React.CSSProperties = {
 const mutedStyles: React.CSSProperties = {
   fontSize: '13px',
   color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+  margin: 0,
 };
 
-type Mode = 'login' | 'register';
-
+/** Ajustes → Respaldo: la URL del servidor y la cuenta (login / registro, o el
+ *  email con "Cerrar sesión"). Es el único sitio donde se gestiona la cuenta. */
 export function BackupAccountSection() {
   const { t } = useTranslation();
-  const [session, setSession] = useState<BackupSession | null>(null);
+  const { session, loading: sessionLoading, logout } = useBackupSession();
   const [serverUrl, setServerUrl] = useState('');
-  const [mode, setMode] = useState<Mode>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [savedUrl, setSavedUrl] = useState('');
   const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [url, current] = await Promise.all([
-        getBackupServerUrl(),
-        getBackupSession().catch(() => null),
-      ]);
-      setServerUrl(url);
-      setSession(current);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    getBackupServerUrl()
+      .then((url) => {
+        setServerUrl(url);
+        setSavedUrl(url);
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const submit = async () => {
+  const persistUrl = async () => {
+    const url = serverUrl.trim();
+    await setBackupServerUrl(url);
+    setServerUrl(url);
+    setSavedUrl(url);
+  };
+
+  const save = async () => {
     setError(null);
-    if (!email || !password) {
-      setError(t('settings.backup.errors.required'));
-      return;
-    }
+    setSaved(false);
     setBusy(true);
     try {
-      // Guarda la URL del server antes de autenticar.
-      await setBackupServerUrl(serverUrl.trim());
-      const s =
-        mode === 'login'
-          ? await backupLogin(email, password)
-          : await backupRegister(email, password, name || undefined);
-      setSession(s);
-      setPassword('');
+      await persistUrl();
+      setSaved(true);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -102,13 +86,12 @@ export function BackupAccountSection() {
     }
   };
 
-  const logout = async () => {
-    setBusy(true);
+  const handleLogout = async () => {
+    setLoggingOut(true);
     try {
-      await backupLogout();
-      setSession(null);
+      await logout();
     } finally {
-      setBusy(false);
+      setLoggingOut(false);
     }
   };
 
@@ -119,73 +102,46 @@ export function BackupAccountSection() {
         <p style={sectionDescriptionStyles}>{t('settings.backup.description')}</p>
       </div>
 
-      {loading ? (
+      {loading || sessionLoading ? (
         <p style={mutedStyles}>{t('settings.loading')}</p>
-      ) : session ? (
-        <div style={formStyles}>
-          <p style={sectionDescriptionStyles}>
-            {t('settings.backup.signedInAs', { email: session.email })}
-          </p>
-          <p style={mutedStyles}>
-            {t('settings.backup.server')}: {session.server_url}
-          </p>
-          <div style={rowStyles}>
-            <Button variant="secondary" size="sm" onClick={logout} disabled={busy}>
-              {t('settings.backup.logout')}
-            </Button>
-          </div>
-        </div>
       ) : (
         <div style={formStyles}>
           <Input
             label={t('settings.backup.serverUrl')}
             value={serverUrl}
-            onChange={(e) => setServerUrl(e.target.value)}
-            fullWidth
-          />
-          {mode === 'register' && (
-            <Input
-              label={t('settings.backup.name')}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              fullWidth
-            />
-          )}
-          <Input
-            label={t('settings.backup.email')}
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            fullWidth
-          />
-          <Input
-            label={t('settings.backup.password')}
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setServerUrl(e.target.value);
+              setSaved(false);
+            }}
             fullWidth
           />
           {error && <span style={errorStyles}>{error}</span>}
           <div style={rowStyles}>
-            <Button variant="primary" onClick={submit} disabled={busy}>
-              {mode === 'login'
-                ? t('settings.backup.login')
-                : t('settings.backup.register')}
-            </Button>
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
-              onClick={() => {
-                setMode(mode === 'login' ? 'register' : 'login');
-                setError(null);
-              }}
-              disabled={busy}
+              onClick={save}
+              disabled={busy || serverUrl.trim() === savedUrl}
             >
-              {mode === 'login'
-                ? t('settings.backup.switchToRegister')
-                : t('settings.backup.switchToLogin')}
+              {t('settings.backup.saveUrl')}
             </Button>
+            {saved && <span style={mutedStyles}>{t('settings.backup.urlSaved')}</span>}
           </div>
+          {session ? (
+            <div style={rowStyles}>
+              <p style={{ ...mutedStyles, flex: 1 }}>
+                {t('settings.backup.sessionStatus', { email: session.email, server: session.server_url })}
+              </p>
+              <Button variant="secondary" size="sm" onClick={handleLogout} disabled={loggingOut}>
+                {t('settings.backup.logout')}
+              </Button>
+            </div>
+          ) : (
+            // Una URL editada y sin guardar se guarda antes de autenticar.
+            <BackupAccountForm
+              beforeSubmit={serverUrl.trim() !== savedUrl ? persistUrl : undefined}
+            />
+          )}
         </div>
       )}
     </section>

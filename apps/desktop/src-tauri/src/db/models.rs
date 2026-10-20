@@ -269,3 +269,11 @@ impl Default for ProjectSettings {
         }
     }
 }
+
+/// Secciones colapsables de la barra lateral del desktop. En una instalación
+/// nueva ambas están expandidas.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SidebarSections {
+    pub backups_collapsed: bool,
+    pub storage_collapsed: bool,
+}

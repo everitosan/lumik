@@ -40,11 +40,15 @@ El desktop SHALL ofrecer un modal por proyecto que liste los archivos de `_expor
 - **THEN** la subida se rechaza indicando que no hay proveedores conectados
 
 ### Requirement: Subida en segundo plano con progreso
-El respaldo SHALL ejecutarse en segundo plano con hasta 6 subidas en paralelo, sin congelar la interfaz. El fotógrafo SHALL poder cerrar el modal, seguir usando la app y volver a abrirlo para ver el progreso de cada archivo. Un archivo que ya se está subiendo no SHALL lanzarse otra vez.
+El respaldo SHALL ejecutarse en segundo plano con hasta 6 subidas en paralelo, sin congelar la interfaz. El fotógrafo SHALL poder cerrar el modal, seguir usando la app y volver a abrirlo para ver el progreso de cada archivo, desde el proyecto o desde la tarjeta del respaldo en la barra lateral. Un archivo que ya se está subiendo no SHALL lanzarse otra vez.
 
 #### Scenario: Cerrar y reabrir el modal
 - **WHEN** el fotógrafo cierra el modal a mitad de la subida y lo vuelve a abrir
 - **THEN** ve el estado de cada archivo (subiendo, subido o fallido) y la subida no se reinicia
+
+#### Scenario: Reabrir desde la barra lateral
+- **WHEN** el fotógrafo cierra el modal, vuelve al dashboard y pulsa la tarjeta del respaldo en la barra lateral
+- **THEN** ve el mismo modal con el estado de cada archivo y la subida no se reinicia
 
 ### Requirement: Fan-out a varios proveedores
 Cada archivo SHALL subirse a todos los proveedores elegidos. El archivo SHALL quedar como `uploaded` solo si llegó a todos; si falló en alguno, SHALL quedar como `failed` y SHALL incrementarse su contador de reintentos.
@@ -68,7 +72,7 @@ Volver a subir un archivo ya respaldado SHALL sobrescribirlo en la misma ruta, s
 - **THEN** en la nube sigue habiendo un solo archivo con ese nombre
 
 ### Requirement: Cola offline-first
-Al iniciar un respaldo, el desktop SHALL guardar la intención (proyecto, proveedores, calidad) en una cola persistente y SHALL quitarla al terminar. Al arrancar la app, SHALL reanudar cada respaldo en cola con los archivos que falten. Si el disco no está montado o no hay red, el respaldo SHALL seguir en cola hasta el siguiente arranque.
+Al iniciar un respaldo, el desktop SHALL guardar la intención (proyecto, proveedores, calidad) en una cola persistente y SHALL quitarla al terminar. Cada respaldo en cola SHALL reanudarse con los archivos que falten en cuanto haya sesión de respaldo: al arrancar la app si ya la hay, o al iniciar sesión durante esa ejecución. Sin sesión, si el disco no está montado o si no hay red, el respaldo SHALL seguir en cola hasta la siguiente oportunidad.
 
 #### Scenario: Cerrar la app a mitad de respaldo
 - **WHEN** el fotógrafo cierra Lumik con un respaldo a medias y la vuelve a abrir con el disco conectado
@@ -77,6 +81,14 @@ Al iniciar un respaldo, el desktop SHALL guardar la intención (proyecto, provee
 #### Scenario: Disco ausente al arrancar
 - **WHEN** la app arranca con un respaldo en cola y sin el disco del proyecto
 - **THEN** el respaldo sigue en cola y no se muestra ningún error
+
+#### Scenario: Arrancar sin sesión
+- **WHEN** la app arranca con un respaldo en cola y sin sesión de respaldo
+- **THEN** no se intenta ninguna subida, el respaldo sigue en cola y la sección "Respaldos" no aparece
+
+#### Scenario: Iniciar sesión con respaldos en cola
+- **WHEN** el fotógrafo arrancó sin sesión con un respaldo en cola e inicia sesión en Ajustes → Respaldo con el disco conectado
+- **THEN** el respaldo se reanuda con los archivos que faltaban y aparece su tarjeta en la barra lateral
 
 ### Requirement: Estado del proyecto tras respaldar
 Tras un respaldo correcto, el proyecto SHALL quedar como `delivered` ("Respaldado") si `_exported/` tiene al menos tantas fotos como `_culled/`, y como `edited` ("Editando") si tiene menos. El estado y los proveedores usados SHALL guardarse y publicarse en el catálogo, y cada tarjeta de proyecto SHALL mostrar los iconos de esos proveedores.
@@ -102,3 +114,14 @@ Desde el icono de un proveedor en la tarjeta, se SHALL generar un enlace a la ca
 #### Scenario: Proveedor sin enlaces con caducidad
 - **WHEN** el fotógrafo pulsa el icono de Mega
 - **THEN** se abre la web de Mega y no se crea ningún enlace público
+
+### Requirement: Respaldar sin sesión
+Si el fotógrafo intenta respaldar un proyecto sin sesión de respaldo iniciada, el desktop SHALL mostrar un aviso que explique que hace falta una cuenta, con una acción que lleve a Ajustes → Respaldo para iniciar sesión o crear la cuenta. No SHALL mostrarse el modal de respaldo ni lanzarse ninguna subida.
+
+#### Scenario: Pulsar Respaldar sin sesión
+- **WHEN** el fotógrafo sin sesión pulsa "Respaldar" en un proyecto
+- **THEN** ve un aviso de que necesita una cuenta de respaldo, sin la lista de archivos ni los proveedores
+
+#### Scenario: Ir a iniciar sesión desde el aviso
+- **WHEN** el fotógrafo pulsa la acción del aviso
+- **THEN** el aviso se cierra y la app muestra Ajustes en la pestaña Respaldo, con el formulario de login

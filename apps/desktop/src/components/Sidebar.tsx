@@ -1,6 +1,9 @@
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Logo, SectionButton, DriveInfo } from '@lumik/ui';
+import { Logo, SectionButton, DriveInfo, CollapsibleSection, BackupJobCard } from '@lumik/ui';
 import { useConnectedDevices, usePlatform } from '../lib/hooks';
+import * as api from '../lib/api';
+import { useBackup } from '../lib/BackupContext';
 import type { Section } from './Layout';
 
 interface SidebarProps {
@@ -56,17 +59,21 @@ const spacerStyles: React.CSSProperties = {
   flex: 1,
 };
 
-const storageContainerStyles: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '8px',
-};
-
 const emptyStorageStyles: React.CSSProperties = {
   fontSize: '13px',
   color: 'var(--lumik-on-surface-variant, #c2c6d7)',
   padding: '8px 16px',
   opacity: 0.7,
+};
+
+// La lista de respaldos crece hasta este alto y luego hace scroll propio, para
+// que Almacenamiento siga visible debajo.
+const backupListStyles: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '8px',
+  maxHeight: '40vh',
+  overflowY: 'auto',
 };
 
 const closeBtnStyles: React.CSSProperties = {
@@ -93,6 +100,35 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
   // Showing an "eject" button there would be misleading, so we hide it.
   const canEject = platform !== 'android';
 
+  const { jobs, retryBackup, dismissBackup, userLaunches, openBackupDetail } = useBackup();
+  // Motivo por el que no se pudo reintentar, por proyecto (p. ej. disco ausente).
+  const [retryMessages, setRetryMessages] = useState<Record<string, string>>({});
+
+  // Secciones colapsables: el estado vive en la configuración de la instalación.
+  const [sections, setSections] = useState<api.SidebarSections>({
+    backups_collapsed: false,
+    storage_collapsed: false,
+  });
+  useEffect(() => {
+    api.getSidebarSections().then(setSections).catch(() => {});
+  }, []);
+  const setSectionCollapsed = (section: api.SidebarSection, value: boolean) => {
+    setSections((s) => ({ ...s, [`${section}_collapsed`]: value }));
+    api.setSidebarSectionCollapsed(section, value).catch((err) =>
+      console.error('saving sidebar section failed', err)
+    );
+  };
+
+  // Un respaldo lanzado por el usuario expande Respaldos (los reanudados al
+  // arrancar no). Si luego la colapsa, se respeta.
+  const seenLaunches = useRef(userLaunches);
+  useEffect(() => {
+    if (userLaunches === seenLaunches.current) return;
+    seenLaunches.current = userLaunches;
+    if (sections.backups_collapsed) setSectionCollapsed('backups', false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userLaunches]);
+
   const handleEject = async (uuid: string) => {
     try {
       await eject(uuid);
@@ -106,6 +142,35 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
   const getUsedBytes = (device: { total_bytes: number | null; available_bytes: number | null }) => {
     if (device.total_bytes === null || device.available_bytes === null) return 0;
     return device.total_bytes - device.available_bytes;
+  };
+
+  const jobEntries = Object.entries(jobs);
+  const running = jobEntries.filter(([, job]) => job.running);
+  const withErrors = jobEntries.filter(
+    ([, job]) => !job.running && job.files.some((f) => f.status === 'error')
+  );
+
+  const backupsSummary = (() => {
+    if (running.length > 0) {
+      const done = running.reduce((n, [, j]) => n + j.files.filter((f) => f.status === 'done').length, 0);
+      const total = running.reduce((n, [, j]) => n + j.files.length, 0);
+      return t('navigation.backups.summaryRunning', { count: running.length, done, total });
+    }
+    if (withErrors.length > 0) return t('navigation.backups.summaryFailed', { count: withErrors.length });
+    return undefined;
+  })();
+
+  const handleRetry = async (projectId: string, projectName: string) => {
+    setRetryMessages(({ [projectId]: _old, ...rest }) => rest);
+    const result = await retryBackup(projectId);
+    if (!result.ok && result.reason === 'not_mounted') {
+      setRetryMessages((m) => ({ ...m, [projectId]: t('navigation.backups.notMounted', { name: projectName }) }));
+    }
+  };
+
+  const handleDismiss = (projectId: string) => {
+    setRetryMessages(({ [projectId]: _old, ...rest }) => rest);
+    dismissBackup(projectId);
   };
 
   return (
@@ -143,8 +208,44 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
 
       <div style={spacerStyles} />
 
-      <div style={storageContainerStyles}>
-        <div style={sectionTitleStyles}>{t('navigation.storage')}</div>
+      {/* Respaldos solo aparece mientras hay jobs (en curso o con errores); la
+          cuenta se gestiona en Ajustes → Respaldo. */}
+      {jobEntries.length > 0 && (
+        <CollapsibleSection
+          title={t('navigation.backups.title')}
+          summary={sections.backups_collapsed ? backupsSummary : undefined}
+          collapsed={sections.backups_collapsed}
+          onToggle={() => setSectionCollapsed('backups', !sections.backups_collapsed)}
+        >
+          <div style={backupListStyles}>
+            {jobEntries.map(([projectId, job]) => (
+              <BackupJobCard
+                key={projectId}
+                name={job.projectName}
+                done={job.files.filter((f) => f.status === 'done').length}
+                total={job.files.length}
+                failed={job.files.filter((f) => f.status === 'error').length}
+                running={job.running}
+                message={retryMessages[projectId]}
+                onClick={() => openBackupDetail(projectId, job.projectName)}
+                onRetry={() => handleRetry(projectId, job.projectName)}
+                onDismiss={() => handleDismiss(projectId)}
+              />
+            ))}
+          </div>
+        </CollapsibleSection>
+      )}
+
+      <CollapsibleSection
+        title={t('navigation.storage')}
+        summary={
+          sections.storage_collapsed && devices
+            ? t('navigation.storageSummary', { count: devices.length })
+            : undefined
+        }
+        collapsed={sections.storage_collapsed}
+        onToggle={() => setSectionCollapsed('storage', !sections.storage_collapsed)}
+      >
         {loading && (
           <div style={emptyStorageStyles}>{t('navigation.loadingDevices')}</div>
         )}
@@ -162,7 +263,7 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
             onEject={canEject ? () => handleEject(device.uuid) : undefined}
           />
         ))}
-      </div>
+      </CollapsibleSection>
     </aside>
   );
 }

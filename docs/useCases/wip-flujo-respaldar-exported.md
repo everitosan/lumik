@@ -37,3 +37,44 @@ sequenceDiagram
 | Deduplicación | Si el hash ya está en el remote, se omite la subida y solo se actualiza el estado. |
 | Ruta en la nube | `Lumik/{año}/{mes}/{día}_{slug}/_exported/`, espejo de la estructura local. |
 | Precondición | El catálogo debe existir: ver [`ensure_catalog_synced`](wip-flujo-sync-catalogo.md). |
+
+## Seguimiento desde la barra lateral
+
+El respaldo corre en `BackupProvider` (a nivel de app), así que se sigue desde cualquier pantalla.
+Cada job aparece como una tarjeta en la sección **Respaldos** de la barra lateral
+(`nombre del proyecto · subidos/total`). La sección solo se muestra mientras hay jobs (en curso o
+con errores), sin depender de la sesión. Al pulsarla se abre el modal de detalle archivo por
+archivo, montado una sola vez en `BackupModalHost`, igual que desde el proyecto.
+
+```mermaid
+stateDiagram-v2
+    [*] --> EnCurso: startBackup o reanudado con sesión
+    EnCurso --> [*]: todos subidos, la tarjeta desaparece
+    EnCurso --> ConErrores: algún archivo falló, sigue en la cola
+    ConErrores --> EnCurso: Reintentar solo los fallidos
+    ConErrores --> ConErrores: Reintentar sin el disco, avisa
+    ConErrores --> Descartado: Descartar
+    Descartado --> EnCurso: próximo arranque, la cola lo reanuda
+```
+
+```mermaid
+flowchart TD
+    close(["Cerrar la ventana"])
+    running_q{"¿Hay jobs<br/>subiendo?"}
+    exit_now(["Se cierra sin preguntar"])
+    ask["Diálogo: 'N respaldos en curso'<br/>Seguir respaldando / Cerrar de todos modos"]
+    keep(["La app sigue abierta<br/>y la subida continúa"])
+    destroy(["Se cierra: el respaldo queda en la cola<br/>y se reanuda al arrancar"])
+
+    close --> running_q
+    running_q -->|No| exit_now
+    running_q -->|Sí| ask
+    ask -->|Seguir respaldando| keep
+    ask -->|Cerrar de todos modos| destroy
+```
+
+| Punto | Detalle |
+|-------|---------|
+| Barra lateral | Respaldos aparece solo con jobs y se oculta al terminar el último. Respaldos y Almacenamiento se pueden colapsar (estado en `global_db`). Colapsada, Respaldos muestra `en curso · subidos/total` o cuántos terminaron con errores. Se expande sola al lanzar un respaldo, no al reanudarlo. |
+| Sin sesión | Respaldar muestra un aviso con "Ir a Ajustes" (pestaña Respaldo) en lugar del modal; la cola no se reanuda hasta iniciar sesión (ver [login](wip-flujo-login-cuenta.md)). |
+| Confirmación al cerrar | `onCloseRequested` en el frontend + `ask` del plugin de diálogo; cerrar usa `destroy()` (`core:window:allow-destroy`). |

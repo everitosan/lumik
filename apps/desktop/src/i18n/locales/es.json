@@ -177,21 +177,22 @@
     },
     "backup": {
       "title": "Cuenta de respaldo",
-      "description": "Inicia sesión para respaldar tus fotos exportadas en la nube.",
+      "description": "Servidor y cuenta con los que Lumik respalda tus fotos exportadas en la nube.",
       "serverUrl": "URL del servidor",
-      "server": "Servidor",
       "name": "Nombre",
       "email": "Correo",
       "password": "Contraseña",
       "login": "Iniciar sesión",
       "register": "Crear cuenta",
-      "logout": "Cerrar sesión",
       "switchToRegister": "¿No tienes cuenta? Crea una",
       "switchToLogin": "¿Ya tienes cuenta? Inicia sesión",
-      "signedInAs": "Sesión iniciada como {{email}}",
       "errors": {
         "required": "Completa correo y contraseña"
-      }
+      },
+      "saveUrl": "Guardar URL",
+      "urlSaved": "URL guardada",
+      "sessionStatus": "Sesión iniciada como {{email}} en {{server}}.",
+      "logout": "Cerrar sesión"
     },
     "keybindings": {
       "title": "Atajos de teclado",
@@ -257,7 +258,16 @@
     "noDevices": "Sin dispositivos conectados",
     "closeMenu": "Cerrar menú",
     "openMenu": "Abrir menú",
-    "ejectError": "No se pudo expulsar el disco: {{error}}"
+    "ejectError": "No se pudo expulsar el disco: {{error}}",
+    "backups": {
+      "title": "Respaldos",
+      "summaryRunning": "{{count}} · {{done}}/{{total}}",
+      "summaryFailed_one": "{{count}} con errores",
+      "summaryFailed_other": "{{count}} con errores",
+      "notMounted": "Conecta el disco de «{{name}}» para reintentar."
+    },
+    "storageSummary_one": "{{count}} disco",
+    "storageSummary_other": "{{count}} discos"
   },
   "dashboard": {
     "title": "Proyectos",
@@ -303,7 +313,22 @@
       "canClose": "Puedes cerrar este modal y seguir usando la app; la subida continúa.",
       "progress": "Subiendo {{done}}/{{total}}…",
       "finished": "Listo: {{done}}/{{total}} subidas",
-      "someFailed": "{{failed}} fallaron; reintenta abriendo de nuevo el respaldo."
+      "someFailed": "{{failed}} no se pudieron subir.",
+      "retry": "Reintentar",
+      "notMounted": "Conecta el disco del proyecto para reintentar."
+    },
+    "closeConfirm": {
+      "title": "Hay respaldos en curso",
+      "message_one": "{{count}} respaldo está subiendo archivos. Si cierras Lumik, la subida se corta y se reanudará la próxima vez que la abras.",
+      "message_other": "{{count}} respaldos están subiendo archivos. Si cierras Lumik, las subidas se cortan y se reanudarán la próxima vez que la abras.",
+      "confirm": "Cerrar de todos modos",
+      "cancel": "Seguir respaldando"
+    },
+    "noSession": {
+      "title": "Necesitas una cuenta de respaldo",
+      "message": "Para respaldar las fotos exportadas de este proyecto en tus nubes, inicia sesión o crea una cuenta en Ajustes → Respaldo.",
+      "goToSettings": "Ir a Ajustes",
+      "cancel": "Cancelar"
     }
   },
   "projectDetail": {

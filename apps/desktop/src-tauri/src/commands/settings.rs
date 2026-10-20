@@ -101,6 +101,20 @@ pub fn set_dashboard_show_archived(state: State<AppState>, show: bool) -> AppRes
 }
 
 #[tauri::command]
+pub fn get_sidebar_sections(state: State<AppState>) -> AppResult<SidebarSections> {
+    Ok(state.global_db.get_sidebar_sections()?)
+}
+
+#[tauri::command]
+pub fn set_sidebar_section_collapsed(
+    state: State<AppState>,
+    section: String,
+    collapsed: bool,
+) -> AppResult<SidebarSections> {
+    Ok(state.global_db.set_sidebar_section_collapsed(&section, collapsed)?)
+}
+
+#[tauri::command]
 pub fn get_dashboard_sort(state: State<AppState>) -> AppResult<DashboardSort> {
     debug!("get_dashboard_sort called");
     Ok(state.global_db.get_dashboard_sort()?)

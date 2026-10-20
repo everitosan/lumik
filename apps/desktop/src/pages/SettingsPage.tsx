@@ -258,7 +258,14 @@ function KeybindingRow({
   );
 }
 
-export function SettingsPage() {
+export type SettingsTab = 'import' | 'shortcuts' | 'appearance' | 'backup';
+
+interface SettingsPageProps {
+  /** Pestaña con la que se abre (p. ej. 'backup' desde el aviso sin sesión). */
+  initialTab?: SettingsTab;
+}
+
+export function SettingsPage({ initialTab = 'import' }: SettingsPageProps) {
   const { t } = useTranslation();
   const { currentLanguage, changeLanguage } = useLanguage();
   const { data: photographer, loading: photographerLoading } = useActivePhotographer();
@@ -270,7 +277,7 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [activeTab, setActiveTab] = useState('import');
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
 
   // Form fields
   const [embedMetadata, setEmbedMetadata] = useState(true);

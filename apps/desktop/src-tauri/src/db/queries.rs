@@ -249,6 +249,26 @@ impl GlobalDatabase {
         self.get_dashboard_show_archived()
     }
 
+    pub fn get_sidebar_sections(&self) -> DbResult<SidebarSections> {
+        let collapsed = |key| -> DbResult<bool> { Ok(self.get_setting(key)?.as_deref() == Some("true")) };
+        Ok(SidebarSections {
+            backups_collapsed: collapsed("sidebar_backups_collapsed")?,
+            storage_collapsed: collapsed("sidebar_storage_collapsed")?,
+        })
+    }
+
+    /// Guarda si una sección de la barra lateral (`backups` o `storage`) está
+    /// colapsada y devuelve el estado de todas.
+    pub fn set_sidebar_section_collapsed(&self, section: &str, collapsed: bool) -> DbResult<SidebarSections> {
+        let key = match section {
+            "backups" => "sidebar_backups_collapsed",
+            "storage" => "sidebar_storage_collapsed",
+            other => return Err(super::DbError::InvalidValue(format!("unknown sidebar section: {}", other))),
+        };
+        self.set_setting(key, if collapsed { "true" } else { "false" })?;
+        self.get_sidebar_sections()
+    }
+
     pub fn update_dashboard_sort(&self, sort: &DashboardSort) -> DbResult<DashboardSort> {
         self.set_setting("dashboard_year_order", sort.years.as_str())?;
         self.set_setting("dashboard_project_order", sort.projects.as_str())?;

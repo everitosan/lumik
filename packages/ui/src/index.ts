@@ -19,6 +19,12 @@ export type { SectionButtonProps } from './components/SectionButton';
 export { DriveInfo } from './components/DriveInfo';
 export type { DriveInfoProps } from './components/DriveInfo';
 
+export { CollapsibleSection } from './components/CollapsibleSection';
+export type { CollapsibleSectionProps } from './components/CollapsibleSection';
+
+export { BackupJobCard } from './components/BackupJobCard';
+export type { BackupJobCardProps } from './components/BackupJobCard';
+
 export { CardMenu } from './components/CardMenu';
 export type { CardMenuProps, CardMenuItem } from './components/CardMenu';
 

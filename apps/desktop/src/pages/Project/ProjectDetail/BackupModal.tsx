@@ -1,15 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Button, Icon, Select, type SelectOption } from '@lumik/ui';
 import * as api from '../../../lib/api';
 import type { ExportedBackupItem, ProviderInfo } from '../../../lib/api';
-import { useBackup, type FileStatus } from '../../../lib/BackupContext';
+import { useBackup, type BackupJob, type FileStatus } from '../../../lib/BackupContext';
 
 type Quality = 'original' | 'high' | 'medium' | 'low';
 
 interface BackupModalProps {
   projectId: string;
+  projectName: string;
   onClose: () => void;
 }
 
@@ -38,13 +39,20 @@ const toggleRowStyles: CSSProperties = { display: 'flex', gap: '8px', flexWrap: 
 const footerStyles: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' };
 const mutedStyles: CSSProperties = { fontSize: '13px', color: 'var(--lumik-on-surface-variant, #c2c6d7)', marginTop: 0 };
 
-export function BackupModal({ projectId, onClose }: BackupModalProps) {
+export function BackupModal({ projectId, projectName, onClose }: BackupModalProps) {
   const { t } = useTranslation();
-  const { jobs, startBackup } = useBackup();
-  const job = jobs[projectId];
+  const { jobs, startBackup, retryBackup } = useBackup();
+  const liveJob = jobs[projectId];
+  // Un job que termina bien se retira de `jobs`: se conserva la última foto para
+  // seguir mostrando el resultado en lugar de saltar a la configuración.
+  const lastJob = useRef<BackupJob | undefined>(liveJob);
+  if (liveJob) lastJob.current = liveJob;
+  // Si ya no está en `jobs` es que terminó (la última foto aún decía "en curso").
+  const job = liveJob ?? (lastJob.current && { ...lastJob.current, running: false });
 
-  // Si al abrir ya hay un job corriendo, mostramos el progreso directo.
-  const [viewingJob, setViewingJob] = useState<boolean>(job?.running ?? false);
+  // Si al abrir hay un job (en curso o con errores), mostramos el progreso directo.
+  const [viewingJob, setViewingJob] = useState<boolean>(liveJob != null);
+  const [retryError, setRetryError] = useState<string | null>(null);
 
   const [items, setItems] = useState<ExportedBackupItem[]>([]);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -84,11 +92,20 @@ export function BackupModal({ projectId, onClose }: BackupModalProps) {
     const targets = Array.from(selected).join(',');
     startBackup(
       projectId,
+      projectName,
       pendingItems.map((i) => ({ id: i.id, filename: i.filename })),
       targets,
       quality
     );
     setViewingJob(true);
+  };
+
+  const handleRetry = async () => {
+    setRetryError(null);
+    const result = await retryBackup(projectId);
+    if (!result.ok && result.reason === 'not_mounted') {
+      setRetryError(t('backup.modal.notMounted'));
+    }
   };
 
   const renderStatus = (state: FileStatus) => {
@@ -131,8 +148,17 @@ export function BackupModal({ projectId, onClose }: BackupModalProps) {
             {t('backup.modal.someFailed', { failed })}
           </p>
         )}
+        {retryError && (
+          <p style={{ fontSize: '12px', color: 'var(--lumik-error, #ffb4ab)' }}>{retryError}</p>
+        )}
         <div style={footerStyles}>
-          <span />
+          {failed > 0 && !job.running && liveJob ? (
+            <Button variant="secondary" onClick={handleRetry}>
+              {t('backup.modal.retry')}
+            </Button>
+          ) : (
+            <span />
+          )}
           <Button variant="primary" onClick={onClose}>
             {job.running ? t('backup.modal.closeKeep') : t('backup.modal.close')}
           </Button>

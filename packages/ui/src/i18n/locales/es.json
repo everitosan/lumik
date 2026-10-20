@@ -52,6 +52,16 @@
     "fileList": {
       "searchPlaceholder": "Buscar archivos...",
       "noResults": "No se encontraron archivos que coincidan con \"{{query}}\""
+    },
+    "collapsibleSection": {
+      "expand": "Expandir {{title}}",
+      "collapse": "Colapsar {{title}}"
+    },
+    "backupJobCard": {
+      "failed_one": "{{count}} con error",
+      "failed_other": "{{count}} con error",
+      "retry": "Reintentar",
+      "dismiss": "Descartar"
     }
   },
   "dashboard": {

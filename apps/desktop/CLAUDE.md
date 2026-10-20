@@ -26,11 +26,12 @@ src/
     api.ts                          # Todas las llamadas invoke() a Tauri (una función por comando)
     hooks.ts                        # Custom hooks async para datos + useImport + useKeybindings
     types.ts                        # Tipos TypeScript que espeja los modelos Rust
-    BackupContext.tsx               # Estado global de respaldos en segundo plano (progreso por archivo, cola)
+    BackupContext.tsx               # Estado global de respaldos en segundo plano (progreso por archivo, cola, reintentar/descartar, modal de detalle)
+    BackupSessionContext.tsx        # Sesión de la cuenta de respaldo compartida (Ajustes, aviso sin sesión, reanudación de la cola)
   pages/
     ImportPage.tsx                  # Wizard de importación: origen → ajustes de la importación → confirmar (solo desde un proyecto)
-    SettingsPage.tsx                # Tabs: Importación, Atajos, Apariencia, Respaldo
-    BackupAccountSection.tsx        # Tab Respaldo: URL del server, registro/login/logout
+    SettingsPage.tsx                # Tabs: Importación, Atajos, Apariencia, Respaldo (`initialTab` para abrir una concreta)
+    BackupAccountSection.tsx        # Tab Respaldo: URL del server, login/registro o email + cerrar sesión
     AboutPage.tsx
     Project/
       Projects/
@@ -43,7 +44,7 @@ src/
         FilterPopovers.tsx          # Filtros por estrellas, tags y color
         ProjectDetailFooter.tsx     # Contador de fotos/aprobadas, filtros de aprobadas y papelera
         TrashPhotoModal.tsx         # Confirmación de mover foto a la papelera (borrado lógico a _trash/)
-        BackupModal.tsx             # Modal de respaldo de _exported (proveedores, calidad, progreso)
+        BackupModal.tsx             # Modal de respaldo de _exported (proveedores, calidad, progreso, reintentar); lo monta BackupModalHost
       PhotoDetail/
         PhotoDetail.tsx             # Visor: atajos, aprobación, navegación
         PhotoViewer.tsx             # Canvas con zoom/pan/rotate
@@ -54,7 +55,11 @@ src/
   components/
     CreateProjectModal.tsx          # Modal para crear proyecto (nombre, fecha, dispositivo)
     DateField.tsx                   # Campo de fecha (flatpickr) compartido por los modales de proyecto
-    Layout.tsx / Sidebar.tsx        # Shell de la app
+    Layout.tsx / Sidebar.tsx        # Shell de la app; Sidebar con secciones colapsables Respaldos (tarjetas de jobs; solo visible si hay jobs) y Almacenamiento
+    BackupAccountForm.tsx           # Login / registro en el server de respaldo (lo usa Ajustes → Respaldo)
+    BackupModalHost.tsx             # Único montaje de BackupModal, abierto con openBackupDetail desde el proyecto o la barra; sin sesión muestra el aviso
+    BackupNoSessionModal.tsx        # Aviso al respaldar sin sesión, con "Ir a Ajustes" (pestaña Respaldo)
+    BackupCloseGuard.tsx            # Confirmación al cerrar la ventana con respaldos en curso
 ```
 
 El backend Rust sigue una arquitectura por capas (ver
@@ -202,7 +207,7 @@ App
 │     ├── icono de proveedor → carpeta del proyecto en la nube
 │     └── click proyecto → ProjectDetail
 │           ├── click foto → PhotoDetail
-│           ├── botón respaldo → BackupModal
+│           ├── botón respaldo → BackupModal (sin sesión: aviso → Settings/Respaldo)
 │           └── botón importar → ImportPage (origen → ajustes → confirmar)
 ├── Settings (Importación · Atajos · Apariencia · Respaldo)
 └── About
@@ -258,7 +263,7 @@ Proyectos: `get_projects_dashboard`, `get_project`, `create_project`, `edit_proj
 Fotos: `get_project_photos`, `get_project_trashed_photos`, `trash_photo`, `restore_photo`, `reveal_photo`, `get_project_thumbnails`, `get_thumbnail`, `get_photo_preview`, `save_photo_rotation`, `save_photo_rating`, `save_photo_culled`, `regenerate_project_thumbnails`
 Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`
-Ajustes: `get_app_settings`, `update_app_settings`, `get_dashboard_sort`, `update_dashboard_sort`, `get_dashboard_show_archived`, `set_dashboard_show_archived`
+Ajustes: `get_app_settings`, `update_app_settings`, `get_dashboard_sort`, `update_dashboard_sort`, `get_dashboard_show_archived`, `set_dashboard_show_archived`, `get_sidebar_sections`, `set_sidebar_section_collapsed`
 Keybindings: `get_keybindings`, `update_keybinding`
 Import: `start_import`
 Respaldo — cuenta: `get_backup_server_url`, `set_backup_server_url`, `backup_register`, `backup_login`, `backup_logout`, `get_backup_session`
@@ -281,6 +286,7 @@ Respaldo — cola: `set_pending_backup`, `clear_pending_backup`, `get_pending_ba
 | Metadata XMP del fotógrafo en import | ✓ Funcional |
 | Menú de proyectos (renombrar, eliminar, abrir carpeta) | ✓ Funcional (abrir carpeta: no en Android) |
 | Respaldo de `_exported` en la nube (cuenta, modal, cola offline) | ✓ Beta |
+| Seguimiento de respaldos en la barra lateral (tarjetas, reintentar, descartar, confirmación al cerrar) | ✓ Beta (en Android la barra empieza colapsada) |
 | Archivar proyectos | ✓ Funcional (menú de la tarjeta + botón "Archivados" en el dashboard) |
 | Operaciones en lote desde el grid | ✗ No implementado |
 | App iPad nativa | ✗ Planificado |

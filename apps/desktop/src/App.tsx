@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Layout, type Section } from './components';
-import { Projects, SettingsPage, ProjectDetail, AboutPage } from './pages';
+import { Projects, SettingsPage, ProjectDetail, AboutPage, type SettingsTab } from './pages';
 import { useConnectedDevices } from './lib/hooks';
 import { BackupProvider } from './lib/BackupContext';
+import { BackupSessionProvider } from './lib/BackupSessionContext';
+import { BackupModalHost } from './components/BackupModalHost';
+import { BackupCloseGuard } from './components/BackupCloseGuard';
 import type { ProjectDashboard } from './lib/types';
 
 function App() {
   const [activeSection, setActiveSection] = useState<Section>('projects');
   const [selectedProject, setSelectedProject] = useState<ProjectDashboard | null>(null);
+  // Pestaña con la que se abre Ajustes; solo se fija al saltar a una concreta.
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined);
   const { data: devices } = useConnectedDevices();
 
   // If the open project's device is ejected/disconnected, leave the detail view
@@ -21,6 +26,13 @@ function App() {
   const handleSectionChange = (section: Section) => {
     setActiveSection(section);
     setSelectedProject(null);
+    setSettingsTab(undefined);
+  };
+
+  const openSettings = (tab: SettingsTab) => {
+    setActiveSection('settings');
+    setSelectedProject(null);
+    setSettingsTab(tab);
   };
 
   const renderPage = (section: Section) => {
@@ -43,7 +55,7 @@ function App() {
       case 'projects':
         return <Projects onProjectClick={setSelectedProject} />;
       case 'settings':
-        return <SettingsPage />;
+        return <SettingsPage initialTab={settingsTab} />;
       case 'about':
         return <AboutPage />;
       default:
@@ -52,11 +64,15 @@ function App() {
   };
 
   return (
-    <BackupProvider>
-      <Layout activeSection={activeSection} onSectionChange={handleSectionChange}>
-        {renderPage}
-      </Layout>
-    </BackupProvider>
+    <BackupSessionProvider>
+      <BackupProvider>
+        <Layout activeSection={activeSection} onSectionChange={handleSectionChange}>
+          {renderPage}
+        </Layout>
+        <BackupModalHost onOpenBackupSettings={() => openSettings('backup')} />
+        <BackupCloseGuard />
+      </BackupProvider>
+    </BackupSessionProvider>
   );
 }
 

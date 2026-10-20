@@ -202,6 +202,24 @@ export async function setDashboardShowArchived(show: boolean): Promise<boolean> 
   return invoke('set_dashboard_show_archived', { show });
 }
 
+export type SidebarSection = 'backups' | 'storage';
+
+export interface SidebarSections {
+  backups_collapsed: boolean;
+  storage_collapsed: boolean;
+}
+
+export async function getSidebarSections(): Promise<SidebarSections> {
+  return invoke('get_sidebar_sections');
+}
+
+export async function setSidebarSectionCollapsed(
+  section: SidebarSection,
+  collapsed: boolean
+): Promise<SidebarSections> {
+  return invoke('set_sidebar_section_collapsed', { section, collapsed });
+}
+
 export async function deleteProject(id: string): Promise<void> {
   return invoke('delete_project', { id });
 }

@@ -10,12 +10,20 @@ identidad.
 sequenceDiagram
     autonumber
     actor U as Fotógrafo
-    participant FE as Desktop / Web (frontend)
+    participant PR as Proyecto (desktop)
+    participant FE as Ajustes → Respaldo / Web (frontend)
     participant AC as Cliente HTTP (AuthClient)
     participant SV as Server SaaS (axum)
     participant DB as catalog.db
 
-    U->>FE: Pantalla login/registro (email + contraseña)
+    opt Respaldar sin sesión (desktop)
+        U->>PR: Respaldar
+        PR-->>U: aviso "Necesitas una cuenta de respaldo"
+        U->>PR: Ir a Ajustes
+        PR->>FE: abre Ajustes en la pestaña Respaldo
+    end
+    U->>FE: URL del servidor + login o registro (email + contraseña)<br/>(en web: pantalla de login)
+    Note over FE: una URL editada y sin guardar<br/>se guarda antes de autenticar
     FE->>AC: comando login()
     AC->>SV: POST /v1/auth/login
     SV->>DB: lee photographer (email, pass_hash)
@@ -25,7 +33,13 @@ sequenceDiagram
     SV-->>AC: devuelve access + refresh token
     Note over AC: guarda tokens en settings<br/>creator_id === photographer_id
     AC-->>FE: sesión iniciada
+    Note over FE: BackupSessionProvider actualiza la sesión:<br/>Ajustes muestra email + Cerrar sesión<br/>y se reanuda la cola de respaldos pendiente
     Note over AC: interceptor: ante un 401<br/>refresca con el refresh token
+    U->>FE: Ajustes → Respaldo → Cerrar sesión
+    FE->>AC: comando logout()
+    AC->>SV: POST /v1/auth/logout (revoca el refresh)
+    Note over AC: borra la sesión local aunque el server no responda
+    AC-->>FE: sin sesión → Ajustes vuelve al formulario
 ```
 
 ## Notas
@@ -36,3 +50,5 @@ sequenceDiagram
 | Hashing | `argon2id` en el server. |
 | Renovación | El `AuthClient` lleva un interceptor que, ante un `401`, renueva con el refresh token de forma transparente. |
 | Almacenamiento | Los tokens quedan en los *settings* locales de la app. |
+| Dónde se gestiona (desktop) | URL del servidor, login, registro y logout en Ajustes → Respaldo. Pulsar Respaldar en un proyecto sin sesión muestra un aviso con "Ir a Ajustes", que abre esa pestaña. La barra lateral no muestra datos de la cuenta. |
+| Cola pendiente | La cola de respaldos se reanuda la primera vez que hay sesión en la ejecución (al arrancar o al iniciar sesión); sin sesión no se intenta subir nada. |
