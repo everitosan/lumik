@@ -5,7 +5,7 @@ Todos los cambios notables de Lumik se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
-## [0.1.4-beta] — pendiente (en pruebas)
+## [0.1.4-beta] — 2026-10-21
 
 ### Añadido
 - **macOS (beta)**: Lumik se publica para macOS como `.dmg` universal, que corre
@@ -118,5 +118,6 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 - Nuevo **componente Loader**.
 - Ícono de la aplicación.
 
+[0.1.4-beta]: https://github.com/everitosan/lumik/releases/tag/v0.1.4-beta
 [0.1.3-beta]: https://github.com/everitosan/lumik/releases/tag/v0.1.3-beta
 [0.1.2-beta]: https://github.com/everitosan/lumik/releases/tag/v0.1.2-beta
