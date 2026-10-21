@@ -112,7 +112,7 @@ Si la firma está activa en los ajustes de la importación (por defecto, el valo
 - **THEN** las fotos de esa importación no llevan datos del fotógrafo
 
 ### Requirement: Registro de fotos y metadatos EXIF
-Cada foto importada SHALL registrarse en el proyecto con su ruta relativa al punto de montaje y los datos EXIF disponibles: cámara, formato, fecha de captura, dimensiones, tamaño, ISO, apertura, velocidad, compensación de exposición, focal, objetivo y rotación. Las fotos se SHALL registrar todas juntas; si el registro falla, se SHALL informar como fallidas.
+Cada foto importada SHALL registrarse en el proyecto con su ruta relativa a la carpeta del proyecto y los datos EXIF disponibles: cámara, formato, fecha de captura, dimensiones, tamaño, ISO, apertura, velocidad, compensación de exposición, focal, objetivo y rotación. Las fotos se SHALL registrar todas juntas; si el registro falla, se SHALL informar como fallidas.
 
 #### Scenario: Import correcto
 - **WHEN** se importan 120 fotos
