@@ -43,7 +43,7 @@ Ver design, decisión 8. La columna `deleted` de la BD, `set_deleted` y `photo.d
 ## 7. Verificación integrada
 
 - [x] 7.1 En un disco exFAT real con un proyecto que tenga foto aprobada, foto con exportado y foto de portada: mover las tres a la papelera, comprobar el dashboard (conteo y portada), lanzar un respaldo y comprobar que no se suben, restaurarlas y comprobar que `sync_exported` mantiene el enlace del exportado al reabrir el proyecto.
-- [ ] 7.2 Verificar en Android que el menú de la foto muestra solo "Mover a la papelera" (y "Restaurar" en la vista de papelera), y que mover a la papelera y restaurar funcionan con el sidecar `.xmp`.
+- [ ] 7.2 Verificar en Android que el menú de la foto muestra solo "Mover a la papelera" (y "Restaurar" en la vista de papelera), y que mover a la papelera y restaurar funcionan con el sidecar `.xmp`. *(Aplazada al próximo ciclo de Android: se sigue en `docs/ROADMAP.md`, "Android — pendientes antes de distribución".)*
 - [x] 7.3 Ejecutar `openspec validate photo-card-menu --strict` y verificar que pasa sin errores. *(Vuelve a quedar pendiente porque las specs cambiaron.)*
 
 ## Workflow follow-up
