@@ -8,6 +8,8 @@ const t = useTranslations(lang);
 const base    = lang === 'en' ? '' : `/${lang}`;
 const altBase = lang === 'en' ? '/es' : '';
 const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
+const oses = ['linux', 'windows', 'macos'] as const;
+const macCommand = 'xattr -dr com.apple.quarantine /Applications/Lumik.app';
 ---
 <!doctype html>
 <html lang={lang}>
@@ -47,7 +49,6 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
       .os-tab:hover { color: var(--lumik-on-surface); }
       .os-tab.active { color: var(--lumik-primary); border-bottom-color: var(--lumik-primary-container); }
       .os-tab:disabled { opacity: 0.4; cursor: not-allowed; }
-      .os-tab .soon { font-size: 10px; font-family: var(--lumik-font-mono); background: var(--lumik-surface-container-high); color: var(--lumik-outline); padding: 2px 6px; border-radius: 4px; }
       .os-tab img, .os-tab svg { width: 16px; height: 16px; opacity: 0.7; }
       .os-tab.active img, .os-tab.active svg { opacity: 1; }
 
@@ -56,7 +57,7 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
       .spinner { width: 28px; height: 28px; border: 2px solid var(--lumik-outline-variant); border-top-color: var(--lumik-primary-container); border-radius: 50%; animation: spin 0.7s linear infinite; }
       @keyframes spin { to { transform: rotate(360deg); } }
 
-      #releases-list, #releases-list-win { display: flex; flex-direction: column; gap: 24px; }
+      .releases-list { display: flex; flex-direction: column; gap: 24px; }
       .release-card { background: var(--lumik-surface-container-low); border: 1px solid var(--lumik-outline-variant); border-radius: 12px; overflow: hidden; }
       .release-header { padding: 24px 28px 20px; border-bottom: 1px solid var(--lumik-outline-variant); }
       .release-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
@@ -78,13 +79,15 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
       .asset-size { font-size: 12px; font-family: var(--lumik-font-mono); color: var(--lumik-outline); text-align: right; white-space: nowrap; }
       .btn-download { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; background: var(--lumik-primary-container); color: #fff; border-radius: 8px; font-size: 13px; font-weight: 500; font-family: var(--lumik-font-primary); text-decoration: none; white-space: nowrap; transition: opacity 150ms ease; }
       .btn-download:hover { opacity: 0.85; }
-      .no-assets { padding: 24px; font-size: 14px; color: var(--lumik-outline); font-style: italic; text-align: center; }
-
-      .coming-soon { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 80px 0; text-align: center; }
-      .coming-soon .icon { opacity: 0.4; }
-      .coming-soon .icon img { width: 48px; height: 48px; }
-      .coming-soon h3 { font-size: 18px; font-weight: 600; color: var(--lumik-on-surface); }
-      .coming-soon p { font-size: 14px; color: var(--lumik-outline); }
+      .install-guide { background: var(--lumik-surface-container-low); border: 1px solid var(--lumik-outline-variant); border-left: 3px solid var(--lumik-secondary); border-radius: 12px; padding: 20px 24px; margin-bottom: 32px; font-size: 14px; color: var(--lumik-on-surface-variant); }
+      .install-guide-title { font-size: 15px; font-weight: 600; color: var(--lumik-on-surface); margin-bottom: 6px; }
+      .install-guide-req { margin-bottom: 14px; }
+      .install-guide ol { padding-left: 20px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+      .install-guide-cmd { display: flex; align-items: center; gap: 8px; margin-top: 8px; background: var(--lumik-surface-container); border: 1px solid var(--lumik-outline-variant); border-radius: 8px; padding: 8px 8px 8px 12px; }
+      .install-guide-cmd code { flex: 1; min-width: 0; font-family: var(--lumik-font-mono); font-size: 13px; color: var(--lumik-on-surface); overflow-wrap: anywhere; user-select: all; }
+      .btn-copy { flex-shrink: 0; padding: 5px 12px; font-size: 12px; font-family: var(--lumik-font-primary); color: var(--lumik-primary); background: none; border: 1px solid var(--lumik-outline-variant); border-radius: 6px; cursor: pointer; transition: background 150ms ease; }
+      .btn-copy:hover { background: var(--lumik-surface-container-high); }
+      .install-guide-note { font-size: 13px; color: var(--lumik-outline); margin-top: 8px; }
 
       .lang-switch { font-size: 13px; color: var(--lumik-outline); text-decoration: none; transition: color 150ms ease; }
       .lang-switch:hover { color: var(--lumik-on-surface-variant); }
@@ -92,6 +95,8 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
       @media (max-width: 600px) {
         .nav { padding: 0 16px; }
         .page { padding: 40px 16px 64px; }
+        .os-tabs { gap: 0; }
+        .os-tab { padding: 10px 12px; }
         .asset-row { grid-template-columns: 36px 1fr auto; }
         .asset-size { display: none; }
       }
@@ -128,51 +133,65 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
         <button class="os-tab" role="tab" data-os="windows" id="tab-windows">
           <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="#8c90a0" aria-hidden="true"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg> Windows
         </button>
-        <button class="os-tab" role="tab" data-os="macos" disabled>
-          <img src="https://cdn.simpleicons.org/apple/8c90a0" alt="" /> macOS <span class="soon">soon</span>
+        <button class="os-tab" role="tab" data-os="macos" id="tab-macos">
+          <img src="https://cdn.simpleicons.org/apple/8c90a0" alt="" /> macOS
         </button>
       </div>
 
-      <div id="panel-linux">
-        <div class="state" id="state-loading">
-          <div class="spinner"></div>
-          <span id="loading-text">{t('dl.loading')}</span>
+      {oses.map(os => (
+        <div id={`panel-${os}`} style="display:none">
+          {os === 'windows' && (
+            <div class="install-guide">
+              <p class="install-guide-title">{t('dl.windows.title')}</p>
+              <p>{t('dl.windows.body')}</p>
+            </div>
+          )}
+          {os === 'macos' && (
+            <div class="install-guide">
+              <p class="install-guide-title">{t('dl.macos.title')}</p>
+              <p class="install-guide-req">{t('dl.macos.req')}</p>
+              <ol>
+                <li>{t('dl.macos.step1')}</li>
+                <li>
+                  {t('dl.macos.step2')}
+                  <div class="install-guide-cmd">
+                    <code id="mac-cmd">{macCommand}</code>
+                    <button class="btn-copy" id="btn-copy" type="button" hidden>{t('dl.macos.copy')}</button>
+                  </div>
+                </li>
+              </ol>
+              <p>{t('dl.macos.alt')}</p>
+              <p class="install-guide-note">{t('dl.macos.volumes')}</p>
+            </div>
+          )}
+          <div class="state" id={`loading-${os}`}>
+            <div class="spinner"></div>
+            <span>{t('dl.loading')}</span>
+          </div>
+          <div class="state" id={`error-${os}`} style="display:none">
+            <span class="state-icon">⚠️</span>
+            <span>{t('dl.error')} <a href="https://github.com/everitosan/lumik/releases" target="_blank" rel="noopener" style="color:var(--lumik-primary)">{t('dl.error.link')}</a></span>
+          </div>
+          <div class="releases-list" id={`releases-${os}`} style="display:none"></div>
         </div>
-        <div class="state" id="state-error" style="display:none">
-          <span class="state-icon">⚠️</span>
-          <span id="error-text">{t('dl.error')} <a href="https://github.com/everitosan/lumik/releases" target="_blank" rel="noopener" style="color:var(--lumik-primary)">{t('dl.error.link')}</a></span>
-        </div>
-        <div id="releases-list" style="display:none"></div>
-      </div>
-
-      <div id="panel-windows" style="display:none">
-        <div class="state" id="state-loading-win">
-          <div class="spinner"></div>
-          <span>{t('dl.loading')}</span>
-        </div>
-        <div class="state" id="state-error-win" style="display:none">
-          <span class="state-icon">⚠️</span>
-          <span>{t('dl.error')} <a href="https://github.com/everitosan/lumik/releases" target="_blank" rel="noopener" style="color:var(--lumik-primary)">{t('dl.error.link')}</a></span>
-        </div>
-        <div id="releases-list-win" style="display:none"></div>
-      </div>
-      <div id="panel-macos" style="display:none">
-        <div class="coming-soon">
-          <div class="icon"><img src="https://cdn.simpleicons.org/apple/8c90a0" alt="macOS" /></div>
-          <h3>{t('dl.coming.macos.title')}</h3>
-          <p>{t('dl.coming.sub')} <a href="https://github.com/everitosan/lumik" target="_blank" rel="noopener" style="color:var(--lumik-primary)">{t('dl.coming.sub2')}</a> {t('dl.coming.sub3')}</p>
-        </div>
-      </div>
+      ))}
     </div>
 
     <script define:vars={{
-      hintLinux:      t('dl.hint.linux'),
-      hintWindows:    t('dl.hint.windows'),
-      hintMacos:      t('dl.hint.macos'),
-      txtNoAssets:    t('dl.no.assets'),
-      txtNoAssetsWin: t('dl.no.assets.windows'),
+      hints: {
+        linux:   t('dl.hint.linux'),
+        windows: t('dl.hint.windows'),
+        macos:   t('dl.hint.macos'),
+      },
+      empty: {
+        linux:   t('dl.no.assets.linux'),
+        windows: t('dl.no.assets.windows'),
+        macos:   t('dl.no.assets.macos'),
+      },
       txtNotes:       t('dl.release.notes'),
       txtDownload:    t('dl.btn'),
+      txtCopy:        t('dl.macos.copy'),
+      txtCopied:      t('dl.macos.copied'),
       descDeb:        t('dl.desc.deb'),
       descAppImg:     t('dl.desc.appimage'),
       descRpm:        t('dl.desc.rpm'),
@@ -184,6 +203,13 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
       const REPO = 'everitosan/lumik';
       const API  = `https://api.github.com/repos/${REPO}/releases`;
 
+      // Extensiones de los paquetes de cada sistema en los releases
+      const EXTS = {
+        linux:   ['.deb', '.AppImage', '.rpm'],
+        windows: ['.exe', '.msi'],
+        macos:   ['.dmg'],
+      };
+
       function detectOS() {
         const ua = navigator.userAgent.toLowerCase();
         if (ua.includes('win')) return 'windows';
@@ -191,21 +217,13 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
         return 'linux';
       }
 
-      const panels = { linux: 'panel-linux', windows: 'panel-windows', macos: 'panel-macos' };
-
       let cachedReleases = null;
       let dataLoaded = false;
       let dataError = false;
-      const rendered = { linux: false, windows: false };
+      const rendered = { linux: false, windows: false, macos: false };
 
-      function isLinuxAsset(name) {
-        return name.endsWith('.deb') || name.endsWith('.AppImage') || name.endsWith('.rpm');
-      }
-      function isWindowsAsset(name) {
-        return name.endsWith('.exe') || name.endsWith('.msi');
-      }
-      function assetFilter(name, os) {
-        return os === 'windows' ? isWindowsAsset(name) : isLinuxAsset(name);
+      function isAssetFor(name, os) {
+        return EXTS[os].some(ext => name.endsWith(ext));
       }
 
       function assetIcon(name) {
@@ -241,34 +259,30 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
         if (!dataLoaded || rendered[os]) return;
         rendered[os] = true;
 
-        const isWin    = os === 'windows';
-        const listId   = isWin ? 'releases-list-win' : 'releases-list';
-        const loadId   = isWin ? 'state-loading-win' : 'state-loading';
-        const errId    = isWin ? 'state-error-win'   : 'state-error';
-        const noTxt    = isWin ? txtNoAssetsWin       : txtNoAssets;
-
-        document.getElementById(loadId).style.display = 'none';
+        document.getElementById(`loading-${os}`).style.display = 'none';
 
         if (dataError) {
-          document.getElementById(errId).style.display = '';
+          document.getElementById(`error-${os}`).style.display = '';
           return;
         }
 
-        const list     = document.getElementById(listId);
-        const filtered = cachedReleases.filter(r => !r.draft);
+        const list = document.getElementById(`releases-${os}`);
+        // Solo los releases con algún paquete de este sistema
+        const releases = cachedReleases
+          .filter(r => !r.draft)
+          .map(r => ({ ...r, assets: r.assets.filter(a => isAssetFor(a.name, os)) }))
+          .filter(r => r.assets.length);
 
-        if (!filtered.length) {
-          list.innerHTML = `<div class="state"><span class="state-icon">📭</span><span>${noTxt}</span></div>`;
+        if (!releases.length) {
+          list.innerHTML = `<div class="state"><span class="state-icon">📭</span><span>${empty[os]}</span></div>`;
           list.style.display = '';
           return;
         }
 
-        list.innerHTML = filtered.map((release, i) => {
-          const assets   = release.assets.filter(a => assetFilter(a.name, os));
+        list.innerHTML = releases.map((release, i) => {
           const isLatest = i === 0;
 
-          const assetsHtml = assets.length
-            ? assets.map(asset => `
+          const assetsHtml = release.assets.map(asset => `
                 <div class="asset-row">
                   <div class="asset-icon">${assetIcon(asset.name)}</div>
                   <div class="asset-info">
@@ -277,8 +291,7 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
                   </div>
                   <span class="asset-size">${formatSize(asset.size)}</span>
                   <a class="btn-download" href="${asset.browser_download_url}" download>${txtDownload}</a>
-                </div>`).join('')
-            : `<div class="no-assets">${noTxt}</div>`;
+                </div>`).join('');
 
           return `
             <div class="release-card">
@@ -303,16 +316,28 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
         document.querySelectorAll('.os-tab').forEach(t => t.classList.remove('active'));
         const tab = document.querySelector(`[data-os="${os}"]`);
         if (tab) tab.classList.add('active');
-        Object.entries(panels).forEach(([key, id]) => {
-          const el = document.getElementById(id);
-          if (el) el.style.display = key === os ? '' : 'none';
+        Object.keys(EXTS).forEach(key => {
+          document.getElementById(`panel-${key}`).style.display = key === os ? '' : 'none';
         });
-        if (os === 'linux' || os === 'windows') renderOSReleases(os);
+        renderOSReleases(os);
       }
 
-      document.querySelectorAll('.os-tab:not(:disabled)').forEach(tab => {
+      document.querySelectorAll('.os-tab').forEach(tab => {
         tab.addEventListener('click', () => activateTab(tab.dataset.os));
       });
+
+      // Sin API del portapapeles el comando sigue seleccionable en el <code>
+      const copyBtn = document.getElementById('btn-copy');
+      if (navigator.clipboard) {
+        copyBtn.hidden = false;
+        copyBtn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(document.getElementById('mac-cmd').textContent);
+            copyBtn.textContent = txtCopied;
+            setTimeout(() => { copyBtn.textContent = txtCopy; }, 2000);
+          } catch { /* el usuario puede seleccionar el comando a mano */ }
+        });
+      }
 
       async function loadReleases() {
         try {
@@ -329,12 +354,8 @@ const dateLocale = lang === 'en' ? 'en-US' : 'es-MX';
       }
 
       const detectedOS = detectOS();
-      const hint = document.getElementById('os-hint');
-      activateTab(detectedOS === 'windows' ? 'windows' : 'linux');
-
-      if (detectedOS === 'linux')        hint.textContent = hintLinux;
-      else if (detectedOS === 'windows') hint.textContent = hintWindows;
-      else                               hint.textContent = hintMacos;
+      document.getElementById('os-hint').textContent = hints[detectedOS];
+      activateTab(detectedOS);
 
       loadReleases();
     </script>

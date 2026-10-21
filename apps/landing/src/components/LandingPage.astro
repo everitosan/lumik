@@ -8,6 +8,15 @@ const t = useTranslations(lang);
 const base    = lang === 'en' ? '' : `/${lang}`;
 const altLang = lang === 'en' ? 'es' : 'en';
 const altBase = lang === 'en' ? '/es' : '';
+
+const roadmapNow = [
+  'roadmap.now.import', 'roadmap.now.culling', 'roadmap.now.filters', 'roadmap.now.viewer',
+  'roadmap.now.shortcuts', 'roadmap.now.xmp', 'roadmap.now.video', 'roadmap.now.devices',
+  'roadmap.now.projects', 'roadmap.now.trash', 'roadmap.now.importSettings', 'roadmap.now.i18n',
+  'roadmap.now.platforms',
+] as const;
+const roadmapNext  = ['roadmap.next.globalTagSearch', 'roadmap.next.albums', 'roadmap.next.macosSigned'] as const;
+const roadmapLater = ['roadmap.later.backup', 'roadmap.later.ipad', 'roadmap.later.batch'] as const;
 ---
 <!doctype html>
 <html lang={lang}>
@@ -315,11 +324,11 @@ const altBase = lang === 'en' ? '/es' : '';
           <span class="platform-badge available">{t('platforms.available')}</span>
         </div>
         <div class="platform-item">
-          <div class="platform-icon soon">
-            <img src="https://cdn.simpleicons.org/apple/8c90a0" alt="macOS" />
+          <div class="platform-icon available">
+            <img src="https://cdn.simpleicons.org/apple/b0c6ff" alt="macOS" />
           </div>
           <span class="platform-name">macOS</span>
-          <span class="platform-badge soon">{t('platforms.soon')}</span>
+          <span class="platform-badge available">{t('platforms.available')}</span>
         </div>
       </div>
     </section>
@@ -332,30 +341,17 @@ const altBase = lang === 'en' ? '/es' : '';
         <div class="roadmap-card now">
           <h3>{t('roadmap.now')}</h3>
           <ul class="roadmap-list">
-            <li><span class="dot"></span>{t('roadmap.now.i1')}</li>
-            <li><span class="dot"></span>{t('roadmap.now.i2')}</li>
-            <li><span class="dot"></span>{t('roadmap.now.i3')}</li>
-            <li><span class="dot"></span>{t('roadmap.now.i4')}</li>
-            <li><span class="dot"></span>{t('roadmap.now.i5')}</li>
-            <li><span class="dot"></span>{t('roadmap.now.i6')}</li>
-            <li><span class="dot"></span>{t('roadmap.now.i7')}</li>
-            <li><span class="dot"></span>{t('roadmap.now.i8')}</li>
-            <li><span class="dot"></span>{t('roadmap.now.i9')}</li>
-            <li><span class="dot"></span>{t('roadmap.now.i10')}</li>
+            {roadmapNow.map(key => <li><span class="dot"></span>{t(key)}</li>)}
           </ul>
         </div>
         <div class="roadmap-card soon">
           <h3>{t('roadmap.next')}</h3>
           <ul class="roadmap-list">
-            <li><span class="dot"></span>{t('roadmap.next.i1')}</li>
-            <li><span class="dot"></span>{t('roadmap.next.i2')}</li>
-            <li><span class="dot"></span>{t('roadmap.next.i3')}</li>
+            {roadmapNext.map(key => <li><span class="dot"></span>{t(key)}</li>)}
           </ul>
           <h3 style="margin-top:24px">{t('roadmap.later')}</h3>
           <ul class="roadmap-list">
-            <li><span class="dot"></span>{t('roadmap.later.i1')}</li>
-            <li><span class="dot"></span>{t('roadmap.later.i2')}</li>
-            <li><span class="dot"></span>{t('roadmap.later.i3')}</li>
+            {roadmapLater.map(key => <li><span class="dot"></span>{t(key)}</li>)}
           </ul>
         </div>
       </div>
