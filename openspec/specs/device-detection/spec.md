@@ -30,7 +30,7 @@ El sistema SHALL listar los dispositivos de almacenamiento externos montados con
 - **THEN** aparece la tarjeta SD y no el almacenamiento interno
 
 ### Requirement: Identidad estable por UUID
-Un dispositivo SHALL identificarse por el UUID de su sistema de archivos que reporta el sistema operativo de esa máquina, no por su punto de montaje. Ese UUID es un identificador local: puede diferir para el mismo disco entre plataformas, y no SHALL usarse para identificar proyectos ni fotos. El sistema no SHALL escribir archivos en el disco para identificarlo. Cada dispositivo visto SHALL registrarse en el registro global de dispositivos conocidos con su nombre, última ruta de montaje (solo como pista) y fecha de última vez visto.
+Un dispositivo SHALL identificarse por el UUID de su sistema de archivos que reporta el sistema operativo de esa máquina, no por su punto de montaje. Ese UUID no SHALL usarse para identificar proyectos ni fotos, y el sistema no SHALL escribir archivos en el disco para identificarlo. Cada dispositivo visto SHALL registrarse en el registro global de dispositivos conocidos con su nombre, última ruta de montaje (solo como pista) y fecha de última vez visto.
 
 #### Scenario: Cambio de punto de montaje
 - **WHEN** un disco que se montó en `/media/a` se vuelve a montar en `/media/b`
@@ -38,7 +38,7 @@ Un dispositivo SHALL identificarse por el UUID de su sistema de archivos que rep
 
 #### Scenario: Mismo disco en dos plataformas
 - **WHEN** un disco exFAT que en Linux tiene UUID `ECD0-9D14` se conecta a una Mac, donde macOS reporta `2B7D2056-C914-3E3F-9332-95EC595EE039`
-- **THEN** en la Mac el disco se registra con el UUID de macOS y sus proyectos se listan igual que en Linux
+- **THEN** en la Mac el disco se registra con el UUID de macOS, distinto del de Linux, y sus proyectos se listan igual que en Linux
 
 #### Scenario: Conectar un disco no escribe en él
 - **WHEN** se conecta un disco sin carpeta `lumik/`
