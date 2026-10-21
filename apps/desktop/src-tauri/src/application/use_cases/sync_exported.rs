@@ -11,8 +11,8 @@ pub struct PhotoStem {
     pub stem: String,
 }
 
-/// Archivo encontrado en `_exported/`: su *stem* y la ruta del JPEG relativa al
-/// mount point (como se guarda `jpg_path`).
+/// Archivo encontrado en `_exported/`: su *stem* y la ruta del JPEG relativa a
+/// la carpeta del proyecto (como se guarda `jpg_path`).
 pub struct ExportedFile {
     pub stem: String,
     pub jpg_path: String,
@@ -126,7 +126,7 @@ mod tests {
         let exported = vec![
             ExportedFile {
                 stem: "img_0001".into(), // distinta capitalización
-                jpg_path: "lumik/2024/06/15_Boda/_exported/img_0001.jpg".into(),
+                jpg_path: "_exported/img_0001.jpg".into(),
             },
         ];
         let res = uc.run(&photos(), &exported).unwrap();
@@ -134,7 +134,7 @@ mod tests {
         assert!(res.unmatched.is_empty());
         assert_eq!(
             repo.calls.borrow()[0],
-            ("a".to_string(), "lumik/2024/06/15_Boda/_exported/img_0001.jpg".to_string())
+            ("a".to_string(), "_exported/img_0001.jpg".to_string())
         );
     }
 
@@ -144,7 +144,7 @@ mod tests {
         let uc = SyncExported { repo: &repo };
         let exported = vec![ExportedFile {
             stem: "DSC_9999".into(),
-            jpg_path: "p/_exported/DSC_9999.jpg".into(),
+            jpg_path: "_exported/DSC_9999.jpg".into(),
         }];
         let res = uc.run(&photos(), &exported).unwrap();
         assert_eq!(res.matched, 0);
@@ -157,8 +157,8 @@ mod tests {
         let repo = FakeRepo::new();
         let uc = SyncExported { repo: &repo };
         let exported = vec![
-            ExportedFile { stem: "IMG_0002".into(), jpg_path: "p/_exported/IMG_0002.jpg".into() },
-            ExportedFile { stem: "nope".into(), jpg_path: "p/_exported/nope.jpg".into() },
+            ExportedFile { stem: "IMG_0002".into(), jpg_path: "_exported/IMG_0002.jpg".into() },
+            ExportedFile { stem: "nope".into(), jpg_path: "_exported/nope.jpg".into() },
         ];
         let res = uc.run(&photos(), &exported).unwrap();
         assert_eq!(res.matched, 1);

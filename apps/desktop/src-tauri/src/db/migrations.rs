@@ -6,13 +6,28 @@
 //! externos con estados heterogéneos y sin fixtures de BDs antiguas reales;
 //! el enfoque idempotente (ALTER "si falta") es seguro para adoptar sobre
 //! cualquier estado existente.
+//!
+//! Las rutas de las fotos (`dng_path`, `jpg_path`) se guardan relativas a la
+//! carpeta del proyecto. Las BDs anteriores las guardaban relativas al punto de
+//! montaje; `migrate_photo_paths_to_project_relative` las convierte, dejando
+//! antes una copia `.project.db.pre-relative-paths` junto al `project.db`.
 
 use super::schema;
 use super::DbResult;
+use log::warn;
 use rusqlite::Connection;
+use std::path::Path;
+
+/// Subcarpetas del proyecto donde viven los archivos de las fotos.
+const PROJECT_SUBDIRS: [&str; 4] = ["_media", "_culled", "_trash", "_exported"];
+
+/// Copia de la BD que se deja antes de convertir las rutas de las fotos.
+pub(super) const PRE_RELATIVE_PATHS_BACKUP: &str = ".project.db.pre-relative-paths";
 
 /// Aplica el esquema y todas las migraciones idempotentes a `conn`.
-pub(super) fn run_project_migrations(conn: &Connection) -> DbResult<()> {
+/// `project_dir` es la carpeta del `project.db` (donde se deja la copia de
+/// seguridad); `None` en BDs en memoria, que se migran sin copia.
+pub(super) fn run_project_migrations(conn: &Connection, project_dir: Option<&Path>) -> DbResult<()> {
     // Crea tablas/índices que falten (CREATE TABLE IF NOT EXISTS).
     conn.execute_batch(schema::PROJECT_SCHEMA)?;
 
@@ -21,7 +36,78 @@ pub(super) fn run_project_migrations(conn: &Connection) -> DbResult<()> {
     migrate_project_backup_columns(conn);
     ensure_project_settings_row(conn)?;
     migrate_project_settings_columns(conn)?;
+    migrate_photo_paths_to_project_relative(conn, project_dir)?;
 
+    Ok(())
+}
+
+/// Convierte una ruta relativa al punto de montaje
+/// (`lumik/2024/06/15_boda/_media/IMG.cr2`) en relativa a la carpeta del
+/// proyecto (`_media/IMG.cr2`), recortando desde la primera subcarpeta del
+/// proyecto. Devuelve la ruta sin cambios si ya empieza con una subcarpeta, y
+/// `None` si no contiene ninguna.
+fn project_relative_path(path: &str) -> Option<String> {
+    let normalized = path.replace('\\', "/");
+    let parts: Vec<&str> = normalized.split('/').filter(|s| !s.is_empty()).collect();
+    let start = parts.iter().position(|p| PROJECT_SUBDIRS.contains(p))?;
+    Some(parts[start..].join("/"))
+}
+
+/// Reescribe `dng_path` y `jpg_path` al formato relativo al proyecto
+/// (idempotente). Solo escribe si alguna fila cambia; antes deja una copia de la
+/// BD si hay `project_dir`. Si la copia falla, no migra y se reintenta en la
+/// siguiente apertura.
+fn migrate_photo_paths_to_project_relative(conn: &Connection, project_dir: Option<&Path>) -> DbResult<()> {
+    let rows: Vec<(String, String, Option<String>)> = {
+        let mut stmt = conn.prepare("SELECT id, dng_path, jpg_path FROM photo")?;
+        let mapped = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        mapped.collect::<Result<_, _>>()?
+    };
+
+    // Ruta convertida si cambia; se avisa de las que no se reconocen.
+    let convert = |id: &str, path: &str| -> Option<String> {
+        match project_relative_path(path) {
+            Some(rel) if rel != path => Some(rel),
+            Some(_) => None,
+            None => {
+                warn!("Foto {}: ruta sin subcarpeta de proyecto, se deja igual: {}", id, path);
+                None
+            }
+        }
+    };
+
+    let updates: Vec<(String, Option<String>, Option<String>)> = rows
+        .iter()
+        .filter_map(|(id, dng, jpg)| {
+            let new_dng = convert(id, dng);
+            let new_jpg = jpg.as_deref().and_then(|j| convert(id, j));
+            (new_dng.is_some() || new_jpg.is_some()).then(|| (id.clone(), new_dng, new_jpg))
+        })
+        .collect();
+    if updates.is_empty() {
+        return Ok(());
+    }
+
+    if let Some(dir) = project_dir {
+        let backup = dir.join(PRE_RELATIVE_PATHS_BACKUP);
+        if !backup.exists() {
+            if let Err(e) = conn.execute("VACUUM INTO ?1", [backup.to_string_lossy()]) {
+                warn!("No se pudo copiar {} antes de convertir rutas: {}", backup.display(), e);
+                return Ok(());
+            }
+        }
+    }
+
+    let tx = conn.unchecked_transaction()?;
+    for (id, dng, jpg) in &updates {
+        if let Some(dng) = dng {
+            tx.execute("UPDATE photo SET dng_path = ?1 WHERE id = ?2", [dng, id])?;
+        }
+        if let Some(jpg) = jpg {
+            tx.execute("UPDATE photo SET jpg_path = ?1 WHERE id = ?2", [jpg, id])?;
+        }
+    }
+    tx.commit()?;
     Ok(())
 }
 
@@ -152,7 +238,7 @@ mod tests {
         assert!(!column_names(&conn, "photo").contains(&"rotation".to_string()));
         assert!(!column_names(&conn, "project_settings").contains(&"view_mode".to_string()));
 
-        run_project_migrations(&conn).unwrap();
+        run_project_migrations(&conn, None).unwrap();
 
         // cover_photo_id → cover_photo_path (renombrado, dato preservado).
         let project_cols = column_names(&conn, "project");
@@ -180,10 +266,112 @@ mod tests {
     #[test]
     fn migrations_are_idempotent() {
         let conn = old_schema_db();
-        run_project_migrations(&conn).unwrap();
+        run_project_migrations(&conn, None).unwrap();
         // Correr de nuevo no debe fallar ni duplicar columnas.
-        run_project_migrations(&conn).unwrap();
+        run_project_migrations(&conn, None).unwrap();
         let cols = column_names(&conn, "project_settings");
         assert_eq!(cols.iter().filter(|c| *c == "view_mode").count(), 1);
+    }
+
+    #[test]
+    fn project_relative_path_cuts_at_first_project_subdir() {
+        assert_eq!(
+            project_relative_path("lumik/2024/06/15_boda/_media/IMG.cr2").as_deref(),
+            Some("_media/IMG.cr2")
+        );
+        assert_eq!(
+            project_relative_path("lumik/a/_trash/_exported/x.jpg").as_deref(),
+            Some("_trash/_exported/x.jpg")
+        );
+        assert_eq!(project_relative_path("_culled/x.dng").as_deref(), Some("_culled/x.dng"));
+        assert_eq!(
+            project_relative_path("lumik\\2024\\x\\_exported\\a.jpg").as_deref(),
+            Some("_exported/a.jpg")
+        );
+        assert_eq!(project_relative_path("lumik/x/fotos/IMG.dng"), None);
+    }
+
+    /// BD actual con fotos en formato viejo, nuevo, movido y no reconocido.
+    fn db_with_photos(conn: &Connection) {
+        run_project_migrations(conn, None).unwrap();
+        conn.execute_batch(
+            "INSERT INTO project (id, name, created_at, creator_id) VALUES ('p1', 'Boda', '2024-01-01', 'ph1');
+             INSERT INTO photo (id, project_id, dng_path, jpg_path, device_uuid, import_date) VALUES
+                ('old',   'p1', 'lumik/2024/06/15_boda/_media/A.cr2', 'lumik/2024/06/15_boda/_exported/A.jpg', '', 'x'),
+                ('new',   'p1', '_culled/B.cr2', NULL, '', 'x'),
+                ('moved', 'p1', 'lumik/2026/10/10_sesion/_trash/C.cr2', 'lumik/2026/10/10_sesion/_trash/_exported/C.jpg', '', 'x'),
+                ('odd',   'p1', 'lumik/x/fotos/D.cr2', NULL, '', 'x');",
+        )
+        .unwrap();
+    }
+
+    fn paths(conn: &Connection) -> Vec<(String, String, Option<String>)> {
+        let mut stmt = conn.prepare("SELECT id, dng_path, jpg_path FROM photo ORDER BY id").unwrap();
+        let rows = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        rows
+    }
+
+    #[test]
+    fn converts_photo_paths_to_project_relative() {
+        let conn = Connection::open_in_memory().unwrap();
+        db_with_photos(&conn);
+
+        run_project_migrations(&conn, None).unwrap();
+        let after = paths(&conn);
+        assert_eq!(
+            after,
+            vec![
+                ("moved".into(), "_trash/C.cr2".into(), Some("_trash/_exported/C.jpg".into())),
+                ("new".into(), "_culled/B.cr2".into(), None),
+                ("odd".into(), "lumik/x/fotos/D.cr2".into(), None),
+                ("old".into(), "_media/A.cr2".into(), Some("_exported/A.jpg".into())),
+            ]
+        );
+
+        // Idempotente: una segunda pasada no cambia nada.
+        run_project_migrations(&conn, None).unwrap();
+        assert_eq!(paths(&conn), after);
+    }
+
+    #[test]
+    fn backs_up_db_once_before_converting_paths() {
+        let dir = std::env::temp_dir().join(format!("lumik_mig_{}", uuid::Uuid::new_v4().as_simple()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("project.db");
+        let backup = dir.join(PRE_RELATIVE_PATHS_BACKUP);
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            conn.execute_batch("PRAGMA journal_mode = WAL;").unwrap();
+            db_with_photos(&conn);
+            run_project_migrations(&conn, Some(&dir)).unwrap();
+            assert_eq!(paths(&conn)[3].1, "_media/A.cr2");
+        }
+
+        // La copia guarda las rutas viejas y se abre como BD normal.
+        let copy = Connection::open(&backup).unwrap();
+        assert_eq!(paths(&copy)[3].1, "lumik/2024/06/15_boda/_media/A.cr2");
+        drop(copy);
+
+        // Una conversión posterior no sobrescribe la copia existente.
+        let modified = std::fs::metadata(&backup).unwrap().modified().unwrap();
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            conn.execute(
+                "UPDATE photo SET dng_path = 'lumik/y/_media/A.cr2' WHERE id = 'old'",
+                [],
+            )
+            .unwrap();
+            run_project_migrations(&conn, Some(&dir)).unwrap();
+            assert_eq!(paths(&conn)[3].1, "_media/A.cr2");
+        }
+        assert_eq!(std::fs::metadata(&backup).unwrap().modified().unwrap(), modified);
+        let copy = Connection::open(&backup).unwrap();
+        assert_eq!(paths(&copy)[3].1, "lumik/2024/06/15_boda/_media/A.cr2");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -8,7 +8,7 @@ use crate::domain::project::{renamed_photo_file, sanitize_file_name};
 use log::warn;
 use std::path::{Path, PathBuf};
 
-/// Foto a considerar: su id y su ruta relativa al mount point.
+/// Foto a considerar: su id y su ruta relativa a la carpeta del proyecto.
 #[derive(Debug, Clone)]
 pub struct PhotoFile {
     pub id: String,
@@ -19,8 +19,8 @@ pub struct RenameProjectFiles<'a> {
     pub photos: &'a dyn PhotoRepository,
     pub files: &'a dyn FileStore,
     pub finder_tags: &'a dyn FinderTagWriter,
-    /// Mount point del proyecto: los `dng_path` son relativos a él.
-    pub mount_point: &'a Path,
+    /// Carpeta del proyecto: los `dng_path` son relativos a ella.
+    pub project_dir: &'a Path,
 }
 
 /// Un renombrado ya aplicado, para poder deshacerlo.
@@ -64,8 +64,8 @@ impl RenameProjectFiles<'_> {
     }
 
     fn rename_one(&self, photo: &PhotoFile, new_rel: &str, done: &mut Vec<Done>) -> Result<(), String> {
-        let from = self.mount_point.join(&photo.dng_path);
-        let to = self.mount_point.join(new_rel);
+        let from = self.project_dir.join(&photo.dng_path);
+        let to = self.project_dir.join(new_rel);
 
         if self.files.exists(&to) {
             return Err(format!("Ya existe un archivo con el nombre destino: {}", to.display()));
@@ -228,13 +228,14 @@ mod tests {
         }
     }
 
-    const DIR: &str = "lumik/2024/06/15_Boda Ana/_media";
+    const PROJECT: &str = "/mnt/lumik/2024/06/15_Boda Ana";
+    const DIR: &str = "_media";
 
     fn photo(id: &str, file: &str) -> PhotoFile {
         PhotoFile { id: id.into(), dng_path: format!("{}/{}", DIR, file) }
     }
     fn abs(file: &str) -> String {
-        format!("/mnt/{}/{}", DIR, file)
+        format!("{}/{}/{}", PROJECT, DIR, file)
     }
 
     fn run(repo: &FakeRepo, files: &FakeFiles, photos: &[PhotoFile]) -> Result<usize, String> {
@@ -242,7 +243,7 @@ mod tests {
             photos: repo,
             files,
             finder_tags: &FakeFinderTags,
-            mount_point: Path::new("/mnt"),
+            project_dir: Path::new(PROJECT),
         }
         .execute(photos, "Boda", "Boda Ana")
     }

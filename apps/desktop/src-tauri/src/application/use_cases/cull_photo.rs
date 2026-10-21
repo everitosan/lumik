@@ -11,8 +11,8 @@ pub struct CullPhoto<'a> {
     pub photos: &'a dyn PhotoRepository,
     pub files: &'a dyn FileStore,
     pub finder_tags: &'a dyn FinderTagWriter,
-    /// Mount point del proyecto: los `dng_path` son relativos a él.
-    pub mount_point: &'a Path,
+    /// Carpeta del proyecto: los `dng_path` son relativos a ella.
+    pub project_dir: &'a Path,
 }
 
 impl CullPhoto<'_> {
@@ -36,8 +36,8 @@ impl CullPhoto<'_> {
         // Regla de dominio: destino relativo (sube dos niveles y recoloca).
         let new_rel = cull_destination(&photo.dng_path, culled).map_err(|e| e.to_string())?;
 
-        let current = self.mount_point.join(&photo.dng_path);
-        let target = self.mount_point.join(&new_rel);
+        let current = self.project_dir.join(&photo.dng_path);
+        let target = self.project_dir.join(&new_rel);
 
         // Asegura la carpeta destino (_culled/ o _media/).
         if let Some(dir) = target.parent() {
@@ -207,17 +207,17 @@ mod tests {
     #[test]
     fn cull_moves_file_and_updates_db() {
         let repo = FakePhotoRepo {
-            photo: make_photo("lumik/2024/06/15_boda/_media/IMG.dng", false),
+            photo: make_photo("_media/IMG.dng", false),
             fail_update: false,
             culled_calls: RefCell::new(vec![]),
         };
         let files = FakeFileStore::default();
-        let mount = Path::new("/mnt/disk");
+        let dir = Path::new("/mnt/disk/lumik/2024/06/15_boda");
         let uc = CullPhoto {
             photos: &repo,
             files: &files,
             finder_tags: &FakeFinderTags,
-            mount_point: mount,
+            project_dir: dir,
         };
 
         uc.execute("p1", true).unwrap();
@@ -225,18 +225,18 @@ mod tests {
         // Se movió el RAW de _media a _culled.
         let renames = files.renames.lock().unwrap();
         assert_eq!(renames.len(), 1);
-        assert_eq!(renames[0].0, mount.join("lumik/2024/06/15_boda/_media/IMG.dng"));
-        assert_eq!(renames[0].1, mount.join("lumik/2024/06/15_boda/_culled/IMG.dng"));
+        assert_eq!(renames[0].0, dir.join("_media/IMG.dng"));
+        assert_eq!(renames[0].1, dir.join("_culled/IMG.dng"));
 
         // Se persistió el nuevo dng_path relativo.
         let calls = repo.culled_calls.borrow();
         assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0], (true, "lumik/2024/06/15_boda/_culled/IMG.dng".to_string()));
+        assert_eq!(calls[0], (true, "_culled/IMG.dng".to_string()));
     }
 
     #[test]
     fn trashed_photo_is_rejected_without_moving() {
-        let mut photo = make_photo("lumik/x/_trash/IMG.dng", false);
+        let mut photo = make_photo("_trash/IMG.dng", false);
         photo.deleted = true;
         let repo = FakePhotoRepo {
             photo,
@@ -248,7 +248,7 @@ mod tests {
             photos: &repo,
             files: &files,
             finder_tags: &FakeFinderTags,
-            mount_point: Path::new("/mnt"),
+            project_dir: Path::new("/mnt/lumik/x"),
         };
 
         assert!(uc.execute("p1", true).is_err());
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn no_change_when_state_matches() {
         let repo = FakePhotoRepo {
-            photo: make_photo("lumik/x/_media/IMG.dng", true),
+            photo: make_photo("_media/IMG.dng", true),
             fail_update: false,
             culled_calls: RefCell::new(vec![]),
         };
@@ -268,7 +268,7 @@ mod tests {
             photos: &repo,
             files: &files,
             finder_tags: &FakeFinderTags,
-            mount_point: Path::new("/mnt"),
+            project_dir: Path::new("/mnt/lumik/x"),
         };
         // Ya está culled y se pide culled=true → no-op.
         uc.execute("p1", true).unwrap();
@@ -279,17 +279,17 @@ mod tests {
     #[test]
     fn rollback_moves_file_back_when_db_fails() {
         let repo = FakePhotoRepo {
-            photo: make_photo("lumik/x/_media/IMG.dng", false),
+            photo: make_photo("_media/IMG.dng", false),
             fail_update: true, // la BD falla al persistir
             culled_calls: RefCell::new(vec![]),
         };
         let files = FakeFileStore::default();
-        let mount = Path::new("/mnt");
+        let dir = Path::new("/mnt/lumik/x");
         let uc = CullPhoto {
             photos: &repo,
             files: &files,
             finder_tags: &FakeFinderTags,
-            mount_point: mount,
+            project_dir: dir,
         };
 
         let err = uc.execute("p1", true).unwrap_err();
@@ -298,8 +298,8 @@ mod tests {
         // Debe haber dos renames: el movimiento y su reversión.
         let renames = files.renames.lock().unwrap();
         assert_eq!(renames.len(), 2, "se esperaba mover y luego revertir");
-        let media = mount.join("lumik/x/_media/IMG.dng");
-        let culled = mount.join("lumik/x/_culled/IMG.dng");
+        let media = dir.join("_media/IMG.dng");
+        let culled = dir.join("_culled/IMG.dng");
         assert_eq!(renames[0], (media.clone(), culled.clone())); // ida
         assert_eq!(renames[1], (culled, media)); // rollback
     }

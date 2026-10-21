@@ -129,8 +129,8 @@ flowchart TD
     exif_desktop["Linux / Windows / macOS<br/>exiftool -csv batch sobre todos los archivos<br/>Extrae: Width, Height, DateTimeOriginal, Make, Model,<br/>ISO, FNumber, ExposureTime, FocalLength, LensModel,<br/>IFD0:Orientation → rotation°<br/>capture_date: DateTimeOriginal → CreateDate → ModifyDate<br/>Headers parseados dinámicamente — exiftool omite<br/>columnas vacías del batch → HashMap"]
     exif_android["Android<br/>exif_android::extract_exif_metadata_batch()<br/>RAW: crate rawler → RawMetadata.exif.orientation → rotation°<br/>JPEG: crate kamadak-exif → tag Orientation → rotation°<br/>(rawler no soporta JPEGs de cámaras de teléfono)<br/>→ HashMap"]
     merge_exif["HashMap (incl. rotation) disponible<br/>para todos los archivos"]
-    dtos["Construir CreatePhoto DTOs<br/>dng_path · original_format · capture_date · dimensiones ·<br/>ISO · apertura · velocidad · longitud focal · lente · rotation"]
-    insert["project_db.create_photos_batch() — transacción SQLite única<br/>• Genera UUID por foto<br/>• INSERT INTO photo (id, project_id, dng_path,<br/>device_uuid = '' (obsoleto: el disco se resuelve<br/>en runtime por mount_point), original_camera, original_format, capture_date, width, height,<br/>file_size_bytes, iso, aperture, shutter_speed, focal_length,<br/>lens_model, rotation)<br/>• Commit en éxito · Rollback en error, sin inserciones parciales"]
+    dtos["Construir CreatePhoto DTOs<br/>dng_path relativo a la carpeta del proyecto (_media/…) ·<br/>original_format · capture_date · dimensiones ·<br/>ISO · apertura · velocidad · longitud focal · lente · rotation"]
+    insert["project_db.create_photos_batch() — transacción SQLite única<br/>• Genera UUID por foto<br/>• INSERT INTO photo (id, project_id, dng_path,<br/>device_uuid = '' (obsoleto: las rutas se resuelven<br/>en runtime con la carpeta del proyecto), original_camera, original_format, capture_date, width, height,<br/>file_size_bytes, iso, aperture, shutter_speed, focal_length,<br/>lens_model, rotation)<br/>• Commit en éxito · Rollback en error, sin inserciones parciales"]
     next(["continúa en §5"])
 
     plat_q -->|Escritorio| exif_desktop --> merge_exif

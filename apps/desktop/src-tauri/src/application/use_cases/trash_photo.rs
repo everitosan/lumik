@@ -96,8 +96,8 @@ pub struct TrashPhoto<'a> {
     pub photos: &'a dyn PhotoRepository,
     pub files: &'a dyn FileStore,
     pub finder_tags: &'a dyn FinderTagWriter,
-    /// Mount point del proyecto: `dng_path` y `jpg_path` son relativos a él.
-    pub mount_point: &'a Path,
+    /// Carpeta del proyecto: `dng_path` y `jpg_path` son relativos a ella.
+    pub project_dir: &'a Path,
 }
 
 impl TrashPhoto<'_> {
@@ -111,14 +111,14 @@ impl TrashPhoto<'_> {
         }
 
         let new_dng = trash_destination(&photo.dng_path).map_err(|e| e.to_string())?;
-        let dng_from = self.mount_point.join(&photo.dng_path);
-        let dng_to = self.mount_point.join(&new_dng);
+        let dng_from = self.project_dir.join(&photo.dng_path);
+        let dng_to = self.project_dir.join(&new_dng);
 
         // El exportado solo se mueve si está en disco; si no, su ruta queda igual.
         let exported = match photo.jpg_path.as_deref() {
-            Some(jpg) if self.files.exists(&self.mount_point.join(jpg)) => {
+            Some(jpg) if self.files.exists(&self.project_dir.join(jpg)) => {
                 let new_jpg = trash_exported_destination(jpg).map_err(|e| e.to_string())?;
-                Some((self.mount_point.join(jpg), self.mount_point.join(&new_jpg), new_jpg))
+                Some((self.project_dir.join(jpg), self.project_dir.join(&new_jpg), new_jpg))
             }
             _ => None,
         };
@@ -156,8 +156,8 @@ pub struct RestorePhoto<'a> {
     pub photos: &'a dyn PhotoRepository,
     pub files: &'a dyn FileStore,
     pub finder_tags: &'a dyn FinderTagWriter,
-    /// Mount point del proyecto: `dng_path` y `jpg_path` son relativos a él.
-    pub mount_point: &'a Path,
+    /// Carpeta del proyecto: `dng_path` y `jpg_path` son relativos a ella.
+    pub project_dir: &'a Path,
 }
 
 impl RestorePhoto<'_> {
@@ -171,8 +171,8 @@ impl RestorePhoto<'_> {
         }
 
         let new_dng = restore_destination(&photo.dng_path, photo.culled).map_err(|e| e.to_string())?;
-        let dng_from = self.mount_point.join(&photo.dng_path);
-        let dng_to = self.mount_point.join(&new_dng);
+        let dng_from = self.project_dir.join(&photo.dng_path);
+        let dng_to = self.project_dir.join(&new_dng);
 
         // El exportado se busca en `_trash/_exported/` junto al original (ahí lo
         // dejó la papelera). Si no está ahí pero `jpg_path` existe en otro sitio, se
@@ -182,10 +182,10 @@ impl RestorePhoto<'_> {
         if let Some(jpg) = photo.jpg_path.as_deref() {
             let expected =
                 trashed_exported_for(&photo.dng_path, file_name(jpg)).map_err(|e| e.to_string())?;
-            if self.files.exists(&self.mount_point.join(&expected)) {
+            if self.files.exists(&self.project_dir.join(&expected)) {
                 let new_jpg = restore_exported_destination(&expected).map_err(|e| e.to_string())?;
-                exported = Some((self.mount_point.join(&expected), self.mount_point.join(&new_jpg), new_jpg));
-            } else if self.files.exists(&self.mount_point.join(jpg)) {
+                exported = Some((self.project_dir.join(&expected), self.project_dir.join(&new_jpg), new_jpg));
+            } else if self.files.exists(&self.project_dir.join(jpg)) {
                 keep_jpg = Some(jpg.to_string());
             } else {
                 warn!("restore: el exportado {} de la foto {} no está en disco", jpg, photo_id);
@@ -229,13 +229,14 @@ mod tests {
 
     // ---- Dobles de prueba ----------------------------------------------------
 
-    const P: &str = "lumik/2024/06/15_Boda";
+    /// Carpeta del proyecto; las rutas de la BD son relativas a ella.
+    const P: &str = "/mnt/lumik/2024/06/15_Boda";
 
     fn rel(sub: &str) -> String {
-        format!("{}/{}", P, sub)
+        sub.to_string()
     }
     fn abs(sub: &str) -> String {
-        format!("/mnt/{}/{}", P, sub)
+        format!("{}/{}", P, sub)
     }
 
     fn make_photo(dng: &str, jpg: Option<&str>, culled: bool, deleted: bool) -> Photo {
@@ -384,10 +385,10 @@ mod tests {
     }
 
     fn trash(repo: &FakeRepo, fs: &FakeFs) -> Result<(), String> {
-        TrashPhoto { photos: repo, files: fs, finder_tags: fs, mount_point: Path::new("/mnt") }.execute("p1")
+        TrashPhoto { photos: repo, files: fs, finder_tags: fs, project_dir: Path::new(P) }.execute("p1")
     }
     fn restore(repo: &FakeRepo, fs: &FakeFs) -> Result<(), String> {
-        RestorePhoto { photos: repo, files: fs, finder_tags: fs, mount_point: Path::new("/mnt") }.execute("p1")
+        RestorePhoto { photos: repo, files: fs, finder_tags: fs, project_dir: Path::new(P) }.execute("p1")
     }
 
     // ---- Papelera -------------------------------------------------------------
@@ -652,7 +653,7 @@ mod tests {
         let created = db
             .create_photos_batch(&[CreatePhoto {
                 project_id: "p1".into(),
-                dng_path: format!("{}/_culled/IMG_0001.cr2", project_rel),
+                dng_path: "_culled/IMG_0001.cr2".into(),
                 device_uuid: "dev".into(),
                 original_camera: None,
                 original_format: None,
@@ -670,14 +671,14 @@ mod tests {
             }])
             .unwrap();
         let id = created[0].id.clone();
-        db.update_photo_culled(&id, true, &format!("{}/_culled/IMG_0001.cr2", project_rel)).unwrap();
-        db.set_photo_exported(&id, &format!("{}/_exported/IMG_0001.jpg", project_rel)).unwrap();
+        db.update_photo_culled(&id, true, "_culled/IMG_0001.cr2").unwrap();
+        db.set_photo_exported(&id, "_exported/IMG_0001.jpg").unwrap();
         db.set_cover_photo(Some(&format!(".thumbs/{}.jpg", id))).unwrap();
 
         let fs = StdFileStore;
         let tags = AppleDoubleFinderTags;
 
-        TrashPhoto { photos: &db, files: &fs, finder_tags: &tags, mount_point: &mount }.execute(&id).unwrap();
+        TrashPhoto { photos: &db, files: &fs, finder_tags: &tags, project_dir: &project_dir }.execute(&id).unwrap();
 
         for rel in ["_trash/IMG_0001.cr2", "_trash/IMG_0001.xmp", "_trash/._IMG_0001.cr2", "_trash/_exported/IMG_0001.jpg"] {
             assert!(project_dir.join(rel).exists(), "falta {}", rel);
@@ -690,7 +691,7 @@ mod tests {
         assert_eq!(entry.photo_count, 0);
         assert_eq!(entry.cover_photo_path, None);
 
-        RestorePhoto { photos: &db, files: &fs, finder_tags: &tags, mount_point: &mount }.execute(&id).unwrap();
+        RestorePhoto { photos: &db, files: &fs, finder_tags: &tags, project_dir: &project_dir }.execute(&id).unwrap();
 
         for rel in ["_culled/IMG_0001.cr2", "_culled/IMG_0001.xmp", "_culled/._IMG_0001.cr2", "_exported/IMG_0001.jpg"] {
             assert!(project_dir.join(rel).exists(), "falta {}", rel);
@@ -698,8 +699,8 @@ mod tests {
         let photo = db.get_photo(&id).unwrap().unwrap();
         assert!(!photo.deleted);
         assert!(photo.culled);
-        assert_eq!(photo.dng_path, format!("{}/_culled/IMG_0001.cr2", project_rel));
-        assert_eq!(photo.jpg_path, Some(format!("{}/_exported/IMG_0001.jpg", project_rel)));
+        assert_eq!(photo.dng_path, "_culled/IMG_0001.cr2");
+        assert_eq!(photo.jpg_path.as_deref(), Some("_exported/IMG_0001.jpg"));
         // El contenido viajó intacto: nada se sobrescribió.
         assert_eq!(std::fs::read(project_dir.join("_culled/IMG_0001.cr2")).unwrap(), b"_culled/IMG_0001.cr2");
 

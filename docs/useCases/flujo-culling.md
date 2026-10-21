@@ -60,7 +60,7 @@ flowchart TD
     get_photo["project_db.get_photo(&photo_id)<br/>Leer registro actual"]
     noop_q{"¿photo.culled<br/>== culled?"}
     noop_ok["No-op<br/>return Ok()"]
-    paths["Calcular rutas<br/>current_path = mount_point + dng_path<br/>target_dir = culled ? _culled/ : _media/<br/>new_dng_path = project_dir_rel + target_dir + filename"]
+    paths["Calcular rutas<br/>current_path = project_dir + dng_path<br/>target_dir = culled ? _culled/ : _media/<br/>new_dng_path = target_dir + filename"]
     mkdir["fs::create_dir_all(target_dir)<br/>Garantiza que _culled/ o _media/ existen"]
     move["fs::rename(current_path, target_path) — DNG / RAW<br/>Si existe .xmp → fs::rename(xmp_src, xmp_dest)<br/>(best-effort, error ignorado)"]
     move_q{"¿Error<br/>al mover?"}
@@ -72,7 +72,7 @@ flowchart TD
     next(["continúa en §3"])
 
     n_xmp["El sidecar .xmp solo existe en Android<br/>(creado al importar por xmp.rs ·<br/>write_xmp_sidecar())<br/>Contiene: Artist · Copyright · Rights · contacto"]
-    n_path["dng_path actualizado refleja<br/>la ubicación real del archivo:<br/>→ lumik/…/_culled/foto.dng<br/>→ lumik/…/_media/foto.dng"]
+    n_path["dng_path actualizado refleja<br/>la ubicación real del archivo,<br/>relativa a la carpeta del proyecto:<br/>→ _culled/foto.dng<br/>→ _media/foto.dng"]
 
     be --> get_photo --> noop_q
     noop_q -->|Sí| noop_ok --> next

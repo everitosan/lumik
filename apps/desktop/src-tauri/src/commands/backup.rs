@@ -14,10 +14,12 @@ use crate::application::use_cases::sync_exported::{
     ExportedFile, PhotoStem, SyncExported, SyncExportedResult,
 };
 use crate::domain::paths::path_to_slash;
+use crate::db::models::Photo;
 use crate::domain::project::ProjectFolder;
 use log::{info, warn};
 use serde::Serialize;
 use std::collections::HashSet;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tauri::State;
 
@@ -276,7 +278,13 @@ fn build_catalog_data(
         slug: ProjectFolder::slug(&project.name),
         workflow_status: None,
     };
-    let cat_photos: Vec<CatalogPhoto> = photos
+    Ok((cat_project, catalog_photos(&photos)))
+}
+
+/// Fotos del catálogo: `jpg_path` se publica tal cual se guarda (relativo a la
+/// carpeta del proyecto).
+fn catalog_photos(photos: &[Photo]) -> Vec<CatalogPhoto> {
+    photos
         .iter()
         .map(|p| CatalogPhoto {
             id: p.id.clone(),
@@ -284,8 +292,43 @@ fn build_catalog_data(
             file_hash: p.file_hash.clone(),
             jpg_path: p.jpg_path.clone(),
         })
-        .collect();
-    Ok((cat_project, cat_photos))
+        .collect()
+}
+
+/// Archivos de imagen de `{project_dir}/_exported/`, con su ruta relativa a la
+/// carpeta del proyecto (como `dng_path`) y separador '/'.
+fn list_exported_files(project_dir: &Path) -> std::io::Result<Vec<ExportedFile>> {
+    let exported_dir = project_dir.join("_exported");
+    let mut exported: Vec<ExportedFile> = Vec::new();
+    if !exported_dir.is_dir() {
+        return Ok(exported);
+    }
+    for entry in std::fs::read_dir(&exported_dir)? {
+        let path = entry?.path();
+        if !path.is_file() {
+            continue;
+        }
+        let is_image = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| EXPORTED_EXTS.contains(&e.to_lowercase().as_str()))
+            .unwrap_or(false);
+        if !is_image {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let jpg_path = match path.strip_prefix(project_dir) {
+            Ok(rel) => path_to_slash(rel),
+            Err(_) => continue, // fuera del proyecto: no debería pasar
+        };
+        exported.push(ExportedFile {
+            stem: stem.to_string(),
+            jpg_path,
+        });
+    }
+    Ok(exported)
 }
 
 /// Publica (upsert) proyecto + fotos al catálogo. Best-effort: `Ok(false)` si no
@@ -414,38 +457,7 @@ pub async fn sync_exported(
 
     let project_db = state.project_db(&project_id)?;
     let photos = project_db.get_project_photos()?;
-    let exported_dir = project_db.project_dir.join("_exported");
-
-    // Lista los archivos de imagen en _exported/ con su ruta relativa al mount.
-    let mut exported: Vec<ExportedFile> = Vec::new();
-    if exported_dir.is_dir() {
-        for entry in std::fs::read_dir(&exported_dir)? {
-            let path = entry?.path();
-            if !path.is_file() {
-                continue;
-            }
-            let is_image = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| EXPORTED_EXTS.contains(&e.to_lowercase().as_str()))
-                .unwrap_or(false);
-            if !is_image {
-                continue;
-            }
-            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-                continue;
-            };
-            // jpg_path relativo al mount (como dng_path), con separador '/'.
-            let jpg_path = match path.strip_prefix(&project_db.mount_point) {
-                Ok(rel) => path_to_slash(rel),
-                Err(_) => continue, // fuera del mount: no debería pasar
-            };
-            exported.push(ExportedFile {
-                stem: stem.to_string(),
-                jpg_path,
-            });
-        }
-    }
+    let exported = list_exported_files(&project_db.project_dir)?;
 
     let photo_stems: Vec<PhotoStem> = photos
         .iter()
@@ -913,4 +925,57 @@ pub fn get_pending_backups(
     state: State<'_, AppState>,
 ) -> AppResult<Vec<crate::db::models::PendingBackup>> {
     Ok(state.global_db.get_pending_backups()?)
+}
+
+#[cfg(all(test, not(target_os = "android")))]
+mod tests {
+    use super::*;
+    use crate::db::models::CreatePhoto;
+    use crate::db::ProjectDatabase;
+
+    #[test]
+    fn exported_jpg_path_is_project_relative_in_db_and_catalog() {
+        let dir = std::env::temp_dir().join(format!("lumik_exported_{}", uuid::Uuid::new_v4().as_simple()));
+        let db = ProjectDatabase::create(
+            dir.join("project.db"), "p1", "Boda", "creator", None, Some("2024-06-15"), "", dir.clone(),
+        )
+        .unwrap();
+        std::fs::create_dir_all(dir.join("_exported")).unwrap();
+        std::fs::write(dir.join("_exported/IMG_0001.jpg"), b"jpg").unwrap();
+        std::fs::write(dir.join("_exported/.DS_Store"), b"x").unwrap();
+        db.create_photos_batch(&[CreatePhoto {
+            project_id: "p1".into(),
+            dng_path: "_media/IMG_0001.cr2".into(),
+            device_uuid: String::new(),
+            original_camera: None,
+            original_format: None,
+            capture_date: None,
+            width: None,
+            height: None,
+            file_size_bytes: None,
+            iso: None,
+            aperture: None,
+            shutter_speed: None,
+            exposure_compensation: None,
+            focal_length: None,
+            lens_model: None,
+            rotation: 0,
+        }])
+        .unwrap();
+
+        let exported = list_exported_files(&dir).unwrap();
+        assert_eq!(exported.len(), 1, "solo imágenes no ocultas");
+        assert_eq!(exported[0].jpg_path, "_exported/IMG_0001.jpg");
+
+        let photos = db.get_project_photos().unwrap();
+        let stems = vec![PhotoStem { id: photos[0].id.clone(), stem: "IMG_0001".into() }];
+        SyncExported { repo: &db }.run(&stems, &exported).unwrap();
+
+        let catalog = catalog_photos(&db.get_project_photos().unwrap());
+        assert_eq!(catalog[0].jpg_path.as_deref(), Some("_exported/IMG_0001.jpg"));
+        assert_eq!(catalog[0].filename, "IMG_0001.jpg");
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

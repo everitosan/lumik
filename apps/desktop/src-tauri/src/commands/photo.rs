@@ -8,7 +8,7 @@ use crate::application::use_cases::rotate_photo::RotatePhoto;
 use crate::application::use_cases::trash_photo::{RestorePhoto, TrashPhoto};
 use crate::db::models::*;
 use log::{debug, error, info, warn};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::{AppHandle, State};
 
 // ============================================================================
@@ -92,8 +92,7 @@ pub fn get_photo_preview(
         .get_photo(&photo_id)?
         .ok_or_else(|| format!("Photo {} not found", photo_id))?;
 
-    let mount = project_db.mount_point.to_string_lossy().to_string();
-    let dng_full = Path::new(&mount).join(&photo.dng_path);
+    let dng_full = project_db.photo_file(&photo.dng_path);
     debug!("get_photo_preview: dng_full={:?} exists={}", dng_full, dng_full.exists());
 
     // JPEGs are already viewable — no permanent preview cache needed.
@@ -151,7 +150,7 @@ pub fn save_photo_rotation(
     }
     .execute(&photo_id, rotation)?;
 
-    let dng_full = project_db.mount_point.join(&dng_rel);
+    let dng_full = project_db.photo_file(&dng_rel);
 
     // Write orientation to the file after a short debounce (non-blocking).
     // Rapid successive rotations bump this photo's generation counter; only the
@@ -219,6 +218,7 @@ pub fn save_photo_rating(
     let spotlight = RatePhoto {
         photos: project_db.as_ref(),
         finder_tags: state.finder_tags.as_ref(),
+        project_dir: &project_db.project_dir,
         mount_point: &mount,
         finder_tags_enabled,
     }
@@ -252,7 +252,7 @@ pub fn reveal_photo(
     let photo = project_db
         .get_photo(&photo_id)?
         .ok_or_else(|| format!("Photo {} not found", photo_id))?;
-    let file = project_db.mount_point.join(&photo.dng_path);
+    let file = project_db.photo_file(&photo.dng_path);
     crate::infrastructure::folder::reveal_file(&app, &file).map_err(AppError::from)
 }
 
@@ -260,13 +260,11 @@ pub fn reveal_photo(
 #[tauri::command]
 pub fn trash_photo(state: State<AppState>, project_id: String, photo_id: String) -> AppResult<()> {
     let project_db = state.project_db(&project_id)?;
-    let mount = project_db.mount_point.clone();
-
     TrashPhoto {
         photos: project_db.as_ref(),
         files: state.file_store.as_ref(),
         finder_tags: state.finder_tags.as_ref(),
-        mount_point: &mount,
+        project_dir: &project_db.project_dir,
     }
     .execute(&photo_id)?;
 
@@ -278,13 +276,11 @@ pub fn trash_photo(state: State<AppState>, project_id: String, photo_id: String)
 #[tauri::command]
 pub fn restore_photo(state: State<AppState>, project_id: String, photo_id: String) -> AppResult<()> {
     let project_db = state.project_db(&project_id)?;
-    let mount = project_db.mount_point.clone();
-
     RestorePhoto {
         photos: project_db.as_ref(),
         files: state.file_store.as_ref(),
         finder_tags: state.finder_tags.as_ref(),
-        mount_point: &mount,
+        project_dir: &project_db.project_dir,
     }
     .execute(&photo_id)?;
 
@@ -300,13 +296,11 @@ pub fn save_photo_culled(
     culled: bool,
 ) -> AppResult<()> {
     let project_db = state.project_db(&project_id)?;
-    let mount = project_db.mount_point.clone();
-
     CullPhoto {
         photos: project_db.as_ref(),
         files: state.file_store.as_ref(),
         finder_tags: state.finder_tags.as_ref(),
-        mount_point: &mount,
+        project_dir: &project_db.project_dir,
     }
     .execute(&photo_id, culled)?;
 
@@ -377,8 +371,6 @@ pub fn regenerate_project_thumbnails(state: State<AppState>, project_id: String)
     let project_db = state.project_db(&project_id)?;
     let photos = project_db.get_project_photos()?;
 
-    let mount = project_db.mount_point.to_string_lossy().to_string();
-
     // Delete existing thumbnails (both .jpg and legacy .webp) so they get recreated
     let thumbs_dir = project_db.project_dir.join(".thumbs");
     if thumbs_dir.exists() {
@@ -391,7 +383,7 @@ pub fn regenerate_project_thumbnails(state: State<AppState>, project_id: String)
     // Reconcile rotation: read from source file → update DB if different
     let mut reconciled = 0u32;
     for photo in &photos {
-        let dng_full = Path::new(&mount).join(&photo.dng_path);
+        let dng_full = project_db.photo_file(&photo.dng_path);
         let file_rotation = state.metadata.read_rotation(&dng_full);
         if file_rotation != photo.rotation {
             let _ = project_db.update_photo_rotation(&photo.id, file_rotation);
@@ -404,7 +396,7 @@ pub fn regenerate_project_thumbnails(state: State<AppState>, project_id: String)
 
     let pairs: Vec<(PathBuf, String)> = photos
         .iter()
-        .map(|photo| (Path::new(&mount).join(&photo.dng_path), photo.id.clone()))
+        .map(|photo| (project_db.photo_file(&photo.dng_path), photo.id.clone()))
         .collect();
 
     cache_thumbnails_parallel(state.image_processor.as_ref(), &pairs, None);

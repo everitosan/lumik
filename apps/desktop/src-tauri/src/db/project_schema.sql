@@ -34,8 +34,8 @@ CREATE TABLE IF NOT EXISTS photo (
     project_id      TEXT NOT NULL REFERENCES project(id),
 
     -- File location
-    dng_path        TEXT NOT NULL,          -- Path RELATIVE to device mount point
-    jpg_path        TEXT,                   -- Relative path to edited JPG (nullable)
+    dng_path        TEXT NOT NULL,          -- Path RELATIVE to the project folder (e.g. "_media/IMG.dng")
+    jpg_path        TEXT,                   -- Edited JPG, relative to the project folder (nullable)
 
     -- OBSOLETO: UUID del disco donde se importó. La identidad portable es
     -- project.id y el disco se resuelve en runtime (scan_mounted_devices).

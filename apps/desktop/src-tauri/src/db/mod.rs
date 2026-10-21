@@ -70,15 +70,17 @@ pub struct ProjectDatabase {
     /// The project UUID stored in this database (cached to avoid re-reading).
     pub project_id: String,
     /// UUID of the device this project lives on (set during discovery/creation).
-    /// Kept for reference; do NOT use to resolve file paths — use mount_point instead
-    /// so that projects copied to a different disk still open correctly.
+    /// Kept for reference; do NOT use to resolve file paths — use project_dir instead
+    /// so that projects copied to a different disk or folder still open correctly.
     pub device_uuid: String,
     /// Absolute path to the project directory (parent of project.db).
-    /// Used to locate .thumbs/ and .previews/ regardless of culling state.
+    /// Photo paths (`dng_path`, `jpg_path`), .thumbs/ and .previews/ are resolved
+    /// against it (see `photo_file`).
     pub project_dir: PathBuf,
     /// Absolute path to the storage mount point where this project lives.
     /// Derived from the mount point used during discovery, NOT from device_uuid.
-    /// This ensures projects copied to a different disk resolve paths correctly.
+    /// Only for disk-level work (relocating the project folder, Spotlight); photo
+    /// paths are relative to `project_dir`.
     pub mount_point: PathBuf,
 }
 
@@ -93,7 +95,7 @@ impl ProjectDatabase {
         )?;
 
         // Esquema + migraciones idempotentes en un solo lugar (ver db::migrations).
-        migrations::run_project_migrations(&conn)?;
+        migrations::run_project_migrations(&conn, path.parent())?;
 
         let project_id: String = conn.query_row(
             "SELECT id FROM project LIMIT 1",
@@ -142,7 +144,7 @@ impl ProjectDatabase {
         )?;
 
         // Esquema + migraciones (crea tablas y la fila project_settings id=1).
-        migrations::run_project_migrations(&conn)?;
+        migrations::run_project_migrations(&conn, path.parent())?;
 
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
@@ -162,6 +164,12 @@ impl ProjectDatabase {
             project_dir,
             mount_point,
         })
+    }
+
+    /// Ruta absoluta de un archivo de foto (`dng_path`/`jpg_path`, relativos a
+    /// la carpeta del proyecto).
+    pub fn photo_file(&self, rel: &str) -> PathBuf {
+        self.project_dir.join(rel)
     }
 
     pub fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
@@ -391,30 +399,28 @@ mod tests {
     }
 
     #[test]
-    fn prefix_update_rewrites_dng_and_jpg_paths_of_trashed_photos() {
-        let (dir, db) = temp_project("prefix_jpg");
-        let photos = db
-            .create_photos_batch(&[new_photo("lumik/2024/06/15_Boda/_media/A.dng")])
-            .unwrap();
-        let id = &photos[0].id;
-        db.set_photo_deleted(
-            id,
-            true,
-            "lumik/2024/06/15_Boda/_trash/A.dng",
-            Some("lumik/2024/06/15_Boda/_trash/_exported/A.jpg"),
-        )
-        .unwrap();
+    fn moving_project_folder_keeps_photo_paths_valid() {
+        let (dir, db) = temp_project("relocate");
+        std::fs::create_dir_all(dir.join("_media")).unwrap();
+        std::fs::write(dir.join("_media/A.dng"), b"raw").unwrap();
+        let id = db.create_photos_batch(&[new_photo("_media/A.dng")]).unwrap()[0].id.clone();
+        drop(db);
 
-        let n = db
-            .update_photo_paths_prefix("lumik/2024/06/15_Boda", "lumik/2024/06/16_Boda_Ana")
-            .unwrap();
+        // Mover la carpeta del proyecto (como relocate_project_folder) y reabrir.
+        let moved = dir.with_file_name(format!(
+            "{}_moved",
+            dir.file_name().unwrap().to_string_lossy()
+        ));
+        let _ = std::fs::remove_dir_all(&moved);
+        std::fs::rename(&dir, &moved).unwrap();
+        let db = ProjectDatabase::open(moved.join("project.db"), "dev", moved.clone()).unwrap();
 
-        assert_eq!(n, 1);
-        let photo = db.get_photo(id).unwrap().unwrap();
-        assert_eq!(photo.dng_path, "lumik/2024/06/16_Boda_Ana/_trash/A.dng");
-        assert_eq!(photo.jpg_path.as_deref(), Some("lumik/2024/06/16_Boda_Ana/_trash/_exported/A.jpg"));
+        let photo = db.get_photo(&id).unwrap().unwrap();
+        assert_eq!(photo.dng_path, "_media/A.dng");
+        assert_eq!(db.photo_file(&photo.dng_path), moved.join("_media/A.dng"));
+        assert!(db.photo_file(&photo.dng_path).exists());
 
         drop(db);
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&moved);
     }
 }

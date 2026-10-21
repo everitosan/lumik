@@ -234,7 +234,7 @@ Cada proveedor conectado = **un remote de rclone**. Dos tipos:
 
 ### Fase 6 — `sync_exported` local (_exported ↔ photo) ✅
 - [x] `use_cases/sync_exported.rs`: matching por *stem* (case-insensitive) → fija `jpg_path` + `workflow_status='edited'` vía `PhotoRepository::set_exported` (puerto + impl + query nuevos); reporta no-emparejados. 3 tests de fakes.
-- [x] Comando `sync_exported`: escanea `_exported/` (extensiones de imagen), construye rutas `jpg_path` relativas al mount (`path_to_slash`), corre el use case y **publica al catálogo** (`publish_catalog_upsert`, best-effort, refresca en 401). Registrado en `invoke_handler`.
+- [x] Comando `sync_exported`: escanea `_exported/` (extensiones de imagen), construye rutas `jpg_path` relativas a la carpeta del proyecto (`path_to_slash`; antes de `project-relative-photo-paths`, al mount), corre el use case y **publica al catálogo** (`publish_catalog_upsert`, best-effort, refresca en 401). Registrado en `invoke_handler`.
 - [x] Frontend: `syncExported` disparado al abrir el proyecto tras `ensureProjectSynced` (fire-and-forget).
 
 **Gate 6:** ✅ **lógica verificada** — matching cubierto por tests; command compila y publica reusando el path del catálogo. *Pendiente verificación en la app con `_exported` real en disco (requiere la GUI).* 61 tests desktop verdes.

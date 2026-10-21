@@ -275,6 +275,13 @@ Cada caso de uso orquesta puertos; sin `std::fs`/SQLite directo.
 Base: puertos `PhotoRepository` (impl para `ProjectDatabase`) y `FileStore`
 (`StdFileStore`), inyectados en `AppState`.
 
+Los casos de uso que tocan archivos de fotos (`CullPhoto`, `TrashPhoto`/`RestorePhoto`,
+`RatePhoto`, `RotatePhoto`, `RenameProjectFiles`, `RewriteProjectDescription`,
+`ImportPhotos`) reciben `project_dir`: `dng_path` y `jpg_path` son relativos a la
+carpeta del proyecto (`_media/x.dng`), y los comandos resuelven con
+`ProjectDatabase::photo_file`. `RatePhoto` recibe además `mount_point`, solo como
+raíz del índice de Spotlight.
+
 - [x] `use_cases/cull_photo.rs` + test con fakes (mover _media↔_culled + **rollback** si falla BD).
 - [x] `use_cases/rotate_photo.rs` (parte sincrónica; el debounce del write queda en
       el adaptador porque necesita hilos + estado de generación) + test.
@@ -462,3 +469,9 @@ Registrar aquí decisiones/desvíos al ejecutar cada fase (fecha + nota breve).
   backend. Todos los comandos → `AppResult`; ~30 closures de log+to_string
   eliminadas. `{code,message}` queda como mejora de producto para cuando el
   frontend consuma códigos.
+- **2026-10-20 · Rutas relativas al proyecto** (`project-relative-photo-paths`) —
+  `dng_path`/`jpg_path` pasan de relativas al montaje a relativas a la carpeta del
+  proyecto. Los casos de uso cambian `mount_point` por `project_dir`; la migración
+  `migrate_photo_paths_to_project_relative` convierte las BDs existentes (y repara
+  proyectos movidos) dejando antes `.project.db.pre-relative-paths`, y
+  `relocate_project_folder` ya no reescribe rutas.

@@ -3,7 +3,6 @@ use super::AppState;
 use crate::application::error::{AppError, AppResult};
 use crate::db::models::*;
 use crate::db::ProjectDatabase;
-use crate::domain::paths::path_to_slash;
 use crate::domain::project::{compare_dashboard, ProjectFolder};
 use chrono::Utc;
 use log::{debug, error, info, warn};
@@ -174,8 +173,6 @@ pub(crate) fn relocate_project_folder(
     let device_uuid = project_db.device_uuid.clone();
     let mount_point = project_db.mount_point.clone();
     let old_dir = project_db.project_dir.clone();
-    let old_rel = path_to_slash(old_dir.strip_prefix(&mount_point).unwrap_or(&old_dir));
-    let new_rel = path_to_slash(new_dir.strip_prefix(&mount_point).unwrap_or(new_dir));
 
     // Close the SQLite handle before touching the filesystem.
     drop(project_db);
@@ -218,9 +215,6 @@ pub(crate) fn relocate_project_folder(
 
     let reopened = ProjectDatabase::open(new_dir.join("project.db"), &device_uuid, mount_point.clone())
         .map_err(|e| format!("Failed to reopen project at new location: {}", e))?;
-    if let Err(e) = reopened.update_photo_paths_prefix(&old_rel, &new_rel) {
-        warn!("Could not rewrite dng_path after move: {}", e);
-    }
 
     let arc = Arc::new(reopened);
     state.registry.insert(project_id.to_string(), arc.clone());
@@ -330,7 +324,7 @@ fn edit_project_blocking(app: &AppHandle, state: &AppState, request: EditProject
             photos: db.as_ref(),
             files: state.file_store.as_ref(),
             finder_tags: state.finder_tags.as_ref(),
-            mount_point: &mount_point,
+            project_dir: &db.project_dir,
         }
         .execute(&photos, &current.name, &name)
         .map_err(AppError::from)?;
@@ -353,7 +347,7 @@ fn edit_project_blocking(app: &AppHandle, state: &AppState, request: EditProject
         let project_id = request.id.clone();
         let outcome = RewriteProjectDescription {
             metadata: state.metadata.as_ref(),
-            mount_point: &mount_point,
+            project_dir: &db.project_dir,
         }
         .execute(&photos, value.as_deref(), &|done, total| {
             let progress = EditProjectProgress { project_id: project_id.clone(), done, total };

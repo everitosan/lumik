@@ -10,8 +10,8 @@ use std::path::Path;
 
 pub struct RewriteProjectDescription<'a> {
     pub metadata: &'a dyn MetadataTool,
-    /// Mount point del proyecto: los `dng_path` son relativos a él.
-    pub mount_point: &'a Path,
+    /// Carpeta del proyecto: los `dng_path` son relativos a ella.
+    pub project_dir: &'a Path,
 }
 
 /// Resultado de la reescritura.
@@ -33,7 +33,7 @@ impl RewriteProjectDescription<'_> {
         let total = photos.len();
         let mut outcome = RewriteOutcome::default();
         for (i, photo) in photos.iter().enumerate() {
-            let file = self.mount_point.join(&photo.dng_path);
+            let file = self.project_dir.join(&photo.dng_path);
             match self.metadata.set_image_description(&file, description) {
                 Ok(()) => outcome.updated += 1,
                 Err(e) => outcome.failed.push(FailedFile {
@@ -88,9 +88,9 @@ mod tests {
 
     fn photos() -> Vec<PhotoFile> {
         vec![
-            PhotoFile { id: "a".into(), dng_path: "p/_media/a.cr3".into() },
-            PhotoFile { id: "b".into(), dng_path: "p/_culled/b.cr3".into() },
-            PhotoFile { id: "c".into(), dng_path: "p/_media/c.cr3".into() },
+            PhotoFile { id: "a".into(), dng_path: "_media/a.cr3".into() },
+            PhotoFile { id: "b".into(), dng_path: "_culled/b.cr3".into() },
+            PhotoFile { id: "c".into(), dng_path: "_media/c.cr3".into() },
         ]
     }
 
@@ -98,31 +98,31 @@ mod tests {
     fn writes_description_to_every_photo_with_progress() {
         let meta = FakeMetadata::new(None);
         let progress = RefCell::new(Vec::new());
-        let out = RewriteProjectDescription { metadata: &meta, mount_point: Path::new("/mnt") }
+        let out = RewriteProjectDescription { metadata: &meta, project_dir: Path::new("/mnt/lumik/p") }
             .execute(&photos(), Some("Playa@2024"), &|done, total| progress.borrow_mut().push((done, total)));
 
         assert_eq!(out.updated, 3);
         assert!(out.failed.is_empty());
         let written = meta.written.lock().unwrap();
-        assert_eq!(written[1], (PathBuf::from("/mnt/p/_culled/b.cr3"), Some("Playa@2024".into())));
+        assert_eq!(written[1], (PathBuf::from("/mnt/lumik/p/_culled/b.cr3"), Some("Playa@2024".into())));
         assert_eq!(*progress.borrow(), vec![(1, 3), (2, 3), (3, 3)]);
     }
 
     #[test]
     fn failures_are_collected_and_the_rest_continues() {
         let meta = FakeMetadata::new(Some("b.cr3"));
-        let out = RewriteProjectDescription { metadata: &meta, mount_point: Path::new("/mnt") }
+        let out = RewriteProjectDescription { metadata: &meta, project_dir: Path::new("/mnt/lumik/p") }
             .execute(&photos(), Some("Playa@2024"), &|_, _| {});
 
         assert_eq!(out.updated, 2);
         assert_eq!(out.failed.len(), 1);
-        assert_eq!(out.failed[0].path, "p/_culled/b.cr3");
+        assert_eq!(out.failed[0].path, "_culled/b.cr3");
     }
 
     #[test]
     fn empty_description_removes_it() {
         let meta = FakeMetadata::new(None);
-        RewriteProjectDescription { metadata: &meta, mount_point: Path::new("/mnt") }
+        RewriteProjectDescription { metadata: &meta, project_dir: Path::new("/mnt/lumik/p") }
             .execute(&photos(), None, &|_, _| {});
         assert!(meta.written.lock().unwrap().iter().all(|(_, d)| d.is_none()));
     }

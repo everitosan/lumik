@@ -22,7 +22,8 @@ pub struct ImportParams {
     pub video_paths: Vec<PathBuf>,
     pub project_id: String,
     pub project_name: String,
-    pub mount_point: PathBuf,
+    /// Carpeta del proyecto: las rutas de las fotos se guardan relativas a ella.
+    pub project_dir: PathBuf,
     /// `{project_dir}/_media`
     pub dest_folder: PathBuf,
     /// `{project_dir}/_video`
@@ -86,13 +87,22 @@ impl ImportPhotos<'_> {
             });
 
             let exif_map = self.metadata.extract_batch(&dng_files);
-            let inserts = build_photo_inserts(
+            let inserts = match build_photo_inserts(
                 &dng_files,
                 &exif_map,
                 &p.dest_folder,
-                &p.mount_point,
+                &p.project_dir,
                 &p.project_id,
-            );
+            ) {
+                Ok(inserts) => inserts,
+                Err(e) => {
+                    return Ok(ImportOutcome {
+                        successful: 0,
+                        failed_files: failed_all(&dng_files, &e),
+                        videos_copied,
+                    })
+                }
+            };
             let create_dtos: Vec<CreatePhoto> = inserts.iter().map(|(_, cp)| cp.clone()).collect();
 
             match self.photos.create_batch(&create_dtos) {
@@ -116,19 +126,8 @@ impl ImportPhotos<'_> {
                     (photos.len(), Vec::new())
                 }
                 Err(e) => {
-                    let all_failed = inserts
-                        .iter()
-                        .map(|(path, _)| FailedFile {
-                            name: path
-                                .file_name()
-                                .and_then(|n| n.to_str())
-                                .unwrap_or("unknown")
-                                .to_string(),
-                            path: path.to_string_lossy().to_string(),
-                            error: format!("Database error: {}", e),
-                        })
-                        .collect::<Vec<_>>();
-                    (0, all_failed)
+                    let paths: Vec<PathBuf> = inserts.iter().map(|(path, _)| path.clone()).collect();
+                    (0, failed_all(&paths, &format!("Database error: {}", e)))
                 }
             }
         };
@@ -141,16 +140,40 @@ impl ImportPhotos<'_> {
     }
 }
 
+/// Marca todas las fotos del lote como fallidas con el mismo motivo.
+fn failed_all(paths: &[PathBuf], error: &str) -> Vec<FailedFile> {
+    paths
+        .iter()
+        .map(|path| FailedFile {
+            name: path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string(),
+            path: path.to_string_lossy().to_string(),
+            error: error.to_string(),
+        })
+        .collect()
+}
+
 /// Construye los DTOs `CreatePhoto` a partir de las rutas movidas y la metadata
-/// EXIF extraída. Lógica pura salvo la lectura del tamaño del archivo (que es
-/// `None` si el archivo no existe, p.ej. en tests).
+/// EXIF extraída, con `dng_path` relativo a la carpeta del proyecto. Falla si
+/// `dest_folder` no está dentro de `project_dir`. Lógica pura salvo la lectura
+/// del tamaño del archivo (que es `None` si el archivo no existe, p.ej. en tests).
 fn build_photo_inserts(
     dng_files: &[PathBuf],
     exif_map: &HashMap<PathBuf, FileMetadata>,
     dest_folder: &Path,
-    mount_point: &Path,
+    project_dir: &Path,
     project_id: &str,
-) -> Vec<(PathBuf, CreatePhoto)> {
+) -> Result<Vec<(PathBuf, CreatePhoto)>, String> {
+    let dest_rel = dest_folder.strip_prefix(project_dir).map_err(|_| {
+        format!(
+            "El destino {} no está dentro del proyecto {}",
+            dest_folder.display(),
+            project_dir.display()
+        )
+    })?;
     let mut inserts = Vec::new();
     for dng_path in dng_files {
         let file_name = match dng_path.file_name().and_then(|n| n.to_str()) {
@@ -160,12 +183,7 @@ fn build_photo_inserts(
 
         let file_size = std::fs::metadata(dng_path).map(|m| m.len() as i64).ok();
         let meta = exif_map.get(dng_path).cloned().unwrap_or_default();
-        let relative_path = path_to_slash(
-            &dest_folder
-                .strip_prefix(mount_point)
-                .unwrap_or(dest_folder)
-                .join(&file_name),
-        );
+        let relative_path = path_to_slash(&dest_rel.join(&file_name));
         let original_format = dng_path
             .extension()
             .and_then(|e| e.to_str())
@@ -195,7 +213,7 @@ fn build_photo_inserts(
             },
         ));
     }
-    inserts
+    Ok(inserts)
 }
 
 /// Genera miniaturas en paralelo (acotado por CPUs, máx 8) vía `ImageProcessor`.
@@ -236,8 +254,8 @@ mod tests {
 
     #[test]
     fn build_inserts_maps_metadata_and_relative_path() {
-        let mount = Path::new("/mnt/disk");
-        let dest = mount.join("lumik/2024/06/15_boda/_media");
+        let project = Path::new("/mnt/disk/lumik/2024/06/15_boda");
+        let dest = project.join("_media");
         let dng = dest.join("IMG_0001.cr2");
 
         let mut exif = HashMap::new();
@@ -251,11 +269,14 @@ mod tests {
             },
         );
 
-        let inserts = build_photo_inserts(&[dng.clone()], &exif, &dest, mount, "proj1");
+        // Un destino fuera del proyecto no se guarda como ruta absoluta.
+        assert!(build_photo_inserts(&[dng.clone()], &exif, Path::new("/otro/_media"), project, "proj1").is_err());
+
+        let inserts = build_photo_inserts(&[dng.clone()], &exif, &dest, project, "proj1").unwrap();
         assert_eq!(inserts.len(), 1);
         let cp = &inserts[0].1;
-        // Path relativo al mount, con '/'.
-        assert_eq!(cp.dng_path, "lumik/2024/06/15_boda/_media/IMG_0001.cr2");
+        // Path relativo a la carpeta del proyecto, con '/'.
+        assert_eq!(cp.dng_path, "_media/IMG_0001.cr2");
         assert_eq!(cp.project_id, "proj1");
         assert_eq!(cp.device_uuid, "");
         assert_eq!(cp.original_format.as_deref(), Some("CR2"));
@@ -417,7 +438,7 @@ mod tests {
             video_paths: videos,
             project_id: "proj".into(),
             project_name: "Boda".into(),
-            mount_point: PathBuf::from("/mnt"),
+            project_dir: PathBuf::from("/mnt/lumik/x"),
             dest_folder: PathBuf::from("/mnt/lumik/x/_media"),
             video_dest_folder: PathBuf::from("/mnt/lumik/x/_video"),
             metadata: None,

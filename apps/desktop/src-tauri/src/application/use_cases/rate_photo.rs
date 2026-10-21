@@ -12,7 +12,9 @@ use std::path::{Path, PathBuf};
 pub struct RatePhoto<'a> {
     pub photos: &'a dyn PhotoRepository,
     pub finder_tags: &'a dyn FinderTagWriter,
-    /// Mount point del proyecto (los paths de foto son relativos a él).
+    /// Carpeta del proyecto (los paths de foto son relativos a ella).
+    pub project_dir: &'a Path,
+    /// Mount point del disco: raíz del índice de Spotlight.
     pub mount_point: &'a Path,
     /// Ajuste `finder_tags_sidecar`: si está desactivado, no se tocan sidecars.
     pub finder_tags_enabled: bool,
@@ -46,9 +48,9 @@ impl RatePhoto<'_> {
             None => return Ok(None),
         };
 
-        let mut targets: Vec<PathBuf> = vec![self.mount_point.join(&photo.dng_path)];
+        let mut targets: Vec<PathBuf> = vec![self.project_dir.join(&photo.dng_path)];
         if let Some(jpg) = &photo.jpg_path {
-            targets.push(self.mount_point.join(jpg));
+            targets.push(self.project_dir.join(jpg));
         }
 
         for target in &targets {
@@ -185,7 +187,7 @@ mod tests {
     #[test]
     fn saves_rating_normalizes_tags_and_syncs_sidecars() {
         let repo = FakePhotoRepo {
-            photo: make_photo("lumik/x/_media/IMG.dng", Some("lumik/x/_media/IMG.jpg")),
+            photo: make_photo("_media/IMG.dng", Some("_media/IMG.jpg")),
             rating_calls: Mutex::new(vec![]),
         };
         let finder = FakeFinderTags {
@@ -193,9 +195,11 @@ mod tests {
             spotlight_present: true,
         };
         let mount = Path::new("/mnt");
+        let dir = mount.join("lumik/x");
         let uc = RatePhoto {
             photos: &repo,
             finder_tags: &finder,
+            project_dir: &dir,
             mount_point: mount,
             finder_tags_enabled: true,
         };
@@ -210,8 +214,8 @@ mod tests {
         // Sidecar sincronizado para el DNG y el JPG.
         let syncs = finder.sync_calls.lock().unwrap();
         assert_eq!(syncs.len(), 2);
-        assert_eq!(syncs[0].0, mount.join("lumik/x/_media/IMG.dng"));
-        assert_eq!(syncs[1].0, mount.join("lumik/x/_media/IMG.jpg"));
+        assert_eq!(syncs[0].0, dir.join("_media/IMG.dng"));
+        assert_eq!(syncs[1].0, dir.join("_media/IMG.jpg"));
 
         // Índice Spotlight presente → pide invalidación.
         assert_eq!(spotlight, Some(mount.to_path_buf()));
@@ -220,7 +224,7 @@ mod tests {
     #[test]
     fn skips_sidecars_when_disabled_but_still_saves_rating() {
         let repo = FakePhotoRepo {
-            photo: make_photo("lumik/x/_media/IMG.dng", None),
+            photo: make_photo("_media/IMG.dng", None),
             rating_calls: Mutex::new(vec![]),
         };
         let finder = FakeFinderTags {
@@ -230,6 +234,7 @@ mod tests {
         let uc = RatePhoto {
             photos: &repo,
             finder_tags: &finder,
+            project_dir: Path::new("/mnt/lumik/x"),
             mount_point: Path::new("/mnt"),
             finder_tags_enabled: false,
         };
@@ -254,6 +259,7 @@ mod tests {
         let uc = RatePhoto {
             photos: &repo,
             finder_tags: &finder,
+            project_dir: Path::new("/mnt/lumik/x"),
             mount_point: Path::new("/mnt"),
             finder_tags_enabled: true,
         };

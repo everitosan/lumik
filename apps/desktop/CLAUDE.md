@@ -122,12 +122,13 @@ de rutas, migraciones) vive en `domain`/`application` con tests.
 
 2. **BD de Proyecto** (`{mount}/lumik/{año}/{mes}/{día}_{nombre}/project.db`):
    Una por proyecto, vive en el disco externo. Contiene las tablas `project`,
-   `photo` (paths relativos al mount point) y `project_settings`.
+   `photo` (paths relativos a la carpeta del proyecto) y `project_settings`.
 
 **Identidad:** un proyecto se identifica por `project.id`, en cualquier disco y
-plataforma; mover su carpeta a otro disco (dentro de `lumik/`) basta para que se
-liste desde ahí. El UUID del disco es local de cada máquina (macOS y Linux ven
-UUIDs distintos para el mismo exFAT) y solo sirve para localizar y expulsar.
+plataforma; copiar o mover su carpeta a cualquier ruta bajo `lumik/`, en el mismo
+disco o en otro, basta para que se liste y funcione desde ahí. El UUID del disco
+es local de cada máquina (macOS y Linux ven UUIDs distintos para el mismo exFAT)
+y solo sirve para localizar y expulsar.
 `photo.device_uuid` está obsoleto: las fotos nuevas lo guardan vacío y nada lo
 lee. Limitación: si el mismo `project.id` está en dos discos montados, solo se
 lista uno.
@@ -164,8 +165,12 @@ comando devuelve error "device not mounted".
 
 ## Reglas técnicas críticas
 
-- **Paths siempre relativos**: `dng_path` en BD es relativo al mount point. El path
-  absoluto se reconstruye en runtime con `{mount_point}/{dng_path}`.
+- **Paths siempre relativos al proyecto**: `dng_path` y `jpg_path` en BD son relativos
+  a la carpeta del proyecto (la del `project.db`), p. ej. `_media/IMG_0001.dng`. El path
+  absoluto se reconstruye en runtime con `ProjectDatabase::photo_file`
+  (`{project_dir}/{dng_path}`). Mover la carpeta del proyecto no toca la BD. Las BDs
+  con rutas viejas (relativas al mount point) se convierten al abrirlas, dejando antes
+  una copia `.project.db.pre-relative-paths` junto al `project.db`.
 - **`dng_path` refleja la ubicación real**: cuando una foto se cullea, `dng_path` se
   actualiza a `_culled/{filename}`. No hay campo separado "culled_path".
 - **`_media/` y `_culled/` son hermanas**: ambas viven directamente bajo el directorio

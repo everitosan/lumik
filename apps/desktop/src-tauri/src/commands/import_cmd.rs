@@ -19,9 +19,8 @@ pub struct ImportRequest {
     pub session_id: String,
     pub source_files: Vec<String>,
     pub project_id: String,
-    // El frontend también envía `device_uuid`; se ignora (las fotos ya no lo
-    // guardan y el disco se resuelve por `mount_point`).
-    pub mount_point: String,
+    // El frontend también envía `device_uuid` y `mount_point`; se ignoran (las
+    // fotos se guardan relativas a la carpeta del proyecto).
     pub project_name: String,
     /// Ajustes elegidos en el wizard para esta importación. Sin ellos se usan
     /// los globales.
@@ -90,7 +89,7 @@ pub async fn start_import(
         video_paths,
         project_id: request.project_id.clone(),
         project_name: request.project_name.clone(),
-        mount_point: PathBuf::from(&request.mount_point),
+        project_dir: project_db.project_dir.clone(),
         dest_folder: project_db.project_dir.join("_media"),
         video_dest_folder: project_db.project_dir.join("_video"),
         metadata: settings.metadata,

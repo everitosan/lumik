@@ -533,33 +533,6 @@ impl ProjectDatabase {
         Ok(())
     }
 
-    /// Rewrite every photo's relative `dng_path` (and `jpg_path`, when set) so the
-    /// leading `old_prefix` segment is swapped for `new_prefix`. Uses an exact
-    /// prefix match (not `LIKE`) so `_`/`%` characters in slugs aren't treated as
-    /// wildcards, and only rewrites paths that actually start with `old_prefix`.
-    /// `jpg_path` matters for deleted photos: `sync_exported` doesn't re-link them.
-    /// Returns how many `dng_path`s were rewritten.
-    pub fn update_photo_paths_prefix(&self, old_prefix: &str, new_prefix: &str) -> DbResult<usize> {
-        if old_prefix == new_prefix {
-            return Ok(0);
-        }
-        let conn = self.conn();
-        let old_len = old_prefix.chars().count() as i64;
-        let tx = conn.unchecked_transaction()?;
-        let n = tx.execute(
-            "UPDATE photo SET dng_path = ?1 || SUBSTR(dng_path, ?2) \
-             WHERE SUBSTR(dng_path, 1, ?3) = ?4",
-            params![new_prefix, old_len + 1, old_len, old_prefix],
-        )?;
-        tx.execute(
-            "UPDATE photo SET jpg_path = ?1 || SUBSTR(jpg_path, ?2) \
-             WHERE jpg_path IS NOT NULL AND SUBSTR(jpg_path, 1, ?3) = ?4",
-            params![new_prefix, old_len + 1, old_len, old_prefix],
-        )?;
-        tx.commit()?;
-        Ok(n)
-    }
-
     pub fn get_oldest_capture_date(&self) -> DbResult<Option<String>> {
         let conn = self.conn();
         conn.query_row(
