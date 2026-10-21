@@ -138,7 +138,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
 
   # ── Build macOS ────────────────────────────────────────────────────────────
-  # Binario universal (Apple Silicon + Intel) para macOS 10.15+. El runner es
+  # Binario universal (Apple Silicon + Intel) para macOS 12+. El runner es
   # arm64 y compila la porción x86_64 de forma cruzada; tauri la une con lipo.
   # Firma ad hoc (tauri.macos.conf.json): sin Developer ID ni notarización
   # mientras la app esté en beta.

@@ -326,7 +326,7 @@ Respaldo — cola: `set_pending_backup`, `clear_pending_backup`, `get_pending_ba
 | Archivar proyectos | ✓ Funcional (menú de la tarjeta + botón "Archivados" en el dashboard) |
 | Discos en macOS: detección inmediata (DiskArbitration) y expulsión del disco completo | ✓ Beta |
 | Discos de solo lectura (p. ej. NTFS en macOS): se listan con marca y aviso, sin abrir ni crear proyectos | ✓ Beta |
-| Paquete de macOS: `.dmg` universal (Intel + Apple Silicon, macOS 10.15+), firma ad hoc, exiftool incluido | ✓ Beta (sin notarizar) |
+| Paquete de macOS: `.dmg` universal (Intel + Apple Silicon, macOS 12+), firma ad hoc, exiftool incluido | ✓ Beta (sin notarizar) |
 | Operaciones en lote desde el grid | ✗ No implementado |
 | App iPad nativa | ✗ Planificado |
 

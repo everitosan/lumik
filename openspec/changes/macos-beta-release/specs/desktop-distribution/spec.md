@@ -14,14 +14,14 @@ Cada tag de versión SHALL publicar en su release de GitHub un paquete por plata
 - **THEN** su release contiene los paquetes de Linux, Windows y macOS, y la app de cada uno se reporta como versión `0.1.4-beta`
 
 ### Requirement: Paquete de macOS universal
-El `.dmg` de macOS SHALL contener una sola app que corra de forma nativa en Mac con procesador Intel y con Apple Silicon, en macOS 10.15 Catalina o posterior.
+El `.dmg` de macOS SHALL contener una sola app que corra de forma nativa en Mac con procesador Intel y con Apple Silicon, en macOS 12 Monterey o posterior. En versiones anteriores macOS SHALL impedir abrirla.
 
 #### Scenario: Mac con Apple Silicon
 - **WHEN** se abre la app del `.dmg` en una Mac con Apple Silicon
 - **THEN** corre de forma nativa, sin Rosetta
 
-#### Scenario: Mac Intel con Catalina
-- **WHEN** se abre la app del `.dmg` en una Mac Intel con macOS 10.15
+#### Scenario: Mac Intel con Monterey
+- **WHEN** se abre la app del `.dmg` en una Mac Intel con macOS 12
 - **THEN** la app arranca y lista los discos montados
 
 ### Requirement: Herramientas incluidas en el paquete

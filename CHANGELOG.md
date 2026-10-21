@@ -9,7 +9,7 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Añadido
 - **macOS (beta)**: Lumik se publica para macOS como `.dmg` universal, que corre
-  nativo en Mac Intel y Apple Silicon con macOS 10.15 Catalina o posterior. Trae
+  nativo en Mac Intel y Apple Silicon con macOS 12 Monterey o posterior. Trae
   exiftool incluido, así que no hace falta instalar nada más. Detecta los discos
   externos en cuanto se conectan, los expulsa desde la barra lateral y lista los
   de solo lectura (como NTFS) con un aviso. Los atajos con modificador usan Cmd
@@ -23,10 +23,11 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   ```
 
   O bien ábrela una vez, cierra el aviso y ve a Ajustes del Sistema →
-  Privacidad y seguridad → "Abrir igualmente" (en macOS 12 o anterior:
+  Privacidad y seguridad → "Abrir igualmente" (en macOS 12:
   Preferencias del Sistema → Seguridad y privacidad → General → "Abrir de todos
   modos"). Las siguientes aperturas no
-  muestran el aviso. La primera vez que Lumik lea un disco externo, macOS pedirá
+  muestran el aviso. Hazlo con la copia de Aplicaciones: el permiso dado a la
+  app abierta desde el `.dmg` no pasa a la copia. La primera vez que Lumik lea un disco externo, macOS pedirá
   permiso para acceder a volúmenes extraíbles: hay que permitirlo para ver sus
   proyectos.
 - **Ajustes de cada importación**: el wizard de importación tiene un paso nuevo,

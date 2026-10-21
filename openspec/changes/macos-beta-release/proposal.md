@@ -9,7 +9,7 @@ Lumik ya detecta y expulsa discos en macOS, y lista los de solo lectura, pero so
 - **exiftool dentro del `.app`**: la distribución Unix de exiftool (script Perl más `lib/`) va como recurso del bundle de macOS y se ejecuta con el Perl del sistema. Si falta, se busca en el PATH y en las rutas habituales de Homebrew. Lo usan el visor y las miniaturas (preview embebido de RAW) y la firma al importar.
 - **Atajos con Cmd en macOS**: un atajo guardado como `Ctrl+<tecla>` se dispara con Cmd en macOS y con Ctrl en el resto de plataformas. Ajustes lo muestra como `⌘<tecla>` en macOS. La captura de atajos en Ajustes guarda el modificador, que hoy se pierde: se guarda solo `e.key`.
 - **Permiso de volúmenes extraíbles**: el `Info.plist` lleva `NSRemovableVolumesUsageDescription` con un texto que explica para qué accede Lumik a los discos externos.
-- **Release de macOS**: nuevo job en `release.yml` que compila un binario universal (`aarch64` + `x86_64`) para macOS 10.15 Catalina o posterior, firmado ad hoc, y sube un `.dmg` al release del tag.
+- **Release de macOS**: nuevo job en `release.yml` que compila un binario universal (`aarch64` + `x86_64`) para macOS 12 Monterey o posterior, firmado ad hoc, y sube un `.dmg` al release del tag.
 - **Docs**: el ROADMAP saca macOS del backlog y corrige "embed en DNG". El CHANGELOG 0.1.4 explica cómo quitar la cuarentena del `.app` sin notarizar.
 - **Limpieza**: se quita `dnglab` (descartado porque la conversión a DNG era lenta; la metadata vive en la BD) del `externalBin` de Windows y de `binaries/`.
 

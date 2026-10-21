@@ -64,7 +64,7 @@ El valor guardado sigue siendo `Ctrl+<tecla>`, sin migración. `matchesKey` toma
 
 Tauri v2 fusiona sola la configuración `tauri.<plataforma>.conf.json`. Contiene:
 - `bundle.targets: ["app", "dmg"]`
-- `bundle.macOS.minimumSystemVersion: "10.15"`
+- `bundle.macOS.minimumSystemVersion: "12.0"` (era `10.15`; se subió tras la prueba en Catalina, ver Risks)
 - `bundle.macOS.signingIdentity: "-"` (firma ad hoc; Apple Silicon no ejecuta código sin firma)
 - `bundle.resources` con el mapeo de D1
 - `bundle.macOS.infoPlist` (o `Info.plist` junto a `tauri.conf.json`, que Tauri fusiona) con `NSRemovableVolumesUsageDescription`, en español e inglés si el formato lo permite, si no en español
@@ -90,7 +90,7 @@ Se quita `binaries/dnglab` del `externalBin` de Windows y se borran los tres bin
 
 - [Apple retira `/usr/bin/perl` en una versión futura de macOS] → El resolvedor cae al PATH y a Homebrew. Si pasa, se empaqueta un Perl relocalizable; Catalina, Monterey y Sequoia todavía lo traen.
 - [`exiftool.pl` de Windows con ajustes para el lanzador .exe] → La tarea 1.1 lo ejecuta con `/usr/bin/perl` y el `lib/` mínimo antes de construir nada encima; si falla, D1 pasa a la distribución Unix.
-- [La WebView de Catalina (Safari 13–15) no soporta CSS o JS que la UI usa (`:has()`, `aspect-ratio`, `gap` en flex o `structuredClone`)] → Prueba manual en Catalina en 5.2. Lo que falle se arregla en este change si es puntual; si la lista es larga, se sube `minimumSystemVersion` y se anota.
+- [La WebView de Catalina (Safari 13–15) no soporta CSS o JS que la UI usa (`:has()`, `aspect-ratio`, `gap` en flex o `structuredClone`)] → Prueba manual en Catalina en 5.2. Lo que falle se arregla en este change si es puntual; si la lista es larga, se sube `minimumSystemVersion` y se anota. *(Resultado de 5.2: en Catalina la app funciona pero la UI se ve mal; se subió el mínimo a macOS 12 Monterey, cuya WebView es la que se probó en 5.1.)*
 - [Permiso de volúmenes extraíbles negado] → El escaneo (`statfs`, `diskutil`) no necesita el permiso, pero leer `project.db` sí. Se verifica en 5.1 que negar no rompe la lista de discos ni la app.
 - [Firma ad hoc: Gatekeeper bloquea la primera apertura] → Es aceptado para el beta; las notas del release llevan las instrucciones.
 - [El `.dmg` crece unos 20 MB por exiftool] → Es aceptable; Windows ya carga 34 MB.
