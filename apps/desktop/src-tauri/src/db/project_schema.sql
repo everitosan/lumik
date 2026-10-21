@@ -37,7 +37,10 @@ CREATE TABLE IF NOT EXISTS photo (
     dng_path        TEXT NOT NULL,          -- Path RELATIVE to device mount point
     jpg_path        TEXT,                   -- Relative path to edited JPG (nullable)
 
-    -- Storage device UUID (resolved at runtime via scan_mounted_devices)
+    -- OBSOLETO: UUID del disco donde se importó. La identidad portable es
+    -- project.id y el disco se resuelve en runtime (scan_mounted_devices).
+    -- Las fotos nuevas guardan ''; las viejas conservan su valor, que no se lee.
+    -- Se conserva la columna para no migrar los project.db de los discos.
     device_uuid     TEXT NOT NULL,
 
     -- Source data
@@ -87,6 +90,7 @@ CREATE TABLE IF NOT EXISTS photo (
 );
 
 CREATE INDEX IF NOT EXISTS idx_photo_project  ON photo(project_id) WHERE deleted = 0;
+-- OBSOLETO junto con photo.device_uuid; se conserva para no migrar los project.db.
 CREATE INDEX IF NOT EXISTS idx_photo_device   ON photo(device_uuid);
 CREATE INDEX IF NOT EXISTS idx_photo_culled   ON photo(project_id, culled) WHERE deleted = 0;
 CREATE INDEX IF NOT EXISTS idx_photo_stars    ON photo(project_id, stars) WHERE deleted = 0;

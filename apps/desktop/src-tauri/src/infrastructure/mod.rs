@@ -7,6 +7,8 @@ pub mod backup_auth;
 pub mod backup_client;
 pub mod catalog;
 pub mod devices;
+#[cfg(target_os = "macos")]
+pub mod disk_arbitration;
 pub mod finder_tags;
 pub mod folder;
 pub mod fs;

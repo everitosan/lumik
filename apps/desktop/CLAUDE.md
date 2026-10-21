@@ -82,13 +82,14 @@ src-tauri/src/
                                     #   FileStore, PhotoRepository, ImportPipeline, ProgressReporter
     registry.rs                     #   ProjectRegistry (proyectos abiertos, ejecting, rotation-gen)
     use_cases/                      #   cull_photo, trash_photo, rate_photo, rotate_photo, import_photos,
-                                    #   ensure_catalog_synced, sync_exported (con tests de fakes)
+                                    #   eject_device, ensure_catalog_synced, sync_exported (con tests de fakes)
 
   infrastructure/                   # implementa los puertos (aquí vive el #[cfg] de plataforma)
     metadata.rs                     #   ExiftoolMetadata (desktop) / AndroidMetadata (rawler)
     imaging.rs                      #   DesktopImaging / AndroidImaging (thumbnails/previews)
     devices.rs, finder_tags.rs, folder.rs, fs.rs, progress.rs, import_pipeline.rs, persistence.rs
     backup_auth.rs, catalog.rs, backup_client.rs   # clientes HTTP del server de respaldo
+    disk_arbitration.rs             #   FFI mínimo de DiskArbitration (solo macOS): watcher y expulsión
 
   commands.rs                       # AppState + refresh_open_projects + declaración de submódulos
   commands/                         # comandos Tauri (adaptadores delgados) por dominio
@@ -97,7 +98,7 @@ src-tauri/src/
   db/                               # persistencia SQLite (GlobalDatabase / ProjectDatabase)
     mod.rs, models.rs, queries.rs (photo_from_row), migrations.rs, *_schema.sql
   devices.rs                        # scan_mounted_devices() por plataforma (sysinfo / /proc)
-  device_watch.rs                   # watcher nativo de hotplug
+  device_watch.rs                   # watcher nativo de hotplug (Linux mountinfo, Windows WMI, macOS DiskArbitration)
   apple_tags.rs                     # sidecars AppleDouble (desktop-only)
   exiftool.rs / exif_android.rs     # herramientas EXIF por plataforma
   import/                           # pipeline (passthrough → metadata → move), converter, xmp, progress
@@ -122,6 +123,14 @@ de rutas, migraciones) vive en `domain`/`application` con tests.
 2. **BD de Proyecto** (`{mount}/lumik/{año}/{mes}/{día}_{nombre}/project.db`):
    Una por proyecto, vive en el disco externo. Contiene las tablas `project`,
    `photo` (paths relativos al mount point) y `project_settings`.
+
+**Identidad:** un proyecto se identifica por `project.id`, en cualquier disco y
+plataforma; mover su carpeta a otro disco (dentro de `lumik/`) basta para que se
+liste desde ahí. El UUID del disco es local de cada máquina (macOS y Linux ven
+UUIDs distintos para el mismo exFAT) y solo sirve para localizar y expulsar.
+`photo.device_uuid` está obsoleto: las fotos nuevas lo guardan vacío y nada lo
+lee. Limitación: si el mismo `project.id` está en dos discos montados, solo se
+lista uno.
 
 **`AppState`** mantiene `global_db`, los puertos de infraestructura
 (`device_scanner`, `metadata`, `image_processor`, `finder_tags`, `file_store`) y
@@ -288,6 +297,7 @@ Respaldo — cola: `set_pending_backup`, `clear_pending_backup`, `get_pending_ba
 | Respaldo de `_exported` en la nube (cuenta, modal, cola offline) | ✓ Beta |
 | Seguimiento de respaldos en la barra lateral (tarjetas, reintentar, descartar, confirmación al cerrar) | ✓ Beta (en Android la barra empieza colapsada) |
 | Archivar proyectos | ✓ Funcional (menú de la tarjeta + botón "Archivados" en el dashboard) |
+| Discos en macOS: detección inmediata (DiskArbitration) y expulsión del disco completo | ✓ Beta |
 | Operaciones en lote desde el grid | ✗ No implementado |
 | App iPad nativa | ✗ Planificado |
 

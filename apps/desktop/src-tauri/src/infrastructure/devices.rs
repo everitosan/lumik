@@ -16,6 +16,42 @@ impl DeviceScanner for SystemDeviceScanner {
     fn eject(&self, device_uuid: &str, mount_point: &str) -> Result<(), String> {
         os_eject(device_uuid, mount_point)
     }
+
+    fn devices_on_same_physical_disk(&self, device_uuid: &str) -> Vec<String> {
+        #[cfg(target_os = "macos")]
+        {
+            if let Some(uuids) = macos_devices_on_same_disk(&self.scan(), device_uuid) {
+                return uuids;
+            }
+        }
+        vec![device_uuid.to_string()]
+    }
+}
+
+/// macOS: dispositivos escaneados cuyo disco completo (BSD name, p. ej.
+/// `disk4`) coincide con el de `device_uuid`. `None` si no se puede resolver.
+#[cfg(target_os = "macos")]
+fn macos_devices_on_same_disk(devices: &[DetectedDevice], device_uuid: &str) -> Option<Vec<String>> {
+    use crate::infrastructure::disk_arbitration::Session;
+    use std::path::Path;
+
+    let session = Session::new_on_current_run_loop()?;
+    let whole_name = |mount: &str| {
+        session
+            .disk_for_volume(Path::new(mount))
+            .and_then(|d| d.whole_disk())
+            .and_then(|w| w.bsd_name())
+    };
+
+    let target = devices.iter().find(|d| d.uuid == device_uuid)?;
+    let target_whole = whole_name(&target.mount_point)?;
+    Some(
+        devices
+            .iter()
+            .filter(|d| whole_name(&d.mount_point).as_deref() == Some(target_whole.as_str()))
+            .map(|d| d.uuid.clone())
+            .collect(),
+    )
 }
 
 /// Expulsión de volumen específica de plataforma. Cierra/desmonta el volumen en
@@ -85,9 +121,62 @@ fn os_eject(device_uuid: &str, mount_point: &str) -> Result<(), String> {
         Ok(())
     }
 
-    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "android")))]
+    #[cfg(target_os = "macos")]
     {
-        // macOS y otros: fuera del alcance actual. Handles liberados; se trata como ok.
+        // DiskArbitration entrega sus callbacks en el run loop del hilo que espera.
+        // `eject_device` es un comando síncrono y Tauri lo ejecuta en el hilo
+        // principal, así que la espera corre en un hilo propio.
+        let mount = mount_point.to_string();
+        std::thread::spawn(move || eject_macos(&mount))
+            .join()
+            .map_err(|_| "Eject thread panicked".to_string())?
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "android", target_os = "macos")))]
+    {
+        // Otras plataformas: fuera del alcance. Handles liberados; se trata como ok.
         Ok(())
     }
+}
+
+/// macOS: desmonta todos los volúmenes del disco físico que contiene
+/// `mount_point` y lo expulsa para que sea seguro retirarlo.
+#[cfg(target_os = "macos")]
+fn eject_macos(mount_point: &str) -> Result<(), String> {
+    use crate::infrastructure::disk_arbitration::{self as da, DiskOpResult};
+    use std::time::Duration;
+
+    const TIMEOUT: Duration = Duration::from_secs(30);
+
+    let session = da::Session::new_on_current_run_loop()
+        .ok_or_else(|| "Could not start DiskArbitration session".to_string())?;
+    let Some(volume) = session.disk_for_volume(std::path::Path::new(mount_point)) else {
+        // El volumen ya no existe: se considera expulsado.
+        log::info!("eject_macos: {} is no longer mounted", mount_point);
+        return Ok(());
+    };
+    let whole = volume
+        .whole_disk()
+        .ok_or_else(|| format!("Could not resolve the physical disk of {}", mount_point))?;
+
+    match da::unmount_whole_disk(&whole, TIMEOUT) {
+        DiskOpResult::Done => {}
+        DiskOpResult::Dissented { status, .. } if status == da::K_DA_RETURN_NOT_MOUNTED => {}
+        DiskOpResult::Dissented { status, message } => {
+            let reason = da::status_message(status);
+            return Err(match message {
+                Some(detail) => format!("Could not unmount device: {} ({})", reason, detail),
+                None => format!("Could not unmount device: {}", reason),
+            });
+        }
+        DiskOpResult::TimedOut => return Err("Could not unmount device: timed out".to_string()),
+    }
+
+    // Ya desmontado: es seguro retirarlo aunque la expulsión falle (como el
+    // `power-off` de Linux, cuyo resultado se ignora).
+    match da::eject_disk(&whole, TIMEOUT) {
+        DiskOpResult::Done => {}
+        other => log::warn!("eject_macos: unmounted {} but eject failed: {:?}", mount_point, other),
+    }
+    Ok(())
 }

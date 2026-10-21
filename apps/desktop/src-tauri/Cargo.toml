@@ -61,6 +61,12 @@ windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32
 # Windows: WMI subscription to Win32_VolumeChangeEvent (native device watcher)
 wmi = "0.14"
 
+# macOS: CoreFoundation (run loop, CFString/CFDictionary) for the DiskArbitration
+# watcher and eject. DiskArbitration itself is linked directly via FFI.
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+core-foundation-sys = "0.8"
+
 [profile.dev]
 incremental = true
 

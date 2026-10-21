@@ -150,7 +150,13 @@ pub trait ImageProcessor {
     fn make_thumbnail(&self, src: &Path, dest: &Path, rotation: Rotation) -> AppResult<()>;
     fn rotate_thumbnail(&self, thumb: &Path, delta: Rotation) -> AppResult<()>;
 }
-pub trait DeviceScanner { fn scan(&self) -> Vec<Device>; fn eject(&self, uuid: &str, mount: &Path) -> AppResult<()>; }
+pub trait DeviceScanner {
+    fn scan(&self) -> Vec<Device>;
+    fn eject(&self, uuid: &str, mount: &Path) -> AppResult<()>;
+    /// Dispositivos que comparten disco físico (macOS desmonta el disco completo).
+    /// Por defecto, solo el propio `uuid`.
+    fn devices_on_same_physical_disk(&self, uuid: &str) -> Vec<String> { vec![uuid.into()] }
+}
 pub trait FinderTagWriter { fn sync(&self, target: &Path, colors: &[MacColor]) -> AppResult<()>; fn move_sidecar(&self, from: &Path, to: &Path) -> AppResult<()>; }
 pub trait ProgressReporter { fn progress(&self, p: ImportProgress); fn log(&self, session: &str, msg: &str); }
 ```
@@ -241,6 +247,10 @@ Colapsar el `#[cfg]` de plataforma al *composition root*.
 - [x] `DeviceScanner`: `SystemDeviceScanner` envuelve `devices.rs` + `os_eject`
       relocado; cableado en AppState + composition root. `#[cfg]` de eject fuera
       de `commands.rs`.
+      `devices_on_same_physical_disk` (por defecto, solo el propio dispositivo;
+      en macOS, las particiones del mismo disco físico vía DiskArbitration) lo usa
+      el caso de uso `EjectDevice` (`use_cases/eject_device.rs`, con tests de
+      fakes) para cerrar las BDs de todas las particiones antes de expulsar.
 - [x] `MetadataTool`: `ExiftoolMetadata` (desktop) + `AndroidMetadata` (rawler/exif_android).
   - [x] Tests de caracterización contra fixtures reales (`tests/fixtures/*.jpg`
         con EXIF conocido): correctitud + idempotencia. Mejor que un fake.

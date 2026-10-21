@@ -44,7 +44,7 @@ flowchart TD
     s1["Paso 1 — Origen: seleccionar archivos<br/>• Clic en 'Browse' o arrastrar archivos (DropZone)<br/>• Validar extensiones: RAW, DNG, JPEG, video (MP4, MOV…)<br/>• Mostrar FileList con tamaño total acumulado"]
     s2["Paso 2 — Ajustes de esta importación<br/>• Precargados de AppSettings + metadatos del fotógrafo<br/>• Renombrar sí/no (ejemplo con el nombre del proyecto)<br/>• Firmar sí/no + autor, copyright, URL editables<br/>• Restablecer a la configuración global<br/>• No modifica la configuración global"]
     s3["Paso 3 — Confirmar e iniciar<br/>• Resumen: N fotos + M videos, proyecto, disco,<br/>espacio libre, renombrado y firma elegidos<br/>• Botón desactivado si no hay espacio suficiente<br/>• Usuario confirma → genera session_id único"]
-    invoke["api.startImport()<br/>listen('import-progress') + invoke('start_import', ImportRequest)<br/>{ session_id, source_files[], project_id,<br/>device_uuid, mount_point, project_name, settings? }"]
+    invoke["api.startImport()<br/>listen('import-progress') + invoke('start_import', ImportRequest)<br/>{ session_id, source_files[], project_id,<br/>device_uuid (ignorado en Rust), mount_point,<br/>project_name, settings? }"]
     next(["continúa en §2"])
 
     n_uri["Android: DocumentsUI devuelve<br/>content://… URIs<br/>→ resolveContentUri()<br/>→ /storage/{UUID}/DCIM/…"]
@@ -126,14 +126,14 @@ flowchart TD
 ```mermaid
 flowchart TD
     plat_q{"Plataforma"}
-    exif_desktop["Linux / Windows<br/>exiftool -csv batch sobre todos los archivos<br/>Extrae: Width, Height, DateTimeOriginal, Make, Model,<br/>ISO, FNumber, ExposureTime, FocalLength, LensModel,<br/>IFD0:Orientation → rotation°<br/>capture_date: DateTimeOriginal → CreateDate → ModifyDate<br/>Headers parseados dinámicamente — exiftool omite<br/>columnas vacías del batch → HashMap"]
+    exif_desktop["Linux / Windows / macOS<br/>exiftool -csv batch sobre todos los archivos<br/>Extrae: Width, Height, DateTimeOriginal, Make, Model,<br/>ISO, FNumber, ExposureTime, FocalLength, LensModel,<br/>IFD0:Orientation → rotation°<br/>capture_date: DateTimeOriginal → CreateDate → ModifyDate<br/>Headers parseados dinámicamente — exiftool omite<br/>columnas vacías del batch → HashMap"]
     exif_android["Android<br/>exif_android::extract_exif_metadata_batch()<br/>RAW: crate rawler → RawMetadata.exif.orientation → rotation°<br/>JPEG: crate kamadak-exif → tag Orientation → rotation°<br/>(rawler no soporta JPEGs de cámaras de teléfono)<br/>→ HashMap"]
     merge_exif["HashMap (incl. rotation) disponible<br/>para todos los archivos"]
     dtos["Construir CreatePhoto DTOs<br/>dng_path · original_format · capture_date · dimensiones ·<br/>ISO · apertura · velocidad · longitud focal · lente · rotation"]
-    insert["project_db.create_photos_batch() — transacción SQLite única<br/>• Genera UUID por foto<br/>• INSERT INTO photo (id, project_id, dng_path, device_uuid,<br/>original_camera, original_format, capture_date, width, height,<br/>file_size_bytes, iso, aperture, shutter_speed, focal_length,<br/>lens_model, rotation)<br/>• Commit en éxito · Rollback en error, sin inserciones parciales"]
+    insert["project_db.create_photos_batch() — transacción SQLite única<br/>• Genera UUID por foto<br/>• INSERT INTO photo (id, project_id, dng_path,<br/>device_uuid = '' (obsoleto: el disco se resuelve<br/>en runtime por mount_point), original_camera, original_format, capture_date, width, height,<br/>file_size_bytes, iso, aperture, shutter_speed, focal_length,<br/>lens_model, rotation)<br/>• Commit en éxito · Rollback en error, sin inserciones parciales"]
     next(["continúa en §5"])
 
-    plat_q -->|Linux/Win| exif_desktop --> merge_exif
+    plat_q -->|Escritorio| exif_desktop --> merge_exif
     plat_q -->|Android| exif_android --> merge_exif
     merge_exif --> dtos --> insert --> next
 

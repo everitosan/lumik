@@ -263,6 +263,13 @@ pub trait DeviceScanner: Send + Sync {
     /// Desmonta / expulsa el volumen en `mount_point`. Las conexiones SQLite del
     /// dispositivo deben liberarse ANTES de llamar a esto.
     fn eject(&self, device_uuid: &str, mount_point: &str) -> Result<(), String>;
+
+    /// UUIDs de los dispositivos montados que comparten disco físico con
+    /// `device_uuid` (incluido él mismo). Solo importa donde `eject` desmonta el
+    /// disco completo (macOS); por defecto, solo el propio dispositivo.
+    fn devices_on_same_physical_disk(&self, device_uuid: &str) -> Vec<String> {
+        vec![device_uuid.to_string()]
+    }
 }
 
 /// Metadata EXIF extraída de un archivo de imagen. `rotation` en grados

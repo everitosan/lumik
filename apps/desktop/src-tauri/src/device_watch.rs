@@ -6,10 +6,14 @@
 //! frontend already listens for that event and re-scans, so the watcher only
 //! needs to *signal* a change — `scan_mounted_devices` remains the source of truth.
 //!
-//! Android has no native listener here and keeps the frontend polling fallback.
+//! Linux, Windows and macOS have native listeners. Android has none and keeps
+//! the frontend polling fallback.
 
+#[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
 use log::{info, warn};
-use tauri::{AppHandle, Emitter};
+#[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
+use tauri::Emitter;
+use tauri::AppHandle;
 
 /// Spawn the platform device watcher on a background thread.
 /// No-op on platforms without a listener (Android, others), which rely on the
@@ -23,10 +27,89 @@ pub fn start(app: AppHandle) {
     {
         std::thread::spawn(move || watch_windows(app));
     }
-    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    #[cfg(target_os = "macos")]
+    {
+        std::thread::spawn(move || watch_macos(app));
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     {
         let _ = app; // Android & others: frontend polling handles detection.
     }
+}
+
+/// macOS: DiskArbitration session on this thread's own CFRunLoop. A volume
+/// mount/unmount changes the disk's `VolumePath` description key, and a
+/// physical removal fires the disappeared callback. `DiskAppeared` is not used:
+/// it fires before the volume is mounted, so a scan would not see it yet.
+#[cfg(target_os = "macos")]
+fn watch_macos(app: AppHandle) {
+    use crate::infrastructure::disk_arbitration as da;
+    use core_foundation::array::CFArray;
+    use core_foundation::base::TCFType;
+    use core_foundation::string::CFString;
+    use std::ffi::c_void;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::Duration;
+
+    struct WatchContext {
+        app: AppHandle,
+        generation: AtomicU64,
+    }
+
+    // Debounce: a single plug/eject fires several callbacks (one per volume and
+    // per key). Each schedules a delayed emit; only the latest one fires.
+    fn schedule_emit(context: *mut c_void) {
+        // The context is leaked in `watch_macos`, so it is valid for 'static.
+        let ctx: &'static WatchContext = unsafe { &*(context as *const WatchContext) };
+        let generation = ctx.generation.fetch_add(1, Ordering::SeqCst) + 1;
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            if ctx.generation.load(Ordering::SeqCst) == generation {
+                let _ = ctx.app.emit("devices-changed", ());
+            }
+        });
+    }
+
+    extern "C" fn on_description_changed(_disk: da::DADiskRef, _keys: core_foundation_sys::array::CFArrayRef, context: *mut c_void) {
+        schedule_emit(context);
+    }
+
+    extern "C" fn on_disappeared(_disk: da::DADiskRef, context: *mut c_void) {
+        schedule_emit(context);
+    }
+
+    let session = match da::Session::new_on_current_run_loop() {
+        Some(s) => s,
+        None => {
+            warn!("device_watch(macos): DASessionCreate failed, relying on polling");
+            return;
+        }
+    };
+
+    // Leaked: lives for the whole process, like this thread; callbacks read it.
+    let context: &'static WatchContext = Box::leak(Box::new(WatchContext {
+        app,
+        generation: AtomicU64::new(0),
+    }));
+    let context = context as *const WatchContext as *mut c_void;
+
+    let volume_path_key = unsafe { CFString::wrap_under_get_rule(da::kDADiskDescriptionVolumePathKey) };
+    let watch_keys = CFArray::from_CFTypes(&[volume_path_key]);
+    unsafe {
+        da::DARegisterDiskDescriptionChangedCallback(
+            session.as_raw(),
+            std::ptr::null(),
+            watch_keys.as_concrete_TypeRef(),
+            on_description_changed,
+            context,
+        );
+        da::DARegisterDiskDisappearedCallback(session.as_raw(), std::ptr::null(), on_disappeared, context);
+    }
+    info!("device_watch(macos): watching DiskArbitration for volume mount changes");
+
+    // Blocks for the lifetime of the app; callbacks run on this thread.
+    unsafe { core_foundation_sys::runloop::CFRunLoopRun() };
+    warn!("device_watch(macos): run loop exited, relying on polling");
 }
 
 /// Linux: the kernel marks `/proc/self/mountinfo` with POLLPRI/POLLERR whenever

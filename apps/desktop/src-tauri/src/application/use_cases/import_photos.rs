@@ -22,7 +22,6 @@ pub struct ImportParams {
     pub video_paths: Vec<PathBuf>,
     pub project_id: String,
     pub project_name: String,
-    pub device_uuid: String,
     pub mount_point: PathBuf,
     /// `{project_dir}/_media`
     pub dest_folder: PathBuf,
@@ -93,7 +92,6 @@ impl ImportPhotos<'_> {
                 &p.dest_folder,
                 &p.mount_point,
                 &p.project_id,
-                &p.device_uuid,
             );
             let create_dtos: Vec<CreatePhoto> = inserts.iter().map(|(_, cp)| cp.clone()).collect();
 
@@ -152,7 +150,6 @@ fn build_photo_inserts(
     dest_folder: &Path,
     mount_point: &Path,
     project_id: &str,
-    device_uuid: &str,
 ) -> Vec<(PathBuf, CreatePhoto)> {
     let mut inserts = Vec::new();
     for dng_path in dng_files {
@@ -179,7 +176,9 @@ fn build_photo_inserts(
             CreatePhoto {
                 project_id: project_id.to_string(),
                 dng_path: relative_path,
-                device_uuid: device_uuid.to_string(),
+                // Obsoleto: la foto no se ata al disco donde vive (identidad
+                // portable del proyecto). Columna NOT NULL, se guarda vacía.
+                device_uuid: String::new(),
                 original_camera: meta.camera,
                 original_format,
                 capture_date: meta.capture_date,
@@ -252,13 +251,13 @@ mod tests {
             },
         );
 
-        let inserts = build_photo_inserts(&[dng.clone()], &exif, &dest, mount, "proj1", "devA");
+        let inserts = build_photo_inserts(&[dng.clone()], &exif, &dest, mount, "proj1");
         assert_eq!(inserts.len(), 1);
         let cp = &inserts[0].1;
         // Path relativo al mount, con '/'.
         assert_eq!(cp.dng_path, "lumik/2024/06/15_boda/_media/IMG_0001.cr2");
         assert_eq!(cp.project_id, "proj1");
-        assert_eq!(cp.device_uuid, "devA");
+        assert_eq!(cp.device_uuid, "");
         assert_eq!(cp.original_format.as_deref(), Some("CR2"));
         assert_eq!(cp.original_camera.as_deref(), Some("Canon EOS R5"));
         assert_eq!(cp.iso, Some(400));
@@ -418,7 +417,6 @@ mod tests {
             video_paths: videos,
             project_id: "proj".into(),
             project_name: "Boda".into(),
-            device_uuid: "dev".into(),
             mount_point: PathBuf::from("/mnt"),
             dest_folder: PathBuf::from("/mnt/lumik/x/_media"),
             video_dest_folder: PathBuf::from("/mnt/lumik/x/_video"),
