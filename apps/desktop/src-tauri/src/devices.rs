@@ -10,6 +10,9 @@ pub struct DetectedDevice {
     pub total_bytes: Option<u64>,
     pub available_bytes: Option<u64>,
     pub fs_type: String,
+    /// The OS mounted the volume without write access (e.g. NTFS on macOS).
+    /// Lumik lists it but doesn't open or create projects on it.
+    pub read_only: bool,
 }
 
 /// Scan for mounted removable/external devices, cross-platform.
@@ -34,6 +37,8 @@ pub fn scan_mounted_devices() -> Vec<DetectedDevice> {
                 None => continue,
             };
 
+            let read_only = is_read_only(&mount_point);
+
             let name = get_volume_label(disk)
                 .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| generate_device_name(&mount_point));
@@ -45,6 +50,7 @@ pub fn scan_mounted_devices() -> Vec<DetectedDevice> {
                 total_bytes: Some(disk.total_space()),
                 available_bytes: Some(disk.available_space()),
                 fs_type: disk.file_system().to_string_lossy().to_string(),
+                read_only,
             });
         }
 
@@ -106,6 +112,7 @@ fn scan_mounted_devices_android() -> Vec<DetectedDevice> {
             total_bytes,
             available_bytes,
             fs_type: fs_type.to_string(),
+            read_only: false,
         });
     }
 
@@ -178,6 +185,54 @@ fn should_skip_disk(disk: &sysinfo::Disk) -> bool {
     }
 
     false
+}
+
+/// Whether the volume at `mount_point` is mounted read-only. Unknown → `false`
+/// (same as before: SQLite's write error still surfaces).
+fn is_read_only(mount_point: &str) -> bool {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        let Ok(c_path) = std::ffi::CString::new(mount_point) else {
+            return false;
+        };
+        let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+        let ret = unsafe { libc::statvfs(c_path.as_ptr(), &mut stat) };
+        ret == 0 && (stat.f_flag as u64 & libc::ST_RDONLY as u64) != 0
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::ffi::OsStr;
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Storage::FileSystem::GetVolumeInformationW;
+        // winnt.h; kept local to avoid enabling another windows-sys feature.
+        const FILE_READ_ONLY_VOLUME: u32 = 0x0008_0000;
+
+        let mut root: Vec<u16> = OsStr::new(mount_point).encode_wide().collect();
+        if root.last().copied() != Some(b'\\' as u16) {
+            root.push(b'\\' as u16);
+        }
+        root.push(0);
+
+        let mut flags: u32 = 0;
+        let ok = unsafe {
+            GetVolumeInformationW(
+                root.as_ptr(),
+                std::ptr::null_mut(),
+                0,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut flags,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        ok != 0 && flags & FILE_READ_ONLY_VOLUME != 0
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        let _ = mount_point;
+        false
+    }
 }
 
 /// Get the filesystem UUID for a disk (platform-specific).
@@ -297,12 +352,37 @@ fn get_device_uuid_windows(disk: &sysinfo::Disk) -> Option<String> {
 
 #[cfg(target_os = "macos")]
 fn get_device_uuid_macos(disk: &sysinfo::Disk) -> Option<String> {
+    // diskutil info outputs UUID for mounted volumes. Volumes mounted by the
+    // native NTFS driver (`ntfs://disk4s4/Photos`, type lifs) can't be looked up
+    // by mount point, so fall back to the BSD identifier of the mounted device.
+    let mount = disk.mount_point().to_string_lossy().to_string();
+    diskutil_volume_uuid(&mount).or_else(|| {
+        let bsd = bsd_disk_id(&mounted_from(&mount)?)?;
+        diskutil_volume_uuid(&bsd)
+    })
+}
+
+/// Device the volume is mounted from (`f_mntfromname`, as `mount` prints it):
+/// `/dev/disk4s4` or `ntfs://disk4s4/Photos`. sysinfo's `Disk::name()` is the
+/// volume label on macOS, so it can't be used for this.
+#[cfg(target_os = "macos")]
+fn mounted_from(mount_point: &str) -> Option<String> {
+    let c_path = std::ffi::CString::new(mount_point).ok()?;
+    let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
+    if unsafe { libc::statfs(c_path.as_ptr(), &mut stat) } != 0 {
+        return None;
+    }
+    let from = unsafe { std::ffi::CStr::from_ptr(stat.f_mntfromname.as_ptr()) };
+    Some(from.to_string_lossy().into_owned())
+}
+
+/// `VolumeUUID` from `diskutil info -plist <target>` (mount point or BSD id).
+#[cfg(target_os = "macos")]
+fn diskutil_volume_uuid(target: &str) -> Option<String> {
     use std::process::Command;
 
-    // diskutil info outputs UUID for mounted volumes
-    let mount = disk.mount_point().to_string_lossy().to_string();
     let output = Command::new("diskutil")
-        .args(["info", "-plist", &mount])
+        .args(["info", "-plist", target])
         .output()
         .ok()?;
 
@@ -329,6 +409,23 @@ fn get_device_uuid_macos(disk: &sysinfo::Disk) -> Option<String> {
     }
 
     None
+}
+
+/// BSD identifier of a partition (`disk4s4`) inside a macOS mounted-from name
+/// such as `/dev/disk4s4` or `ntfs://disk4s4/Photos`.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn bsd_disk_id(device_name: &str) -> Option<String> {
+    device_name
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .find(|seg| {
+            let Some(rest) = seg.strip_prefix("disk") else { return false };
+            let Some((disk, part)) = rest.split_once('s') else { return false };
+            !disk.is_empty()
+                && !part.is_empty()
+                && disk.bytes().all(|b| b.is_ascii_digit())
+                && part.bytes().all(|b| b.is_ascii_digit())
+        })
+        .map(str::to_string)
 }
 
 /// Get the volume label for a disk (platform-specific).
@@ -485,11 +582,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn bsd_disk_id_from_device_names() {
+        assert_eq!(bsd_disk_id("ntfs://disk4s4/Photos").as_deref(), Some("disk4s4"));
+        assert_eq!(bsd_disk_id("/dev/disk2s1").as_deref(), Some("disk2s1"));
+        assert_eq!(bsd_disk_id("map auto_home"), None);
+        assert_eq!(bsd_disk_id("/dev/disk3"), None);
+    }
+
+    #[test]
     fn test_scan_devices() {
         let devices = scan_mounted_devices();
         println!("Found {} devices:", devices.len());
         for device in &devices {
-            println!("  {} ({}) at {}", device.name, device.uuid, device.mount_point);
+            println!(
+                "  {} ({}) at {} read_only={}",
+                device.name, device.uuid, device.mount_point, device.read_only
+            );
         }
     }
 }
+

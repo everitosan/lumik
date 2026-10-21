@@ -106,6 +106,7 @@ mod tests {
             total_bytes: None,
             available_bytes: None,
             fs_type: "exfat".into(),
+            read_only: false,
         }
     }
 

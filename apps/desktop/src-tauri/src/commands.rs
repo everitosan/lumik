@@ -82,6 +82,12 @@ pub fn refresh_open_projects(
             &device.mount_point,
         );
 
+        // Read-only volumes (e.g. NTFS on macOS) are listed, but their projects
+        // aren't opened: opening a project.db writes (WAL, migrations).
+        if device.read_only {
+            continue;
+        }
+
         // Discover project databases on this device
         let projects = discover_projects_on_device(&device.mount_point, &device.uuid);
         for project_db in projects {
@@ -90,6 +96,65 @@ pub fn refresh_open_projects(
                 registry.insert(id, Arc::new(project_db));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::devices::DetectedDevice;
+
+    struct FakeScanner(Vec<DetectedDevice>);
+
+    impl DeviceScanner for FakeScanner {
+        fn scan(&self) -> Vec<DetectedDevice> {
+            self.0.clone()
+        }
+        fn eject(&self, _uuid: &str, _mount: &str) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    fn device(uuid: &str, mount: &std::path::Path, read_only: bool) -> DetectedDevice {
+        DetectedDevice {
+            uuid: uuid.into(),
+            name: uuid.into(),
+            mount_point: mount.to_string_lossy().into_owned(),
+            total_bytes: None,
+            available_bytes: None,
+            fs_type: "ntfs".into(),
+            read_only,
+        }
+    }
+
+    #[test]
+    fn read_only_devices_are_registered_but_their_projects_are_not_opened() {
+        let root = std::env::temp_dir().join(format!("lumik_ro_{}", uuid::Uuid::new_v4().as_simple()));
+        let rw = root.join("rw");
+        let ro = root.join("ro");
+        let ro_project = ro.join("lumik/2026/10/10_sesion");
+        for (mount, id) in [(&rw, "p-rw"), (&ro, "p-ro")] {
+            let dir = mount.join("lumik/2026/10/10_sesion");
+            ProjectDatabase::create(dir.join("project.db"), id, "Sesion", "c", None, None, "", mount.clone())
+                .unwrap();
+        }
+        // Lo que deja la creación no cuenta: solo importa si el escaneo abre la BD.
+        for f in ["project.db-wal", "project.db-shm"] {
+            let _ = std::fs::remove_file(ro_project.join(f));
+        }
+
+        let global = Arc::new(GlobalDatabase::new(root.join("lumik.db")).unwrap());
+        let registry = ProjectRegistry::new();
+        let scanner = FakeScanner(vec![device("RW", &rw, false), device("RO", &ro, true)]);
+        refresh_open_projects(&scanner, &global, &registry);
+
+        assert!(registry.contains("p-rw"));
+        assert!(!registry.contains("p-ro"));
+        assert!(!ro_project.join("project.db-wal").exists());
+        let known: Vec<String> = global.get_known_devices().unwrap().into_iter().map(|d| d.uuid).collect();
+        assert!(known.contains(&"RO".to_string()), "el disco de solo lectura se registra igual");
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
 

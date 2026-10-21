@@ -12,6 +12,9 @@ export interface DriveInfoProps {
   /** When provided, an eject button is shown. Receives no args; the parent
    *  knows which device this is. Should resolve once the OS eject completes. */
   onEject?: () => Promise<void> | void;
+  /** The OS mounted the drive read-only: shows a badge whose tooltip explains
+   *  that projects can't be opened or created on it. */
+  readOnly?: boolean;
   className?: string;
   style?: CSSProperties;
 }
@@ -43,6 +46,18 @@ const nameStyles: CSSProperties = {
   fontSize: '14px',
   fontWeight: 500,
   color: 'var(--lumik-on-surface, #e5e2e1)',
+};
+
+const readOnlyBadgeStyles: CSSProperties = {
+  alignSelf: 'flex-start',
+  padding: '1px 6px',
+  borderRadius: 'var(--lumik-radius-sm, 4px)',
+  border: '1px solid var(--lumik-outline, #8c90a0)',
+  fontFamily: 'var(--lumik-font-primary, Inter)',
+  fontSize: '10px',
+  fontWeight: 500,
+  color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+  cursor: 'help',
 };
 
 const statusDotStyles = (connected: boolean): CSSProperties => ({
@@ -111,6 +126,7 @@ export function DriveInfo({
   totalBytes,
   connected = true,
   onEject,
+  readOnly = false,
   className,
   style,
 }: DriveInfoProps) {
@@ -154,6 +170,12 @@ export function DriveInfo({
           </button>
         )}
       </div>
+
+      {readOnly && (
+        <span style={readOnlyBadgeStyles} title={t('components.driveInfo.readOnlyNotice')}>
+          {t('components.driveInfo.readOnly')}
+        </span>
+      )}
 
       <div style={progressContainerStyles}>
         <div style={progressBarStyles(usedPercentage)} />

@@ -97,7 +97,8 @@ src-tauri/src/
 
   db/                               # persistencia SQLite (GlobalDatabase / ProjectDatabase)
     mod.rs, models.rs, queries.rs (photo_from_row), migrations.rs, *_schema.sql
-  devices.rs                        # scan_mounted_devices() por plataforma (sysinfo / /proc)
+  devices.rs                        # scan_mounted_devices() por plataforma (sysinfo / /proc); UUID en macOS
+                                    #   vía diskutil (por punto de montaje o, si falla, por disco BSD); read_only
   device_watch.rs                   # watcher nativo de hotplug (Linux mountinfo, Windows WMI, macOS DiskArbitration)
   apple_tags.rs                     # sidecars AppleDouble (desktop-only)
   exiftool.rs / exif_android.rs     # herramientas EXIF por plataforma
@@ -132,6 +133,12 @@ y solo sirve para localizar y expulsar.
 `photo.device_uuid` está obsoleto: las fotos nuevas lo guardan vacío y nada lo
 lee. Limitación: si el mismo `project.id` está en dos discos montados, solo se
 lista uno.
+
+**Discos de solo lectura:** `DetectedDevice.read_only` (`statvfs`/`ST_RDONLY` en
+Linux y macOS, `GetVolumeInformationW` en Windows). Se registran y se listan con
+la marca "Solo lectura", pero `refresh_open_projects` no abre sus `project.db`
+(abrirlos escribe: WAL, migraciones) y `create_project` los rechaza. Caso típico:
+NTFS en macOS, que el driver nativo monta como `ntfs://diskXsY/…` (tipo `lifs`).
 
 **`AppState`** mantiene `global_db`, los puertos de infraestructura
 (`device_scanner`, `metadata`, `image_processor`, `finder_tags`, `file_store`) y
@@ -303,6 +310,7 @@ Respaldo — cola: `set_pending_backup`, `clear_pending_backup`, `get_pending_ba
 | Seguimiento de respaldos en la barra lateral (tarjetas, reintentar, descartar, confirmación al cerrar) | ✓ Beta (en Android la barra empieza colapsada) |
 | Archivar proyectos | ✓ Funcional (menú de la tarjeta + botón "Archivados" en el dashboard) |
 | Discos en macOS: detección inmediata (DiskArbitration) y expulsión del disco completo | ✓ Beta |
+| Discos de solo lectura (p. ej. NTFS en macOS): se listan con marca y aviso, sin abrir ni crear proyectos | ✓ Beta |
 | Operaciones en lote desde el grid | ✗ No implementado |
 | App iPad nativa | ✗ Planificado |
 

@@ -66,6 +66,8 @@ wmi = "0.14"
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10"
 core-foundation-sys = "0.8"
+# statvfs (read-only volume detection)
+libc = "0.2"
 
 [profile.dev]
 incremental = true

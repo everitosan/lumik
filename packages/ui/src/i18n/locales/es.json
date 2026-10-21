@@ -47,7 +47,9 @@
       "disconnected": "Desconectado",
       "freeOf": "libres de",
       "eject": "Expulsar disco",
-      "ejecting": "Expulsando..."
+      "ejecting": "Expulsando...",
+      "readOnly": "Solo lectura",
+      "readOnlyNotice": "Lumik no puede abrir ni crear proyectos en este disco porque el sistema lo montó en solo lectura."
     },
     "fileList": {
       "searchPlaceholder": "Buscar archivos...",

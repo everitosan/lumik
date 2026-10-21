@@ -65,6 +65,8 @@ export interface DetectedDevice {
   total_bytes: number | null;
   available_bytes: number | null;
   fs_type: string;
+  /** Mounted without write access: listed, but no projects are opened or created on it. */
+  read_only: boolean;
 }
 
 // Photographer metadata for XMP embedding

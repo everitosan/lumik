@@ -58,6 +58,9 @@ pub fn create_project(state: State<AppState>, project: CreateProject) -> AppResu
         .iter()
         .find(|d| d.uuid == project.device_uuid)
         .ok_or_else(|| format!("Device '{}' is not mounted", project.device_uuid))?;
+    if device.read_only {
+        return Err(AppError::from("El dispositivo está montado en solo lectura"));
+    }
 
     // Build date-based path: {mount}/lumik/{year}/{month}/{day}_{slug}/project.db
     // Falls back to today (UTC) if no valid session_date is set.

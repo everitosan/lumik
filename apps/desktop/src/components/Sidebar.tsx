@@ -260,6 +260,7 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
             usedBytes={getUsedBytes(device)}
             totalBytes={device.total_bytes ?? 0}
             connected={true}
+            readOnly={device.read_only}
             onEject={canEject ? () => handleEject(device.uuid) : undefined}
           />
         ))}

@@ -62,6 +62,17 @@ export const Disconnected: Story = {
   },
 };
 
+export const ReadOnly: Story = {
+  args: {
+    name: 'Photos',
+    uuid: 'a458e660-ce06-41af-b816-da3c4eb825fa',
+    usedBytes: 310 * GB,
+    totalBytes: 496 * GB,
+    connected: true,
+    readOnly: true,
+  },
+};
+
 export const MultipleDisks: Story = {
   render: () => (
     <div style={{ width: '240px', display: 'flex', flexDirection: 'column', gap: '12px' }}>

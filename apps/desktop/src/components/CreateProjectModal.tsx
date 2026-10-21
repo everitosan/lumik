@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ChangeEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Input, Button, DriveSelector, type Drive } from '@lumik/ui';
 import type { DetectedDevice } from '../lib/types';
@@ -80,6 +80,8 @@ export function CreateProjectModal({
   error,
 }: CreateProjectModalProps) {
   const { t } = useTranslation();
+  // Read-only drives can't hold new projects (the OS mounted them without write).
+  const writableDevices = useMemo(() => devices.filter((d) => !d.read_only), [devices]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [sessionDate, setSessionDate] = useState('');
@@ -101,10 +103,10 @@ export function CreateProjectModal({
 
   // Auto-select the only device if there's exactly one
   useEffect(() => {
-    if (open && devices.length === 1 && !deviceUuid) {
-      setDeviceUuid(devices[0].uuid);
+    if (open && writableDevices.length === 1 && !deviceUuid) {
+      setDeviceUuid(writableDevices[0].uuid);
     }
-  }, [open, devices, deviceUuid]);
+  }, [open, writableDevices, deviceUuid]);
 
   const validate = (): boolean => {
     const newErrors: Partial<Record<'name' | 'deviceUuid', string>> = {};
@@ -130,7 +132,7 @@ export function CreateProjectModal({
     onClose();
   };
 
-  const drives = devicesToDrives(devices);
+  const drives = devicesToDrives(writableDevices);
 
   return (
     <Modal

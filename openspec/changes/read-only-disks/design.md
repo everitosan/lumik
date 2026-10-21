@@ -10,7 +10,7 @@ Ver `proposal.md` (Why). Estado actual relevante:
   - `diskutil info /Volumes/Photos` → "Could not find disk", exit 1.
   - `diskutil info -plist disk4s4` → `VolumeUUID A458E660-…`, `FilesystemType ntfs`, `WritableVolume false`.
   - `statvfs("/Volumes/Photos").f_flag & ST_RDONLY` → 1.
-- `sysinfo` 0.31 no expone si un disco es de solo lectura. `Disk::name()` devuelve el `f_mntfromname` (`ntfs://disk4s4/Photos`).
+- `sysinfo` 0.31 no expone si un disco es de solo lectura, y en macOS `Disk::name()` es el nombre del volumen (`Photos`), no el dispositivo de origen.
 - `commands.rs::refresh_open_projects` registra cada dispositivo en la BD global y llama a `discover_projects_on_device`, que abre cada `project.db` y le corre las migraciones, que escriben.
 - `create_project` busca el dispositivo por UUID en `scan()`; `CreateProjectModal` ofrece todos los `DetectedDevice`.
 - La barra lateral pinta cada disco con `DriveInfo` (`@lumik/ui`), que traduce sus textos internamente (`components.driveInfo.*`).
@@ -30,7 +30,7 @@ Ver `proposal.md` (Why). Estado actual relevante:
 
 ### D1. UUID en macOS: por punto de montaje y, si falla, por nombre del disco
 
-`get_device_uuid_macos` intenta primero `diskutil info -plist <punto de montaje>`, como hoy. Si falla, extrae el identificador BSD de `disk.name()`: el primer segmento con forma `disk\d+s\d+` (de `ntfs://disk4s4/Photos` o de `/dev/disk4s4`), y repite `diskutil info -plist disk4s4`. El parseo del identificador se separa en una función pura con tests.
+`get_device_uuid_macos` intenta primero `diskutil info -plist <punto de montaje>`, como hoy. Si falla, lee el dispositivo de origen del montaje (`f_mntfromname` con `statfs`, porque en macOS `Disk::name()` de `sysinfo` es el nombre del volumen), extrae el primer segmento con forma `disk\d+s\d+` (de `ntfs://disk4s4/Photos` o de `/dev/disk4s4`) y repite `diskutil info -plist disk4s4`. El parseo del identificador se separa en una función pura con tests.
 
 - *Alternativa: obtener el UUID con DiskArbitration (`DADiskCreateFromBSDName` + descripción).* Evita el subproceso, pero el escaneo de macOS ya usa `diskutil` y el FFI de DA hoy vive en el watcher y en la expulsión. Se descarta para no ampliar el FFI en este change.
 

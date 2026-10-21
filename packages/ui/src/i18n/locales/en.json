@@ -47,7 +47,9 @@
       "disconnected": "Disconnected",
       "freeOf": "free of",
       "eject": "Eject drive",
-      "ejecting": "Ejecting..."
+      "ejecting": "Ejecting...",
+      "readOnly": "Read-only",
+      "readOnlyNotice": "Lumik can't open or create projects on this drive because the system mounted it read-only."
     },
     "fileList": {
       "searchPlaceholder": "Search files...",

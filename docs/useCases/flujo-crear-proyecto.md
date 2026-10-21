@@ -61,7 +61,8 @@ flowchart TD
 ## 2. Resolución del dispositivo destino (backend)
 
 La detección del UUID de volumen es lo único que cambia por plataforma; el resultado se
-normaliza siempre a la misma tripleta `uuid + nombre + mount_point`.
+normaliza siempre a `uuid + nombre + mount_point`, más `read_only` si el sistema lo
+montó sin escritura (en ese caso el proyecto no se crea).
 
 ```mermaid
 flowchart TD
@@ -74,11 +75,14 @@ flowchart TD
         linux["Linux<br/>/dev/disk/by-uuid/<br/>o blkid -s UUID"]
         windows["Windows<br/>GetVolumeInformationW()<br/>serial XXXX-XXXX"]
         android["Android<br/>/proc/mounts (vfat/exfat)<br/>UUID = dir en /storage/UUID/"]
+        macos["macOS<br/>diskutil info (punto de montaje<br/>o, si falla, disco BSD p. ej. disk4s4)"]
     end
 
-    merge["Lista de dispositivos disponibles<br/>(uuid + nombre + mount_point)"]
+    merge["Lista de dispositivos disponibles<br/>(uuid + nombre + mount_point + read_only)"]
     mounted_q{"¿Dispositivo con<br/>ese UUID montado?"}
     mount_error["Error: Device not mounted<br/>→ retornar error a frontend"]
+    ro_q{"¿Montado en<br/>solo lectura?"}
+    ro_error["Error: El dispositivo está montado<br/>en solo lectura → nada se escribe"]
     err_end(["Error visible en UI"])
     build_path["Construir ruta del proyecto<br/>{mount_point}/lumik/{año}/{mes}/{día}_{slug}/"]
     gen_uuid["Generar project_id (UUID v4)"]
@@ -88,9 +92,12 @@ flowchart TD
     plat_q -->|Linux| linux --> merge
     plat_q -->|Windows| windows --> merge
     plat_q -->|Android| android --> merge
+    plat_q -->|macOS| macos --> merge
     merge --> mounted_q
     mounted_q -->|No| mount_error --> err_end
-    mounted_q -->|Sí| build_path --> gen_uuid --> next
+    mounted_q -->|Sí| ro_q
+    ro_q -->|Sí| ro_error --> err_end
+    ro_q -->|No| build_path --> gen_uuid --> next
 
     classDef term fill:#d5e8d4,stroke:#82b366,color:#102a12
     classDef be fill:#ffe0b2,stroke:#f57c00,color:#3d2600
@@ -99,9 +106,9 @@ flowchart TD
     classDef err fill:#f8cecc,stroke:#b85450,color:#3d1210
     class next term
     class cmd,scan,merge,build_path,gen_uuid be
-    class plat_q,linux,windows,android plat
-    class mounted_q dec
-    class mount_error,err_end err
+    class plat_q,linux,windows,android,macos plat
+    class mounted_q,ro_q dec
+    class mount_error,ro_error,err_end err
 ```
 
 ## 3. Persistencia y cierre
