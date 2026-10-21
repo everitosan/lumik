@@ -1,0 +1,19 @@
+{
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "resources": {
+      "exiftool_files/exiftool.pl": "exiftool/exiftool",
+      "exiftool_files/lib/Image/": "exiftool/lib/Image/",
+      "exiftool_files/lib/File/RandomAccess.pm": "exiftool/lib/File/RandomAccess.pm"
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": "-",
+      "infoPlist": "macos/Info.plist",
+      "files": {
+        "Resources/es.lproj/InfoPlist.strings": "macos/es.lproj/InfoPlist.strings",
+        "Resources/en.lproj/InfoPlist.strings": "macos/en.lproj/InfoPlist.strings"
+      }
+    }
+  }
+}

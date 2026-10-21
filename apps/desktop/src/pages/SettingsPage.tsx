@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input, Button, Checkbox, Icon, Tabs, type TabItem } from '@lumik/ui';
-import { useActivePhotographer, useLanguage } from '../lib/hooks';
+import { useActivePhotographer, useLanguage, IS_MAC, hasPlatformModifier } from '../lib/hooks';
 import {
   getPhotographerMetadata,
   updatePhotographerMetadata,
@@ -175,7 +175,11 @@ const MODIFIER_KEYS = new Set([
 ]);
 
 function formatKey(key: string): string {
-  if (key.startsWith('Ctrl+')) return `Ctrl+${formatKey(key.slice(5))}`;
+  if (key.startsWith('Ctrl+')) {
+    const base = formatKey(key.slice(5));
+    const label = base.length === 1 ? base.toUpperCase() : base;
+    return IS_MAC ? `⌘${label}` : `Ctrl+${label}`;
+  }
   const labels: Record<string, string> = {
     ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓',
     Escape: 'Esc', Enter: '↵', ' ': 'Space', Backspace: '⌫',
@@ -207,12 +211,17 @@ function KeybindingRow({
 
       if (e.key === 'Escape') { setListening(false); return; }
       if (MODIFIER_KEYS.has(e.key)) return;
+      // Only the platform modifier (Cmd on macOS, Ctrl elsewhere) is allowed;
+      // it is stored as "Ctrl+" on every platform.
+      const withModifier = hasPlatformModifier(e);
+      if (!withModifier && (e.ctrlKey || e.metaKey || e.altKey)) return;
+      const key = withModifier ? `Ctrl+${e.key}` : e.key;
 
       setListening(false);
-      updateKeybinding(binding.action, e.key)
+      updateKeybinding(binding.action, key)
         .then(() => {
           setRowState('saved');
-          onSaved(binding.action, e.key);
+          onSaved(binding.action, key);
           setTimeout(() => setRowState('idle'), 1500);
         })
         .catch(() => setRowState('error'));

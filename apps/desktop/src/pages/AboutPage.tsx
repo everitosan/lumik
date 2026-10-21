@@ -112,7 +112,6 @@ const licenseBadgeStyles: React.CSSProperties = {
 
 const licenses = [
   { name: 'rawler',    license: 'MIT / Apache-2.0', url: 'https://github.com/dnglab/rawler' },
-  { name: 'dnglab',   license: 'LGPL-2.1',          url: 'https://github.com/dnglab/dnglab' },
   { name: 'exiftool', license: 'Perl Artistic / GPL', url: 'https://exiftool.org' },
   { name: 'Tauri',    license: 'MIT / Apache-2.0',  url: 'https://tauri.app' },
   { name: 'React',    license: 'MIT',               url: 'https://react.dev' },

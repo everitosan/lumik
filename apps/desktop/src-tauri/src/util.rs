@@ -1,8 +1,9 @@
+use std::ffi::OsStr;
 use std::process::Command;
 
 /// Build a `Command` that does not spawn a console window on Windows.
 /// Without this, GUI apps flash a console for every subprocess spawn.
-pub fn silent_command(program: &str) -> Command {
+pub fn silent_command(program: impl AsRef<OsStr>) -> Command {
     let cmd = Command::new(program);
     #[cfg(target_os = "windows")]
     {

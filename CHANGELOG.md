@@ -8,6 +8,27 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 ## [0.1.4-beta] — pendiente (en pruebas)
 
 ### Añadido
+- **macOS (beta)**: Lumik se publica para macOS como `.dmg` universal, que corre
+  nativo en Mac Intel y Apple Silicon con macOS 10.15 Catalina o posterior. Trae
+  exiftool incluido, así que no hace falta instalar nada más. Detecta los discos
+  externos en cuanto se conectan, los expulsa desde la barra lateral y lista los
+  de solo lectura (como NTFS) con un aviso. Los atajos con modificador usan Cmd
+  (Ajustes los muestra como `⌘C`).
+
+  **Primera apertura**: esta versión no está notarizada por Apple, así que macOS
+  la bloquea la primera vez. Copia Lumik a Aplicaciones y, en Terminal, ejecuta:
+
+  ```
+  xattr -dr com.apple.quarantine /Applications/Lumik.app
+  ```
+
+  O bien ábrela una vez, cierra el aviso y ve a Ajustes del Sistema →
+  Privacidad y seguridad → "Abrir igualmente" (en macOS 12 o anterior:
+  Preferencias del Sistema → Seguridad y privacidad → General → "Abrir de todos
+  modos"). Las siguientes aperturas no
+  muestran el aviso. La primera vez que Lumik lea un disco externo, macOS pedirá
+  permiso para acceder a volúmenes extraíbles: hay que permitirlo para ver sus
+  proyectos.
 - **Ajustes de cada importación**: el wizard de importación tiene un paso nuevo,
   entre Origen y Confirmar, para revisar el renombrado y la firma (autor,
   copyright, URL) antes de importar. Parten de la configuración global y lo que
@@ -26,6 +47,8 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   los muestra atenuados en su año; la elección se conserva al reabrir la app.
 
 ### Cambiado
+- **Instalador de Windows más ligero**: ya no incluye dnglab, que no se usaba
+  desde que la metadata se guarda en la base de datos en lugar de convertir a DNG.
 - **Badge de estado del proyecto**: las tarjetas del dashboard (desktop y portal
   web) muestran el estado de flujo con un icono además del texto, y con colores
   que se leen como semáforo de trabajo: importado en amarillo, editado en azul
@@ -40,6 +63,8 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   contadores, el buscador y "Nuevo proyecto".
 
 ### Corregido
+- Al reasignar un atajo en Ajustes pulsando Ctrl con una tecla, se guardaba solo
+  la tecla y se perdía el modificador.
 - No se podía impedir una importación sin espacio suficiente en el disco del
   proyecto: ahora el botón para iniciarla se desactiva y se avisa del espacio
   que falta.

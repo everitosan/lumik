@@ -136,3 +136,50 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+
+  # ── Build macOS ────────────────────────────────────────────────────────────
+  # Binario universal (Apple Silicon + Intel) para macOS 10.15+. El runner es
+  # arm64 y compila la porción x86_64 de forma cruzada; tauri la une con lipo.
+  # Firma ad hoc (tauri.macos.conf.json): sin Developer ID ni notarización
+  # mientras la app esté en beta.
+  build-macos:
+    runs-on: macos-14
+    needs: create-release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Update Rust to stable
+        run: |
+          rustup update stable
+          rustup default stable
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          rustup show
+
+      - name: Enable pnpm via corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@latest --activate
+
+      - name: Install Node dependencies
+        run: pnpm install
+
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # sed de BSD: -i necesita un sufijo (vacío) y no admite el rango 0,/re/
+          sed -i '' "1,/^version = .*/s/^version = .*/version = \"$VERSION\"/" \
+            apps/desktop/src-tauri/Cargo.toml
+          echo "Building version $VERSION"
+
+      - name: Build Tauri — macOS
+        run: pnpm --filter @lumik/desktop tauri build --target universal-apple-darwin
+
+      - name: Upload macOS dmg to release
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}

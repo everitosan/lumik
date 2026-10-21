@@ -14,7 +14,7 @@ Comportamiento esperado por capability: `openspec/specs/` en la raíz del monore
 - **Bundler**: Vite
 - **BD global**: SQLite en `~/.local/share/lumik/lumik.db` (fotógrafo, ajustes, keybindings, dispositivos conocidos, sesión y cola de respaldo)
 - **BD proyectos**: SQLite por proyecto, en cada disco externo (`project.db`)
-- **Metadatos EXIF/XMP**: `exiftool` (dependencia externa en runtime — debe estar instalado)
+- **Metadatos EXIF/XMP**: `exiftool` (empaquetado en Windows y macOS; en Linux debe estar instalado)
 - **UI**: `@lumik/ui` (paquete interno del monorepo en `packages/ui/`)
 
 ## Estructura de archivos relevantes
@@ -186,6 +186,17 @@ comando devuelve error "device not mounted".
   escritura de metadatos XMP.
 - **exiftool es requerido en runtime**: thumbnails, previews, EXIF batch, orientación
   y metadata XMP dependen de él. Sin exiftool, la importación y el visor fallan.
+  Siempre se lanza con `exiftool::command()`, nunca con `Command::new("exiftool")`:
+  - **Windows**: `exiftool.exe` (lanzador) va en `externalBin` y `exiftool_files/`
+    (Strawberry Perl + `exiftool.pl` + `lib/`) como recurso (`tauri.windows.conf.json`);
+    el sistema lo encuentra por nombre junto al ejecutable.
+  - **macOS**: `tauri.macos.conf.json` empaqueta `exiftool_files/exiftool.pl` como
+    `Resources/exiftool/exiftool` junto con `lib/Image/` y `lib/File/RandomAccess.pm`,
+    y se ejecuta con `/usr/bin/perl` (sin arquitectura: sirve en el binario universal).
+    Una app abierta desde Finder recibe un PATH mínimo, así que el orden es: script
+    del bundle → PATH → `/opt/homebrew/bin` → `/usr/local/bin`. Con `tauri dev` no
+    hay bundle y se usa el del PATH. El log de arranque dice cuál se eligió.
+  - **Linux**: el del PATH.
 - **Orientación**: el DNG guarda `IFD0:Orientation`. Los thumbnails tienen la
   rotación física aplicada. Los previews tienen `Orientation=1` y el canvas
   aplica la rotación manualmente vía `PhotoViewer`.
@@ -253,6 +264,10 @@ Los atajos se almacenan en la BD global y se cargan con `useKeybindings()`.
 Defaults definidos en `hooks.ts:DEFAULT_KEYBINDINGS`. Se agrupan por contexto
 (`photo_detail.*`, `project.*`). `matchesKey()` compara un `KeyboardEvent` contra
 el valor almacenado (soporta `"Escape"`, `"ArrowLeft"`, `"Ctrl+c"`, etc.).
+`"Ctrl+"` significa el modificador de la plataforma: Cmd en macOS y Ctrl en las demás
+(`hasPlatformModifier()`); en macOS Ctrl no lo sustituye, porque Ctrl+clic es clic
+secundario. Ajustes lo muestra como `⌘C` en macOS y `Ctrl+C` en las demás, y al
+reasignar guarda `"Ctrl+<tecla>"` si estaba pulsado ese modificador.
 
 ## Flujos de producto ↔ comando ↔ caso de uso
 
@@ -311,6 +326,7 @@ Respaldo — cola: `set_pending_backup`, `clear_pending_backup`, `get_pending_ba
 | Archivar proyectos | ✓ Funcional (menú de la tarjeta + botón "Archivados" en el dashboard) |
 | Discos en macOS: detección inmediata (DiskArbitration) y expulsión del disco completo | ✓ Beta |
 | Discos de solo lectura (p. ej. NTFS en macOS): se listan con marca y aviso, sin abrir ni crear proyectos | ✓ Beta |
+| Paquete de macOS: `.dmg` universal (Intel + Apple Silicon, macOS 10.15+), firma ad hoc, exiftool incluido | ✓ Beta (sin notarizar) |
 | Operaciones en lote desde el grid | ✗ No implementado |
 | App iPad nativa | ✗ Planificado |
 

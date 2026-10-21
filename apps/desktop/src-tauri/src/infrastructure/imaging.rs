@@ -132,7 +132,6 @@ pub struct DesktopImaging;
 impl ImageProcessor for DesktopImaging {
     fn cache_thumbnail(&self, src: &Path, photo_id: &str) -> Option<i32> {
         use crate::application::ports::MetadataTool;
-        use crate::util::silent_command;
         use image::ImageFormat;
         use std::io::Cursor;
 
@@ -152,7 +151,7 @@ impl ImageProcessor for DesktopImaging {
         // -PreviewImage returns only the first strip (16px tall), not a usable thumbnail.
         if !matches!(ext.as_str(), "tif" | "tiff") {
             for tag in &["-PreviewImage", "-ThumbnailImage"] {
-                let output = match silent_command("exiftool").args(["-b", tag, path_str]).output() {
+                let output = match crate::exiftool::command().args(["-b", tag, path_str]).output() {
                     Ok(o) => o,
                     Err(_) => continue,
                 };
@@ -221,7 +220,6 @@ impl ImageProcessor for DesktopImaging {
     }
 
     fn ensure_preview(&self, src: &Path, project_dir: &Path, photo_id: &str) -> Option<PathBuf> {
-        use crate::util::silent_command;
         let dir = previews_dir_for(project_dir)?;
         let dest = dir.join(format!("{}.jpg", photo_id));
         if dest.exists() {
@@ -238,7 +236,7 @@ impl ImageProcessor for DesktopImaging {
         // exiftool -PreviewImage; use image::open instead to reconstruct the full image.
         if !matches!(ext.as_str(), "tif" | "tiff") {
             for tag in &["-JpgFromRaw", "-LargeImage", "-PreviewImage", "-OtherImage"] {
-                let output = match silent_command("exiftool").args(["-b", tag, path_str]).output() {
+                let output = match crate::exiftool::command().args(["-b", tag, path_str]).output() {
                     Ok(o) => o,
                     Err(_) => continue,
                 };

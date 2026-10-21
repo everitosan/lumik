@@ -446,13 +446,32 @@ const DEFAULT_KEYBINDINGS: KeybindingMap = {
 };
 
 /**
+ * True on macOS. Synchronous (unlike `usePlatform`) so key handlers can use it;
+ * the WebView reports `MacIntel` on Apple Silicon too.
+ */
+export const IS_MAC = typeof navigator !== 'undefined'
+  && /Mac/.test(navigator.platform || navigator.userAgent);
+
+/**
+ * Whether the platform modifier (Cmd on macOS, Ctrl elsewhere) is pressed on
+ * its own: Alt and the other platform's modifier must be up. On macOS
+ * Ctrl+click is a secondary click, so Ctrl never stands in for Cmd.
+ */
+export function hasPlatformModifier(e: KeyboardEvent): boolean {
+  const mod = IS_MAC ? e.metaKey : e.ctrlKey;
+  const foreign = IS_MAC ? e.ctrlKey : e.metaKey;
+  return mod && !foreign && !e.altKey;
+}
+
+/**
  * Check if a KeyboardEvent matches a stored keybinding value.
- * Supports simple keys ("Escape", "+") and Ctrl+ combos ("Ctrl+c").
+ * Supports simple keys ("Escape", "+") and modifier combos stored as "Ctrl+c",
+ * which fire with Cmd on macOS and Ctrl elsewhere.
  * Plain keys require no modifier keys to be pressed.
  */
 export function matchesKey(e: KeyboardEvent, stored: string): boolean {
   if (stored.startsWith('Ctrl+')) {
-    return e.ctrlKey && !e.altKey && !e.metaKey && e.key === stored.slice(5);
+    return hasPlatformModifier(e) && e.key === stored.slice(5);
   }
   return e.key === stored && !e.ctrlKey && !e.altKey && !e.metaKey;
 }
