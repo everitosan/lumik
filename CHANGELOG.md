@@ -5,6 +5,47 @@ Todos los cambios notables de Lumik se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.1.5-beta] — pendiente (en pruebas)
+
+### Añadido
+- **Seguimiento de la importación archivo por archivo**: el paso 3 muestra la
+  fase (videos, copia y firma, mover, registrar), el archivo en curso con su
+  número ("42 de 400"), los bytes de ese archivo y de toda la importación, y una
+  barra que avanza según los bytes. Los videos también se siguen: uno grande ya
+  no parece colgado. El registro de actividad muestra una línea por archivo y se
+  conserva al terminar.
+- **Resultado siempre visible**: al terminar, el paso 3 indica si la importación
+  fue completa, parcial o falló, con cuántas fotos y videos entraron, qué
+  archivos fallaron y por qué (con "Ver todos"), y qué archivos se ignoraron por
+  formato.
+
+### Cambiado
+- **Importación más rápida**: una sesión de 304 RAW (7.2 GB) con 3 videos,
+  firmada y renombrada desde un disco mecánico, pasa de unos 5 minutos a 2 min
+  32 s. El origen se lee de corrido, de un archivo a la vez, mientras la firma
+  se aplica en paralelo, y las miniaturas se generan con la rotación que ya se
+  leyó.
+- Las fotos se preparan en una carpeta oculta dentro del proyecto
+  (`.import-staging/`), en el mismo disco de destino, en lugar de la carpeta
+  temporal del sistema. El espacio que pide el paso 3 es el único que la
+  importación necesita, y una carpeta temporal pequeña (en Linux suele estar en
+  RAM) ya no limita el tamaño de la sesión.
+
+### Corregido
+- Si algo fallaba durante la importación, el asistente volvía al botón
+  "Importar" sin decir qué había pasado. Ahora se muestra el motivo y lo que sí
+  quedó importado.
+- Un solo archivo con problema cancelaba toda la importación. Ahora se informa
+  como fallido y se sigue con los demás.
+- Importar una foto o un video con el nombre de uno que ya estaba en el
+  proyecto lo sobrescribía sin avisar. Ahora el nuevo se guarda con un sufijo
+  `-001`, `-002`…; lo mismo con dos archivos del mismo nombre que vienen de
+  carpetas distintas.
+- Las importaciones interrumpidas dejaban copias completas de las fotos en la
+  carpeta temporal del sistema. Ahora no se usa, y lo que quede en el proyecto
+  se limpia al iniciar la siguiente importación.
+- Lumik dejaba un proceso de exiftool abierto cada vez que se cerraba.
+
 ## [0.1.4-beta] — 2026-10-21
 
 ### Añadido
