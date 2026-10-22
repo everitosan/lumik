@@ -21,9 +21,6 @@ pub const VIDEO_EXTENSIONS: &[&str] = &[
 /// Errors that can occur during the import pipeline
 #[derive(Debug, Error)]
 pub enum ConvertError {
-    #[error("Import error: {0}")]
-    DngError(String),
-
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 }

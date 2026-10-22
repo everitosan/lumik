@@ -18,7 +18,7 @@ import { stat } from '@tauri-apps/plugin-fs';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useConnectedDevices, useProjectsDashboard, useActivePhotographer, useAppSettings, useImport, usePlatform } from '../lib/hooks';
 import { getPhotographerMetadata } from '../lib/api';
-import type { FailedFile, ImportSessionSettings } from '../lib/types';
+import type { FailedFile, ImportLogEntry, ImportProgress, ImportResult, ImportSessionSettings, SkippedFile } from '../lib/types';
 
 const pathBasename = (p: string) => p.replace(/\\/g, '/').split('/').pop() || p;
 
@@ -327,6 +327,50 @@ const resultErrorStyles: CSSProperties = {
   border: '1px solid rgba(255, 180, 171, 0.3)',
 };
 
+const resultWarningStyles: CSSProperties = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: '12px',
+  padding: '16px',
+  backgroundColor: 'var(--lumik-surface-container, #201f1f)',
+  borderRadius: 'var(--lumik-radius-md, 8px)',
+  border: '1px solid var(--lumik-outline-variant, #424654)',
+};
+
+const fileListStyles: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  maxHeight: '240px',
+  overflowY: 'auto',
+};
+
+const fileRowStyles: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2px',
+};
+
+const fileDetailStyles: CSSProperties = {
+  fontFamily: 'var(--lumik-font-mono, JetBrains Mono)',
+  fontSize: '11px',
+  color: 'var(--lumik-outline, #8c90a0)',
+  wordBreak: 'break-all',
+};
+
+const progressRowStyles: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'baseline',
+  gap: '12px',
+};
+
+/** Fallidos que se muestran antes de "Ver todos". */
+const FAILED_PREVIEW = 3;
+
+/** Fases en las que la barra avanza por bytes copiados desde el origen. */
+const BYTE_PHASES = new Set(['videos', 'copy', 'copy_metadata']);
+
 function generateSessionId(): string {
   return `import-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
@@ -392,7 +436,8 @@ export function ImportPage({
   const { data: projects } = useProjectsDashboard();
   const { data: photographer } = useActivePhotographer();
   const { data: appSettings } = useAppSettings();
-  const { progress, importLog, result, isImporting, error: importError, startImport } = useImport();
+  const { status: importStatus, progress, importLog, result, isImporting, error: importError, startImport } = useImport();
+  const [showAllFailed, setShowAllFailed] = useState(false);
   const platform = usePlatform();
 
   useEffect(() => {
@@ -525,6 +570,8 @@ export function ImportPage({
 
   // Handlers
   const handleStepClick = (stepIndex: number) => {
+    // Con un import en curso o terminado, el wizard no vuelve atrás.
+    if (importStatus !== 'idle') return;
     if (stepIndex < currentStepIndex) {
       setCurrentStepIndex(stepIndex);
     }
@@ -618,6 +665,7 @@ export function ImportPage({
     const sessionId = generateSessionId();
     const startTime = Date.now();
     setElapsedTime(null);
+    setShowAllFailed(false);
 
     try {
       await startImport({
@@ -747,134 +795,195 @@ export function ImportPage({
   };
 
   // Step 3: Confirm
+  const renderProgress = (p: ImportProgress) => {
+    const percent = p.bytes_total > 0 ? Math.min(100, (p.bytes_done / p.bytes_total) * 100) : 0;
+    const withBytes = BYTE_PHASES.has(p.phase);
+    return (
+      <div style={progressContainerStyles}>
+        <div style={progressRowStyles}>
+          <span style={progressTextStyles}>{t(`import.progress.phases.${p.phase}`)}</span>
+          {p.bytes_total > 0 && (
+            <span style={progressCountStyles}>
+              {formatBytes(Math.min(p.bytes_done, p.bytes_total))} / {formatBytes(p.bytes_total)}
+            </span>
+          )}
+        </div>
+        <div style={progressBarContainerStyles}>
+          <div style={{ ...progressBarStyles, width: `${percent}%` }} />
+        </div>
+        {p.file_name && (
+          <div style={progressRowStyles}>
+            <span style={{ ...progressTextStyles, wordBreak: 'break-all' }}>{p.file_name}</span>
+            {withBytes && p.file_bytes_total > 0 && (
+              <span style={{ ...progressCountStyles, flexShrink: 0 }}>
+                {formatBytes(p.file_bytes)} / {formatBytes(p.file_bytes_total)}
+              </span>
+            )}
+          </div>
+        )}
+        {p.file_total > 0 && (
+          <span style={progressCountStyles}>
+            {t('import.progress.fileOf', { index: p.file_index, total: p.file_total })}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const logLine = (entry: ImportLogEntry) => {
+    const file = entry.file_name ?? '';
+    switch (entry.kind) {
+      case 'file_failed':
+        return t('import.log.file_failed', { file, reason: t(`import.errors.codes.${entry.code ?? 'unknown'}`) });
+      case 'file_skipped':
+        return t('import.log.file_skipped', { file, reason: t(`import.result.skipReasons.${entry.detail ?? 'unsupported_format'}`) });
+      case 'photos_registered':
+      case 'thumbnails':
+      case 'done':
+        return t(`import.log.${entry.kind}`, { count: entry.count ?? 0 });
+      default:
+        return t(`import.log.${entry.kind}`, { file, detail: entry.detail ?? '' });
+    }
+  };
+
+  const resultTitle = (r: ImportResult | null) => {
+    if (!r) return t('import.result.failedTitle');
+    const imported = r.successful + r.videos_copied;
+    if (r.fatal || (r.failed > 0 && imported === 0)) return t('import.result.failedTitle');
+    if (r.failed > 0) return t('import.result.partialTitle');
+    return t('import.progress.completed');
+  };
+
+  const renderFailedFiles = (files: FailedFile[]) => {
+    const visible = showAllFailed ? files : files.slice(0, FAILED_PREVIEW);
+    return (
+      <div style={resultErrorStyles}>
+        <Icon name="x" size="md" color="var(--lumik-error, #ffb4ab)" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minWidth: 0 }}>
+          <span style={progressTextStyles}>{t('import.result.failed', { count: files.length })}</span>
+          <div style={fileListStyles}>
+            {visible.map((f) => (
+              <div key={f.path} style={fileRowStyles}>
+                <span style={progressCountStyles}>
+                  {f.name}: {t(`import.errors.codes.${f.code}`)}
+                </span>
+                {f.error && <span style={fileDetailStyles}>{f.error}</span>}
+              </div>
+            ))}
+          </div>
+          {files.length > FAILED_PREVIEW && (
+            <div>
+              <Button variant="ghost" size="sm" onClick={() => setShowAllFailed((v) => !v)}>
+                {showAllFailed
+                  ? t('import.result.showLess')
+                  : t('import.result.showAll', { count: files.length })}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSkippedFiles = (files: SkippedFile[]) => (
+    <div style={resultWarningStyles}>
+      <Icon name="info" size="md" color="var(--lumik-outline, #8c90a0)" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minWidth: 0 }}>
+        <span style={progressTextStyles}>{t('import.result.skipped', { count: files.length })}</span>
+        <div style={fileListStyles}>
+          {files.map((f) => (
+            <span key={f.path} style={progressCountStyles}>
+              {f.name}: {t(`import.result.skipReasons.${f.reason}`)}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderResult = (r: ImportResult) => (
+    <>
+      {(r.successful > 0 || r.videos_copied > 0) && (
+        <div style={resultSuccessStyles}>
+          <Icon name="check" size="md" color="var(--lumik-secondary, #e9c349)" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {r.successful > 0 && (
+              <span style={progressTextStyles}>
+                {r.successful} {t(r.successful === 1 ? 'import.progress.photoImported_one' : 'import.progress.photoImported_other')}
+              </span>
+            )}
+            {r.videos_copied > 0 && (
+              <span style={progressTextStyles}>
+                {r.videos_copied} {t(r.videos_copied === 1 ? 'import.progress.videoCopied_one' : 'import.progress.videoCopied_other')}
+              </span>
+            )}
+            {elapsedTime && (
+              <span style={progressCountStyles}>
+                {t('import.progress.totalTime')}: {formatElapsedTime(elapsedTime)}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+      {r.fatal && (
+        <div style={resultErrorStyles}>
+          <Icon name="x" size="md" color="var(--lumik-error, #ffb4ab)" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+            <span style={progressTextStyles}>
+              {t('import.result.fatal', { reason: t(`import.errors.codes.${r.fatal.code}`) })}
+            </span>
+            <span style={fileDetailStyles}>{r.fatal.detail}</span>
+          </div>
+        </div>
+      )}
+      {r.failed_files.length > 0 && renderFailedFiles(r.failed_files)}
+      {r.skipped_files.length > 0 && renderSkippedFiles(r.skipped_files)}
+    </>
+  );
+
   const renderConfirmStep = () => {
-    // Show import progress if importing or has result
-    if (isImporting || result) {
+    // Una vez iniciado, el paso muestra el progreso y luego el resultado
+    // (también si falló): nunca vuelve a la confirmación.
+    if (importStatus !== 'idle') {
       return (
         <div style={stepContentStyles}>
           <div style={sectionStyles}>
             <span style={sectionTitleStyles}>
-              {isImporting ? t('import.progress.importing') : t('import.progress.completed')}
+              {isImporting ? t('import.progress.importing') : resultTitle(result)}
             </span>
 
-            {/* Progress UI */}
-            {isImporting && progress && (
-              <div style={progressContainerStyles}>
-                <div style={progressBarContainerStyles}>
-                  <div
-                    style={{
-                      ...progressBarStyles,
-                      width: `${((progress.current_index + 1) / progress.total_files) * 100}%`,
-                    }}
-                  />
-                </div>
-                <span style={progressTextStyles}>
-                  {progress.current_file}
-                </span>
-                <span style={progressCountStyles}>
-                  {progress.current_index + 1} / {progress.total_files} {t('import.progress.files')}
-                </span>
+            {isImporting && progress && renderProgress(progress)}
+
+            {importStatus === 'done' && result && renderResult(result)}
+
+            {importStatus === 'done' && importError && (
+              <div style={resultErrorStyles}>
+                <Icon name="x" size="md" color="var(--lumik-error, #ffb4ab)" />
+                <span style={progressTextStyles}>{t('import.result.couldNotStart', { error: importError })}</span>
               </div>
             )}
 
-            {/* Import log */}
             {importLog.length > 0 && (
               <div style={importLogContainerStyles}>
-                <span style={sectionTitleStyles}>{t('import.progress.completed')}</span>
+                <span style={sectionTitleStyles}>{t('import.log.title')}</span>
                 <div style={importLogScrollStyles}>
-                  {importLog.map((line, i) => (
+                  {importLog.map((entry, i) => (
                     <div
                       key={i}
                       style={{
-                        color: line.includes('ERROR')
+                        color: entry.kind === 'file_failed'
                           ? 'var(--lumik-error, #ffb4ab)'
                           : 'var(--lumik-on-surface-variant, #c2c6d7)',
                         lineHeight: '1.6',
-                        whiteSpace: 'pre',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-all',
                       }}
                     >
-                      {line}
+                      {logLine(entry)}
                     </div>
                   ))}
                   <div ref={logEndRef} />
                 </div>
-              </div>
-            )}
-
-            {/* Result UI */}
-            {result && (
-              <>
-                {result.failed === 0 ? (
-                  <div style={resultSuccessStyles}>
-                    <Icon name="check" size="md" color="var(--lumik-secondary, #e9c349)" />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      {result.successful > 0 && (
-                        <span style={progressTextStyles}>
-                          {result.successful} {t(result.successful === 1 ? 'import.progress.photoImported_one' : 'import.progress.photoImported_other')}
-                        </span>
-                      )}
-                      {result.videos_copied > 0 && (
-                        <span style={progressTextStyles}>
-                          {result.videos_copied} {t(result.videos_copied === 1 ? 'import.progress.videoCopied_one' : 'import.progress.videoCopied_other')}
-                        </span>
-                      )}
-                      {elapsedTime && (
-                        <span style={progressCountStyles}>
-                          {t('import.progress.totalTime')}: {formatElapsedTime(elapsedTime)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div style={resultSuccessStyles}>
-                      <Icon name="check" size="md" color="var(--lumik-secondary, #e9c349)" />
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {result.successful > 0 && (
-                          <span style={progressTextStyles}>
-                            {result.successful} {t(result.successful === 1 ? 'import.progress.photoImported_one' : 'import.progress.photoImported_other')}
-                          </span>
-                        )}
-                        {result.videos_copied > 0 && (
-                          <span style={progressTextStyles}>
-                            {result.videos_copied} {t(result.videos_copied === 1 ? 'import.progress.videoCopied_one' : 'import.progress.videoCopied_other')}
-                          </span>
-                        )}
-                        {elapsedTime && (
-                          <span style={progressCountStyles}>
-                            {t('import.progress.totalTime')}: {formatElapsedTime(elapsedTime)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div style={resultErrorStyles}>
-                      <Icon name="x" size="md" color="var(--lumik-error, #ffb4ab)" />
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={progressTextStyles}>
-                          {result.failed} {t('import.summary.failedFiles')}
-                        </span>
-                        {result.failed_files.slice(0, 3).map((f: FailedFile) => (
-                          <span key={f.path} style={progressCountStyles}>
-                            {f.name}: {f.error}
-                          </span>
-                        ))}
-                        {result.failed_files.length > 3 && (
-                          <span style={progressCountStyles}>
-                            {result.failed_files.length - 3} {t('import.summary.moreFiles')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-
-            {/* Import error */}
-            {importError && (
-              <div style={resultErrorStyles}>
-                <Icon name="x" size="md" color="var(--lumik-error, #ffb4ab)" />
-                <span style={progressTextStyles}>{t('import.errors.importError')}: {importError}</span>
               </div>
             )}
           </div>
@@ -1010,7 +1119,7 @@ export function ImportPage({
           )}
         </div>
         <div style={footerRightStyles}>
-          {currentStepIndex > 0 && !isImporting && !result && (
+          {currentStepIndex > 0 && importStatus === 'idle' && (
             <Button variant="secondary" onClick={handleBack}>
               <Icon name="chevron-right" size="sm" style={{ transform: 'rotate(180deg)' }} />
               {t('import.footer.back')}
@@ -1025,7 +1134,7 @@ export function ImportPage({
               {t('import.footer.next')}
               <Icon name="chevron-right" size="sm" />
             </Button>
-          ) : result ? (
+          ) : importStatus === 'done' ? (
             <Button variant="primary" onClick={onClose}>
               <Icon name="check" size="sm" />
               {t('import.footer.accept')}

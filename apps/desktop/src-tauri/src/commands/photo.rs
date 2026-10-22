@@ -2,13 +2,12 @@
 use super::AppState;
 use crate::application::error::{AppError, AppResult};
 use crate::application::use_cases::cull_photo::CullPhoto;
-use crate::application::use_cases::import_photos::cache_thumbnails_parallel;
+use crate::application::use_cases::import_photos::{cache_thumbnails_parallel, ThumbJob};
 use crate::application::use_cases::rate_photo::RatePhoto;
 use crate::application::use_cases::rotate_photo::RotatePhoto;
 use crate::application::use_cases::trash_photo::{RestorePhoto, TrashPhoto};
 use crate::db::models::*;
 use log::{debug, error, info, warn};
-use std::path::PathBuf;
 use tauri::{AppHandle, State};
 
 // ============================================================================
@@ -380,8 +379,10 @@ pub fn regenerate_project_thumbnails(state: State<AppState>, project_id: String)
         }
     }
 
-    // Reconcile rotation: read from source file → update DB if different
+    // Reconcile rotation: read from source file → update DB if different.
+    // The rotation read here is reused for the thumbnails.
     let mut reconciled = 0u32;
+    let mut jobs: Vec<ThumbJob> = Vec::with_capacity(photos.len());
     for photo in &photos {
         let dng_full = project_db.photo_file(&photo.dng_path);
         let file_rotation = state.metadata.read_rotation(&dng_full);
@@ -389,19 +390,15 @@ pub fn regenerate_project_thumbnails(state: State<AppState>, project_id: String)
             let _ = project_db.update_photo_rotation(&photo.id, file_rotation);
             reconciled += 1;
         }
+        jobs.push(ThumbJob { src: dng_full, photo_id: photo.id.clone(), rotation: Some(file_rotation) });
     }
     if reconciled > 0 {
         info!("regenerate_project_thumbnails: reconciled rotation for {} photo(s)", reconciled);
     }
 
-    let pairs: Vec<(PathBuf, String)> = photos
-        .iter()
-        .map(|photo| (project_db.photo_file(&photo.dng_path), photo.id.clone()))
-        .collect();
+    cache_thumbnails_parallel(state.image_processor.as_ref(), &jobs, None);
 
-    cache_thumbnails_parallel(state.image_processor.as_ref(), &pairs, None);
-
-    let regenerated = pairs.len() as u32;
+    let regenerated = jobs.len() as u32;
     info!("regenerate_project_thumbnails: {} thumbnails regenerated for project {}", regenerated, project_id);
     Ok(regenerated)
 }

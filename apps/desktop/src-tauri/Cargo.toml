@@ -72,6 +72,13 @@ libc = "0.2"
 [profile.dev]
 incremental = true
 
+# Las dependencias se compilan optimizadas también en `tauri dev`: sin esto,
+# decodificar y reducir un preview de 20 MP con `image` tarda ~6.4 s por foto
+# (frente a ~90 ms en release) y el import en desarrollo no es representativo.
+# El código propio sigue en debug para compilar rápido.
+[profile.dev.package."*"]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1
 lto = true

@@ -168,6 +168,7 @@ comando devuelve error "device not mounted".
     {photo_id}.jpg           # JPEG 480px, rotación física aplicada
   .previews/
     {photo_id}.jpg           # JPEG full-res extraído del DNG, Orientation=1
+  .import-staging/           # solo durante un import: staging de la sesión (se borra al terminar)
 ```
 
 ## Reglas técnicas críticas
@@ -182,8 +183,8 @@ comando devuelve error "device not mounted".
   actualiza a `_culled/{filename}`. No hay campo separado "culled_path".
 - **`_media/` y `_culled/` son hermanas**: ambas viven directamente bajo el directorio
   del proyecto. Al cullarse, el archivo pasa de `_media/` a `_culled/`; al descullear, vuelve a `_media/`.
-- **`_video/`**: carpeta donde van los videos. Se copian directamente sin conversión ni
-  escritura de metadatos XMP.
+- **`_video/`**: carpeta donde van los videos. Se copian sin conversión ni escritura de
+  metadatos XMP (pasan por `.import-staging/` y llegan con `rename`).
 - **exiftool es requerido en runtime**: thumbnails, previews, EXIF batch, orientación
   y metadata XMP dependen de él. Sin exiftool, la importación y el visor fallan.
   Siempre se lanza con `exiftool::command()`, nunca con `Command::new("exiftool")`:
@@ -216,19 +217,40 @@ modificarlos), particiona fotos/videos y delega en el caso de uso `ImportPhotos`
 
 ```
 source files
-  → pipeline_passthrough → workspace temporal (copia en formato original, sin conversión)
-  → pipeline_metadata (exiftool renombra y embebe XMP del fotógrafo según los ajustes resueltos)
-  → pipeline_move_to_dest → carpeta del proyecto en disco externo
+  → PipelineWorkspace::create → {proyecto}/.import-staging/{sesión}/ (mismo disco que el destino;
+                                  borra restos de un import interrumpido; Drop lo limpia)
+  → pipeline_copy_videos → staging → pipeline_move_to_dest(_video/)
+  → escritorio con algo que escribir: pipeline_stage_signed (fase copy_metadata): copia
+      secuencial origen → staging y, solapado, 4 workers (sesiones del pool de exiftool) firman
+      y renombran con exiftool -o dentro del staging. El origen se lee de a uno: con lectores
+      concurrentes un disco mecánico o una tarjeta se desploman
+    sin nada que escribir: pipeline_passthrough → staging (copia tal cual, fase copy)
+    Android: pipeline_passthrough + pipeline_metadata (rawler + sidecar XMP, fase metadata)
+    (un archivo por subcarpeta del staging, formato original, sin conversión)
+  → pipeline_move_to_dest(_media/) → fs::rename con free_name() (sufijo -001… si ya existe)
   → MetadataTool::extract_batch (UN proceso exiftool para todos, salida CSV)
   → PhotoRepository::create_batch (UNA transacción SQLite)
   → cache_thumbnails_parallel (ImageProcessor, paralelo por CPU cores, max 8)
 ```
 
+**Fallos por archivo:** un archivo que no se puede copiar, preparar o mover se agrega a
+`failed_files` con un `ImportErrorCode` (`source_unreadable`, `no_space`, `write_failed`,
+`metadata_failed`, `register_failed`, `unknown`) y el resto sigue; tras `no_space` los
+pendientes fallan sin intentarse. Los no admitidos van a `skipped_files`. Un error general (no
+se puede crear el staging, `_media/` o `_video/`) va en `ImportResult.fatal` junto con lo ya
+importado: `start_import` devuelve `Ok` en todo lo que ocurre durante la importación y `Err`
+solo para precondiciones (proyecto no abierto, sin fotógrafo). Nunca se sobrescribe un archivo
+de `_media/` o `_video/`.
+
 El auto-rename de la carpeta por fecha (usa `relocate_project_folder`, acoplado al
 registry) se queda en el adaptador, tras el caso de uso.
 
-El progreso se emite como evento Tauri `"import-progress"` con 3 fases gruesas
-(no por archivo). El frontend lo recibe en `useImport()` hook.
+El progreso se emite como evento Tauri `"import-progress"` **por archivo**: fase (`videos`,
+`copy`, `copy_metadata`, `metadata`, `move`, `register`, `complete`), archivo N de M y bytes del archivo y del
+total (copia por bloques de 4 MiB con `copy_with_progress`, como máximo un evento cada ~100 ms).
+El registro va por `"import-log"` como entradas estructuradas (`ImportLogEntry { kind, … }`) que
+el frontend traduce (`import.log.*`, `import.errors.codes.*`). `useImport()` expone el estado
+`idle | importing | done`, y el paso 3 muestra siempre el resultado (completo, parcial o fallido).
 
 ## Flujo de navegación (frontend)
 

@@ -6,16 +6,16 @@
 
 use crate::db::models::{CreatePhoto, Photo, PhotographerMetadata};
 use crate::devices::DetectedDevice;
-use crate::import::ImportProgress;
+use crate::import::{FailedFile, FatalError, ImportLogEntry, ImportProgress, SkippedFile};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Canal de progreso/log del import. Desacopla la orquestación de Tauri: la impl
 /// real emite eventos (`app.emit`), y en tests un doble los recopila.
 pub trait ProgressReporter: Send + Sync {
-    /// Emite una línea de log para la sesión de import indicada.
-    fn log(&self, session_id: &str, message: &str);
-    /// Emite un evento de progreso (fase gruesa) del import.
+    /// Emite una entrada del registro de actividad (traducida en el frontend).
+    fn log(&self, entry: ImportLogEntry);
+    /// Emite un evento de progreso (fase, archivo y bytes) del import.
     fn progress(&self, progress: ImportProgress);
 }
 
@@ -217,32 +217,44 @@ pub trait PhotoRepository {
     fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String>;
 }
 
-/// Parámetros para procesar fotos a través del pipeline de importación.
-pub struct PipelinePhotos<'a> {
+/// Parámetros de una sesión del pipeline de importación (fotos y videos).
+pub struct PipelineRequest<'a> {
+    pub session_id: &'a str,
     pub photos: &'a [PathBuf],
+    pub videos: &'a [PathBuf],
+    /// Carpeta del proyecto: el staging vive dentro (mismo disco que el destino).
+    pub project_dir: &'a Path,
+    /// Carpeta destino de las fotos (`{project_dir}/_media`).
+    pub dest_folder: &'a Path,
+    /// Carpeta destino de los videos (`{project_dir}/_video`).
+    pub video_dest_folder: &'a Path,
     pub project_name: &'a str,
     pub metadata: &'a Option<PhotographerMetadata>,
     pub image_description: Option<&'a str>,
     pub rename: bool,
-    /// Carpeta destino final (`{project_dir}/_media`).
-    pub dest_folder: &'a Path,
-    pub session_id: &'a str,
 }
 
-/// Pipeline de importación (copia a workspace, embebe metadata/renombra, mueve a
-/// destino, copia videos). Se abstrae para que el caso de uso `ImportPhotos` sea
-/// testeable con un doble, sin tocar exiftool/fs reales.
-pub trait ImportPipeline: Send + Sync {
-    /// Procesa las fotos y devuelve las rutas finales de los archivos movidos
-    /// (sin sidecars XMP). Emite progreso/log de las fases copiar/metadata/mover.
-    fn process_photos(
-        &self,
-        req: PipelinePhotos,
-        reporter: &dyn ProgressReporter,
-    ) -> Result<Vec<PathBuf>, String>;
+/// Resultado del pipeline. Siempre se devuelve, aunque termine por un error
+/// general (`fatal`): lo ya importado se conserva y se informa.
+#[derive(Debug, Default)]
+pub struct PipelineOutcome {
+    /// Rutas finales de las fotos movidas a `dest_folder` (sin sidecars XMP).
+    pub photos: Vec<PathBuf>,
+    pub videos_copied: usize,
+    pub failed: Vec<FailedFile>,
+    pub skipped: Vec<SkippedFile>,
+    /// Suma de los tamaños de origen de fotos y videos.
+    pub bytes_total: u64,
+    pub fatal: Option<FatalError>,
+}
 
-    /// Copia videos directamente a `dest` (sin conversión ni metadata).
-    fn copy_videos(&self, videos: &[PathBuf], dest: &Path) -> Result<usize, String>;
+/// Pipeline de importación (copia al staging, embebe metadata/renombra, mueve a
+/// destino; videos sin metadata). Se abstrae para que el caso de uso
+/// `ImportPhotos` sea testeable con un doble, sin tocar exiftool/fs reales.
+pub trait ImportPipeline: Send + Sync {
+    /// Importa videos y fotos archivo por archivo: los fallos de un archivo se
+    /// acumulan y el resto sigue. Emite progreso y registro por `reporter`.
+    fn import(&self, req: PipelineRequest, reporter: &dyn ProgressReporter) -> PipelineOutcome;
 }
 
 /// Operaciones de sistema de archivos usadas por los casos de uso (mover una
@@ -316,8 +328,9 @@ pub trait MetadataTool: Send + Sync {
 pub trait ImageProcessor: Send + Sync {
     /// Genera el thumbnail (JPEG ~320px, rotación EXIF aplicada) del archivo `src`
     /// en la carpeta `.thumbs/` de su proyecto, como `{photo_id}.jpg`. Idempotente:
-    /// no-op si ya existe. Devuelve la rotación aplicada (para logging) o `None`.
-    fn cache_thumbnail(&self, src: &Path, photo_id: &str) -> Option<i32>;
+    /// no-op si ya existe. `rotation` es la del archivo si ya se conoce (p. ej. del
+    /// EXIF batch); con `None` se lee del archivo. Devuelve la rotación aplicada o `None`.
+    fn cache_thumbnail(&self, src: &Path, photo_id: &str, rotation: Option<i32>) -> Option<i32>;
 
     /// Reaplica un delta de rotación (grados) al thumbnail existente del proyecto.
     fn rotate_thumbnail(&self, project_dir: &Path, photo_id: &str, delta: i32);

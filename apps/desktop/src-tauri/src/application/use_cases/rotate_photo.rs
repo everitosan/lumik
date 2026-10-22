@@ -134,7 +134,7 @@ mod tests {
         rotate_calls: Mutex<Vec<(PathBuf, i32)>>,
     }
     impl ImageProcessor for FakeImages {
-        fn cache_thumbnail(&self, _src: &Path, _id: &str) -> Option<i32> {
+        fn cache_thumbnail(&self, _src: &Path, _id: &str, _rotation: Option<i32>) -> Option<i32> {
             unreachable!()
         }
         fn rotate_thumbnail(&self, project_dir: &Path, _id: &str, delta: i32) {

@@ -224,6 +224,13 @@ pub fn run() {
             commands::clear_pending_backup,
             commands::get_pending_backups,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            // Exiftool con -stay_open no termina solo al salir Lumik.
+            if let tauri::RunEvent::Exit = event {
+                #[cfg(not(target_os = "android"))]
+                exiftool::shutdown();
+            }
+        });
 }

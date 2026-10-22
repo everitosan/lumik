@@ -7,7 +7,7 @@ use crate::application::import_settings::{resolve_import_settings, ImportSession
 use crate::application::ports::ProgressReporter;
 use crate::application::use_cases::import_photos::{ImportParams, ImportPhotos};
 use crate::domain::project::{image_description, ProjectFolder};
-use crate::import::{ImportPhase, ImportProgress, ImportResult};
+use crate::import::{ImportLogEntry, ImportLogKind, ImportPhase, ImportProgress, ImportResult};
 use crate::infrastructure::import_pipeline::{is_video_file, StdImportPipeline};
 use log::{info, warn};
 use serde::Deserialize;
@@ -76,6 +76,8 @@ pub async fn start_import(
         all_paths.into_iter().partition(|p| is_video_file(p));
 
     // Caso de uso: videos + pipeline de fotos + registro en BD + miniaturas.
+    // Lo que falla durante la importación vuelve dentro del resultado (por
+    // archivo o en `fatal`); el `Err` del comando queda para las precondiciones.
     let outcome = ImportPhotos {
         photos: project_db.as_ref(),
         metadata: state.metadata.as_ref(),
@@ -95,7 +97,7 @@ pub async fn start_import(
         metadata: settings.metadata,
         image_description,
         rename_on_import: settings.rename_on_import,
-    })?;
+    });
 
     let successful = outcome.successful;
 
@@ -127,9 +129,10 @@ pub async fn start_import(
             let db = if needs_move {
                 match relocate_project_folder(&state, &request.project_id, &new_project_dir) {
                     Ok(db) => {
-                        emit_log(&reporter, &request.session_id, &format!(
-                            "Carpeta movida a {}", new_project_dir.display()
-                        ));
+                        reporter.log(
+                            ImportLogEntry::new(&request.session_id, ImportLogKind::FolderMoved)
+                                .detail(new_project_dir.display().to_string()),
+                        );
                         Some(db)
                     }
                     Err(e) => {
@@ -149,7 +152,17 @@ pub async fn start_import(
         }
     }
 
-    emit_progress(&reporter, &request.session_id, 3, 3, "Completado", ImportPhase::Complete, None);
+    reporter.progress(ImportProgress {
+        session_id: request.session_id.clone(),
+        phase: ImportPhase::Complete,
+        file_name: String::new(),
+        file_index: 0,
+        file_total: 0,
+        file_bytes: 0,
+        file_bytes_total: 0,
+        bytes_done: 0,
+        bytes_total: 0,
+    });
 
     let result = ImportResult {
         session_id: request.session_id.clone(),
@@ -157,43 +170,21 @@ pub async fn start_import(
         successful,
         failed: outcome.failed_files.len(),
         failed_files: outcome.failed_files,
+        skipped_files: outcome.skipped_files,
         videos_copied: outcome.videos_copied,
+        fatal: outcome.fatal,
     };
 
-    info!(
-        "Import completed: {} successful, {} failed",
-        result.successful, result.failed
-    );
-    emit_log(&reporter, &request.session_id, &format!(
-        "Importación completada: {} fotos{}{}",
-        result.successful,
-        if result.videos_copied > 0 { format!(" · {} videos", result.videos_copied) } else { String::new() },
-        if result.failed > 0 { format!(" · {} errores", result.failed) } else { String::new() },
-    ));
+    match &result.fatal {
+        Some(fatal) => warn!(
+            "Import ended early ({:?}: {}): {} successful, {} failed",
+            fatal.code, fatal.detail, result.successful, result.failed
+        ),
+        None => info!(
+            "Import completed: {} successful, {} failed, {} skipped",
+            result.successful, result.failed, result.skipped_files.len()
+        ),
+    }
+    reporter.log(ImportLogEntry::new(&request.session_id, ImportLogKind::Done).count(result.successful));
     Ok(result)
-}
-
-/// Adaptadores delgados sobre el puerto `ProgressReporter` (el impl real emite
-/// eventos Tauri; en tests, un doble los recopila).
-fn emit_log(reporter: &dyn ProgressReporter, session_id: &str, message: &str) {
-    reporter.log(session_id, message);
-}
-
-fn emit_progress(
-    reporter: &dyn ProgressReporter,
-    session_id: &str,
-    index: usize,
-    total: usize,
-    file_name: &str,
-    phase: ImportPhase,
-    error: Option<String>,
-) {
-    reporter.progress(ImportProgress {
-        session_id: session_id.to_string(),
-        current_index: index,
-        total_files: total,
-        current_file: file_name.to_string(),
-        phase,
-        error,
-    });
 }

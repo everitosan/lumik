@@ -3,9 +3,13 @@ pub mod pipeline;
 pub mod progress;
 pub mod xmp;
 
+#[cfg(target_os = "android")]
+pub use pipeline::pipeline_metadata;
 pub use pipeline::{
-    pipeline_passthrough,
-    pipeline_metadata, pipeline_move_to_dest, pipeline_copy_videos,
-    is_video_file, PipelineWorkspace,
+    pipeline_passthrough, pipeline_move_to_dest, pipeline_copy_videos,
+    is_video_file, PipelineWorkspace, StageEvent,
 };
-pub use progress::{FailedFile, ImportLogEntry, ImportPhase, ImportProgress, ImportResult};
+pub use progress::{
+    error_code_for, FailedFile, FatalError, ImportErrorCode, ImportLogEntry, ImportLogKind,
+    ImportPhase, ImportProgress, ImportResult, IoSide, SkipReason, SkippedFile,
+};
