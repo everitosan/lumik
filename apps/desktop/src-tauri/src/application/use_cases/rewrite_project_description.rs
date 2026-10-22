@@ -5,7 +5,7 @@
 
 use crate::application::ports::MetadataTool;
 use crate::application::use_cases::rename_project_files::PhotoFile;
-use crate::import::FailedFile;
+use crate::import::{FailedFile, ImportErrorCode};
 use std::path::Path;
 
 pub struct RewriteProjectDescription<'a> {
@@ -39,6 +39,7 @@ impl RewriteProjectDescription<'_> {
                 Err(e) => outcome.failed.push(FailedFile {
                     name: photo.dng_path.rsplit('/').next().unwrap_or(&photo.dng_path).to_string(),
                     path: photo.dng_path.clone(),
+                    code: ImportErrorCode::MetadataFailed,
                     error: e,
                 }),
             }

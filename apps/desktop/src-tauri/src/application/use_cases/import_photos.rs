@@ -5,15 +5,18 @@
 //! hace aquí; lo maneja el adaptador tras `execute`.
 
 use crate::application::ports::{
-    FileMetadata, ImageProcessor, ImportPipeline, MetadataTool, PhotoRepository, PipelinePhotos,
+    FileMetadata, ImageProcessor, ImportPipeline, MetadataTool, PhotoRepository, PipelineRequest,
     ProgressReporter,
 };
 use crate::db::models::{CreatePhoto, PhotographerMetadata};
 use crate::domain::paths::path_to_slash;
-use crate::import::{FailedFile, ImportPhase, ImportProgress};
-use log::info;
+use crate::import::{
+    FailedFile, FatalError, ImportErrorCode, ImportLogEntry, ImportLogKind, ImportPhase,
+    ImportProgress, SkippedFile,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Entrada del import, ya particionada en fotos y videos por el adaptador.
 pub struct ImportParams {
@@ -22,7 +25,8 @@ pub struct ImportParams {
     pub video_paths: Vec<PathBuf>,
     pub project_id: String,
     pub project_name: String,
-    /// Carpeta del proyecto: las rutas de las fotos se guardan relativas a ella.
+    /// Carpeta del proyecto: las rutas de las fotos se guardan relativas a ella,
+    /// y el staging del import vive dentro.
     pub project_dir: PathBuf,
     /// `{project_dir}/_media`
     pub dest_folder: PathBuf,
@@ -34,10 +38,14 @@ pub struct ImportParams {
     pub rename_on_import: bool,
 }
 
+/// Resultado del import. Siempre se devuelve: un error general va en `fatal`
+/// junto con lo que sí se importó.
 pub struct ImportOutcome {
     pub successful: usize,
     pub failed_files: Vec<FailedFile>,
+    pub skipped_files: Vec<SkippedFile>,
     pub videos_copied: usize,
+    pub fatal: Option<FatalError>,
 }
 
 pub struct ImportPhotos<'a> {
@@ -49,111 +57,110 @@ pub struct ImportPhotos<'a> {
 }
 
 impl ImportPhotos<'_> {
-    pub fn execute(&self, p: &ImportParams) -> Result<ImportOutcome, String> {
-        // === VIDEOS: copia directa a _video/ (sin conversión ni metadata) ===
-        let videos_copied = if p.video_paths.is_empty() {
+    pub fn execute(&self, p: &ImportParams) -> ImportOutcome {
+        // Videos + fotos: staging → metadata → mover, con fallos por archivo.
+        let out = self.pipeline.import(
+            PipelineRequest {
+                session_id: &p.session_id,
+                photos: &p.photo_paths,
+                videos: &p.video_paths,
+                project_dir: &p.project_dir,
+                dest_folder: &p.dest_folder,
+                video_dest_folder: &p.video_dest_folder,
+                project_name: &p.project_name,
+                metadata: &p.metadata,
+                image_description: p.image_description.as_deref(),
+                rename: p.rename_on_import,
+            },
+            self.reporter,
+        );
+
+        let mut failed_files = out.failed;
+        let successful = if out.photos.is_empty() {
             0
         } else {
-            self.pipeline.copy_videos(&p.video_paths, &p.video_dest_folder)?
-        };
-
-        // === FOTOS ===
-        let (successful, failed_files) = if p.photo_paths.is_empty() {
-            info!("No photo files selected, skipping photo pipeline");
-            (0usize, Vec::new())
-        } else {
-            // Fases copiar → metadata → mover (emiten progreso 0/3 y 1/3).
-            let dng_files = self.pipeline.process_photos(
-                PipelinePhotos {
-                    photos: &p.photo_paths,
-                    project_name: &p.project_name,
-                    metadata: &p.metadata,
-                    image_description: p.image_description.as_deref(),
-                    rename: p.rename_on_import,
-                    dest_folder: &p.dest_folder,
-                    session_id: &p.session_id,
-                },
-                self.reporter,
-            )?;
-
-            // Fase 3: registrar (EXIF batch + transacción única + miniaturas).
-            self.reporter.progress(ImportProgress {
-                session_id: p.session_id.clone(),
-                current_index: 2,
-                total_files: 3,
-                current_file: "Registrando".to_string(),
-                phase: ImportPhase::Saving,
-                error: None,
-            });
-
-            let exif_map = self.metadata.extract_batch(&dng_files);
-            let inserts = match build_photo_inserts(
-                &dng_files,
-                &exif_map,
-                &p.dest_folder,
-                &p.project_dir,
-                &p.project_id,
-            ) {
-                Ok(inserts) => inserts,
-                Err(e) => {
-                    return Ok(ImportOutcome {
-                        successful: 0,
-                        failed_files: failed_all(&dng_files, &e),
-                        videos_copied,
-                    })
-                }
-            };
-            let create_dtos: Vec<CreatePhoto> = inserts.iter().map(|(_, cp)| cp.clone()).collect();
-
-            match self.photos.create_batch(&create_dtos) {
-                Ok(photos) => {
-                    self.reporter
-                        .log(&p.session_id, &format!("{} fotos registradas en BD", photos.len()));
-                    let thumb_pairs: Vec<(PathBuf, String)> = inserts
-                        .iter()
-                        .zip(photos.iter())
-                        .map(|((path, _), photo)| (path.clone(), photo.id.clone()))
-                        .collect();
-                    self.reporter.log(
-                        &p.session_id,
-                        &format!("Generando {} miniaturas...", thumb_pairs.len()),
-                    );
-                    cache_thumbnails_parallel(
-                        self.images,
-                        &thumb_pairs,
-                        Some((self.reporter, p.session_id.as_str())),
-                    );
-                    (photos.len(), Vec::new())
-                }
-                Err(e) => {
-                    let paths: Vec<PathBuf> = inserts.iter().map(|(path, _)| path.clone()).collect();
-                    (0, failed_all(&paths, &format!("Database error: {}", e)))
+            match self.register(p, &out.photos, out.bytes_total) {
+                Ok(n) => n,
+                Err(failed) => {
+                    failed_files.extend(failed);
+                    0
                 }
             }
         };
 
-        Ok(ImportOutcome {
+        ImportOutcome {
             successful,
             failed_files,
-            videos_copied,
-        })
+            skipped_files: out.skipped,
+            videos_copied: out.videos_copied,
+            fatal: out.fatal,
+        }
+    }
+
+    /// Fase registrar: EXIF batch + transacción única + miniaturas. Si el
+    /// registro falla, todas las fotos del lote se devuelven como fallidas.
+    fn register(&self, p: &ImportParams, dng_files: &[PathBuf], bytes_total: u64) -> Result<usize, Vec<FailedFile>> {
+        let progress = |file_name: &str, index: usize, total: usize| {
+            self.reporter.progress(ImportProgress {
+                session_id: p.session_id.clone(),
+                phase: ImportPhase::Register,
+                file_name: file_name.to_string(),
+                file_index: index,
+                file_total: total,
+                file_bytes: 0,
+                file_bytes_total: 0,
+                bytes_done: bytes_total,
+                bytes_total,
+            })
+        };
+        progress("", 0, 0);
+
+        let exif_map = self.metadata.extract_batch(dng_files);
+        let inserts = build_photo_inserts(dng_files, &exif_map, &p.dest_folder, &p.project_dir, &p.project_id)
+            .map_err(|e| failed_all(dng_files, ImportErrorCode::RegisterFailed, &e))?;
+        let create_dtos: Vec<CreatePhoto> = inserts.iter().map(|(_, cp)| cp.clone()).collect();
+
+        let photos = self.photos.create_batch(&create_dtos).map_err(|e| {
+            let paths: Vec<PathBuf> = inserts.iter().map(|(path, _)| path.clone()).collect();
+            failed_all(&paths, ImportErrorCode::RegisterFailed, &format!("Database error: {}", e))
+        })?;
+        self.reporter.log(
+            ImportLogEntry::new(&p.session_id, ImportLogKind::PhotosRegistered).count(photos.len()),
+        );
+
+        // La rotación ya viene del EXIF batch: no se vuelve a leer por archivo.
+        let thumb_pairs: Vec<ThumbJob> = inserts
+            .iter()
+            .zip(photos.iter())
+            .map(|((path, _), photo)| ThumbJob {
+                src: path.clone(),
+                photo_id: photo.id.clone(),
+                rotation: exif_map.get(path).map(|m| m.rotation),
+            })
+            .collect();
+        let total = thumb_pairs.len();
+        self.reporter.log(ImportLogEntry::new(&p.session_id, ImportLogKind::Thumbnails).count(total));
+        let done = AtomicUsize::new(0);
+        let on_thumb = |path: &Path, rotation: Option<i32>| {
+            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+            progress(file_name, n, total);
+            if let Some(rotation) = rotation {
+                self.reporter.log(
+                    ImportLogEntry::new(&p.session_id, ImportLogKind::Thumbnail)
+                        .file(file_name)
+                        .detail(format!("{}°", rotation)),
+                );
+            }
+        };
+        cache_thumbnails_parallel(self.images, &thumb_pairs, Some(&on_thumb));
+        Ok(photos.len())
     }
 }
 
 /// Marca todas las fotos del lote como fallidas con el mismo motivo.
-fn failed_all(paths: &[PathBuf], error: &str) -> Vec<FailedFile> {
-    paths
-        .iter()
-        .map(|path| FailedFile {
-            name: path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("unknown")
-                .to_string(),
-            path: path.to_string_lossy().to_string(),
-            error: error.to_string(),
-        })
-        .collect()
+fn failed_all(paths: &[PathBuf], code: ImportErrorCode, error: &str) -> Vec<FailedFile> {
+    paths.iter().map(|path| FailedFile::new(path, code, error)).collect()
 }
 
 /// Construye los DTOs `CreatePhoto` a partir de las rutas movidas y la metadata
@@ -216,29 +223,32 @@ fn build_photo_inserts(
     Ok(inserts)
 }
 
+/// Una miniatura por generar. `rotation` es la del archivo si ya se conoce.
+pub(crate) struct ThumbJob {
+    pub src: PathBuf,
+    pub photo_id: String,
+    pub rotation: Option<i32>,
+}
+
 /// Genera miniaturas en paralelo (acotado por CPUs, máx 8) vía `ImageProcessor`.
-/// Emite un log por miniatura recién creada. Compartido con `regenerate_project_thumbnails`.
+/// `on_done(ruta, rotación)` se llama al terminar cada una (rotación `None` si
+/// no se pudo crear). Compartido con `regenerate_project_thumbnails`.
 pub(crate) fn cache_thumbnails_parallel(
     image_processor: &dyn ImageProcessor,
-    pairs: &[(PathBuf, String)],
-    log_ctx: Option<(&dyn ProgressReporter, &str)>,
+    jobs: &[ThumbJob],
+    on_done: Option<&(dyn Fn(&Path, Option<i32>) + Sync)>,
 ) {
     let concurrency = std::thread::available_parallelism()
         .map(|n| n.get().min(8))
         .unwrap_or(4);
 
-    for chunk in pairs.chunks(concurrency) {
+    for chunk in jobs.chunks(concurrency) {
         std::thread::scope(|s| {
-            for (path, id) in chunk {
+            for job in chunk {
                 s.spawn(move || {
-                    if let Some(rotation) = image_processor.cache_thumbnail(path, id) {
-                        if let Some((reporter, session_id)) = log_ctx {
-                            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or(id);
-                            reporter.log(
-                                session_id,
-                                &format!("Miniatura: {} (rot {}°)", file_name, rotation),
-                            );
-                        }
+                    let rotation = image_processor.cache_thumbnail(&job.src, &job.photo_id, job.rotation);
+                    if let Some(on_done) = on_done {
+                        on_done(&job.src, rotation);
                     }
                 });
             }
@@ -249,6 +259,7 @@ pub(crate) fn cache_thumbnails_parallel(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::ports::PipelineOutcome;
     use crate::db::models::Photo;
     use std::sync::Mutex;
 
@@ -289,21 +300,20 @@ mod tests {
 
     // ---- Fakes para el test de orquestación --------------------------------
 
+    /// Pipeline doble: devuelve el resultado preparado y recuerda la petición.
     struct FakePipeline {
-        dng: Vec<PathBuf>,
-        videos: Mutex<usize>,
+        outcome: Mutex<Option<PipelineOutcome>>,
+        videos_seen: Mutex<usize>,
+    }
+    impl FakePipeline {
+        fn new(outcome: PipelineOutcome) -> Self {
+            Self { outcome: Mutex::new(Some(outcome)), videos_seen: Mutex::new(0) }
+        }
     }
     impl ImportPipeline for FakePipeline {
-        fn process_photos(
-            &self,
-            _req: PipelinePhotos,
-            _r: &dyn ProgressReporter,
-        ) -> Result<Vec<PathBuf>, String> {
-            Ok(self.dng.clone())
-        }
-        fn copy_videos(&self, videos: &[PathBuf], _dest: &Path) -> Result<usize, String> {
-            *self.videos.lock().unwrap() = videos.len();
-            Ok(videos.len())
+        fn import(&self, req: PipelineRequest, _r: &dyn ProgressReporter) -> PipelineOutcome {
+            *self.videos_seen.lock().unwrap() = req.videos.len();
+            self.outcome.lock().unwrap().take().unwrap_or_default()
         }
     }
 
@@ -328,7 +338,7 @@ mod tests {
         thumbs: Mutex<Vec<String>>,
     }
     impl ImageProcessor for FakeImages {
-        fn cache_thumbnail(&self, _src: &Path, id: &str) -> Option<i32> {
+        fn cache_thumbnail(&self, _src: &Path, id: &str, _rotation: Option<i32>) -> Option<i32> {
             self.thumbs.lock().unwrap().push(id.to_string());
             Some(0)
         }
@@ -392,7 +402,7 @@ mod tests {
 
     struct NoopReporter;
     impl ProgressReporter for NoopReporter {
-        fn log(&self, _s: &str, _m: &str) {}
+        fn log(&self, _e: ImportLogEntry) {}
         fn progress(&self, _p: ImportProgress) {}
     }
 
@@ -447,45 +457,87 @@ mod tests {
         }
     }
 
+    fn use_case<'a>(
+        pipeline: &'a FakePipeline,
+        repo: &'a FakeRepo,
+        images: &'a FakeImages,
+    ) -> ImportPhotos<'a> {
+        ImportPhotos {
+            photos: repo,
+            metadata: &FakeMetadata,
+            images,
+            pipeline,
+            reporter: &NoopReporter,
+        }
+    }
+
     #[test]
     fn execute_registers_photos_and_generates_thumbnails() {
         let dng = vec![PathBuf::from("/mnt/lumik/x/_media/A.dng"), PathBuf::from("/mnt/lumik/x/_media/B.dng")];
-        let pipeline = FakePipeline { dng: dng.clone(), videos: Mutex::new(0) };
+        let pipeline = FakePipeline::new(PipelineOutcome { photos: dng.clone(), ..Default::default() });
         let repo = FakeRepo { created: Mutex::new(0) };
         let images = FakeImages { thumbs: Mutex::new(vec![]) };
-        let uc = ImportPhotos {
-            photos: &repo,
-            metadata: &FakeMetadata,
-            images: &images,
-            pipeline: &pipeline,
-            reporter: &NoopReporter,
-        };
 
-        let out = uc.execute(&params(dng.clone(), vec![])).unwrap();
+        let out = use_case(&pipeline, &repo, &images).execute(&params(dng.clone(), vec![]));
         assert_eq!(out.successful, 2);
         assert_eq!(out.videos_copied, 0);
         assert!(out.failed_files.is_empty());
+        assert!(out.fatal.is_none());
         assert_eq!(*repo.created.lock().unwrap(), 2, "batch con 2 fotos");
         assert_eq!(images.thumbs.lock().unwrap().len(), 2, "2 miniaturas");
     }
 
     #[test]
     fn execute_copies_videos_and_skips_empty_photo_pipeline() {
-        let pipeline = FakePipeline { dng: vec![], videos: Mutex::new(0) };
+        let pipeline = FakePipeline::new(PipelineOutcome { videos_copied: 1, ..Default::default() });
         let repo = FakeRepo { created: Mutex::new(0) };
         let images = FakeImages { thumbs: Mutex::new(vec![]) };
-        let uc = ImportPhotos {
-            photos: &repo,
-            metadata: &FakeMetadata,
-            images: &images,
-            pipeline: &pipeline,
-            reporter: &NoopReporter,
-        };
 
         let videos = vec![PathBuf::from("/src/CLIP.mp4")];
-        let out = uc.execute(&params(vec![], videos)).unwrap();
+        let out = use_case(&pipeline, &repo, &images).execute(&params(vec![], videos));
+        assert_eq!(*pipeline.videos_seen.lock().unwrap(), 1);
         assert_eq!(out.videos_copied, 1);
         assert_eq!(out.successful, 0);
         assert_eq!(*repo.created.lock().unwrap(), 0, "sin fotos, no hay batch");
     }
+
+    #[test]
+    fn execute_registers_the_rest_when_one_file_fails() {
+        let dng = vec![PathBuf::from("/mnt/lumik/x/_media/A.dng"), PathBuf::from("/mnt/lumik/x/_media/C.dng")];
+        let failed = FailedFile::new(Path::new("/src/B.dng"), ImportErrorCode::SourceUnreadable, "denied");
+        let pipeline = FakePipeline::new(PipelineOutcome {
+            photos: dng.clone(),
+            failed: vec![failed],
+            ..Default::default()
+        });
+        let repo = FakeRepo { created: Mutex::new(0) };
+        let images = FakeImages { thumbs: Mutex::new(vec![]) };
+
+        let sources = vec![PathBuf::from("/src/A.dng"), PathBuf::from("/src/B.dng"), PathBuf::from("/src/C.dng")];
+        let out = use_case(&pipeline, &repo, &images).execute(&params(sources, vec![]));
+        assert_eq!(out.successful, 2, "n-1 fotos registradas");
+        assert_eq!(out.failed_files.len(), 1);
+        assert_eq!(out.failed_files[0].name, "B.dng");
+        assert_eq!(*repo.created.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn execute_keeps_videos_when_the_pipeline_ends_early() {
+        let pipeline = FakePipeline::new(PipelineOutcome {
+            videos_copied: 2,
+            fatal: Some(FatalError { code: ImportErrorCode::NoSpace, detail: "No space left on device".into() }),
+            ..Default::default()
+        });
+        let repo = FakeRepo { created: Mutex::new(0) };
+        let images = FakeImages { thumbs: Mutex::new(vec![]) };
+
+        let out = use_case(&pipeline, &repo, &images).execute(&params(
+            vec![PathBuf::from("/src/A.dng")],
+            vec![PathBuf::from("/src/1.mp4"), PathBuf::from("/src/2.mp4")],
+        ));
+        assert_eq!(out.fatal.as_ref().map(|f| f.code), Some(ImportErrorCode::NoSpace));
+        assert_eq!(out.videos_copied, 2, "lo ya copiado se conserva");
+        assert_eq!(out.successful, 0);
+    }
 }
+

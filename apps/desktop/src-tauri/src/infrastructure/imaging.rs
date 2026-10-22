@@ -130,7 +130,7 @@ pub struct DesktopImaging;
 
 #[cfg(not(target_os = "android"))]
 impl ImageProcessor for DesktopImaging {
-    fn cache_thumbnail(&self, src: &Path, photo_id: &str) -> Option<i32> {
+    fn cache_thumbnail(&self, src: &Path, photo_id: &str, rotation: Option<i32>) -> Option<i32> {
         use crate::application::ports::MetadataTool;
         use image::ImageFormat;
         use std::io::Cursor;
@@ -191,7 +191,7 @@ impl ImageProcessor for DesktopImaging {
             }
         };
 
-        let rotation = ExiftoolMeta.read_rotation(src);
+        let rotation = rotation.unwrap_or_else(|| ExiftoolMeta.read_rotation(src));
         let final_bytes = match image::load_from_memory(&raw_bytes) {
             Ok(img) => {
                 let resized = img.thumbnail(320, 320);
@@ -324,14 +324,14 @@ pub struct AndroidImaging;
 
 #[cfg(target_os = "android")]
 impl ImageProcessor for AndroidImaging {
-    fn cache_thumbnail(&self, src: &Path, photo_id: &str) -> Option<i32> {
+    fn cache_thumbnail(&self, src: &Path, photo_id: &str, rotation: Option<i32>) -> Option<i32> {
         let dest = thumb_dest(src, photo_id)?;
         if dest.exists() {
             return None;
         }
         crate::exif_android::cache_thumbnail(src, &dest);
         if dest.exists() {
-            Some(crate::exif_android::read_exif_rotation(src))
+            Some(rotation.unwrap_or_else(|| crate::exif_android::read_exif_rotation(src)))
         } else {
             None
         }
@@ -394,13 +394,22 @@ mod tests {
     }
 
     #[test]
+    fn cache_thumbnail_uses_hinted_rotation() {
+        let proj = temp_project();
+        let src = staged_media(&proj, "orient_6.jpg", "IMG.jpg");
+        // El archivo dice 90°, pero la rotación conocida manda: no se vuelve a leer.
+        assert_eq!(DesktopImaging.cache_thumbnail(&src, "photo1", Some(0)), Some(0));
+        std::fs::remove_dir_all(&proj).ok();
+    }
+
+    #[test]
     fn cache_thumbnail_creates_and_is_idempotent() {
         let proj = temp_project();
         let src = staged_media(&proj, "orient_6.jpg", "IMG.jpg");
         let imaging = DesktopImaging;
 
         // Primera vez: genera el thumbnail y reporta la rotación (90°).
-        let r1 = imaging.cache_thumbnail(&src, "photo1");
+        let r1 = imaging.cache_thumbnail(&src, "photo1", None);
         assert_eq!(r1, Some(90));
         let thumb = proj.join(".thumbs/photo1.jpg");
         assert!(thumb.exists(), "el thumbnail debe existir");
@@ -408,7 +417,7 @@ mod tests {
         assert!(!bytes1.is_empty());
 
         // Segunda vez: idempotente — no reprocesa (dest ya existe) y no cambia el archivo.
-        let r2 = imaging.cache_thumbnail(&src, "photo1");
+        let r2 = imaging.cache_thumbnail(&src, "photo1", None);
         assert_eq!(r2, None, "segunda llamada debe ser no-op");
         let bytes2 = std::fs::read(&thumb).unwrap();
         assert_eq!(bytes1, bytes2, "el thumbnail no debe cambiar en la 2a llamada");
@@ -452,7 +461,7 @@ mod tests {
         let src = staged_media(&proj, "orient_1.jpg", "IMG.jpg");
         let imaging = DesktopImaging;
 
-        imaging.cache_thumbnail(&src, "photo1").unwrap();
+        imaging.cache_thumbnail(&src, "photo1", None).unwrap();
         let thumb = proj.join(".thumbs/photo1.jpg");
         let before = std::fs::read(&thumb).unwrap();
 

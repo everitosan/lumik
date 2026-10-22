@@ -12,11 +12,7 @@ pub struct TauriProgressReporter {
 }
 
 impl ProgressReporter for TauriProgressReporter {
-    fn log(&self, session_id: &str, message: &str) {
-        let entry = ImportLogEntry {
-            session_id: session_id.to_string(),
-            message: message.to_string(),
-        };
+    fn log(&self, entry: ImportLogEntry) {
         if let Err(e) = self.app.emit("import-log", &entry) {
             warn!("Failed to emit log event: {}", e);
         }

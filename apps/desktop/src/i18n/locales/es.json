@@ -30,13 +30,22 @@
     "progress": {
       "importing": "Importando...",
       "completed": "Importación completada",
-      "files": "Archivos",
       "elapsed": "Tiempo transcurrido",
       "photoImported_one": "fotografía importada",
       "photoImported_other": "fotografías importadas",
       "videoCopied_one": "video copiado",
       "videoCopied_other": "videos copiados",
-      "totalTime": "Tiempo total"
+      "totalTime": "Tiempo total",
+      "phases": {
+        "videos": "Copiando videos",
+        "copy": "Copiando fotos",
+        "copy_metadata": "Copiando y firmando fotos",
+        "metadata": "Aplicando nombres y metadatos",
+        "move": "Moviendo al proyecto",
+        "register": "Registrando fotos y generando miniaturas",
+        "complete": "Terminando…"
+      },
+      "fileOf": "Archivo {{index}} de {{total}}"
     },
     "buttons": {
       "import": "Iniciar importación",
@@ -54,8 +63,6 @@
       "destination": "Destino",
       "availableSpace": "Espacio disponible",
       "ready": "Todo listo. Los archivos se copiarán al disco de destino.",
-      "failedFiles": "archivos fallaron",
-      "moreFiles": "más...",
       "rename": "Renombrado",
       "renameYes": "Por fecha de captura",
       "renameNo": "Nombres originales",
@@ -82,7 +89,45 @@
       "selectFiles": "Error seleccionando archivos",
       "invalidFiles": "Algunos archivos no son soportados",
       "noFilesSelected": "No hay archivos seleccionados",
-      "importError": "Error"
+      "codes": {
+        "source_unreadable": "no se pudo leer el archivo de origen",
+        "no_space": "no hay espacio en el disco del proyecto",
+        "write_failed": "no se pudo escribir en el disco del proyecto",
+        "metadata_failed": "no se pudieron aplicar el nombre o los metadatos",
+        "register_failed": "no se pudo registrar en el proyecto",
+        "unknown": "error desconocido"
+      }
+    },
+    "log": {
+      "title": "Registro",
+      "video_copied": "Video copiado: {{file}}",
+      "file_copied": "Copiada: {{file}}",
+      "file_failed": "Error en {{file}}: {{reason}}",
+      "file_skipped": "Ignorado {{file}}: {{reason}}",
+      "photos_registered_one": "{{count}} foto registrada en el proyecto",
+      "photos_registered_other": "{{count}} fotos registradas en el proyecto",
+      "thumbnails_one": "Generando {{count}} miniatura…",
+      "thumbnails_other": "Generando {{count}} miniaturas…",
+      "thumbnail": "Miniatura: {{file}} ({{detail}})",
+      "folder_moved": "Carpeta del proyecto movida a {{detail}}",
+      "done_one": "Importación terminada: {{count}} foto",
+      "done_other": "Importación terminada: {{count}} fotos"
+    },
+    "result": {
+      "failedTitle": "La importación falló",
+      "partialTitle": "Importación completada con errores",
+      "failed_one": "{{count}} archivo no se importó",
+      "failed_other": "{{count}} archivos no se importaron",
+      "skipped_one": "{{count}} archivo ignorado",
+      "skipped_other": "{{count}} archivos ignorados",
+      "skipReasons": {
+        "unsupported_format": "formato no admitido",
+        "not_a_file": "no es un archivo"
+      },
+      "showAll": "Ver todos ({{count}})",
+      "showLess": "Ver menos",
+      "fatal": "La importación se detuvo: {{reason}}. Lo que aparece arriba sí quedó en el proyecto.",
+      "couldNotStart": "No se pudo iniciar la importación: {{error}}"
     }
   },
   "project": {

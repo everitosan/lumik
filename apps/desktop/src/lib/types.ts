@@ -154,28 +154,56 @@ export interface ImportRequest {
 }
 
 export type ImportPhase =
-  | 'reading'
-  | 'decoding'
-  | 'converting'
-  | 'hashing'
-  | 'writing'
-  | 'saving'
-  | 'complete'
-  | 'failed';
+  | 'videos'
+  | 'copy'
+  | 'copy_metadata'
+  | 'metadata'
+  | 'move'
+  | 'register'
+  | 'complete';
 
+/** Evento `import-progress`. `file_index` empieza en 1; los bytes solo avanzan en `videos`, `copy` y `copy_metadata` (con varios archivos en paralelo, `file_*` es el último que empezó). */
 export interface ImportProgress {
   session_id: string;
-  current_index: number;
-  total_files: number;
-  current_file: string;
   phase: ImportPhase;
-  error: string | null;
+  file_name: string;
+  file_index: number;
+  file_total: number;
+  file_bytes: number;
+  file_bytes_total: number;
+  bytes_done: number;
+  bytes_total: number;
 }
+
+/** Motivo de un fallo; se traduce con `import.errors.codes.<code>`. */
+export type ImportErrorCode =
+  | 'source_unreadable'
+  | 'no_space'
+  | 'write_failed'
+  | 'metadata_failed'
+  | 'register_failed'
+  | 'unknown';
 
 export interface FailedFile {
   name: string;
   path: string;
+  code: ImportErrorCode;
+  /** Detalle técnico */
   error: string;
+}
+
+export type SkipReason = 'unsupported_format' | 'not_a_file';
+
+export interface SkippedFile {
+  name: string;
+  path: string;
+  reason: SkipReason;
+}
+
+/** Error que terminó el import antes de tiempo. */
+export interface FatalError {
+  code: ImportErrorCode;
+  detail: string;
 }
 
 // Editar proyecto
@@ -210,12 +238,30 @@ export interface ImportResult {
   successful: number;
   failed: number;
   failed_files: FailedFile[];
+  skipped_files: SkippedFile[];
   videos_copied: number;
+  fatal: FatalError | null;
 }
 
+export type ImportLogKind =
+  | 'video_copied'
+  | 'file_copied'
+  | 'file_failed'
+  | 'file_skipped'
+  | 'photos_registered'
+  | 'thumbnails'
+  | 'thumbnail'
+  | 'folder_moved'
+  | 'done';
+
+/** Evento `import-log`; se traduce con `import.log.<kind>`. */
 export interface ImportLogEntry {
   session_id: string;
-  message: string;
+  kind: ImportLogKind;
+  file_name?: string;
+  code?: ImportErrorCode;
+  count?: number;
+  detail?: string;
 }
 
 // ============================================================================

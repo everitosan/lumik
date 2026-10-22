@@ -30,13 +30,22 @@
     "progress": {
       "importing": "Importing...",
       "completed": "Import complete",
-      "files": "Files",
       "elapsed": "Elapsed time",
       "photoImported_one": "photo imported",
       "photoImported_other": "photos imported",
       "videoCopied_one": "video copied",
       "videoCopied_other": "videos copied",
-      "totalTime": "Total time"
+      "totalTime": "Total time",
+      "phases": {
+        "videos": "Copying videos",
+        "copy": "Copying photos",
+        "copy_metadata": "Copying and signing photos",
+        "metadata": "Applying names and metadata",
+        "move": "Moving into the project",
+        "register": "Registering photos and generating thumbnails",
+        "complete": "Finishing…"
+      },
+      "fileOf": "File {{index}} of {{total}}"
     },
     "buttons": {
       "import": "Start import",
@@ -54,8 +63,6 @@
       "destination": "Destination",
       "availableSpace": "Available space",
       "ready": "Ready. Files will be copied to destination drive.",
-      "failedFiles": "files failed",
-      "moreFiles": "more...",
       "rename": "Renaming",
       "renameYes": "By capture date",
       "renameNo": "Original names",
@@ -82,7 +89,45 @@
       "selectFiles": "Error selecting files",
       "invalidFiles": "Some files are not supported",
       "noFilesSelected": "No files selected",
-      "importError": "Error"
+      "codes": {
+        "source_unreadable": "the source file could not be read",
+        "no_space": "the project disk is out of space",
+        "write_failed": "could not write to the project disk",
+        "metadata_failed": "the name or metadata could not be applied",
+        "register_failed": "could not be registered in the project",
+        "unknown": "unknown error"
+      }
+    },
+    "log": {
+      "title": "Log",
+      "video_copied": "Video copied: {{file}}",
+      "file_copied": "Copied: {{file}}",
+      "file_failed": "Error in {{file}}: {{reason}}",
+      "file_skipped": "Skipped {{file}}: {{reason}}",
+      "photos_registered_one": "{{count}} photo registered in the project",
+      "photos_registered_other": "{{count}} photos registered in the project",
+      "thumbnails_one": "Generating {{count}} thumbnail…",
+      "thumbnails_other": "Generating {{count}} thumbnails…",
+      "thumbnail": "Thumbnail: {{file}} ({{detail}})",
+      "folder_moved": "Project folder moved to {{detail}}",
+      "done_one": "Import finished: {{count}} photo",
+      "done_other": "Import finished: {{count}} photos"
+    },
+    "result": {
+      "failedTitle": "Import failed",
+      "partialTitle": "Import finished with errors",
+      "failed_one": "{{count}} file was not imported",
+      "failed_other": "{{count}} files were not imported",
+      "skipped_one": "{{count}} file skipped",
+      "skipped_other": "{{count}} files skipped",
+      "skipReasons": {
+        "unsupported_format": "unsupported format",
+        "not_a_file": "not a file"
+      },
+      "showAll": "Show all ({{count}})",
+      "showLess": "Show less",
+      "fatal": "The import stopped: {{reason}}. Everything listed above was kept in the project.",
+      "couldNotStart": "The import could not start: {{error}}"
     }
   },
   "project": {

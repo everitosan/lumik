@@ -97,13 +97,12 @@ struct ExifToolSession {
 
 impl ExifToolSession {
     fn spawn() -> Result<Self, String> {
-        let mut child = command()
-            .args(["-stay_open", "True", "-@", "-"])
+        let mut cmd = command();
+        cmd.args(["-stay_open", "True", "-@", "-"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| format!("Failed to spawn exiftool: {}", e))?;
+            .stderr(Stdio::null());
+        let mut child = spawn_session_process(cmd).map_err(|e| format!("Failed to spawn exiftool: {}", e))?;
         let stdin = child.stdin.take().ok_or("no stdin")?;
         let stdout = BufReader::new(child.stdout.take().ok_or("no stdout")?);
         Ok(Self { _child: child, stdin, stdout })
@@ -133,6 +132,65 @@ impl ExifToolSession {
     }
 }
 
+/// Lanza el proceso de una sesión. Exiftool con `-stay_open` no termina cuando
+/// se cierra su stdin, así que si Lumik sale sin cerrar la sesión (Ctrl+C, un
+/// crash, el fin de `cargo test`) queda huérfano. En Linux se le pide al kernel
+/// que lo termine al morir el padre (`PR_SET_PDEATHSIG`). Esa señal se dispara
+/// cuando termina el *hilo* que lo lanzó, así que se lanza desde un hilo
+/// dedicado que vive mientras viva el proceso. En las demás plataformas cubre
+/// la salida normal `shutdown()`.
+#[cfg(target_os = "linux")]
+fn spawn_session_process(cmd: Command) -> std::io::Result<Child> {
+    use std::os::unix::process::CommandExt;
+    use std::sync::mpsc;
+
+    type Request = (Command, mpsc::Sender<std::io::Result<Child>>);
+    static SPAWNER: OnceLock<Mutex<mpsc::Sender<Request>>> = OnceLock::new();
+
+    let spawner = SPAWNER.get_or_init(|| {
+        let (tx, rx) = mpsc::channel::<Request>();
+        std::thread::Builder::new()
+            .name("exiftool-spawner".into())
+            .spawn(move || {
+                for (mut cmd, reply) in rx {
+                    // SAFETY: entre fork y exec solo se llama a prctl, que es
+                    // async-signal-safe, y no se toca memoria compartida.
+                    unsafe {
+                        cmd.pre_exec(|| {
+                            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) == -1 {
+                                return Err(std::io::Error::last_os_error());
+                            }
+                            Ok(())
+                        });
+                    }
+                    let _ = reply.send(cmd.spawn());
+                }
+            })
+            .expect("failed to start exiftool spawner thread");
+        Mutex::new(tx)
+    });
+
+    let gone = || std::io::Error::other("exiftool spawner thread is gone");
+    let (reply_tx, reply_rx) = mpsc::channel();
+    spawner.lock().unwrap().send((cmd, reply_tx)).map_err(|_| gone())?;
+    reply_rx.recv().map_err(|_| gone())?
+}
+
+#[cfg(not(target_os = "linux"))]
+fn spawn_session_process(mut cmd: Command) -> std::io::Result<Child> {
+    cmd.spawn()
+}
+
+impl Drop for ExifToolSession {
+    /// Pide a exiftool que termine y lo recoge, para no dejar procesos zombie
+    /// al cerrar sesiones del pool.
+    fn drop(&mut self) {
+        let _ = writeln!(self.stdin, "-stay_open\nFalse");
+        let _ = self.stdin.flush();
+        let _ = self._child.wait();
+    }
+}
+
 static SESSION: OnceLock<Mutex<Option<ExifToolSession>>> = OnceLock::new();
 
 fn session() -> &'static Mutex<Option<ExifToolSession>> {
@@ -142,7 +200,44 @@ fn session() -> &'static Mutex<Option<ExifToolSession>> {
 /// Run a sequence of exiftool args against the persistent session.
 /// Spawns the session lazily and respawns it if it died.
 pub fn run_text(args: &[String]) -> Result<String, String> {
-    let mut guard = session().lock().unwrap();
+    run_in(session(), args)
+}
+
+/// Sesiones extra para llamadas en paralelo (exiftool es Perl de un solo hilo:
+/// ~0.5 s de CPU por RAW al escribir). Cada hilo de trabajo usa su propio slot.
+pub const POOL_SIZE: usize = 4;
+
+static POOL: OnceLock<Vec<Mutex<Option<ExifToolSession>>>> = OnceLock::new();
+
+fn pool() -> &'static [Mutex<Option<ExifToolSession>>] {
+    POOL.get_or_init(|| (0..POOL_SIZE).map(|_| Mutex::new(None)).collect())
+}
+
+/// Como `run_text`, pero sobre la sesión `slot` del pool (`slot % POOL_SIZE`).
+pub fn run_text_in(slot: usize, args: &[String]) -> Result<String, String> {
+    run_in(&pool()[slot % POOL_SIZE], args)
+}
+
+/// Cierra las sesiones del pool (cada una recibe `-stay_open False` y se
+/// espera a que termine). Se vuelven a lanzar solas en la siguiente llamada.
+pub fn close_pool() {
+    for slot in pool() {
+        *slot.lock().unwrap() = None;
+    }
+}
+
+/// Cierra todas las sesiones al salir de la app. Usa `try_lock` para no
+/// bloquear la salida si alguna llamada sigue en curso.
+pub fn shutdown() {
+    for slot in std::iter::once(session()).chain(pool().iter()) {
+        if let Ok(mut guard) = slot.try_lock() {
+            *guard = None;
+        }
+    }
+}
+
+fn run_in(slot: &Mutex<Option<ExifToolSession>>, args: &[String]) -> Result<String, String> {
+    let mut guard = slot.lock().unwrap();
     if guard.is_none() {
         *guard = Some(ExifToolSession::spawn()?);
     }

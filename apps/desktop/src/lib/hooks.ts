@@ -509,9 +509,17 @@ export function useContextKeybindings(context: string): KeybindingMap {
 // IMPORT HOOKS
 // ============================================================================
 
+/**
+ * `idle`: sin importar. `importing`: en curso. `done`: terminó, con `result`
+ * (que puede traer `fatal` si terminó antes de tiempo) o con `error` si el
+ * import ni siquiera pudo empezar.
+ */
+export type ImportStatus = 'idle' | 'importing' | 'done';
+
 interface UseImportReturn {
+  status: ImportStatus;
   progress: ImportProgress | null;
-  importLog: string[];
+  importLog: ImportLogEntry[];
   result: ImportResult | null;
   isImporting: boolean;
   error: string | null;
@@ -520,14 +528,14 @@ interface UseImportReturn {
 }
 
 export function useImport(): UseImportReturn {
+  const [status, setStatus] = useState<ImportStatus>('idle');
   const [progress, setProgress] = useState<ImportProgress | null>(null);
-  const [importLog, setImportLog] = useState<string[]>([]);
+  const [importLog, setImportLog] = useState<ImportLogEntry[]>([]);
   const [result, setResult] = useState<ImportResult | null>(null);
-  const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const unlistenProgressRef = useRef<UnlistenFn | null>(null);
   const unlistenLogRef = useRef<UnlistenFn | null>(null);
-  const logBufferRef = useRef<string[]>([]);
+  const logBufferRef = useRef<ImportLogEntry[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionIdRef = useRef<string | null>(null);
 
@@ -541,7 +549,7 @@ export function useImport(): UseImportReturn {
   }, []);
 
   const startImport = useCallback(async (request: ImportRequest) => {
-    setIsImporting(true);
+    setStatus('importing');
     setError(null);
     setResult(null);
     setProgress(null);
@@ -558,7 +566,7 @@ export function useImport(): UseImportReturn {
 
       unlistenLogRef.current = await listen<ImportLogEntry>('import-log', (event) => {
         if (event.payload.session_id === sessionIdRef.current) {
-          logBufferRef.current.push(event.payload.message);
+          logBufferRef.current.push(event.payload);
         }
       });
 
@@ -580,7 +588,7 @@ export function useImport(): UseImportReturn {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsImporting(false);
+      setStatus('done');
       unlistenProgressRef.current?.();
       unlistenProgressRef.current = null;
       unlistenLogRef.current?.();
@@ -599,16 +607,25 @@ export function useImport(): UseImportReturn {
   }, []);
 
   const reset = useCallback(() => {
+    setStatus('idle');
     setProgress(null);
     setImportLog([]);
     setResult(null);
     setError(null);
-    setIsImporting(false);
     logBufferRef.current = [];
     sessionIdRef.current = null;
   }, []);
 
-  return { progress, importLog, result, isImporting, error, startImport, reset };
+  return {
+    status,
+    progress,
+    importLog,
+    result,
+    isImporting: status === 'importing',
+    error,
+    startImport,
+    reset,
+  };
 }
 
 // ============================================================================

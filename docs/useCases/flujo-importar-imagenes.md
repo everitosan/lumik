@@ -2,9 +2,11 @@
 
 Lumik Desktop · Linux · Windows · Android
 
-Wizard de 3 pasos en el frontend (origen, ajustes, confirmar; solo desde un proyecto) y un pipeline de 5 fases en Rust: copia a un workspace
-temporal, metadatos y renombrado, movimiento a `_media/`, extracción EXIF e inserción en
-`project.db`, y generación de miniaturas.
+Wizard de 3 pasos en el frontend (origen, ajustes, confirmar; solo desde un proyecto) y un pipeline en Rust que procesa
+**archivo por archivo**: copia de videos y fotos a un staging dentro del proyecto
+(`.import-staging/`, mismo disco que el destino), metadatos y renombrado, `rename` a `_video/` y `_media/` sin
+sobrescribir, extracción EXIF e inserción en `project.db`, y generación de miniaturas. Un archivo que falla se
+registra con su motivo y el resto sigue; el resultado se muestra siempre.
 
 > **Splits por plataforma:** en los diagramas que se bifurcan, la rama izquierda es
 > **Linux / Windows** (vía `exiftool`) y la derecha **Android** (Rust puro, sin `exiftool`).
@@ -16,9 +18,9 @@ flowchart LR
     W["Wizard<br/>3 pasos"]
     I["invoke<br/>'start_import'"]
     P["Particionar<br/>videos / fotos"]
-    C["Workspace temp<br/>+ copia"]
+    C["Staging en el proyecto<br/>+ copia por archivo"]
     M["Metadatos<br/>+ renombrado"]
-    D["Mover a _media/"]
+    D["rename a _media/<br/>(nombre libre)"]
     X["EXIF → DTOs"]
     B["create_photos_batch()"]
     T["Miniaturas<br/>.thumbs/"]
@@ -64,61 +66,77 @@ flowchart TD
     class n_uri,n_set note
 ```
 
-## 2. Arranque del backend y particionado
+## 2. Arranque del backend, staging y videos
 
-Los videos salen del pipeline de inmediato: se copian tal cual, sin conversión, sin XMP y
-sin registro en base de datos.
+Fotos y videos comparten el staging de la sesión. Los videos se copian primero, sin
+conversión, sin XMP y sin registro en base de datos.
 
 ```mermaid
 flowchart TD
     be_load["Cargar ProjectDatabase por project_id<br/>+ AppSettings + metadatos del fotógrafo<br/>→ resolve_import_settings(globales, settings?)<br/>(sin settings = globales; con settings = los de la sesión)<br/>+ descripción del proyecto"]
-    part{"Particionar archivos<br/>videos vs fotos"}
-    video_copy["pipeline_copy_videos()<br/>Copiar directamente a _video/<br/>Sin conversión · Sin XMP · Sin BD"]
-    video_done(["videos_copied count<br/>→ ImportResult"])
-    ws["PipelineWorkspace::create()<br/>Directorio temp lumik_{proyecto}_{ts}/files/<br/>Linux/Win: /tmp/ · Android: $HOME/cache/"]
-    next(["continúa en §3"])
+    pre_err(["Err del comando (precondición)<br/>proyecto no abierto, sin fotógrafo<br/>→ la UI muestra 'No se pudo iniciar'"])
+    part["Particionar archivos<br/>videos vs fotos"]
+    ws{"PipelineWorkspace::create()<br/>borra .import-staging/ previa (import interrumpido)<br/>crea {proyecto}/.import-staging/{session}/photos|videos"}
+    fatal(["fatal en ImportResult<br/>(no_space / write_failed)"])
+    video_stage["pipeline_copy_videos()<br/>por archivo → videos/{nnnnn}/{nombre}<br/>copy_with_progress: bloques de 4 MiB → eventos de bytes"]
+    video_q{"¿copia OK?"}
+    video_fail["FailedFile { code, error }<br/>sin archivo parcial · sigue con el siguiente<br/>(tras no_space, los pendientes fallan igual)"]
+    video_move["pipeline_move_to_dest(_video/)<br/>rename con free_name(): CLIP.mp4 → CLIP-001.mp4 si existe"]
+    next(["continúa en §3 (fotos)"])
 
-    be_load --> part
-    part -->|Videos| video_copy --> video_done
-    part -->|Fotos RAW/JPEG| ws --> next
+    be_load -->|error| pre_err
+    be_load --> part --> ws
+    ws -->|no se pudo crear| fatal
+    ws --> video_stage --> video_q
+    video_q -->|sí| video_move
+    video_q -->|no| video_fail --> video_move
+    video_move --> next
 
     classDef term fill:#d5e8d4,stroke:#82b366,color:#102a12
     classDef be fill:#ffe0b2,stroke:#f57c00,color:#3d2600
     classDef dec fill:#fff2cc,stroke:#d6b656,color:#3d3100
+    classDef err fill:#ffcdd2,stroke:#c62828,color:#3d0d0d
     class next term
-    class be_load,video_copy,video_done,ws be
-    class part dec
+    class be_load,part,video_stage,video_move be
+    class ws,video_q dec
+    class pre_err,fatal,video_fail err
 ```
 
-## 3. Copia, metadatos y movimiento a destino
+## 3. Fotos: copia, metadatos y movimiento a destino
 
 ```mermaid
 flowchart TD
-    passthrough["pipeline_passthrough() — todas las plataformas<br/>Archivos RAW/JPEG copiados en formato original,<br/>sin conversión"]
-    ready["Archivos listos en workspace/files/"]
+    classify["Clasificar selección<br/>no es archivo → skipped(not_a_file)<br/>extensión no admitida → skipped(unsupported_format)"]
+    plat_q{"Plataforma y<br/>¿hay algo que escribir?"}
+    signed["Linux / Windows / macOS — pipeline_stage_signed() · fase copy_metadata<br/>copia y firma SOLAPADAS:<br/>• hilo del import: copia secuencial origen → photos/{nnnnn}/src/ (bytes exactos)<br/>• 4 workers (sesión -stay_open del pool): exiftool -o photos/{nnnnn}/ … src/{foto}<br/>• cola acotada (8): la copia espera si la firma se atrasa<br/>• Rename: {DateTimeOrig}__{proyecto}%-03c.{ext} (respaldo ModifyDate)<br/>• Embed: Artist, Copyright, ImageDescription@Año,<br/>CreatorURL, CreatorEmail, UsageTerms<br/>• Resultados en el orden de la selección"]
+    passthrough["pipeline_passthrough() · fase copy<br/>(sin nada que escribir, o Android)<br/>por archivo → photos/{nnnnn}/{nombre}, formato original<br/>copy_with_progress: bloques de 4 MiB"]
+    meta_android["Android · fase metadata<br/>rawler → extract_datetime → rename<br/>• Rename: {DateTimeOrig}__{proyecto}.{ext}<br/>• Sidecar .xmp: Artist, Copyright,<br/>ImageDescription@Año, CreatorURL, CreatorEmail<br/>(Rust puro, sin exiftool)"]
+    copy_fail["FailedFile por archivo, el resto sigue<br/>exiftool falla → copia de prueba decide:<br/>source_unreadable · no_space · write_failed · metadata_failed"]
 
-    plat_q{"Plataforma"}
-    meta_desktop["Linux / Windows<br/>rename_and_embed_metadata()<br/>exiftool batch sobre workspace/files/<br/>• Pre-pass: si no hay DateTimeOriginal → DateTimeOriginal<br/>• Rename: {DateTimeOrig}__{proyecto}__%03c.{ext}<br/>• Embed: Artist, Copyright, ImageDescription@Año,<br/>CreatorURL, CreatorEmail, UsageTerms"]
-    meta_android["Android<br/>rawler → extract_datetime → rename<br/>• Rename: {DateTimeOrig}__{proyecto}__{n:03}.{ext}<br/>• Sidecar .xmp: Artist, Copyright,<br/>ImageDescription@Año, CreatorURL, CreatorEmail<br/>(Rust puro, sin exiftool)"]
-
-    merge_meta["Archivos renombrados en workspace<br/>Metadata embebida (Linux/Win) o en sidecar .xmp (Android)"]
-    move["pipeline_move_to_dest()<br/>Mover a {project}/_media/ (+ sidecar .xmp si existe)<br/>Implementado como Copy + Delete — seguro cross-filesystem"]
-    cleanup["workspace.cleanup()<br/>Eliminar directorio temp completo (fs::remove_dir_all)"]
+    move["pipeline_move_to_dest(_media/)<br/>fs::rename (mismo disco; copia+borrado si EXDEV)<br/>free_name(): si existe → {stem}-001.{ext}, -002…<br/>(ráfagas del mismo segundo y nombres repetidos)<br/>el sidecar .xmp viaja con el mismo stem"]
+    cleanup["Drop de PipelineWorkspace<br/>borra .import-staging/{session} (y la raíz si queda vacía)<br/>también ante salidas tempranas"]
     next(["continúa en §4"])
 
-    passthrough --> ready --> plat_q
-    plat_q -->|Linux/Win| meta_desktop --> merge_meta
-    plat_q -->|Android| meta_android --> merge_meta
-    merge_meta --> move --> cleanup --> next
+    classify --> plat_q
+    plat_q -->|Escritorio, firmar/renombrar| signed --> move
+    plat_q -->|Nada que escribir| passthrough --> move
+    plat_q -->|Android| passthrough
+    passthrough -->|Android| meta_android --> move
+    signed -.->|por archivo| copy_fail
+    passthrough -.->|por archivo| copy_fail
+    meta_android -.-> copy_fail
+    move --> cleanup --> next
 
     classDef term fill:#d5e8d4,stroke:#82b366,color:#102a12
     classDef be fill:#ffe0b2,stroke:#f57c00,color:#3d2600
     classDef plat fill:#e1d5e7,stroke:#9673a6,color:#2a1a33
     classDef dec fill:#fff2cc,stroke:#d6b656,color:#3d3100
+    classDef err fill:#ffcdd2,stroke:#c62828,color:#3d0d0d
     class next term
-    class passthrough,ready,merge_meta,move,cleanup be
-    class meta_desktop,meta_android plat
+    class classify,passthrough,move,cleanup be
+    class signed,meta_android plat
     class plat_q dec
+    class copy_fail err
 ```
 
 ## 4. Extracción EXIF e inserción en base de datos
@@ -151,7 +169,9 @@ flowchart TD
 
 ## 5. Miniaturas y resultado
 
-Las miniaturas se generan en paralelo, con un máximo de 8 hilos.
+Las miniaturas se generan en paralelo, con un máximo de 8 hilos; cada una emite progreso
+(fase `register`, N de M) y una entrada `thumbnail` en el registro. Si falla la inserción en
+la BD, todas las fotos del lote se informan como fallidas (`register_failed`).
 
 ```mermaid
 flowchart TD
@@ -159,8 +179,8 @@ flowchart TD
     thumb_desktop["Linux / Windows — cache_thumbnail()<br/>RAW/JPEG: exiftool -b -PreviewImage<br/>(fallback -ThumbnailImage)<br/>TIFF: image::open() → si falla por JPEG strips,<br/>open_jpeg_tiff() via crate tiff 0.11 + zune-jpeg (Rust puro)<br/>→ image crate: resize 320×320, rotación EXIF aplicada<br/>→ encode JPEG → .thumbs/{id}.jpg"]
     thumb_android["Android — exif_android::cache_thumbnail()<br/>RAW: rawler::extract_thumbnail_pixels()<br/>+ resize + rotación física<br/>JPEG: image::open() + resize<br/>+ rotación via kamadak-exif<br/>→ encode JPEG → .thumbs/{id}.jpg"]
     merge_thumb["Miniaturas JPEG en {project}/.thumbs/{photo_id}.jpg<br/>para todas las fotos importadas"]
-    result["Retornar ImportResult al frontend<br/>{ total_files, successful, failed, failed_files[], videos_copied }"]
-    show["Mostrar resultado en UI<br/>• Barra de progreso (eventos 'import-progress')<br/>• Resumen: N fotos importadas + M videos copiados<br/>• Lista de errores si failed > 0 — hasta 3 archivos detallados"]
+    result["Retornar Ok(ImportResult) al frontend, también si falló algo<br/>{ total_files, successful, failed, failed_files[] (code + error),<br/>skipped_files[], videos_copied, fatal? }"]
+    show["Paso 3 muestra siempre el resultado (nunca vuelve a la confirmación)<br/>• Completo · parcial · fallido (fatal)<br/>• N fotos importadas + M videos copiados + tiempo<br/>• Fallidos con motivo traducido (3 + 'Ver todos') e ignorados<br/>• Registro de actividad conservado"]
     fin(["Fotos visibles en galería del proyecto<br/>Miniaturas en caché · rotation en BD"])
 
     plat_q -->|Linux/Win| thumb_desktop --> merge_thumb
@@ -183,18 +203,25 @@ flowchart TD
 
 ## 6. Eventos de progreso
 
-El backend emite `app.emit('import-progress', progress)`. La granularidad es **por fase, no
-por archivo**; el frontend filtra por `session_id`.
+El backend emite dos eventos, filtrados por `session_id` en `useImport()`:
+
+- `import-progress` — `ImportProgress { phase, file_name, file_index, file_total, file_bytes,
+  file_bytes_total, bytes_done, bytes_total }`. Granularidad **por archivo**; los bytes avanzan
+  en `videos`, `copy` y `copy_metadata` (siempre por la copia secuencial; como máximo un evento cada ~100 ms por archivo, más uno al empezar y
+  al terminar cada archivo). La barra de la UI sigue `bytes_done / bytes_total`.
+- `import-log` — `ImportLogEntry { kind, file_name?, code?, count?, detail? }`, traducido en el
+  frontend con `import.log.<kind>` e `import.errors.codes.<code>`.
 
 ```mermaid
 flowchart LR
-    p0["0/3<br/>Copiando archivos"] --> p1["1/3<br/>Agregando metadatos"] --> p2["2/3<br/>Registrando en BD"] --> p3["3/3<br/>Completo"]
+    p0["videos<br/>por archivo + bytes"] --> p1["copy_metadata (escritorio)<br/>o copy<br/>por archivo + bytes"] --> p2["metadata<br/>solo Android"] --> p3["move<br/>por archivo"] --> p4["register<br/>miniaturas N/M"] --> p5["complete"]
 
     classDef note fill:#fff9c4,stroke:#f9a825,color:#3d3300
-    class p0,p1,p2,p3 note
+    class p0,p1,p2,p3,p4,p5 note
 ```
 
-`ImportPhase` admite `Reading`, `Converting`, `Writing`, `Saving`, `Complete` y `Failed`.
+Códigos de error (`ImportErrorCode`): `source_unreadable`, `no_space`, `write_failed`,
+`metadata_failed`, `register_failed`, `unknown`.
 
 ## Archivos de código
 
@@ -203,11 +230,12 @@ flowchart LR
 | Wizard (§1) | `src/pages/ImportPage.tsx` — wizard 3 pasos (origen, ajustes de la importación, confirmar), DropZone, FileList, `handleBrowse()`, `resolveContentUri()` (Android); auto-muestra importación si el proyecto está vacío |
 | IPC (§1) | `src/lib/api.ts` — `startImport()`, `listen('import-progress')` · `src/lib/hooks.ts` — `useImport()`, `session_id` |
 | Arranque (§2) | `src-tauri/src/commands/import_cmd.rs` — `start_import()`, particionado, `image_description = {desc}@{year}` · `src-tauri/src/application/import_settings.rs` — `resolve_import_settings()` (ajustes de la sesión contra los globales) |
-| Workspace (§2–3) | `src-tauri/src/import/pipeline.rs` — `PipelineWorkspace::create()` (solo `files/`), `pipeline_passthrough()`; temp dir `/tmp` (Linux/Win) o `$HOME/cache` (Android) |
-| Metadatos (§3) | `src-tauri/src/import/pipeline.rs` — `pipeline_metadata()`, split Linux vs Android, `rename_and_embed_metadata()` · `src-tauri/src/import/xmp.rs` — `write_xmp_sidecar()` (Rust puro) |
-| Movimiento (§3) | `src-tauri/src/import/pipeline.rs` — `pipeline_move_to_dest()`, `move_dng_files()`, Copy + Delete cross-FS, `.xmp` excluidos de la lista EXIF, `workspace.cleanup()` |
+| Staging (§2–3) | `src-tauri/src/import/pipeline.rs` — `PipelineWorkspace::create(project_dir, session_id)` en `{proyecto}/.import-staging/`, `Drop` que limpia, `copy_with_progress()`, `pipeline_copy_videos()`, `pipeline_passthrough()` · `src-tauri/src/infrastructure/import_pipeline.rs` — `StdImportPipeline::import()`, eventos y `EmitThrottle` |
+| Metadatos (§3) | `src-tauri/src/import/pipeline.rs` — escritorio: `exiftool_metadata_args()`, `pipeline_stage_signed()`, `sign_one()` · Android: `pipeline_metadata()` · `src-tauri/src/exiftool.rs` — pool `run_text_in()` / `close_pool()` · `src-tauri/src/import/xmp.rs` — `write_xmp_sidecar()` (Rust puro) |
+| Movimiento (§3) | `src-tauri/src/import/pipeline.rs` — `pipeline_move_to_dest()`, `move_into()`, `free_name()` (sufijo `-001`…), `fs::rename` con respaldo copia+borrado, `.xmp` excluidos de la lista EXIF |
 | EXIF (§4) | `src-tauri/src/commands.rs` — `extract_exif_metadata_batch()`, `exiftool -csv`, headers dinámicos, `-IFD0:Orientation` → `rotation°` · `src-tauri/src/exif_android.rs` — RAW con `rawler`, JPEG con `kamadak-exif` |
 | Inserción (§4) | `src-tauri/src/commands.rs` — `create_photos_batch()`, `CreatePhoto` incl. `rotation` · `src-tauri/src/db/queries.rs` · `db/project_schema.sql`; migración automática `ALTER TABLE ADD COLUMN rotation` |
 | Miniaturas (§5) | `src-tauri/src/commands.rs` — `cache_thumbnail()`, `cache_thumbnails_parallel()` · `src-tauri/src/exif_android.rs` — `rawler::extract_thumbnail_pixels()`, `image::open()` + rotación `kamadak-exif` |
-| Progreso (§6) | `src-tauri/src/import/progress.rs` — `ImportPhase`, `ImportProgress`, `ImportResult`, `FailedFile`, `ImportLogEntry` (serializados en eventos Tauri) |
-| Resultado (§5) | `src/lib/hooks.ts` — `useImport()` sobre el evento `import-progress` · `src/pages/ImportPage.tsx` — barra de progreso, resumen, lista de errores |
+| Progreso (§6) | `src-tauri/src/import/progress.rs` — `ImportPhase`, `ImportProgress`, `ImportErrorCode`, `error_code_for()`, `FailedFile`, `SkippedFile`, `FatalError`, `ImportLogEntry`, `ImportResult` (serializados en eventos Tauri) |
+| Caso de uso (§2–5) | `src-tauri/src/application/use_cases/import_photos.rs` — `ImportPhotos::execute()` (siempre devuelve `ImportOutcome`), registro y miniaturas solo de las fotos movidas |
+| Resultado (§5) | `src/lib/hooks.ts` — `useImport()` con estado `idle / importing / done` · `src/pages/ImportPage.tsx` — progreso por bytes y archivo, resultado completo/parcial/fallido, fallidos e ignorados, registro traducido |
