@@ -5,6 +5,21 @@ Todos los cambios notables de Lumik se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.1.6-beta.1] — pendiente (en pruebas)
+
+Corrección sobre la 0.1.5-beta: los archivos que fallaban al importar solo se
+podían recuperar repitiendo la importación a mano.
+
+### Añadido
+- **Reintentar los archivos fallidos**: el resultado del import ofrece
+  "Reintentar" cuando algo falló. Procesa solo esos archivos, en el mismo
+  proyecto y con el mismo renombrado y la misma firma. Si una foto llegó al
+  proyecto pero no se pudo registrar, solo se vuelve a registrar, sin copiarla
+  de nuevo ni duplicarla. El resultado y el registro de actividad muestran el
+  total de la sesión, y si algo vuelve a fallar se puede reintentar otra vez.
+  Si el disco no tiene espacio para lo que hay que volver a copiar, el botón se
+  desactiva y se indica cuánto falta.
+
 ## [0.1.5-beta] — pendiente (en pruebas)
 
 ### Añadido
