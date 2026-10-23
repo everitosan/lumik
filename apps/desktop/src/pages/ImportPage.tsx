@@ -16,7 +16,7 @@ import {
 import { open } from '@tauri-apps/plugin-dialog';
 import { stat } from '@tauri-apps/plugin-fs';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { useConnectedDevices, useProjectsDashboard, useActivePhotographer, useAppSettings, useImport, usePlatform } from '../lib/hooks';
+import { useConnectedDevices, useProjectsDashboard, useActivePhotographer, useAppSettings, useImport, usePlatform, type ImportRetryStep } from '../lib/hooks';
 import { getPhotographerMetadata } from '../lib/api';
 import type { FailedFile, ImportLogEntry, ImportProgress, ImportResult, ImportSessionSettings, SkippedFile } from '../lib/types';
 
@@ -317,6 +317,14 @@ const resultSuccessStyles: CSSProperties = {
   border: '1px solid rgba(233, 195, 73, 0.3)',
 };
 
+const failedHeaderStyles: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '12px',
+  flexWrap: 'wrap',
+};
+
 const resultErrorStyles: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -432,11 +440,11 @@ export function ImportPage({
   const [sessionSettings, setSessionSettings] = useState<ImportSessionSettings | null>(null);
   const globalSettingsRef = useRef<ImportSessionSettings | null>(null);
 
-  const { data: devices } = useConnectedDevices();
+  const { data: devices, refetch: refetchDevices } = useConnectedDevices();
   const { data: projects } = useProjectsDashboard();
   const { data: photographer } = useActivePhotographer();
   const { data: appSettings } = useAppSettings();
-  const { status: importStatus, progress, importLog, result, isImporting, error: importError, startImport } = useImport();
+  const { status: importStatus, progress, importLog, result, isImporting, error: importError, startImport, retry } = useImport();
   const [showAllFailed, setShowAllFailed] = useState(false);
   const platform = usePlatform();
 
@@ -568,6 +576,25 @@ export function ImportPage({
 
   const canProceedFromOrigin = importState.sourceFiles.length > 0;
 
+  // Reintento: los `register_failed` ya están en `_media/` y solo se registran;
+  // el resto se vuelve a importar desde el origen, y eso necesita espacio.
+  const retryPlan = useMemo(() => {
+    const failed = result?.failed_files ?? [];
+    const register = failed.filter((f) => f.code === 'register_failed');
+    const copy = failed.filter((f) => f.code !== 'register_failed');
+    const sizes = new Map(importState.sourceFiles.map((f) => [f.path, f.sizeBytes]));
+    const copyBytes = copy.reduce((sum, f) => sum + (sizes.get(f.path) ?? 0), 0);
+    return { register, copy, copyBytes };
+  }, [result, importState.sourceFiles]);
+
+  const freeBytes = selectedDrive ? selectedDrive.totalBytes - selectedDrive.usedBytes : 0;
+  const retryHasSpace = retryPlan.copy.length === 0 || (!!selectedDrive && freeBytes >= retryPlan.copyBytes);
+
+  // Al terminar, el espacio libre cambió: se vuelve a leer para validar el reintento.
+  useEffect(() => {
+    if (importStatus === 'done') refetchDevices();
+  }, [importStatus]);
+
   // Handlers
   const handleStepClick = (stepIndex: number) => {
     // Con un import en curso o terminado, el wizard no vuelve atrás.
@@ -682,6 +709,43 @@ export function ImportPage({
     }
 
     setElapsedTime(Date.now() - startTime);
+  };
+
+  const handleRetry = async () => {
+    if (!result || !selectedProject || !selectedDrive || !retryHasSpace) return;
+    const steps: ImportRetryStep[] = [];
+    if (retryPlan.register.length > 0) {
+      steps.push({
+        kind: 'register',
+        request: {
+          session_id: generateSessionId(),
+          project_id: selectedProject.id,
+          project_name: selectedProject.name,
+          file_names: retryPlan.register.map((f) => f.name),
+        },
+        files: retryPlan.register,
+      });
+    }
+    if (retryPlan.copy.length > 0) {
+      steps.push({
+        kind: 'import',
+        request: {
+          session_id: generateSessionId(),
+          source_files: retryPlan.copy.map((f) => f.path),
+          project_id: selectedProject.id,
+          device_uuid: selectedDrive.uuid,
+          mount_point: selectedDrive.mountPath!,
+          project_name: selectedProject.name,
+          settings: sessionSettings ?? undefined,
+        },
+        files: retryPlan.copy,
+      });
+    }
+
+    const startTime = Date.now();
+    setShowAllFailed(false);
+    await retry(steps);
+    setElapsedTime((prev) => (prev ?? 0) + Date.now() - startTime);
   };
 
   // Render step content
@@ -860,7 +924,20 @@ export function ImportPage({
       <div style={resultErrorStyles}>
         <Icon name="x" size="md" color="var(--lumik-error, #ffb4ab)" />
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minWidth: 0 }}>
-          <span style={progressTextStyles}>{t('import.result.failed', { count: files.length })}</span>
+          <div style={failedHeaderStyles}>
+            <span style={progressTextStyles}>{t('import.result.failed', { count: files.length })}</span>
+            <Button variant="secondary" size="sm" onClick={handleRetry} disabled={isImporting || !retryHasSpace}>
+              {t('import.result.retry', { count: files.length })}
+            </Button>
+          </div>
+          {!retryHasSpace && (
+            <span style={progressCountStyles}>
+              {t('import.result.retryNoSpace', {
+                required: formatBytes(retryPlan.copyBytes),
+                available: formatBytes(freeBytes),
+              })}
+            </span>
+          )}
           <div style={fileListStyles}>
             {visible.map((f) => (
               <div key={f.path} style={fileRowStyles}>
@@ -959,7 +1036,11 @@ export function ImportPage({
             {importStatus === 'done' && importError && (
               <div style={resultErrorStyles}>
                 <Icon name="x" size="md" color="var(--lumik-error, #ffb4ab)" />
-                <span style={progressTextStyles}>{t('import.result.couldNotStart', { error: importError })}</span>
+                <span style={progressTextStyles}>
+                  {result
+                    ? t('import.result.retryError', { error: importError })
+                    : t('import.result.couldNotStart', { error: importError })}
+                </span>
               </div>
             )}
 

@@ -159,6 +159,13 @@ mod tests {
         ) -> Result<Vec<Photo>, String> {
             unreachable!("RatePhoto no crea fotos")
         }
+
+        fn registered_dng_paths(
+            &self,
+            _dng_paths: &[String],
+        ) -> Result<std::collections::HashSet<String>, String> {
+            unreachable!("RatePhoto no registra fotos")
+        }
     }
 
     struct FakeFinderTags {

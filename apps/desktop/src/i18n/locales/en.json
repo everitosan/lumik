@@ -127,7 +127,10 @@
       "showAll": "Show all ({{count}})",
       "showLess": "Show less",
       "fatal": "The import stopped: {{reason}}. Everything listed above was kept in the project.",
-      "couldNotStart": "The import could not start: {{error}}"
+      "couldNotStart": "The import could not start: {{error}}",
+      "retry": "Retry ({{count}})",
+      "retryNoSpace": "Not enough space to retry: {{required}} needed, {{available}} free.",
+      "retryError": "The retry could not run: {{error}}. Anything not retried is still listed."
     }
   },
   "project": {

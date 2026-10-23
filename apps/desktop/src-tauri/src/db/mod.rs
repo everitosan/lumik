@@ -348,6 +348,27 @@ mod tests {
     }
 
     #[test]
+    fn registered_dng_paths_returns_only_inserted_paths_across_chunks() {
+        let (dir, db) = temp_project("registered_paths");
+        let n = crate::db::queries::REGISTERED_PATHS_CHUNK + 3;
+        let inserted: Vec<String> = (0..n).map(|i| format!("_media/IMG_{i:04}.cr2")).collect();
+        let creates: Vec<CreatePhoto> = inserted.iter().map(|p| new_photo(p)).collect();
+        db.create_photos_batch(&creates).unwrap();
+
+        let mut asked = inserted.clone();
+        asked.push("_media/NO_EXISTE.cr2".into());
+        let found = db.get_registered_dng_paths(&asked).unwrap();
+        assert_eq!(found.len(), n, "todas las insertadas, en más de una tanda");
+        assert!(found.contains("_media/IMG_0000.cr2"));
+        assert!(found.contains(&format!("_media/IMG_{:04}.cr2", n - 1)));
+        assert!(!found.contains("_media/NO_EXISTE.cr2"));
+        assert!(db.get_registered_dng_paths(&[]).unwrap().is_empty());
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn trashed_photo_leaves_listing_count_and_cover() {
         let (dir, db) = temp_project("trash_photo");
         let photos = db

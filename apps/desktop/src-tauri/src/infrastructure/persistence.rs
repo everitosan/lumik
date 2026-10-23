@@ -5,6 +5,7 @@
 use crate::application::ports::PhotoRepository;
 use crate::db::models::{CreatePhoto, Photo};
 use crate::db::ProjectDatabase;
+use std::collections::HashSet;
 
 impl PhotoRepository for ProjectDatabase {
     fn get(&self, id: &str) -> Result<Option<Photo>, String> {
@@ -52,5 +53,9 @@ impl PhotoRepository for ProjectDatabase {
 
     fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
         self.create_photos_batch(photos).map_err(|e| e.to_string())
+    }
+
+    fn registered_dng_paths(&self, dng_paths: &[String]) -> Result<HashSet<String>, String> {
+        self.get_registered_dng_paths(dng_paths).map_err(|e| e.to_string())
     }
 }

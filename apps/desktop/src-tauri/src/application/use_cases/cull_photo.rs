@@ -166,6 +166,13 @@ mod tests {
         ) -> Result<Vec<Photo>, String> {
             unreachable!("CullPhoto no crea fotos")
         }
+
+        fn registered_dng_paths(
+            &self,
+            _dng_paths: &[String],
+        ) -> Result<std::collections::HashSet<String>, String> {
+            unreachable!("CullPhoto no registra fotos")
+        }
     }
 
     #[derive(Default)]

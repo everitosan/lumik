@@ -174,6 +174,10 @@ mod tests {
         fn create_batch(&self, _p: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
             unreachable!()
         }
+
+        fn registered_dng_paths(&self, _: &[String]) -> Result<HashSet<String>, String> {
+            unreachable!()
+        }
     }
 
     /// Filesystem en memoria: un conjunto de rutas existentes.

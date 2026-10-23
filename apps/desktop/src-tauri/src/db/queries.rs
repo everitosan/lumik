@@ -3,7 +3,12 @@ use super::{GlobalDatabase, ProjectDatabase, DbResult};
 use crate::domain::project::DashboardSort;
 use chrono::Utc;
 use rusqlite::params;
+use std::collections::HashSet;
 use uuid::Uuid;
+
+/// Rutas por consulta en `get_registered_dng_paths` (SQLite admite 999 parámetros
+/// en las versiones antiguas).
+pub(crate) const REGISTERED_PATHS_CHUNK: usize = 500;
 
 // ============================================================================
 // GLOBAL DATABASE QUERIES
@@ -680,6 +685,23 @@ impl ProjectDatabase {
             params![path],
         )?;
         Ok(())
+    }
+
+    /// De las rutas dadas (relativas al proyecto), las que ya tienen una foto
+    /// registrada. Consulta en tandas para no pasar del límite de parámetros de SQLite.
+    pub fn get_registered_dng_paths(&self, dng_paths: &[String]) -> DbResult<HashSet<String>> {
+        let conn = self.conn();
+        let mut found = HashSet::new();
+        for chunk in dng_paths.chunks(REGISTERED_PATHS_CHUNK) {
+            let placeholders = vec!["?"; chunk.len()].join(", ");
+            let sql = format!("SELECT dng_path FROM photo WHERE dng_path IN ({placeholders})");
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map(rusqlite::params_from_iter(chunk), |row| row.get::<_, String>(0))?;
+            for path in rows {
+                found.insert(path?);
+            }
+        }
+        Ok(found)
     }
 
     /// Insert all photos in a single transaction. Returns them in the same order as the input.

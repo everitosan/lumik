@@ -252,6 +252,13 @@ El registro va por `"import-log"` como entradas estructuradas (`ImportLogEntry {
 el frontend traduce (`import.log.*`, `import.errors.codes.*`). `useImport()` expone el estado
 `idle | importing | done`, y el paso 3 muestra siempre el resultado (completo, parcial o fallido).
 
+**Reintentar fallidos:** desde el resultado, "Reintentar (N)" (`useImport().retry()`) procesa solo los
+fallidos con los mismos ajustes, en serie y cada tanda con su `session_id`: los `register_failed` ya están
+en `_media/` y van a `retry_import_register` (`ImportPhotos::register_existing`: solo EXIF + BD +
+miniaturas, por nombre contra la carpeta actual, sin registrar dos veces los `dng_path` que ya están); el
+resto vuelve a `start_import` con sus rutas de origen, si cabe en el disco. `mergeRetryResult()` acumula el
+total de la sesión. Los dos comandos cierran con `finish_import()` (fecha inferida y renombrado de carpeta).
+
 ## Flujo de navegación (frontend)
 
 ```
@@ -300,7 +307,7 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 
 | Flujo (`docs/useCases/`) | Comando (entry point)  | Caso de uso                  |
 |--------------------------|------------------------|------------------------------|
-| Importar Imágenes        | `start_import`         | `ImportPhotos`               |
+| Importar Imágenes        | `start_import`, `retry_import_register` | `ImportPhotos` (`execute`, `register_existing`) |
 | Crear Proyecto           | `create_project`       | — (lógica en el comando; `domain::ProjectFolder`) |
 | Editar Proyecto          | `edit_project`         | `RenameProjectFiles` (con rollback), `RewriteProjectDescription` |
 | Culling de imagen        | `save_photo_culled`    | `CullPhoto` (con rollback)   |
@@ -323,7 +330,7 @@ Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`
 Ajustes: `get_app_settings`, `update_app_settings`, `get_dashboard_sort`, `update_dashboard_sort`, `get_dashboard_show_archived`, `set_dashboard_show_archived`, `get_sidebar_sections`, `set_sidebar_section_collapsed`
 Keybindings: `get_keybindings`, `update_keybinding`
-Import: `start_import`
+Import: `start_import`, `retry_import_register`
 Respaldo — cuenta: `get_backup_server_url`, `set_backup_server_url`, `backup_register`, `backup_login`, `backup_logout`, `get_backup_session`
 Respaldo — catálogo: `ensure_project_synced`, `sync_exported`, `sync_project_cover`
 Respaldo — subida: `list_exported_backup`, `list_backup_providers`, `prepare_backup`, `backup_exported_file`, `finalize_backup`, `relocate_backup`, `get_backup_folder_link`

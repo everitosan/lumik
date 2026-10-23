@@ -19,6 +19,7 @@ import type {
   UpdatePhotographerMetadata,
   ImportRequest,
   ImportResult,
+  RetryRegisterRequest,
   BackupSession,
 } from './types';
 
@@ -329,6 +330,10 @@ export async function updateDashboardSort(sort: DashboardSort): Promise<Dashboar
 
 export async function startImport(request: ImportRequest): Promise<ImportResult> {
   return invoke('start_import', { request });
+}
+
+export async function retryImportRegister(request: RetryRegisterRequest): Promise<ImportResult> {
+  return invoke('retry_import_register', { request });
 }
 
 // ============================================================================

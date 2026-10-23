@@ -127,7 +127,10 @@
       "showAll": "Ver todos ({{count}})",
       "showLess": "Ver menos",
       "fatal": "La importación se detuvo: {{reason}}. Lo que aparece arriba sí quedó en el proyecto.",
-      "couldNotStart": "No se pudo iniciar la importación: {{error}}"
+      "couldNotStart": "No se pudo iniciar la importación: {{error}}",
+      "retry": "Reintentar ({{count}})",
+      "retryNoSpace": "No hay espacio para reintentar: se necesitan {{required}} y hay {{available}} libres.",
+      "retryError": "No se pudo reintentar: {{error}}. Lo que no se reintentó sigue en la lista."
     }
   },
   "project": {

@@ -153,6 +153,15 @@ export interface ImportRequest {
   settings?: ImportSessionSettings;
 }
 
+/** Reintento del registro de fotos que ya están en `_media/` (fallaron con `register_failed`). */
+export interface RetryRegisterRequest {
+  session_id: string;
+  project_id: string;
+  project_name: string;
+  /** Nombres en `_media/` (`FailedFile.name`). */
+  file_names: string[];
+}
+
 export type ImportPhase =
   | 'videos'
   | 'copy'

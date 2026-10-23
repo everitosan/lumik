@@ -5,8 +5,8 @@
 //! hace aquí; lo maneja el adaptador tras `execute`.
 
 use crate::application::ports::{
-    FileMetadata, ImageProcessor, ImportPipeline, MetadataTool, PhotoRepository, PipelineRequest,
-    ProgressReporter,
+    FileMetadata, FileStore, ImageProcessor, ImportPipeline, MetadataTool, PhotoRepository,
+    PipelineRequest, ProgressReporter,
 };
 use crate::db::models::{CreatePhoto, PhotographerMetadata};
 use crate::domain::paths::path_to_slash;
@@ -95,6 +95,63 @@ impl ImportPhotos<'_> {
             videos_copied: out.videos_copied,
             fatal: out.fatal,
         }
+    }
+
+    /// Reintento del registro: las fotos llegaron a `_media/` pero falló su
+    /// registro en la BD. Se resuelven por nombre contra `p.dest_folder` (la
+    /// carpeta actual del proyecto, aunque se haya movido desde el primer
+    /// intento); no se copian, no se borran y no se registran dos veces. Las ya
+    /// registradas cuentan como importadas. De `p` solo se usan la sesión, el
+    /// proyecto y las carpetas.
+    pub fn register_existing(&self, files: &dyn FileStore, p: &ImportParams, file_names: &[String]) -> ImportOutcome {
+        let mut failed_files = Vec::new();
+        let outcome = |successful, failed_files| ImportOutcome {
+            successful,
+            failed_files,
+            skipped_files: Vec::new(),
+            videos_copied: 0,
+            fatal: None,
+        };
+
+        let Ok(dest_rel) = p.dest_folder.strip_prefix(&p.project_dir) else {
+            let paths: Vec<PathBuf> = file_names.iter().map(|n| p.dest_folder.join(n)).collect();
+            let error = format!("El destino {} no está dentro del proyecto", p.dest_folder.display());
+            return outcome(0, failed_all(&paths, ImportErrorCode::RegisterFailed, &error));
+        };
+
+        // (ruta absoluta, dng_path relativo) de los que siguen en `_media/`.
+        let mut present: Vec<(PathBuf, String)> = Vec::new();
+        for name in file_names {
+            let path = p.dest_folder.join(name);
+            // Solo nombres sueltos: nada de subcarpetas ni `..`.
+            let is_plain_name = Path::new(name).file_name().and_then(|n| n.to_str()) == Some(name.as_str());
+            if is_plain_name && files.exists(&path) {
+                present.push((path, path_to_slash(&dest_rel.join(name))));
+            } else {
+                failed_files.push(FailedFile::new(&path, ImportErrorCode::RegisterFailed, "No se encontró en _media/"));
+            }
+        }
+
+        let rel_paths: Vec<String> = present.iter().map(|(_, rel)| rel.clone()).collect();
+        let registered = match self.photos.registered_dng_paths(&rel_paths) {
+            Ok(set) => set,
+            Err(e) => {
+                let paths: Vec<PathBuf> = present.into_iter().map(|(path, _)| path).collect();
+                failed_files.extend(failed_all(&paths, ImportErrorCode::RegisterFailed, &format!("Database error: {}", e)));
+                return outcome(0, failed_files);
+            }
+        };
+
+        let (already, pending): (Vec<_>, Vec<_>) = present.into_iter().partition(|(_, rel)| registered.contains(rel));
+        let pending: Vec<PathBuf> = pending.into_iter().map(|(path, _)| path).collect();
+        let mut successful = already.len();
+        if !pending.is_empty() {
+            match self.register(p, &pending, 0) {
+                Ok(n) => successful += n,
+                Err(failed) => failed_files.extend(failed),
+            }
+        }
+        outcome(successful, failed_files)
     }
 
     /// Fase registrar: EXIF batch + transacción única + miniaturas. Si el
@@ -261,6 +318,7 @@ mod tests {
     use super::*;
     use crate::application::ports::PipelineOutcome;
     use crate::db::models::Photo;
+    use std::collections::HashSet;
     use std::sync::Mutex;
 
     #[test]
@@ -353,6 +411,14 @@ mod tests {
 
     struct FakeRepo {
         created: Mutex<usize>,
+        /// `dng_path` que ya están en la BD.
+        registered: HashSet<String>,
+        fail_create: bool,
+    }
+    impl FakeRepo {
+        fn new() -> Self {
+            FakeRepo { created: Mutex::new(0), registered: HashSet::new(), fail_create: false }
+        }
     }
     impl PhotoRepository for FakeRepo {
         fn get(&self, _id: &str) -> Result<Option<Photo>, String> {
@@ -390,6 +456,9 @@ mod tests {
             unreachable!()
         }
         fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
+            if self.fail_create {
+                return Err("database is locked".into());
+            }
             *self.created.lock().unwrap() = photos.len();
             // Devuelve un Photo mínimo por cada CreatePhoto, con id sintético.
             Ok(photos
@@ -397,6 +466,23 @@ mod tests {
                 .enumerate()
                 .map(|(i, cp)| photo_stub(&format!("id{i}"), &cp.dng_path))
                 .collect())
+        }
+        fn registered_dng_paths(&self, dng_paths: &[String]) -> Result<HashSet<String>, String> {
+            Ok(dng_paths.iter().filter(|p| self.registered.contains(*p)).cloned().collect())
+        }
+    }
+
+    /// Filesystem en memoria: un conjunto de rutas existentes.
+    struct FakeFiles(HashSet<PathBuf>);
+    impl FileStore for FakeFiles {
+        fn create_dir_all(&self, _dir: &Path) -> std::io::Result<()> {
+            unreachable!()
+        }
+        fn rename(&self, _from: &Path, _to: &Path) -> std::io::Result<()> {
+            unreachable!()
+        }
+        fn exists(&self, path: &Path) -> bool {
+            self.0.contains(path)
         }
     }
 
@@ -475,7 +561,7 @@ mod tests {
     fn execute_registers_photos_and_generates_thumbnails() {
         let dng = vec![PathBuf::from("/mnt/lumik/x/_media/A.dng"), PathBuf::from("/mnt/lumik/x/_media/B.dng")];
         let pipeline = FakePipeline::new(PipelineOutcome { photos: dng.clone(), ..Default::default() });
-        let repo = FakeRepo { created: Mutex::new(0) };
+        let repo = FakeRepo::new();
         let images = FakeImages { thumbs: Mutex::new(vec![]) };
 
         let out = use_case(&pipeline, &repo, &images).execute(&params(dng.clone(), vec![]));
@@ -490,7 +576,7 @@ mod tests {
     #[test]
     fn execute_copies_videos_and_skips_empty_photo_pipeline() {
         let pipeline = FakePipeline::new(PipelineOutcome { videos_copied: 1, ..Default::default() });
-        let repo = FakeRepo { created: Mutex::new(0) };
+        let repo = FakeRepo::new();
         let images = FakeImages { thumbs: Mutex::new(vec![]) };
 
         let videos = vec![PathBuf::from("/src/CLIP.mp4")];
@@ -510,7 +596,7 @@ mod tests {
             failed: vec![failed],
             ..Default::default()
         });
-        let repo = FakeRepo { created: Mutex::new(0) };
+        let repo = FakeRepo::new();
         let images = FakeImages { thumbs: Mutex::new(vec![]) };
 
         let sources = vec![PathBuf::from("/src/A.dng"), PathBuf::from("/src/B.dng"), PathBuf::from("/src/C.dng")];
@@ -528,7 +614,7 @@ mod tests {
             fatal: Some(FatalError { code: ImportErrorCode::NoSpace, detail: "No space left on device".into() }),
             ..Default::default()
         });
-        let repo = FakeRepo { created: Mutex::new(0) };
+        let repo = FakeRepo::new();
         let images = FakeImages { thumbs: Mutex::new(vec![]) };
 
         let out = use_case(&pipeline, &repo, &images).execute(&params(
@@ -539,5 +625,77 @@ mod tests {
         assert_eq!(out.videos_copied, 2, "lo ya copiado se conserva");
         assert_eq!(out.successful, 0);
     }
-}
 
+    fn media_files(names: &[&str]) -> FakeFiles {
+        FakeFiles(names.iter().map(|n| PathBuf::from("/mnt/lumik/x/_media").join(n)).collect())
+    }
+
+    fn names(names: &[&str]) -> Vec<String> {
+        names.iter().map(|n| n.to_string()).collect()
+    }
+
+    #[test]
+    fn register_existing_registers_files_already_in_media() {
+        let pipeline = FakePipeline::new(PipelineOutcome::default());
+        let repo = FakeRepo::new();
+        let images = FakeImages { thumbs: Mutex::new(vec![]) };
+        let files = media_files(&["A.cr2", "B.cr2"]);
+
+        let out = use_case(&pipeline, &repo, &images)
+            .register_existing(&files, &params(vec![], vec![]), &names(&["A.cr2", "B.cr2"]));
+        assert_eq!(out.successful, 2);
+        assert!(out.failed_files.is_empty());
+        assert_eq!(*repo.created.lock().unwrap(), 2);
+        assert_eq!(images.thumbs.lock().unwrap().len(), 2, "con miniaturas");
+        assert_eq!(*pipeline.videos_seen.lock().unwrap(), 0, "no pasa por el pipeline");
+    }
+
+    #[test]
+    fn register_existing_does_not_insert_twice() {
+        let pipeline = FakePipeline::new(PipelineOutcome::default());
+        let mut repo = FakeRepo::new();
+        repo.registered.insert("_media/A.cr2".into());
+        let images = FakeImages { thumbs: Mutex::new(vec![]) };
+        let files = media_files(&["A.cr2", "B.cr2"]);
+
+        let out = use_case(&pipeline, &repo, &images)
+            .register_existing(&files, &params(vec![], vec![]), &names(&["A.cr2", "B.cr2"]));
+        assert_eq!(out.successful, 2, "la ya registrada cuenta como importada");
+        assert_eq!(*repo.created.lock().unwrap(), 1, "solo se inserta B");
+        assert!(out.failed_files.is_empty());
+    }
+
+    #[test]
+    fn register_existing_keeps_missing_files_as_failed() {
+        let pipeline = FakePipeline::new(PipelineOutcome::default());
+        let repo = FakeRepo::new();
+        let images = FakeImages { thumbs: Mutex::new(vec![]) };
+        let files = media_files(&["A.cr2"]);
+
+        let out = use_case(&pipeline, &repo, &images)
+            .register_existing(&files, &params(vec![], vec![]), &names(&["A.cr2", "B.cr2", "../C.cr2"]));
+        assert_eq!(out.successful, 1);
+        let failed: Vec<(&str, ImportErrorCode)> =
+            out.failed_files.iter().map(|f| (f.name.as_str(), f.code)).collect();
+        assert_eq!(
+            failed,
+            [("B.cr2", ImportErrorCode::RegisterFailed), ("C.cr2", ImportErrorCode::RegisterFailed)]
+        );
+    }
+
+    #[test]
+    fn register_existing_fails_all_when_the_batch_fails() {
+        let pipeline = FakePipeline::new(PipelineOutcome::default());
+        let mut repo = FakeRepo::new();
+        repo.fail_create = true;
+        let images = FakeImages { thumbs: Mutex::new(vec![]) };
+        let files = media_files(&["A.cr2", "B.cr2"]);
+
+        let out = use_case(&pipeline, &repo, &images)
+            .register_existing(&files, &params(vec![], vec![]), &names(&["A.cr2", "B.cr2"]));
+        assert_eq!(out.successful, 0);
+        assert_eq!(out.failed_files.len(), 2);
+        assert!(out.failed_files.iter().all(|f| f.code == ImportErrorCode::RegisterFailed));
+        assert!(images.thumbs.lock().unwrap().is_empty());
+    }
+}

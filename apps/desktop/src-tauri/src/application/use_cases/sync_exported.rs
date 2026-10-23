@@ -110,6 +110,10 @@ mod tests {
         fn create_batch(&self, _: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
             unimplemented!()
         }
+
+        fn registered_dng_paths(&self, _: &[String]) -> Result<std::collections::HashSet<String>, String> {
+            unimplemented!()
+        }
     }
 
     fn photos() -> Vec<PhotoStem> {

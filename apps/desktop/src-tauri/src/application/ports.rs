@@ -7,7 +7,7 @@
 use crate::db::models::{CreatePhoto, Photo, PhotographerMetadata};
 use crate::devices::DetectedDevice;
 use crate::import::{FailedFile, FatalError, ImportLogEntry, ImportProgress, SkippedFile};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 /// Canal de progreso/log del import. Desacopla la orquestación de Tauri: la impl
@@ -215,6 +215,8 @@ pub trait PhotoRepository {
     ) -> Result<(), String>;
     /// Inserta un lote de fotos en una sola transacción; devuelve las creadas.
     fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String>;
+    /// De las rutas dadas (relativas al proyecto), las que ya están registradas.
+    fn registered_dng_paths(&self, dng_paths: &[String]) -> Result<HashSet<String>, String>;
 }
 
 /// Parámetros de una sesión del pipeline de importación (fotos y videos).

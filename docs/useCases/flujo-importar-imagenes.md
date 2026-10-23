@@ -6,7 +6,8 @@ Wizard de 3 pasos en el frontend (origen, ajustes, confirmar; solo desde un proy
 **archivo por archivo**: copia de videos y fotos a un staging dentro del proyecto
 (`.import-staging/`, mismo disco que el destino), metadatos y renombrado, `rename` a `_video/` y `_media/` sin
 sobrescribir, extracción EXIF e inserción en `project.db`, y generación de miniaturas. Un archivo que falla se
-registra con su motivo y el resto sigue; el resultado se muestra siempre.
+registra con su motivo y el resto sigue; el resultado se muestra siempre, y desde ahí se pueden reintentar
+los fallidos (§7).
 
 > **Splits por plataforma:** en los diagramas que se bifurcan, la rama izquierda es
 > **Linux / Windows** (vía `exiftool`) y la derecha **Android** (Rust puro, sin `exiftool`).
@@ -223,12 +224,53 @@ flowchart LR
 Códigos de error (`ImportErrorCode`): `source_unreadable`, `no_space`, `write_failed`,
 `metadata_failed`, `register_failed`, `unknown`.
 
+## 7. Reintentar fallidos
+
+Desde el resultado, "Reintentar (N)" procesa solo los fallidos, en el mismo proyecto y con los mismos
+ajustes de la sesión. El resultado y el registro se acumulan: tras cada reintento muestran el total de la
+sesión, y si algo vuelve a fallar el botón sigue disponible.
+
+```mermaid
+flowchart TD
+    result(["Resultado con failed_files[]"])
+    split{"Separar por code"}
+    space{"¿Cabe en el disco?<br/>(suma de sizeBytes de esos orígenes<br/>vs espacio libre, releído al terminar)"}
+    disabled(["Botón desactivado<br/>+ aviso del espacio que falta"])
+    reg["1º · retry_import_register({ session_id nuevo, file_names })<br/>ImportPhotos::register_existing():<br/>• no está en _media/ → sigue como register_failed<br/>• dng_path ya en la BD (registered_dng_paths) → cuenta como importada<br/>• resto → EXIF batch + create_photos_batch + miniaturas<br/>sin copiar, sin borrar, sin sufijos -001"]
+    imp["2º · start_import({ session_id nuevo,<br/>source_files = rutas de origen de esos fallidos,<br/>mismos settings }) — §2–§5"]
+    fin["finish_import(): fecha de sesión inferida y renombrado de carpeta<br/>(también tras el reintento de registro)"]
+    merge["mergeRetryResult(prev, reintentados, next)<br/>successful y videos_copied se suman · fallidos = no reintentados + los que volvieron a fallar<br/>ignorados y total_files del primer intento"]
+    err(["Err de un comando (precondición)<br/>se conserva lo ya fusionado<br/>→ 'No se pudo reintentar'"])
+
+    result --> split
+    split -->|register_failed<br/>ya en _media/| reg
+    split -->|resto: copia, firma, no_space…| space
+    space -->|no| disabled
+    space -->|sí| imp
+    reg --> fin
+    imp --> fin
+    fin --> merge --> result
+    reg -.->|Err| err
+    imp -.->|Err| err
+
+    classDef term fill:#d5e8d4,stroke:#82b366,color:#102a12
+    classDef ui fill:#dae8fc,stroke:#6c8ebf,color:#10243d
+    classDef be fill:#ffe0b2,stroke:#f57c00,color:#3d2600
+    classDef dec fill:#fff2cc,stroke:#d6b656,color:#3d3100
+    classDef err fill:#ffcdd2,stroke:#c62828,color:#3d0d0d
+    class result term
+    class merge ui
+    class reg,imp,fin be
+    class split,space dec
+    class disabled,err err
+```
+
 ## Archivos de código
 
 | Fase | Archivos |
 |------|----------|
 | Wizard (§1) | `src/pages/ImportPage.tsx` — wizard 3 pasos (origen, ajustes de la importación, confirmar), DropZone, FileList, `handleBrowse()`, `resolveContentUri()` (Android); auto-muestra importación si el proyecto está vacío |
-| IPC (§1) | `src/lib/api.ts` — `startImport()`, `listen('import-progress')` · `src/lib/hooks.ts` — `useImport()`, `session_id` |
+| IPC (§1, §7) | `src/lib/api.ts` — `startImport()`, `retryImportRegister()`, `listen('import-progress')` · `src/lib/hooks.ts` — `useImport()`, `session_id` |
 | Arranque (§2) | `src-tauri/src/commands/import_cmd.rs` — `start_import()`, particionado, `image_description = {desc}@{year}` · `src-tauri/src/application/import_settings.rs` — `resolve_import_settings()` (ajustes de la sesión contra los globales) |
 | Staging (§2–3) | `src-tauri/src/import/pipeline.rs` — `PipelineWorkspace::create(project_dir, session_id)` en `{proyecto}/.import-staging/`, `Drop` que limpia, `copy_with_progress()`, `pipeline_copy_videos()`, `pipeline_passthrough()` · `src-tauri/src/infrastructure/import_pipeline.rs` — `StdImportPipeline::import()`, eventos y `EmitThrottle` |
 | Metadatos (§3) | `src-tauri/src/import/pipeline.rs` — escritorio: `exiftool_metadata_args()`, `pipeline_stage_signed()`, `sign_one()` · Android: `pipeline_metadata()` · `src-tauri/src/exiftool.rs` — pool `run_text_in()` / `close_pool()` · `src-tauri/src/import/xmp.rs` — `write_xmp_sidecar()` (Rust puro) |
@@ -239,3 +281,4 @@ Códigos de error (`ImportErrorCode`): `source_unreadable`, `no_space`, `write_f
 | Progreso (§6) | `src-tauri/src/import/progress.rs` — `ImportPhase`, `ImportProgress`, `ImportErrorCode`, `error_code_for()`, `FailedFile`, `SkippedFile`, `FatalError`, `ImportLogEntry`, `ImportResult` (serializados en eventos Tauri) |
 | Caso de uso (§2–5) | `src-tauri/src/application/use_cases/import_photos.rs` — `ImportPhotos::execute()` (siempre devuelve `ImportOutcome`), registro y miniaturas solo de las fotos movidas |
 | Resultado (§5) | `src/lib/hooks.ts` — `useImport()` con estado `idle / importing / done` · `src/pages/ImportPage.tsx` — progreso por bytes y archivo, resultado completo/parcial/fallido, fallidos e ignorados, registro traducido |
+| Reintento (§7) | `src/pages/ImportPage.tsx` — `retryPlan` (registro vs copia, espacio), `handleRetry()` · `src/lib/hooks.ts` — `useImport().retry()`, `mergeRetryResult()` · `src-tauri/src/commands/import_cmd.rs` — `retry_import_register()`, `finish_import()` (compartido con `start_import`) · `src-tauri/src/application/use_cases/import_photos.rs` — `ImportPhotos::register_existing()` · `src-tauri/src/db/queries.rs` — `get_registered_dng_paths()` |
