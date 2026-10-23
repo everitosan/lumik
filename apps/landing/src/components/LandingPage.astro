@@ -1,5 +1,6 @@
 ---
 import { useTranslations, type Lang } from '../i18n/ui';
+import YouTubeFacade from './YouTubeFacade.astro';
 
 interface Props { lang: Lang; }
 const { lang } = Astro.props;
@@ -88,6 +89,9 @@ const roadmapLater = ['roadmap.later.backup', 'roadmap.later.ipad', 'roadmap.lat
       .workflow-step-num { font-size: 11px; font-family: var(--lumik-font-mono); color: var(--lumik-primary); font-weight: 500; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
       .workflow-step h3 { font-size: 16px; font-weight: 600; color: var(--lumik-on-surface); margin-bottom: 8px; }
       .workflow-step p { font-size: 14px; color: var(--lumik-on-surface-variant); line-height: 1.5; }
+
+      .video { border-top: 1px solid var(--lumik-outline-variant); }
+      .video-player { max-width: 960px; margin: 56px auto 0; }
 
       .features { border-top: 1px solid var(--lumik-outline-variant); }
       .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 56px; }
@@ -235,6 +239,15 @@ const roadmapLater = ['roadmap.later.backup', 'roadmap.later.ipad', 'roadmap.lat
           <h3>{t('workflow.s4.title')}</h3>
           <p>{t('workflow.s4.desc')}</p>
         </div>
+      </div>
+    </section>
+
+    <section class="video" id="video">
+      <p class="section-label">{t('video.label')}</p>
+      <h2 class="section-title">{t('video.usage.title')}</h2>
+      <p class="section-sub">{t('video.usage.sub')}</p>
+      <div class="video-player">
+        <YouTubeFacade id={t('video.usage.id')} title={t('video.usage.title')} playLabel={t('video.play')} note={t('video.audioNote')} />
       </div>
     </section>
 

@@ -1,5 +1,6 @@
 ---
 import { useTranslations, type Lang } from '../i18n/ui';
+import YouTubeFacade from './YouTubeFacade.astro';
 
 interface Props { lang: Lang; }
 const { lang } = Astro.props;
@@ -82,6 +83,7 @@ const macCommand = 'xattr -dr com.apple.quarantine /Applications/Lumik.app';
       .install-guide { background: var(--lumik-surface-container-low); border: 1px solid var(--lumik-outline-variant); border-left: 3px solid var(--lumik-secondary); border-radius: 12px; padding: 20px 24px; margin-bottom: 32px; font-size: 14px; color: var(--lumik-on-surface-variant); }
       .install-guide-title { font-size: 15px; font-weight: 600; color: var(--lumik-on-surface); margin-bottom: 6px; }
       .install-guide-req { margin-bottom: 14px; }
+      .install-guide-video { margin-bottom: 18px; }
       .install-guide ol { padding-left: 20px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
       .install-guide-cmd { display: flex; align-items: center; gap: 8px; margin-top: 8px; background: var(--lumik-surface-container); border: 1px solid var(--lumik-outline-variant); border-radius: 8px; padding: 8px 8px 8px 12px; }
       .install-guide-cmd code { flex: 1; min-width: 0; font-family: var(--lumik-font-mono); font-size: 13px; color: var(--lumik-on-surface); overflow-wrap: anywhere; user-select: all; }
@@ -150,6 +152,9 @@ const macCommand = 'xattr -dr com.apple.quarantine /Applications/Lumik.app';
             <div class="install-guide">
               <p class="install-guide-title">{t('dl.macos.title')}</p>
               <p class="install-guide-req">{t('dl.macos.req')}</p>
+              <div class="install-guide-video">
+                <YouTubeFacade id={t('video.macos.id')} title={t('video.macos.title')} playLabel={t('video.play')} note={t('video.audioNote')} />
+              </div>
               <ol>
                 <li>{t('dl.macos.step1')}</li>
                 <li>

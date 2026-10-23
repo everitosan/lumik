@@ -96,8 +96,8 @@ export const ui = {
     'dl.btn': '↓ Download',
     'dl.windows.title': 'Unsigned installer — if SmartScreen warns you',
     'dl.windows.body': 'Windows may show "Windows protected your PC". Click "More info" and then "Run anyway". The installer is not code-signed yet while Lumik is in beta.',
-    'dl.macos.title': 'Beta not notarized by Apple — opening it the first time',
-    'dl.macos.req': 'Requires macOS 12 Monterey or later. Runs natively on Intel and Apple Silicon.',
+    'dl.macos.title': 'Opening Lumik for the first time',
+    'dl.macos.req': "This beta isn't signed by Apple yet, so macOS blocks it the first time you open it. Requires macOS 12 Monterey or later. Runs natively on Intel and Apple Silicon.",
     'dl.macos.step1': 'Open the .dmg and drag Lumik to Applications.',
     'dl.macos.step2': 'In Terminal, remove the quarantine flag:',
     'dl.macos.copy': 'Copy',
@@ -110,6 +110,15 @@ export const ui = {
     'dl.desc.exe': 'Windows installer',
     'dl.desc.msi': 'Windows MSI package',
     'dl.desc.dmg': 'macOS disk image',
+    // video
+    'video.label': 'See it in action',
+    'video.usage.id': 'ZtPCxeDthUQ',
+    'video.usage.title': 'A walkthrough of Lumik',
+    'video.usage.sub': 'From opening a project to keeping your best shots, in a few minutes.',
+    'video.macos.id': '9ZA1Ri1a8Hw',
+    'video.macos.title': 'Installing Lumik on macOS',
+    'video.play': 'Play video',
+    'video.audioNote': 'Audio in Spanish',
   },
   es: {
     // meta
@@ -208,8 +217,8 @@ export const ui = {
     'dl.btn': '↓ Descargar',
     'dl.windows.title': 'Instalador sin firmar — si SmartScreen te avisa',
     'dl.windows.body': 'Windows puede mostrar "Windows protegió su PC". Haz clic en "Más información" y luego en "Ejecutar de todas formas". El instalador aún no está firmado mientras Lumik esté en beta.',
-    'dl.macos.title': 'Beta sin notarizar por Apple — cómo abrirla la primera vez',
-    'dl.macos.req': 'Requiere macOS 12 Monterey o posterior. Corre nativa en Intel y Apple Silicon.',
+    'dl.macos.title': 'Cómo abrir Lumik la primera vez',
+    'dl.macos.req': 'Esta beta aún no está firmada por Apple, así que macOS la bloquea al abrirla por primera vez. Requiere macOS 12 Monterey o posterior. Corre nativa en Intel y Apple Silicon.',
     'dl.macos.step1': 'Abre el .dmg y arrastra Lumik a Aplicaciones.',
     'dl.macos.step2': 'En Terminal, quita la cuarentena:',
     'dl.macos.copy': 'Copiar',
@@ -222,6 +231,15 @@ export const ui = {
     'dl.desc.exe': 'Instalador para Windows',
     'dl.desc.msi': 'Paquete MSI para Windows',
     'dl.desc.dmg': 'Imagen de disco para macOS',
+    // video
+    'video.label': 'Míralo en acción',
+    'video.usage.id': 'ZtPCxeDthUQ',
+    'video.usage.title': 'Recorrido por Lumik',
+    'video.usage.sub': 'De abrir un proyecto a quedarte con tus mejores tomas, en unos minutos.',
+    'video.macos.id': '9ZA1Ri1a8Hw',
+    'video.macos.title': 'Cómo instalar Lumik en macOS',
+    'video.play': 'Reproducir video',
+    'video.audioNote': '',
   },
 } as const;
 
