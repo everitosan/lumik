@@ -17,8 +17,8 @@ El hero de la landing SHALL presentar a Lumik como gratis y con el proyecto vivi
 Dentro del hero, debajo del mensaje y del clip, la landing SHALL mostrar tres pruebas cortas, de modo que en escritorio se vean en la primera pantalla junto con el resto del hero: que es gratis y sin suscripción, que corre en Linux, Windows y macOS, y un promedio de importación de unos 150 RAW por minuto, aclarando que depende del medio de almacenamiento y del equipo.
 
 #### Scenario: Tira de pruebas
-- **WHEN** el visitante baja del hero
-- **THEN** ve las tres pruebas antes de la sección de cómo funciona
+- **WHEN** se abre la landing en una pantalla de escritorio
+- **THEN** ve las tres pruebas en la primera pantalla, dentro del hero y antes de la sección de cómo funciona
 
 ### Requirement: Secciones de pilar
 La landing SHALL tener una sección para cada uno de estos pilares, en este orden: "Tu disco es tu estudio", "Importa sin miedo" y "Las manos no dejan el teclado". Cada sección SHALL tener un título, un texto de no más de tres frases y un espacio para su clip. Los textos SHALL describir solo lo que se puede usar en un paquete publicado.

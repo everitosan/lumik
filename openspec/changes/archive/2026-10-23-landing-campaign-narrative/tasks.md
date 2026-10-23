@@ -18,7 +18,7 @@
 ## 4. Verificación
 
 - [x] 4.1 Con `pnpm --filter @lumik/landing build && pnpm --filter @lumik/landing preview`, revisar en el navegador `/` y `/es/`: los escenarios de la spec delta (mensaje principal, pruebas, pilares, clips, medición) y los requisitos actuales que siguen (video del tutorial tras cómo funciona, plataformas "Disponible", roadmap con tres grupos, nota de audio en inglés). Comprobar que el build de producción no muestra la etiqueta de clip pendiente y que el clip del hero solo se descarga al cargar la página, y los demás no existen todavía. Correr `openspec validate landing-campaign-narrative --strict`.
-- [ ] 4.2 Revisión del usuario con `dev`, ya con los clips finales colocados (ver el follow-up): aprobar textos, orden y clips.
+- [x] 4.2 Revisión del usuario con `dev`, ya con los clips finales colocados (ver el follow-up): aprobar textos, orden y clips.
 
 ## Workflow follow-up
 
