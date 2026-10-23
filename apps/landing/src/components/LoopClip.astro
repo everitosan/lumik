@@ -1,0 +1,75 @@
+---
+interface Props {
+  /** Nombre del espacio; en `astro dev` se muestra si todavía no hay clip. */
+  name: string;
+  /** Ruta sin extensión: `{src}.webm`, `{src}.mp4` y `{src}-poster.jpg`. Sin ella se muestra `fallback`. */
+  src?: string;
+  /** Captura que ocupa el espacio mientras no hay clip. */
+  fallback: string;
+  alt: string;
+  playLabel: string;
+  /** Proporción del marco (`aspect-ratio` de CSS). */
+  ratio?: string;
+}
+const { name, src, fallback, alt, playLabel, ratio = '16 / 10' } = Astro.props;
+---
+<figure class="clip" style={`aspect-ratio: ${ratio}`}>
+  {src ? (
+    <>
+      <video class="clip-media" muted loop playsinline preload="none" poster={`${src}-poster.jpg`} aria-label={alt} data-loop-clip>
+        <source src={`${src}.webm`} type="video/webm" />
+        <source src={`${src}.mp4`} type="video/mp4" />
+      </video>
+      <button class="clip-play" type="button" aria-label={`${playLabel}: ${alt}`} hidden>
+        <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
+      </button>
+    </>
+  ) : (
+    <>
+      <img class="clip-media" src={fallback} alt={alt} loading="lazy" decoding="async" />
+      {import.meta.env.DEV && <span class="clip-pending">clip pendiente: {name}</span>}
+    </>
+  )}
+</figure>
+
+<style>
+  .clip { position: relative; margin: 0; width: 100%; border-radius: var(--lumik-radius-lg); overflow: hidden; border: 1px solid var(--lumik-outline-variant); box-shadow: 0 8px 32px rgba(0,0,0,0.4); background: var(--lumik-surface-container-low); }
+  .clip-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .clip-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; background: var(--lumik-primary-container); color: #fff; cursor: pointer; box-shadow: 0 8px 32px rgba(0,0,0,0.5); transition: transform var(--lumik-transition-fast); }
+  .clip-play[hidden] { display: none; }
+  .clip-play:hover, .clip-play:focus-visible { transform: translate(-50%, -50%) scale(1.08); }
+  .clip-play:focus-visible { outline: 2px solid var(--lumik-primary); outline-offset: 2px; }
+  .clip-pending { position: absolute; top: 12px; left: 12px; padding: 4px 10px; border-radius: var(--lumik-radius-full); border: 1px dashed var(--lumik-secondary); background: rgba(19,19,19,0.85); color: var(--lumik-secondary); font-family: var(--lumik-font-mono); font-size: 12px; }
+</style>
+
+<script>
+  // Cada clip se reproduce solo mientras está cerca de la pantalla. Con
+  // "reducir movimiento" se queda en su portada hasta que el visitante pulsa play.
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  document.querySelectorAll<HTMLVideoElement>('[data-loop-clip]').forEach(video => {
+    const button = video.parentElement?.querySelector<HTMLButtonElement>('.clip-play');
+    let visible = false;
+    let started = false;
+    video.muted = true;
+
+    const sync = () => {
+      const play = visible && (!reduceMotion.matches || started);
+      if (play) {
+        video.preload = 'auto';
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+      if (button) button.hidden = !reduceMotion.matches || started;
+    };
+
+    new IntersectionObserver(entries => {
+      visible = entries.some(e => e.isIntersecting);
+      sync();
+    }, { rootMargin: '200px' }).observe(video);
+
+    button?.addEventListener('click', () => { started = true; sync(); });
+    reduceMotion.addEventListener('change', sync);
+  });
+</script>

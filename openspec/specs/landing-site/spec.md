@@ -39,7 +39,7 @@ Al cargar la página de descargas SHALL abrirse la pestaña del sistema que se d
 - **THEN** la pestaña activa es Linux
 
 ### Requirement: Guía de primera apertura en macOS
-Mientras el paquete de macOS no esté notarizado, la pestaña de macOS SHALL mostrar, aunque no carguen los releases, el sistema mínimo (macOS 12 Monterey) y cómo abrir la app la primera vez: copiarla a Aplicaciones y quitar la cuarentena con `xattr -dr com.apple.quarantine /Applications/Lumik.app`, o usar "Abrir igualmente" en Privacidad y seguridad. El comando SHALL poder copiarse con un botón. La guía SHALL incluir el video de YouTube "Instala Lumik en MacOS" (`9ZA1Ri1a8Hw`).
+Mientras Apple no verifique el paquete de macOS, la pestaña de macOS SHALL mostrar, aunque no carguen los releases, el sistema mínimo (macOS 12 Monterey) y cómo abrir la app la primera vez: copiarla a Aplicaciones y quitar la cuarentena con `xattr -dr com.apple.quarantine /Applications/Lumik.app`, o usar "Abrir igualmente" en Privacidad y seguridad. El comando SHALL poder copiarse con un botón. La guía SHALL incluir el video de YouTube "Instala Lumik en MacOS" (`9ZA1Ri1a8Hw`).
 
 #### Scenario: Copiar el comando
 - **WHEN** el visitante pulsa el botón de copiar junto al comando `xattr`
@@ -87,7 +87,7 @@ La landing SHALL mostrar un roadmap con tres grupos: disponible ahora, próximam
 
 #### Scenario: macOS publicado
 - **WHEN** se abre el roadmap con la 0.1.4-beta publicada
-- **THEN** "disponible ahora" incluye macOS junto a Linux y Windows, y "próximamente" incluye macOS firmado y notarizado
+- **THEN** "disponible ahora" incluye macOS junto a Linux y Windows, y "próximamente" incluye macOS firmado y verificado por Apple
 
 ### Requirement: Video de uso en la landing
 La landing SHALL mostrar, justo después de la sección de cómo funciona, el video de YouTube "Tutorial de Lumik app" (`ZtPCxeDthUQ`), en inglés y en español, con un título y una línea de contexto traducidos.
