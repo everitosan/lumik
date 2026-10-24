@@ -5,6 +5,36 @@ Todos los cambios notables de Lumik se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.1.6-beta.2] — pendiente (en pruebas)
+
+Flujo RAW+JPEG: para quien dispara las dos cosas (por ejemplo, con recetas de
+película de Fuji) y quiere entregar el JPG de cámara sin pasar por un editor.
+
+### Añadido
+- **Pares RAW+JPEG como una sola foto**: el RAW y el JPG de una misma toma se
+  detectan al importar (por nombre de cámara y fecha de captura, aunque vengan
+  de tarjetas distintas o en otra importación) y se ven como una sola tarjeta.
+  Calificar, rotar, mandar a la papelera y "Mostrar en carpeta" actúan sobre los
+  dos archivos. Al renombrar, los dos reciben el mismo nombre.
+- **Indicador de formato**: cada miniatura y el visor muestran `RAW+JPG`, `RAW`
+  o `JPG`. En un par, el indicador o la tecla `s` cambian entre la vista del JPG
+  y la del RAW (configurable en Ajustes → Atajos).
+- **Entregar el JPG de cámara al aprobar**: nueva opción por proyecto "Al
+  aprobar, entregar directamente" (nada, el JPG de los pares o todos los JPG de
+  cámara), con valor de fábrica en Ajustes → Importación. Al cambiarla, Lumik
+  ofrece aplicarla también a las fotos ya aprobadas. Una edición tuya en
+  `_exported/` nunca se mueve ni se borra.
+- **Importar por tomas**: el import muestra cuántos pares, RAW sueltos y JPG
+  sueltos hay, y cuántos JPG se unirán a fotos que ya están en el proyecto.
+- **Borrar el respaldo de un proyecto desde el portal web**: borra su carpeta en
+  la nube y lo que el servidor tenía registrado, para volver a respaldarlo desde
+  cero. Pide escribir el nombre del proyecto y no está en la app de escritorio.
+
+### Corregido
+- **Fotos verticales giradas en la nube**: al respaldar con calidad
+  recomprimida, los JPG de cámara verticales llegaban acostados y sin autor ni
+  copyright. Ahora llegan derechos y con todos sus metadatos.
+
 ## [0.1.6-beta.1] — pendiente (en pruebas)
 
 Corrección sobre la 0.1.5-beta: los archivos que fallaban al importar solo se
