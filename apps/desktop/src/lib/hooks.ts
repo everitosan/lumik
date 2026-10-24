@@ -292,7 +292,8 @@ export function useActivePhotographer() {
 // PHOTO PREVIEW HOOK
 // ============================================================================
 
-export function usePhotoPreview(photoId: string, projectId: string) {
+/** Vista previa de una foto; de un par RAW+JPG, su JPG salvo que se pida el RAW. */
+export function usePhotoPreview(photoId: string, projectId: string, raw = false) {
   const [state, setState] = useState<AsyncState<api.PhotoPreviewResult>>({
     data: null,
     loading: true,
@@ -303,7 +304,7 @@ export function usePhotoPreview(photoId: string, projectId: string) {
     let cancelled = false;
     setState({ data: null, loading: true, error: null });
     api
-      .getPhotoPreview(photoId, projectId)
+      .getPhotoPreview(photoId, projectId, raw)
       .then((result) => {
         if (!cancelled) setState({ data: result, loading: false, error: null });
       })
@@ -313,7 +314,7 @@ export function usePhotoPreview(photoId: string, projectId: string) {
     return () => {
       cancelled = true;
     };
-  }, [photoId, projectId]);
+  }, [photoId, projectId, raw]);
 
   return state;
 }
@@ -440,6 +441,7 @@ const DEFAULT_KEYBINDINGS: KeybindingMap = {
   'photo_detail.stars_4':      '4',
   'photo_detail.stars_5':      '5',
   'photo_detail.add_tag':      't',
+  'photo_detail.toggle_raw':   's',
   'projects.new_project':      'n',
   'projects.focus_search':     's',
   'project.show_culled':       'Ctrl+c',
@@ -554,6 +556,7 @@ export function mergeRetryResult(prev: ImportResult, retried: FailedFile[], next
     ...prev,
     successful: prev.successful + next.successful,
     videos_copied: prev.videos_copied + next.videos_copied,
+    joined: (prev.joined ?? 0) + (next.joined ?? 0),
     failed: failed_files.length,
     failed_files,
     fatal: next.fatal ?? prev.fatal,

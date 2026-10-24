@@ -48,9 +48,14 @@ impl RatePhoto<'_> {
             None => return Ok(None),
         };
 
+        // El original, el JPG de cámara de un par y el exportado (que en un par
+        // entregado es el mismo archivo que su JPG de cámara).
         let mut targets: Vec<PathBuf> = vec![self.project_dir.join(&photo.dng_path)];
-        if let Some(jpg) = &photo.jpg_path {
-            targets.push(self.project_dir.join(jpg));
+        for rel in [&photo.camera_jpg_path, &photo.jpg_path].into_iter().flatten() {
+            let path = self.project_dir.join(rel);
+            if !targets.contains(&path) {
+                targets.push(path);
+            }
         }
 
         for target in &targets {
@@ -106,6 +111,7 @@ mod tests {
             focal_length: None,
             lens_model: None,
             rotation: 0,
+            ..Default::default()
         }
     }
 
@@ -150,6 +156,7 @@ mod tests {
             _deleted: bool,
             _dng_path: &str,
             _jpg_path: Option<&str>,
+            _camera_jpg_path: Option<&str>,
         ) -> Result<(), String> {
             unreachable!()
         }
@@ -226,6 +233,27 @@ mod tests {
 
         // Índice Spotlight presente → pide invalidación.
         assert_eq!(spotlight, Some(mount.to_path_buf()));
+    }
+
+    #[test]
+    fn syncs_sidecars_for_both_files_of_a_pair_once() {
+        let mut photo = make_photo("_culled/IMG.raf", Some("_exported/IMG.jpg"));
+        // Par entregado: su JPG de cámara es el exportado.
+        photo.camera_jpg_path = Some("_exported/IMG.jpg".into());
+        let repo = FakePhotoRepo { photo, rating_calls: Mutex::new(vec![]) };
+        let finder = FakeFinderTags { sync_calls: Mutex::new(vec![]), spotlight_present: false };
+        let dir = Path::new("/mnt/lumik/x");
+        let uc = RatePhoto {
+            photos: &repo,
+            finder_tags: &finder,
+            project_dir: dir,
+            mount_point: Path::new("/mnt"),
+            finder_tags_enabled: true,
+        };
+
+        uc.execute("p1", 5, Some("1"), None).unwrap();
+        let targets: Vec<PathBuf> = finder.sync_calls.lock().unwrap().iter().map(|(p, _)| p.clone()).collect();
+        assert_eq!(targets, vec![dir.join("_culled/IMG.raf"), dir.join("_exported/IMG.jpg")]);
     }
 
     #[test]

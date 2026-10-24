@@ -95,16 +95,24 @@ Al registrar un JPG que se une a una foto con `culled = 1`, el import lo deja en
 
 ### D7. Escritura de metadatos en el par
 
-- **Estrellas, color y tags:** se escriben en los dos archivos con la misma cola de escritura que hoy, dos destinos por foto.
+- **Estrellas, color y tags:** como en cualquier foto, viven en la base de datos del proyecto, que es la fuente de verdad (spec `photo-rating`). Lumik no los escribe en los archivos; escribirlos sería otro change, para todas las fotos.
+- **AppleDouble (Finder tags):** se genera para los dos archivos del par, y para el exportado si lo hay. Al unirse un archivo a una foto con color, también se le genera.
 - **Rotación:** se escribe en los dos y la miniatura se regenera una vez.
-- **AppleDouble (Finder tags):** se genera para los dos archivos.
-- **Si falla en uno de los dos:** se reintenta como hoy, sin bloquear la interfaz.
+- **Si falla en uno de los dos:** como hoy, un fallo del sidecar no impide guardar.
 
 ### D8. Vistas previas y visor
 
 - **Miniatura y `.previews/{id}.jpg`:** salen del JPG del par, que ya es JPEG, así que no hace falta extraer nada.
 - **Vista del RAW en el visor:** se cachea aparte en `.previews/{id}-raw.jpg`, la primera vez que se pide.
 - **El conmutador del indicador** es estado de la interfaz: no se guarda y vuelve al JPG al cambiar de foto.
+
+### D9. Notas de implementación
+
+- **Aviso al cambiar la opción:** `plan` reconoce una edición por el **tamaño** del JPG, para no leer cientos de JPG enteros en un disco mecánico antes de mostrar el diálogo. `apply` verifica la huella completa (tamaño + SHA-256) antes de mover o borrar nada.
+- **Reintento del registro:** `register_existing` (fallidos al registrar, ya en `_media/`) empareja por el nombre final y no une con fotos existentes: ese caso es raro y los dos archivos de un par ya llegaron con el mismo nombre.
+- **SHA-256:** dependencia `sha2` (ya estaba en el árbol como transitiva).
+- **Indicador de formato:** `FormatBadge` en `@lumik/ui` (lo usan `PhotoCard` y el visor). En un par es un botón; el atajo configurable `photo_detail.toggle_raw` (por defecto `s`) hace el mismo cambio. `s` ya se usa en el dashboard (`projects.focus_search`), pero los atajos son por contexto y no chocan.
+- **Calificación (D7):** se confirmó que Lumik no escribe estrellas, color ni tags en los archivos; para el par solo cambia el sidecar de Finder tags.
 
 ## Risks / Trade-offs
 
@@ -121,6 +129,3 @@ Al registrar un JPG que se une a una foto con `culled = 1`, el import lo deja en
 - Los proyectos existentes quedan con `delivery_mode = 'none'` y se comportan como hoy.
 - Revertir es volver a la versión anterior. Las columnas nuevas se ignoran; los pares ya importados se verían como una foto (el RAW) y su JPG quedaría en disco sin registrar.
 
-## Open Questions
-
-- Atajo de teclado para cambiar entre JPG y RAW en el visor (¿`r`?). Se decide al implementar, junto con los demás atajos configurables.

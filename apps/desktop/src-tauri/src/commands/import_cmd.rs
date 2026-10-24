@@ -5,7 +5,9 @@ use super::{relocate_project_folder, AppState};
 use crate::application::error::AppResult;
 use crate::application::import_settings::{resolve_import_settings, ImportSessionSettings};
 use crate::application::ports::ProgressReporter;
-use crate::application::use_cases::import_photos::{ImportOutcome, ImportParams, ImportPhotos};
+use crate::application::use_cases::import_photos::{
+    existing_shots, import_breakdown, ImportBreakdown, ImportOutcome, ImportParams, ImportPhotos,
+};
 use crate::db::ProjectDatabase;
 use crate::domain::project::{image_description, ProjectFolder};
 use crate::import::{ImportLogEntry, ImportLogKind, ImportPhase, ImportProgress, ImportResult};
@@ -86,6 +88,8 @@ pub async fn start_import(
         images: state.image_processor.as_ref(),
         pipeline: &StdImportPipeline,
         reporter: &reporter,
+        finder_tags: global_settings.finder_tags_sidecar.then_some(state.finder_tags.as_ref()),
+        files: state.file_store.as_ref(),
     }
     .execute(&ImportParams {
         session_id: request.session_id.clone(),
@@ -99,6 +103,7 @@ pub async fn start_import(
         metadata: settings.metadata,
         image_description,
         rename_on_import: settings.rename_on_import,
+        delivery: project_db.delivery_mode()?,
     });
 
     Ok(finish_import(
@@ -111,6 +116,22 @@ pub async fn start_import(
         total_files,
         outcome,
     ))
+}
+
+/// Desglose por tomas de una selección, para el paso de origen y el resumen
+/// del import: pares, RAW y JPG sueltos, y cuántos se unirán a fotos del proyecto.
+#[tauri::command]
+pub async fn analyze_import_selection(
+    state: State<'_, AppState>,
+    project_id: String,
+    source_files: Vec<String>,
+) -> AppResult<ImportBreakdown> {
+    let project_db = state.project_db(&project_id)?;
+    let photo_paths: Vec<PathBuf> =
+        source_files.iter().map(PathBuf::from).filter(|p| !is_video_file(p)).collect();
+    let dates = state.metadata.capture_dates(&photo_paths);
+    let existing = existing_shots(project_db.get_loose_photos()?, &project_db.project_dir);
+    Ok(import_breakdown(&photo_paths, &dates, &existing))
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -153,6 +174,7 @@ pub async fn retry_import_register(
         metadata: None,
         image_description: None,
         rename_on_import: false,
+        delivery: project_db.delivery_mode()?,
     };
     let outcome = ImportPhotos {
         photos: project_db.as_ref(),
@@ -160,6 +182,9 @@ pub async fn retry_import_register(
         images: state.image_processor.as_ref(),
         pipeline: &StdImportPipeline,
         reporter: &reporter,
+        // El registro de lo que ya está en `_media/` no une archivos.
+        finder_tags: None,
+        files: state.file_store.as_ref(),
     }
     .register_existing(state.file_store.as_ref(), &params, &request.file_names);
 
@@ -262,6 +287,7 @@ fn finish_import(
         failed_files: outcome.failed_files,
         skipped_files: outcome.skipped_files,
         videos_copied: outcome.videos_copied,
+        joined: outcome.joined,
         fatal: outcome.fatal,
     };
 

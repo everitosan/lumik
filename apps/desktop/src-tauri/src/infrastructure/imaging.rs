@@ -28,12 +28,12 @@ fn previews_dir_for(project_dir: &Path) -> Option<PathBuf> {
 
 /// Ruta destino del thumbnail de una foto: `{proyecto}/.thumbs/{photo_id}.jpg`.
 /// El directorio del proyecto es el padre del archivo, o su abuelo si el archivo
-/// vive en `_media/` o `_culled/`.
+/// vive en `_media/`, `_culled/` o `_exported/` (el JPG entregado de un par).
 fn thumb_dest(src: &Path, photo_id: &str) -> Option<PathBuf> {
     let file_parent = src.parent()?;
     let project_dir = if file_parent
         .file_name()
-        .map(|n| n == "_media" || n == "_culled")
+        .map(|n| n == "_media" || n == "_culled" || n == "_exported")
         .unwrap_or(false)
     {
         file_parent.parent().unwrap_or(file_parent)
@@ -46,6 +46,22 @@ fn thumb_dest(src: &Path, photo_id: &str) -> Option<PathBuf> {
 
 /// Reaplica un delta de rotación al thumbnail cacheado. Idéntico en todas las
 /// plataformas (solo usa el crate `image`).
+/// Borra la miniatura y las vistas previas en caché de una foto.
+fn remove_cached_images(project_dir: &Path, photo_id: &str) {
+    for rel in [
+        format!(".thumbs/{}.jpg", photo_id),
+        format!(".previews/{}.jpg", photo_id),
+        format!(".previews/{}-raw.jpg", photo_id),
+    ] {
+        let path = project_dir.join(rel);
+        if path.exists() {
+            if let Err(e) = std::fs::remove_file(&path) {
+                log::warn!("No se pudo borrar {}: {}", path.display(), e);
+            }
+        }
+    }
+}
+
 fn rotate_cached_thumbnail(project_dir: &Path, photo_id: &str, delta: i32) {
     use image::ImageFormat;
     use std::io::Cursor;
@@ -308,6 +324,10 @@ impl ImageProcessor for DesktopImaging {
         let _ = std::fs::remove_file(&tmp);
         Ok(bytes)
     }
+
+    fn invalidate_cached_images(&self, project_dir: &Path, photo_id: &str) {
+        remove_cached_images(project_dir, photo_id);
+    }
 }
 
 /// Alias interno para leer la rotación en desktop sin duplicar la lógica exiftool.
@@ -356,6 +376,10 @@ impl ImageProcessor for AndroidImaging {
 
     fn jpeg_preview_bytes(&self, src: &Path) -> Result<Vec<u8>, String> {
         std::fs::read(src).map_err(|e| format!("Failed to read JPEG: {}", e))
+    }
+
+    fn invalidate_cached_images(&self, project_dir: &Path, photo_id: &str) {
+        remove_cached_images(project_dir, photo_id);
     }
 }
 

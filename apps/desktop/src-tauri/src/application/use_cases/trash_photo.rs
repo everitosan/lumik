@@ -123,15 +123,26 @@ impl TrashPhoto<'_> {
             _ => None,
         };
 
+        // El JPG de cámara de un par va a `_trash/` junto a su RAW. Si ya se
+        // entregó, es el exportado y viaja con él.
+        let camera = match photo.camera_jpg_path.as_deref() {
+            Some(jpg) if Some(jpg) == photo.jpg_path.as_deref() => None,
+            Some(jpg) if self.files.exists(&self.project_dir.join(jpg)) => {
+                let new_jpg = trash_destination(jpg).map_err(|e| e.to_string())?;
+                Some((self.project_dir.join(jpg), self.project_dir.join(&new_jpg), new_jpg))
+            }
+            _ => None,
+        };
+
         let mut targets: Vec<&Path> = vec![&dng_to];
-        if let Some((_, to, _)) = &exported {
+        for (_, to, _) in exported.iter().chain(camera.iter()) {
             targets.push(to);
         }
         ensure_free(self.files, &targets)?;
 
         let mut mover = Mover::new(self.files, self.finder_tags);
         mover.move_with_sidecars(&dng_from, &dng_to)?;
-        if let Some((from, to, _)) = &exported {
+        for (from, to, _) in exported.iter().chain(camera.iter()) {
             if let Err(e) = mover.move_with_sidecars(from, to) {
                 mover.rollback();
                 return Err(e);
@@ -142,7 +153,13 @@ impl TrashPhoto<'_> {
             Some((_, _, new_jpg)) => Some(new_jpg.as_str()),
             None => photo.jpg_path.as_deref(),
         };
-        if let Err(e) = self.photos.set_deleted(photo_id, true, &new_dng, jpg_path) {
+        let camera_jpg_path = match (&camera, &photo.camera_jpg_path) {
+            (Some((_, _, new_jpg)), _) => Some(new_jpg.as_str()),
+            // Entregado: sigue siendo el exportado.
+            (None, Some(jpg)) if Some(jpg) == photo.jpg_path.as_ref() => jpg_path,
+            (None, other) => other.as_deref(),
+        };
+        if let Err(e) = self.photos.set_deleted(photo_id, true, &new_dng, jpg_path, camera_jpg_path) {
             mover.rollback();
             return Err(e);
         }
@@ -192,15 +209,26 @@ impl RestorePhoto<'_> {
             }
         }
 
+        // El JPG de cámara de un par vuelve junto a su RAW; si estaba entregado,
+        // es el exportado y ya vuelve con él.
+        let delivered = photo.camera_jpg_path.is_some() && photo.camera_jpg_path == photo.jpg_path;
+        let camera = match photo.camera_jpg_path.as_deref() {
+            Some(jpg) if !delivered && self.files.exists(&self.project_dir.join(jpg)) => {
+                let new_jpg = restore_destination(jpg, photo.culled).map_err(|e| e.to_string())?;
+                Some((self.project_dir.join(jpg), self.project_dir.join(&new_jpg), new_jpg))
+            }
+            _ => None,
+        };
+
         let mut targets: Vec<&Path> = vec![&dng_to];
-        if let Some((_, to, _)) = &exported {
+        for (_, to, _) in exported.iter().chain(camera.iter()) {
             targets.push(to);
         }
         ensure_free(self.files, &targets)?;
 
         let mut mover = Mover::new(self.files, self.finder_tags);
         mover.move_with_sidecars(&dng_from, &dng_to)?;
-        if let Some((from, to, _)) = &exported {
+        for (from, to, _) in exported.iter().chain(camera.iter()) {
             if let Err(e) = mover.move_with_sidecars(from, to) {
                 mover.rollback();
                 return Err(e);
@@ -211,7 +239,12 @@ impl RestorePhoto<'_> {
             Some((_, _, new_jpg)) => Some(new_jpg.as_str()),
             None => keep_jpg.as_deref(),
         };
-        if let Err(e) = self.photos.set_deleted(photo_id, false, &new_dng, jpg_path) {
+        let camera_jpg_path = match &camera {
+            Some((_, _, new_jpg)) => Some(new_jpg.as_str()),
+            None if delivered => jpg_path,
+            None => photo.camera_jpg_path.as_deref(),
+        };
+        if let Err(e) = self.photos.set_deleted(photo_id, false, &new_dng, jpg_path, camera_jpg_path) {
             mover.rollback();
             return Err(e);
         }
@@ -271,6 +304,7 @@ mod tests {
             focal_length: None,
             lens_model: None,
             rotation: 0,
+            ..Default::default()
         }
     }
 
@@ -281,10 +315,12 @@ mod tests {
         photo: Photo,
         fail_set: bool,
         calls: RefCell<Vec<SetDeletedCall>>,
+        /// `camera_jpg_path` de cada `set_deleted`.
+        camera_calls: RefCell<Vec<Option<String>>>,
     }
     impl FakeRepo {
         fn new(photo: Photo) -> Self {
-            Self { photo, fail_set: false, calls: RefCell::new(Vec::new()) }
+            Self { photo, fail_set: false, calls: RefCell::new(Vec::new()), camera_calls: RefCell::new(Vec::new()) }
         }
     }
     impl PhotoRepository for FakeRepo {
@@ -312,6 +348,7 @@ mod tests {
             deleted: bool,
             dng_path: &str,
             jpg_path: Option<&str>,
+            camera_jpg_path: Option<&str>,
         ) -> Result<(), String> {
             if self.fail_set {
                 return Err("database is locked".into());
@@ -319,6 +356,7 @@ mod tests {
             self.calls
                 .borrow_mut()
                 .push((deleted, dng_path.into(), jpg_path.map(String::from)));
+            self.camera_calls.borrow_mut().push(camera_jpg_path.map(String::from));
             Ok(())
         }
         fn create_batch(&self, _p: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
@@ -396,6 +434,54 @@ mod tests {
     }
 
     // ---- Papelera -------------------------------------------------------------
+
+    fn pair(dng: &str, camera: &str, jpg: Option<&str>, culled: bool, deleted: bool) -> Photo {
+        let mut photo = make_photo(dng, jpg, culled, deleted);
+        photo.camera_jpg_path = Some(camera.into());
+        photo
+    }
+
+    #[test]
+    fn trash_pair_moves_both_files_and_sidecars() {
+        let fs = FakeFs::with(&[abs("_media/IMG.raf"), abs("_media/IMG.jpg"), abs("_media/._IMG.jpg")]);
+        let repo = FakeRepo::new(pair("_media/IMG.raf", "_media/IMG.jpg", None, false, false));
+
+        trash(&repo, &fs).unwrap();
+
+        assert!(fs.has(&abs("_trash/IMG.raf")));
+        assert!(fs.has(&abs("_trash/IMG.jpg")));
+        assert!(fs.has(&abs("_trash/._IMG.jpg")));
+        assert_eq!(*repo.calls.borrow(), vec![(true, rel("_trash/IMG.raf"), None)]);
+        assert_eq!(*repo.camera_calls.borrow(), vec![Some(rel("_trash/IMG.jpg"))]);
+    }
+
+    #[test]
+    fn restore_approved_pair_puts_both_files_back_in_culled() {
+        let fs = FakeFs::with(&[abs("_trash/IMG.raf"), abs("_trash/IMG.jpg")]);
+        let repo = FakeRepo::new(pair("_trash/IMG.raf", "_trash/IMG.jpg", None, true, true));
+
+        restore(&repo, &fs).unwrap();
+
+        assert!(fs.has(&abs("_culled/IMG.raf")));
+        assert!(fs.has(&abs("_culled/IMG.jpg")));
+        assert_eq!(*repo.camera_calls.borrow(), vec![Some(rel("_culled/IMG.jpg"))]);
+    }
+
+    #[test]
+    fn delivered_pair_travels_with_its_export() {
+        let fs = FakeFs::with(&[abs("_culled/IMG.raf"), abs("_exported/IMG.jpg")]);
+        let repo = FakeRepo::new(pair("_culled/IMG.raf", "_exported/IMG.jpg", Some("_exported/IMG.jpg"), true, false));
+
+        trash(&repo, &fs).unwrap();
+
+        assert!(fs.has(&abs("_trash/IMG.raf")));
+        assert!(fs.has(&abs("_trash/_exported/IMG.jpg")));
+        assert_eq!(
+            *repo.calls.borrow(),
+            vec![(true, rel("_trash/IMG.raf"), Some(rel("_trash/_exported/IMG.jpg")))]
+        );
+        assert_eq!(*repo.camera_calls.borrow(), vec![Some(rel("_trash/_exported/IMG.jpg"))]);
+    }
 
     #[test]
     fn trash_without_export_moves_original_to_trash() {
@@ -672,6 +758,7 @@ mod tests {
                 focal_length: None,
                 lens_model: None,
                 rotation: 0,
+                ..Default::default()
             }])
             .unwrap();
         let id = created[0].id.clone();

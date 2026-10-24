@@ -2,7 +2,7 @@
 //! existentes (`ProjectDatabase`/`GlobalDatabase`). Son adaptadores delgados:
 //! delegan en los métodos de `db::queries` y mapean `DbError` → `String`.
 
-use crate::application::ports::PhotoRepository;
+use crate::application::ports::{CullUpdate, PhotoRepository};
 use crate::db::models::{CreatePhoto, Photo};
 use crate::db::ProjectDatabase;
 use std::collections::HashSet;
@@ -32,6 +32,10 @@ impl PhotoRepository for ProjectDatabase {
             .map_err(|e| e.to_string())
     }
 
+    fn update_cull(&self, id: &str, update: &CullUpdate) -> Result<(), String> {
+        self.update_photo_cull(id, update).map_err(|e| e.to_string())
+    }
+
     fn update_dng_path(&self, id: &str, new_dng_path: &str) -> Result<(), String> {
         self.update_photo_dng_path(id, new_dng_path).map_err(|e| e.to_string())
     }
@@ -46,8 +50,9 @@ impl PhotoRepository for ProjectDatabase {
         deleted: bool,
         dng_path: &str,
         jpg_path: Option<&str>,
+        camera_jpg_path: Option<&str>,
     ) -> Result<(), String> {
-        self.set_photo_deleted(id, deleted, dng_path, jpg_path)
+        self.set_photo_deleted(id, deleted, dng_path, jpg_path, camera_jpg_path)
             .map_err(|e| e.to_string())
     }
 
@@ -57,5 +62,17 @@ impl PhotoRepository for ProjectDatabase {
 
     fn registered_dng_paths(&self, dng_paths: &[String]) -> Result<HashSet<String>, String> {
         self.get_registered_dng_paths(dng_paths).map_err(|e| e.to_string())
+    }
+
+    fn approved_photos(&self) -> Result<Vec<Photo>, String> {
+        self.get_approved_photos().map_err(|e| e.to_string())
+    }
+
+    fn loose_photos(&self) -> Result<Vec<Photo>, String> {
+        self.get_loose_photos().map_err(|e| e.to_string())
+    }
+
+    fn join_partner(&self, id: &str, rel_path: &str, raw_format: Option<&str>) -> Result<(), String> {
+        self.join_photo_partner(id, rel_path, raw_format).map_err(|e| e.to_string())
     }
 }

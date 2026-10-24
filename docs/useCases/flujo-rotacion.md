@@ -97,7 +97,7 @@ retorna `Ok()` de inmediato.
 ```mermaid
 flowchart TD
     plat_q{"Plataforma"}
-    desktop_write["Linux / Windows<br/>exiftool -IFD0:Orientation={val} -n<br/>-overwrite_original {dng}<br/>Mapa EXIF: 90°→6 · 180°→3 · 270°→8 · 0°→1<br/>Escribe en el DNG original en el disco externo"]
+    desktop_write["Linux / Windows<br/>exiftool -IFD0:Orientation={val} -n<br/>-overwrite_original {dng}<br/>Mapa EXIF: 90°→6 · 180°→3 · 270°→8 · 0°→1<br/>Escribe en el original en el disco externo<br/>(en un par, también en su JPG)"]
     android_write["Android<br/>xmp::update_xmp_orientation(&dng, rotation)<br/>Escribe / actualiza el sidecar {dng}.xmp<br/>Sin exiftool — Rust puro"]
     thread["Hilo background — std::thread::spawn<br/>El main thread NO espera<br/>→ return Ok() inmediato"]
     ret["return Ok() — IPC response<br/>(antes de que el hilo de escritura termine)"]
@@ -134,6 +134,7 @@ flowchart TD
 | Miniatura por píxeles | `.thumbs/` se reescribe girando los píxeles, sin tocar EXIF. |
 | Escritura asíncrona | Si falla la escritura al DNG/XMP, la BD y la UI ya quedaron actualizadas; el error no vuelve al frontend. |
 | Mapa EXIF | 0°→1, 90°→6, 180°→3, 270°→8. |
+| Pares RAW+JPG | `RotatePhoto` devuelve los dos archivos y la escritura asíncrona orienta ambos; la miniatura se gira una vez. |
 
 ## Archivos de código
 

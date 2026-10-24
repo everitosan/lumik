@@ -3,7 +3,9 @@
 //! testear en aislamiento. Primer paso del refactor a arquitectura limpia
 //! (ver `docs/desktop-clean-architecture.md`).
 
+pub mod delivery;
 pub mod error;
+pub mod pairs;
 pub mod paths;
 pub mod photo;
 pub mod project;

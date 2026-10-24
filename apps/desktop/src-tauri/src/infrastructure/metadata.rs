@@ -144,6 +144,38 @@ impl MetadataTool for ExiftoolMetadata {
         map
     }
 
+    fn capture_dates(&self, paths: &[PathBuf]) -> HashMap<PathBuf, Option<String>> {
+        if paths.is_empty() {
+            return HashMap::new();
+        }
+        // -fast2: solo cabeceras (sin MakerNotes ni el resto del archivo).
+        let mut args: Vec<String> = ["-csv", "-fast2", "-DateTimeOriginal", "-CreateDate", "-ModifyDate"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        args.extend(paths.iter().map(|p| p.to_string_lossy().to_string()));
+        let Ok(stdout) = crate::exiftool::run_text(&args) else {
+            return HashMap::new();
+        };
+        let mut lines = stdout.lines();
+        let Some(header_line) = lines.next() else {
+            return HashMap::new();
+        };
+        let headers: Vec<String> = parse_csv_line(header_line).into_iter().map(|s| s.trim().to_lowercase()).collect();
+        let col = |name: &str| headers.iter().position(|h| h == name);
+        lines
+            .map(parse_csv_line)
+            .filter(|f| !f.is_empty())
+            .map(|f| {
+                let get = |name: &str| {
+                    col(name).and_then(|i| f.get(i)).map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+                };
+                let date = get("datetimeoriginal").or_else(|| get("createdate")).or_else(|| get("modifydate"));
+                (PathBuf::from(f[0].trim()), date)
+            })
+            .collect()
+    }
+
     fn set_orientation(&self, file: &Path, rotation: i32) -> Result<(), String> {
         use crate::domain::photo::Rotation;
         let orientation = Rotation::new(rotation)
@@ -300,6 +332,14 @@ mod tests {
         let b = tool.read_rotation(&f);
         assert_eq!(a, b, "leer la rotación no debe tener efectos secundarios");
         assert_eq!(a, 90);
+    }
+
+    #[test]
+    fn capture_dates_match_extract_batch() {
+        let tool = ExiftoolMetadata;
+        let f = fixture("orient_6.jpg");
+        let dates = tool.capture_dates(&[f.clone()]);
+        assert_eq!(dates.get(&f).cloned().flatten().as_deref(), Some("2024:06:15 14:30:22"));
     }
 
     #[test]

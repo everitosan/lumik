@@ -10,8 +10,9 @@ import {
   getKeybindings,
   updateKeybinding,
 } from '../lib/api';
-import type { PhotographerMetadata, AppSettings, Keybinding } from '../lib/types';
+import type { PhotographerMetadata, AppSettings, Keybinding, DeliveryMode } from '../lib/types';
 import { BackupAccountSection } from './BackupAccountSection';
+import { DeliveryModeSelect } from '../components/DeliveryModeSelect';
 
 const containerStyles: React.CSSProperties = {
   display: 'flex',
@@ -292,6 +293,7 @@ export function SettingsPage({ initialTab = 'import' }: SettingsPageProps) {
   const [embedMetadata, setEmbedMetadata] = useState(true);
   const [renameOnImport, setRenameOnImport] = useState(true);
   const [finderTags, setFinderTags] = useState(true);
+  const [defaultDelivery, setDefaultDelivery] = useState<DeliveryMode>('none');
   const [artist, setArtist] = useState('');
   const [copyright, setCopyright] = useState('');
   const [creatorUrl, setCreatorUrl] = useState('');
@@ -324,6 +326,7 @@ export function SettingsPage({ initialTab = 'import' }: SettingsPageProps) {
         setEmbedMetadata(settingsData.embed_metadata_on_import);
         setRenameOnImport(settingsData.rename_on_import);
         setFinderTags(settingsData.finder_tags_sidecar);
+        setDefaultDelivery(settingsData.default_delivery_mode);
       } catch (err) {
         setError(err instanceof Error ? err.message : t('settings.errors.loadingSettings'));
       } finally {
@@ -352,6 +355,7 @@ export function SettingsPage({ initialTab = 'import' }: SettingsPageProps) {
           embed_metadata_on_import: embedMetadata,
           rename_on_import: renameOnImport,
           finder_tags_sidecar: finderTags,
+          default_delivery_mode: defaultDelivery,
         }),
       ]);
 
@@ -378,7 +382,8 @@ export function SettingsPage({ initialTab = 'import' }: SettingsPageProps) {
     const settingsChanged = appSettings
       ? embedMetadata !== appSettings.embed_metadata_on_import ||
         renameOnImport !== appSettings.rename_on_import ||
-        finderTags !== appSettings.finder_tags_sidecar
+        finderTags !== appSettings.finder_tags_sidecar ||
+        defaultDelivery !== appSettings.default_delivery_mode
       : false;
 
     return metadataChanged || settingsChanged;
@@ -442,6 +447,16 @@ export function SettingsPage({ initialTab = 'import' }: SettingsPageProps) {
             />
             <p style={sectionDescriptionStyles}>
               {t('settings.importOptions.finderTagsHint')}
+            </p>
+
+            <DeliveryModeSelect
+              labelKey="settings.importOptions.deliveryDefault"
+              value={defaultDelivery}
+              onChange={setDefaultDelivery}
+              disabled={saving}
+            />
+            <p style={sectionDescriptionStyles}>
+              {t('settings.importOptions.deliveryDefaultHint')}
             </p>
           </section>
 

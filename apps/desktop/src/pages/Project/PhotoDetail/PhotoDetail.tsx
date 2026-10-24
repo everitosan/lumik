@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon } from '@lumik/ui';
+import { FormatBadge, Icon, photoFormat } from '@lumik/ui';
 import type { ColorLabel } from '@lumik/ui';
 import type { Photo } from '../../../lib/types';
 import { usePhotoPreview, useContextKeybindings, matchesKey, usePlatform } from '../../../lib/hooks';
@@ -145,7 +145,16 @@ export function PhotoDetail({
     return [...set].sort();
   }, [photos]);
 
-  const { data: preview, loading: previewLoading } = usePhotoPreview(photo.id, photo.project_id);
+  // Un par RAW+JPG se abre en su JPG; el indicador cambia al RAW y, al pasar a
+  // otra foto, se vuelve al JPG.
+  const format = photoFormat(photo.dng_path, photo.camera_jpg_path);
+  const [showRaw, setShowRaw] = useState(false);
+  useEffect(() => setShowRaw(false), [photo.id]);
+  const { data: preview, loading: previewLoading } = usePhotoPreview(
+    photo.id,
+    photo.project_id,
+    format === 'RAW+JPG' && showRaw,
+  );
   const fullImageUrl = preview?.url ?? null;
   const initialRotation = photo.rotation;
 
@@ -248,6 +257,7 @@ export function PhotoDetail({
       if (matchesKey(e, kb['photo_detail.rotate_right']))  { viewerRef.current?.rotateRight(); return; }
       if (matchesKey(e, kb['photo_detail.cull']))          { handleCulledChange(!localCulled); return; }
       if (matchesKey(e, kb['photo_detail.add_tag']))       { e.preventDefault(); tagManagerRef.current?.startAdding(); return; }
+      if (matchesKey(e, kb['photo_detail.toggle_raw']))    { if (format === 'RAW+JPG') setShowRaw((v) => !v); return; }
       if (matchesKey(e, kb['photo_detail.stars_0']))       { handleStarsChange(0); return; }
       if (matchesKey(e, kb['photo_detail.stars_1']))       { handleStarsChange(1); return; }
       if (matchesKey(e, kb['photo_detail.stars_2']))       { handleStarsChange(2); return; }
@@ -257,7 +267,7 @@ export function PhotoDetail({
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [kb, onClose, goPrev, goNext, localCulled, handleCulledChange, localColorLabels, localTags]);
+  }, [kb, onClose, goPrev, goNext, localCulled, handleCulledChange, localColorLabels, localTags, format]);
 
   return (
     <div style={rootStyle}>
@@ -325,6 +335,15 @@ export function PhotoDetail({
           onNext={goNext}
           onRotationChange={handleRotationChange}
           onHistogramReady={setHistogramBins}
+          cornerOverlay={
+            format && (
+              <FormatBadge
+                format={format}
+                showing={format === 'RAW+JPG' ? (showRaw ? 'RAW' : 'JPG') : undefined}
+                onToggle={format === 'RAW+JPG' ? () => setShowRaw((v) => !v) : undefined}
+              />
+            )
+          }
         />
 
         {/* Tab to open info panel when collapsed */}

@@ -6,6 +6,7 @@ import {
   forwardRef,
   useImperativeHandle,
   type CSSProperties,
+  type ReactNode,
 } from 'react';
 import { PhotoViewerToolbar } from './PhotoViewerToolbar';
 
@@ -34,6 +35,8 @@ export interface PhotoViewerProps {
   onNext: () => void;
   onRotationChange: (rotation: number) => void;
   onHistogramReady?: (bins: HistogramBins) => void;
+  /** Se dibuja encima de la imagen, en la esquina superior derecha (indicador de formato). */
+  cornerOverlay?: ReactNode;
 }
 
 const viewerRootStyle: CSSProperties = {
@@ -49,6 +52,13 @@ const canvasWrapStyle: CSSProperties = {
   position: 'relative',
   overflow: 'hidden',
   background: 'var(--lumik-surface-container-lowest, #0e0e0e)',
+};
+
+const cornerOverlayStyle: CSSProperties = {
+  position: 'absolute',
+  top: '12px',
+  right: '12px',
+  zIndex: 2,
 };
 
 const loadingOverlayStyle: CSSProperties = {
@@ -81,6 +91,7 @@ export const PhotoViewer = forwardRef<PhotoViewerHandle, PhotoViewerProps>(
       onNext,
       onRotationChange,
       onHistogramReady,
+      cornerOverlay,
     },
     ref,
   ) => {
@@ -398,6 +409,11 @@ export const PhotoViewer = forwardRef<PhotoViewerHandle, PhotoViewerProps>(
           onMouseLeave={handleMouseUp}
         >
           <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
+          {cornerOverlay && (
+            <div style={cornerOverlayStyle} onMouseDown={(e) => e.stopPropagation()}>
+              {cornerOverlay}
+            </div>
+          )}
           {fullImageLoading && (
             <div style={loadingOverlayStyle}>
               <span

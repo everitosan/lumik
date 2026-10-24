@@ -7,7 +7,7 @@ Permite seleccionar durante el culling las fotos que vale la pena editar, apart�
 ## Requirements
 
 ### Requirement: Aprobar mueve el archivo a `_culled/`
-En Lumik "culled" significa **aprobada/seleccionada**. Aprobar una foto SHALL mover su archivo de `_media/` a `_culled/` dentro de la misma carpeta de proyecto, conservando el nombre, y SHALL actualizar su ruta guardada. Quitar la aprobación SHALL devolverlo a `_media/`. Ninguna de las dos operaciones SHALL borrar el archivo.
+En Lumik "culled" significa **aprobada/seleccionada**. Aprobar una foto SHALL mover su archivo original de `_media/` a `_culled/` dentro de la misma carpeta de proyecto, conservando el nombre, y SHALL actualizar su ruta guardada. Quitar la aprobación SHALL devolver el original a `_media/`. Ninguna de las dos operaciones SHALL borrar un archivo, salvo la copia de entrega de un JPG suelto que Lumik hizo y que sigue idéntica a su original.
 
 #### Scenario: Aprobar
 - **WHEN** el usuario aprueba `lumik/2024/06/15_Boda/_media/IMG_0001.cr2`
@@ -21,6 +21,13 @@ En Lumik "culled" significa **aprobada/seleccionada**. Aprobar una foto SHALL mo
 - **WHEN** se aprueba la primera foto de un proyecto sin carpeta `_culled/`
 - **THEN** la carpeta se crea y el archivo se mueve a ella
 
+### Requirement: El JPG de un par al aprobar
+Al aprobar un par, su JPG SHALL ir a `_culled/` o a `_exported/` según la opción de entrega del proyecto. Al quitar la aprobación, el JPG SHALL volver a `_media/` salvo que sea una edición del fotógrafo.
+
+#### Scenario: Aprobar un par sin entrega
+- **WHEN** el proyecto entrega *nada* y el usuario aprueba el par `IMG_0001.cr2` + `IMG_0001.jpg`
+- **THEN** los dos archivos quedan en `_culled/`
+
 ### Requirement: Operación idempotente
 Pedir el mismo estado que la foto ya tiene SHALL completarse sin mover nada.
 
@@ -29,11 +36,15 @@ Pedir el mismo estado que la foto ya tiene SHALL completarse sin mover nada.
 - **THEN** la operación termina con éxito y el archivo no se mueve
 
 ### Requirement: Los sidecars acompañan a la foto
-Al aprobar o quitar la aprobación, el sidecar `.xmp` de la foto y su sidecar de etiquetas para iPad (`._{nombre}`), si existen, SHALL moverse junto al archivo.
+Al aprobar o quitar la aprobación, el sidecar `.xmp` de la foto y los sidecars de etiquetas para iPad (`._{nombre}`) de sus archivos, si existen, SHALL moverse junto al archivo al que pertenecen.
 
 #### Scenario: Foto con sidecar XMP
 - **WHEN** se aprueba `IMG_0001.cr2` que tiene `IMG_0001.xmp` al lado
 - **THEN** ambos archivos quedan en `_culled/`
+
+#### Scenario: Par entregado con sidecars para iPad
+- **WHEN** se aprueba un par con entrega de JPG y existen `._IMG_0001.cr2` y `._IMG_0001.jpg`
+- **THEN** `._IMG_0001.cr2` queda en `_culled/` y `._IMG_0001.jpg` en `_exported/`
 
 ### Requirement: Rollback si falla el guardado
 Si el archivo se movió pero no se pudo guardar el nuevo estado, el sistema SHALL devolver el archivo a su ubicación original e informar el error, para que el disco y la base de datos del proyecto no queden desalineados.

@@ -45,11 +45,11 @@ Un JPEG que llega en una importación posterior o en un reintento SHALL unirse a
 - **THEN** el paso de origen indica que esos 300 JPG se unirán a fotos existentes
 
 ### Requirement: El par es una sola foto
-Un par SHALL ocupar una sola tarjeta en el grid y contar como una foto en los contadores del proyecto. Estrellas, color, tags, aprobación, rotación y papelera SHALL aplicarse al par. Las estrellas, el color y los tags SHALL escribirse en los metadatos de los dos archivos.
+Un par SHALL ocupar una sola tarjeta en el grid y contar como una foto en los contadores del proyecto. Estrellas, color, tags, aprobación, rotación y papelera SHALL aplicarse al par. Como en cualquier foto, la calificación SHALL guardarse en la base de datos del proyecto, y el sidecar de etiquetas de color para iPad y Mac SHALL escribirse para los dos archivos del par.
 
 #### Scenario: Calificar un par
-- **WHEN** el usuario da 5 estrellas y el color rojo a un par
-- **THEN** el RAW y el JPG del par llevan 5 estrellas y la etiqueta roja en sus metadatos
+- **WHEN** con los sidecars para iPad activos, el usuario da 5 estrellas y el color rojo a un par
+- **THEN** la foto queda con 5 estrellas y la etiqueta roja, y existen los sidecars `._{nombre}` del RAW y del JPG con la etiqueta roja
 
 #### Scenario: Contador del proyecto
 - **WHEN** un proyecto tiene 300 pares, 3 RAW sueltos y 1 JPG suelto

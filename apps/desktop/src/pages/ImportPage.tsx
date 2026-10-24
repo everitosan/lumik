@@ -17,8 +17,10 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { stat } from '@tauri-apps/plugin-fs';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useConnectedDevices, useProjectsDashboard, useActivePhotographer, useAppSettings, useImport, usePlatform, type ImportRetryStep } from '../lib/hooks';
-import { getPhotographerMetadata } from '../lib/api';
-import type { FailedFile, ImportLogEntry, ImportProgress, ImportResult, ImportSessionSettings, SkippedFile } from '../lib/types';
+import { analyzeImportSelection, getPhotographerMetadata, getProjectDeliveryMode } from '../lib/api';
+import type { DeliveryMode, FailedFile, ImportBreakdown, ImportLogEntry, ImportProgress, ImportResult, ImportSessionSettings, SkippedFile } from '../lib/types';
+import { DeliveryModeSelect } from '../components/DeliveryModeSelect';
+import { useDeliveryChange } from '../components/DeliveryChangeDialog';
 
 const pathBasename = (p: string) => p.replace(/\\/g, '/').split('/').pop() || p;
 
@@ -214,6 +216,23 @@ const fieldsGridStyles: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(2, 1fr)',
   gap: '16px',
+};
+
+const breakdownStyles: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  padding: '12px 16px',
+  backgroundColor: 'var(--lumik-surface-container, #201f1f)',
+  borderRadius: 'var(--lumik-radius-md, 8px)',
+  border: '1px solid var(--lumik-outline-variant, #424654)',
+};
+
+const breakdownTitleStyles: CSSProperties = {
+  fontFamily: 'var(--lumik-font-primary, Inter)',
+  fontSize: '14px',
+  fontWeight: 600,
+  color: 'var(--lumik-on-surface, #e5e2e1)',
 };
 
 // Confirm step styles
@@ -448,6 +467,33 @@ export function ImportPage({
   const [showAllFailed, setShowAllFailed] = useState(false);
   const platform = usePlatform();
 
+  // Desglose por tomas de lo seleccionado (pares RAW+JPG, sueltos, uniones).
+  const [breakdown, setBreakdown] = useState<ImportBreakdown | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  // Entrega al aprobar: es del proyecto, no de esta importación.
+  const [delivery, setDelivery] = useState<DeliveryMode | null>(null);
+  useEffect(() => {
+    getProjectDeliveryMode(initialProjectId)
+      .then(setDelivery)
+      .catch((err) => console.error('getProjectDeliveryMode failed:', err));
+  }, [initialProjectId]);
+
+  // Cambiarla avisa si afecta a fotos ya aprobadas; cancelar deja la anterior.
+  const { requestChange, dialog: deliveryDialog } = useDeliveryChange(initialProjectId);
+  const handleDeliveryChange = (mode: DeliveryMode) => {
+    const previous = delivery;
+    setDelivery(mode);
+    requestChange(mode)
+      .then((saved) => {
+        if (!saved) setDelivery(previous);
+      })
+      .catch((err) => {
+        console.error('set delivery mode failed:', err);
+        setDelivery(previous);
+      });
+  };
+
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [importLog]);
@@ -555,6 +601,34 @@ export function ImportPage({
     () => importState.sourceFiles.filter((f) => isVideoFile(f.name)).length,
     [importState.sourceFiles]
   );
+
+  // Recalcula el desglose al cambiar la selección (con una pausa corta para no
+  // leer las fechas de captura en cada archivo que se arrastra).
+  useEffect(() => {
+    const paths = importState.sourceFiles.map((f) => f.path);
+    if (paths.length === 0) {
+      setBreakdown(null);
+      return;
+    }
+    let cancelled = false;
+    setAnalyzing(true);
+    const timer = setTimeout(() => {
+      analyzeImportSelection(initialProjectId, paths)
+        .then((b) => !cancelled && setBreakdown(b))
+        .catch((err) => {
+          console.error('analyzeImportSelection failed:', err);
+          if (!cancelled) setBreakdown(null);
+        })
+        .finally(() => !cancelled && setAnalyzing(false));
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [importState.sourceFiles, initialProjectId]);
+
+  /** Fotos nuevas: por toma si ya hay desglose, si no por archivo. */
+  const shotCount = breakdown?.photos ?? photoCount;
 
   // Get selected drive
   const selectedDrive = useMemo(() => {
@@ -758,6 +832,28 @@ export function ImportPage({
     }
   };
 
+  /** Fotos por toma: pares RAW+JPG, sueltos y archivos que se unirán. */
+  const renderBreakdown = () => {
+    if (!breakdown) {
+      return analyzing ? <div style={breakdownStyles}><span style={hintStyles}>{t('import.origin.breakdown.analyzing')}</span></div> : null;
+    }
+    const parts = [
+      breakdown.pairs > 0 && t('import.origin.breakdown.pairs', { count: breakdown.pairs }),
+      breakdown.raw_only > 0 && t('import.origin.breakdown.rawOnly', { count: breakdown.raw_only }),
+      breakdown.jpg_only > 0 && t('import.origin.breakdown.jpgOnly', { count: breakdown.jpg_only }),
+      breakdown.other > 0 && t('import.origin.breakdown.other', { count: breakdown.other }),
+    ].filter(Boolean);
+    return (
+      <div style={breakdownStyles}>
+        <span style={breakdownTitleStyles}>{t('import.origin.breakdown.photos', { count: breakdown.photos })}</span>
+        {parts.length > 0 && <span style={hintStyles}>{parts.join(' · ')}</span>}
+        {breakdown.joins > 0 && (
+          <span style={hintStyles}>{t('import.origin.breakdown.joins', { count: breakdown.joins })}</span>
+        )}
+      </div>
+    );
+  };
+
   // Step 1: Origin
   const renderOriginStep = () => (
     <div style={stepContentStyles}>
@@ -766,6 +862,7 @@ export function ImportPage({
           fileCount={importState.sourceFiles.length}
           totalBytes={totalImportSize}
         />
+        {photoCount > 0 && renderBreakdown()}
         <DropZone
           onBrowse={handleBrowse}
           title={t('import.origin.dragDrop')}
@@ -854,6 +951,19 @@ export function ImportPage({
             {t('import.settings.reset')}
           </Button>
         </div>
+
+        {delivery && (
+          <>
+            <div style={sectionStyles}>
+              <span style={sectionTitleStyles}>{t('import.settings.projectTitle')}</span>
+              <p style={settingsHintStyles}>{t('import.settings.projectDescription')}</p>
+            </div>
+            <div style={summaryCardStyles}>
+              <DeliveryModeSelect value={delivery} onChange={handleDeliveryChange} />
+              <p style={settingsHintStyles}>{t('project.delivery.hint')}</p>
+            </div>
+          </>
+        )}
       </div>
     );
   };
@@ -902,6 +1012,7 @@ export function ImportPage({
       case 'file_skipped':
         return t('import.log.file_skipped', { file, reason: t(`import.result.skipReasons.${entry.detail ?? 'unsupported_format'}`) });
       case 'photos_registered':
+      case 'photos_joined':
       case 'thumbnails':
       case 'done':
         return t(`import.log.${entry.kind}`, { count: entry.count ?? 0 });
@@ -912,7 +1023,7 @@ export function ImportPage({
 
   const resultTitle = (r: ImportResult | null) => {
     if (!r) return t('import.result.failedTitle');
-    const imported = r.successful + r.videos_copied;
+    const imported = r.successful + r.videos_copied + (r.joined ?? 0);
     if (r.fatal || (r.failed > 0 && imported === 0)) return t('import.result.failedTitle');
     if (r.failed > 0) return t('import.result.partialTitle');
     return t('import.progress.completed');
@@ -980,7 +1091,7 @@ export function ImportPage({
 
   const renderResult = (r: ImportResult) => (
     <>
-      {(r.successful > 0 || r.videos_copied > 0) && (
+      {(r.successful > 0 || r.videos_copied > 0 || r.joined > 0) && (
         <div style={resultSuccessStyles}>
           <Icon name="check" size="md" color="var(--lumik-secondary, #e9c349)" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -992,6 +1103,11 @@ export function ImportPage({
             {r.videos_copied > 0 && (
               <span style={progressTextStyles}>
                 {r.videos_copied} {t(r.videos_copied === 1 ? 'import.progress.videoCopied_one' : 'import.progress.videoCopied_other')}
+              </span>
+            )}
+            {r.joined > 0 && (
+              <span style={progressTextStyles}>
+                {r.joined} {t(r.joined === 1 ? 'import.progress.joined_one' : 'import.progress.joined_other')}
               </span>
             )}
             {elapsedTime && (
@@ -1081,7 +1197,14 @@ export function ImportPage({
             {photoCount > 0 && (
               <div style={summaryRowStyles}>
                 <span style={summaryLabelStyles}>{t('import.summary.photos')}</span>
-                <span style={summaryValueStyles}>{photoCount}</span>
+                <span style={summaryValueStyles}>
+                  {shotCount}
+                  {breakdown && breakdown.pairs > 0 && (
+                    <span style={hintStyles}>
+                      {' '}({t('import.summary.photosDetail', { pairs: breakdown.pairs, raw: breakdown.raw_only, jpg: breakdown.jpg_only })})
+                    </span>
+                  )}
+                </span>
               </div>
             )}
             {videoCount > 0 && (
@@ -1122,6 +1245,12 @@ export function ImportPage({
                     {sessionSettings.rename_on_import ? t('import.summary.renameYes') : t('import.summary.renameNo')}
                   </span>
                 </div>
+                {delivery && (
+                  <div style={summaryRowStyles}>
+                    <span style={summaryLabelStyles}>{t('import.summary.delivery')}</span>
+                    <span style={summaryValueStyles}>{t(`project.delivery.modes.${delivery}`)}</span>
+                  </div>
+                )}
                 <div style={summaryRowStyles}>
                   <span style={summaryLabelStyles}>{t('import.summary.signedBy')}</span>
                   <span style={summaryValueStyles}>
@@ -1187,13 +1316,14 @@ export function ImportPage({
       </header>
 
       <div style={contentStyles}>{renderStepContent()}</div>
+      {deliveryDialog}
 
       <footer style={footerStyles}>
         <div style={footerLeftStyles}>
           {importState.sourceFiles.length > 0 && (
             <span style={hintStyles}>
               {[
-                photoCount > 0 && `${photoCount} ${t(photoCount === 1 ? 'import.footer.photo_one' : 'import.footer.photo_other')}`,
+                shotCount > 0 && `${shotCount} ${t(shotCount === 1 ? 'import.footer.photo_one' : 'import.footer.photo_other')}`,
                 videoCount > 0 && `${videoCount} ${t(videoCount === 1 ? 'import.footer.video_one' : 'import.footer.video_other')}`,
               ].filter(Boolean).join(' • ')} • {formatBytes(totalImportSize)}
             </span>

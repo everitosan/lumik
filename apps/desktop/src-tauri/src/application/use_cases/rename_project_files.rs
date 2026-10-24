@@ -168,6 +168,7 @@ mod tests {
             _deleted: bool,
             _dng_path: &str,
             _jpg_path: Option<&str>,
+            _camera_jpg_path: Option<&str>,
         ) -> Result<(), String> {
             unreachable!()
         }

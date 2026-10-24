@@ -199,24 +199,50 @@ pub trait PhotoRepository {
         tags: Option<&str>,
     ) -> Result<(), String>;
     fn update_culled(&self, id: &str, culled: bool, new_dng_path: &str) -> Result<(), String>;
+    /// Guarda la aprobación con las rutas y la entrega del JPG de cámara. Por
+    /// defecto solo la aprobación y el original.
+    fn update_cull(&self, id: &str, update: &CullUpdate) -> Result<(), String> {
+        self.update_culled(id, update.culled, &update.dng_path)
+    }
     /// Cambia la ruta relativa de la foto (renombrado de archivos al editar).
     fn update_dng_path(&self, id: &str, new_dng_path: &str) -> Result<(), String>;
     /// Enlaza la foto con su JPEG exportado y la marca `edited` (Fase 6).
     fn set_exported(&self, id: &str, jpg_path: &str) -> Result<(), String>;
     /// Mete la foto en la papelera (borrado lógico, columna `deleted`) o la restaura,
-    /// fijando a la vez las rutas de su original y de su exportado. Al meterla, si
-    /// la foto era la portada del proyecto, el proyecto queda sin portada.
+    /// fijando a la vez las rutas de su original, de su exportado y del JPG de
+    /// cámara de un par. Al meterla, si la foto era la portada del proyecto, el
+    /// proyecto queda sin portada.
     fn set_deleted(
         &self,
         id: &str,
         deleted: bool,
         dng_path: &str,
         jpg_path: Option<&str>,
+        camera_jpg_path: Option<&str>,
     ) -> Result<(), String>;
     /// Inserta un lote de fotos en una sola transacción; devuelve las creadas.
     fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String>;
     /// De las rutas dadas (relativas al proyecto), las que ya están registradas.
     fn registered_dng_paths(&self, dng_paths: &[String]) -> Result<HashSet<String>, String>;
+
+    /// Fotos aprobadas fuera de la papelera. Por defecto, ninguna.
+    fn approved_photos(&self) -> Result<Vec<Photo>, String> {
+        Ok(Vec::new())
+    }
+
+    /// Fotos sueltas (no en la papelera y sin pareja) que podrían recibir su
+    /// RAW o su JPEG en una importación posterior. Por defecto, ninguna.
+    fn loose_photos(&self) -> Result<Vec<Photo>, String> {
+        Ok(Vec::new())
+    }
+
+    /// Une a una foto suelta la otra mitad de su toma, ya en el proyecto en
+    /// `rel_path` (relativa al proyecto). Si llega un RAW, pasa a ser el
+    /// original (`dng_path`, formato `raw_format`) y el JPEG queda como su JPG
+    /// de cámara. La foto conserva todo lo demás.
+    fn join_partner(&self, _id: &str, _rel_path: &str, _raw_format: Option<&str>) -> Result<(), String> {
+        Err("join_partner no está implementado en este repositorio".into())
+    }
 }
 
 /// Parámetros de una sesión del pipeline de importación (fotos y videos).
@@ -234,14 +260,63 @@ pub struct PipelineRequest<'a> {
     pub metadata: &'a Option<PhotographerMetadata>,
     pub image_description: Option<&'a str>,
     pub rename: bool,
+    /// Para leer la fecha de captura de lo copiado y emparejar RAW+JPEG.
+    pub metadata_tool: &'a dyn MetadataTool,
+    /// Fotos sueltas del proyecto a las que puede unirse lo que llega.
+    pub existing: &'a [ExistingShot],
+}
+
+/// Foto suelta del proyecto que puede recibir su otra mitad en este import.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExistingShot {
+    pub photo_id: String,
+    pub key: crate::domain::pairs::ShotKey,
+    pub kind: crate::domain::pairs::FileKind,
+    /// Ruta absoluta de su archivo (en `_media/` o `_culled/`): la otra mitad se
+    /// guarda a su lado, con su mismo nombre.
+    pub file: PathBuf,
+}
+
+/// Archivo que se unió a una foto existente (su RAW o su JPEG).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportedJoin {
+    pub photo_id: String,
+    /// Ruta final del archivo, junto al de la foto.
+    pub file: PathBuf,
+}
+
+/// Foto movida a `_media/` por el pipeline: un archivo suelto o un par RAW+JPEG.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportedShot {
+    /// Archivo principal (`dng_path`): el RAW de un par o el archivo suelto.
+    pub file: PathBuf,
+    /// JPEG de cámara de un par (`camera_jpg_path`).
+    pub camera_jpg: Option<PathBuf>,
+    /// Nombre de cámara sin extensión (`DSCF1234`).
+    pub source_stem: String,
+}
+
+impl ImportedShot {
+    /// Archivo suelto cuyo nombre de cámara es el suyo propio.
+    pub fn single(file: PathBuf) -> Self {
+        let source_stem = crate::domain::pairs::stem_of(&file);
+        ImportedShot { file, camera_jpg: None, source_stem }
+    }
+
+    /// Imagen que se muestra (miniatura y vista previa): el JPEG de un par.
+    pub fn display_file(&self) -> &Path {
+        self.camera_jpg.as_deref().unwrap_or(&self.file)
+    }
 }
 
 /// Resultado del pipeline. Siempre se devuelve, aunque termine por un error
 /// general (`fatal`): lo ya importado se conserva y se informa.
 #[derive(Debug, Default)]
 pub struct PipelineOutcome {
-    /// Rutas finales de las fotos movidas a `dest_folder` (sin sidecars XMP).
-    pub photos: Vec<PathBuf>,
+    /// Fotos movidas a `dest_folder` (sin sidecars XMP), un par por entrada.
+    pub photos: Vec<ImportedShot>,
+    /// Archivos que se unieron a una foto que ya estaba en el proyecto.
+    pub joined: Vec<ImportedJoin>,
     pub videos_copied: usize,
     pub failed: Vec<FailedFile>,
     pub skipped: Vec<SkippedFile>,
@@ -266,6 +341,46 @@ pub trait FileStore: Send + Sync {
     fn create_dir_all(&self, dir: &Path) -> std::io::Result<()>;
     fn rename(&self, from: &Path, to: &Path) -> std::io::Result<()>;
     fn exists(&self, path: &Path) -> bool;
+
+    /// Copia `from` a `to` (entrega de un JPG suelto).
+    fn copy(&self, _from: &Path, _to: &Path) -> std::io::Result<()> {
+        Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "copy"))
+    }
+
+    /// Borra un archivo (solo la copia de entrega de un JPG suelto, sin cambios).
+    fn remove_file(&self, _path: &Path) -> std::io::Result<()> {
+        Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "remove_file"))
+    }
+
+    /// Tamaño de un archivo, para estimar sin leerlo entero si cambió.
+    fn file_size(&self, _path: &Path) -> std::io::Result<u64> {
+        Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "file_size"))
+    }
+
+    /// Huella de un archivo: tamaño y SHA-256 (spec `camera-jpeg-delivery`).
+    fn fingerprint(&self, _path: &Path) -> std::io::Result<Fingerprint> {
+        Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "fingerprint"))
+    }
+}
+
+/// Tamaño y SHA-256 (hex) de un archivo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fingerprint {
+    pub size: u64,
+    pub sha256: String,
+}
+
+/// Estado que guarda un cambio de aprobación, en una sola actualización.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CullUpdate {
+    pub culled: bool,
+    pub dng_path: String,
+    pub camera_jpg_path: Option<String>,
+    pub jpg_path: Option<String>,
+    pub workflow_status: String,
+    pub delivered: Option<Fingerprint>,
+    /// `moved` o `copied`; `None` sin entrega.
+    pub delivery_kind: Option<String>,
 }
 
 /// Detección y expulsión de dispositivos de almacenamiento extraíbles.
@@ -312,6 +427,13 @@ pub trait MetadataTool: Send + Sync {
     /// Extrae metadata EXIF de un lote de archivos, en una sola pasada cuando es posible.
     fn extract_batch(&self, paths: &[PathBuf]) -> HashMap<PathBuf, FileMetadata>;
 
+    /// Fecha de captura de un lote (la misma que `extract_batch`), para emparejar
+    /// RAW+JPEG antes de importar. Las implementaciones pueden leer solo las
+    /// cabeceras para que sea rápido sobre una tarjeta o un disco mecánico.
+    fn capture_dates(&self, paths: &[PathBuf]) -> HashMap<PathBuf, Option<String>> {
+        self.extract_batch(paths).into_iter().map(|(p, m)| (p, m.capture_date)).collect()
+    }
+
     /// Escribe la orientación EXIF en el archivo (desktop: IFD0/IFD1 vía exiftool;
     /// Android: sidecar XMP). `rotation` en grados.
     fn set_orientation(&self, file: &Path, rotation: i32) -> Result<(), String>;
@@ -343,6 +465,10 @@ pub trait ImageProcessor: Send + Sync {
 
     /// Bytes de preview de un JPEG sin caché permanente, con `Orientation` neutralizada.
     fn jpeg_preview_bytes(&self, src: &Path) -> Result<Vec<u8>, String>;
+
+    /// Descarta la miniatura y la vista previa en caché de una foto, para que se
+    /// regeneren de otro archivo (p. ej. del JPEG que se le acaba de unir).
+    fn invalidate_cached_images(&self, _project_dir: &Path, _photo_id: &str) {}
 }
 
 /// Escritura de Finder tags de macOS/iPadOS como sidecars AppleDouble (`._nombre`),

@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CSSProperties } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT, type ColorLabel } from '@lumik/ui';
+import { PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT, photoFormat, type ColorLabel } from '@lumik/ui';
 import type { Photo } from '../../../lib/types';
 import { useProjectPhotos, useProjectTrashedPhotos, useProjectThumbnails, useContextKeybindings, matchesKey, usePlatform } from '../../../lib/hooks';
 import * as api from '../../../lib/api';
@@ -97,6 +97,7 @@ function LazyPhotoCard({ projectId, photo, hasThumbnail, cache, onClick, onRevea
       culled={photo.culled}
       captureDate={photo.capture_date ?? undefined}
       colorLabels={parseColorLabels(photo.color_label)}
+      format={photoFormat(photo.dng_path, photo.camera_jpg_path)}
       onClick={onClick}
       onRevealInFolder={onRevealInFolder}
       onTrash={onTrash}

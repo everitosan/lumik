@@ -86,7 +86,21 @@ CREATE TABLE IF NOT EXISTS photo (
     lens_model            TEXT,             -- e.g. "SUMMILUX-M 35MM f/1.4 ASPH"
 
     -- Orientation from EXIF, cached so the canvas never reads the file
-    rotation              INTEGER NOT NULL DEFAULT 0  -- degrees: 0 / 90 / 180 / 270
+    rotation              INTEGER NOT NULL DEFAULT 0, -- degrees: 0 / 90 / 180 / 270
+
+    -- RAW+JPEG pair: the camera JPG of the same shot (dng_path is the RAW).
+    -- Relative to the project folder; NULL if the photo is not a pair.
+    camera_jpg_path       TEXT,
+    -- Camera file name without extension (e.g. "DSCF1234"), kept to pair a
+    -- file that arrives later with a photo whose files were already renamed.
+    source_stem           TEXT,
+
+    -- Camera JPG delivered to _exported/ on approval (camera-jpeg-delivery):
+    -- fingerprint of the delivered file and how to undo the delivery
+    -- ('moved' = the JPG of a pair, 'copied' = copy of a standalone JPG).
+    delivered_size        INTEGER,
+    delivered_sha256      TEXT,
+    delivery_kind         TEXT CHECK(delivery_kind IN ('moved', 'copied'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_photo_project  ON photo(project_id) WHERE deleted = 0;
@@ -113,5 +127,8 @@ CREATE TABLE IF NOT EXISTS project_settings (
     selected_tags       TEXT,                         -- comma-separated tags (or NULL)
     selected_colors     TEXT,                         -- comma-separated color labels 1-5 (or NULL)
     stars_filter_mode   TEXT,                         -- 'exact' | 'inclusive' (or NULL for default)
-    view_mode           TEXT                          -- 'grid' | 'by-date' (or NULL for default 'by-date')
+    view_mode           TEXT,                         -- 'grid' | 'by-date' (or NULL for default 'by-date')
+    -- What approving delivers straight to _exported/ (camera-jpeg-delivery).
+    delivery_mode       TEXT NOT NULL DEFAULT 'none'
+                        CHECK(delivery_mode IN ('none', 'pairs', 'all_camera_jpg'))
 );

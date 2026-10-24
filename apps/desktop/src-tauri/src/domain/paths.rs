@@ -77,6 +77,21 @@ fn join_rel(project: &[&str], subdirs: &[&str], filename: &str) -> String {
     out.join("/")
 }
 
+/// Destino de un archivo del proyecto al entregarlo: `{proyecto}/_exported/{nombre}`,
+/// venga de `_media/` o de `_culled/`.
+pub fn exported_destination(current_rel: &str) -> Result<String, DomainError> {
+    let normalized = current_rel.replace('\\', "/");
+    let (project, filename) = split_project(&normalized, 1)?;
+    Ok(join_rel(&project, &["_exported"], filename))
+}
+
+/// ¿Está el archivo directamente en la subcarpeta `subdir` del proyecto?
+pub fn is_in_subdir(rel: &str, subdir: &str) -> bool {
+    let normalized = rel.replace('\\', "/");
+    let parts: Vec<&str> = normalized.split('/').filter(|s| !s.is_empty()).collect();
+    parts.len() >= 2 && parts[parts.len() - 2] == subdir
+}
+
 /// Destino del archivo original al mover una foto a la papelera: `{proyecto}/_trash/{nombre}`,
 /// venga de `_media/` o de `_culled/`.
 pub fn trash_destination(current_rel: &str) -> Result<String, DomainError> {
@@ -122,6 +137,14 @@ pub fn trashed_exported_for(trashed_rel: &str, jpg_filename: &str) -> Result<Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exported_destination_and_subdir() {
+        assert_eq!(exported_destination("_culled/IMG.jpg").unwrap(), "_exported/IMG.jpg");
+        assert_eq!(exported_destination("lumik/x/_media/IMG.jpg").unwrap(), "lumik/x/_exported/IMG.jpg");
+        assert!(is_in_subdir("_exported/IMG.jpg", "_exported"));
+        assert!(!is_in_subdir("_media/IMG.jpg", "_exported"));
+    }
 
     #[test]
     fn cull_moves_media_to_culled() {

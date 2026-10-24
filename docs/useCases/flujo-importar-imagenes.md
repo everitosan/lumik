@@ -9,6 +9,10 @@ sobrescribir, extracción EXIF e inserción en `project.db`, y generación de mi
 registra con su motivo y el resto sigue; el resultado se muestra siempre, y desde ahí se pueden reintentar
 los fallidos (§7).
 
+Un RAW y un JPG de la misma toma (mismo nombre de cámara sin extensión y misma fecha de captura al
+segundo) se registran como **una sola foto, un par**, aunque vengan de carpetas o tarjetas distintas o
+en imports separados (§3b). El import cuenta tomas, no archivos.
+
 > **Splits por plataforma:** en los diagramas que se bifurcan, la rama izquierda es
 > **Linux / Windows** (vía `exiftool`) y la derecha **Android** (Rust puro, sin `exiftool`).
 
@@ -21,13 +25,14 @@ flowchart LR
     P["Particionar<br/>videos / fotos"]
     C["Staging en el proyecto<br/>+ copia por archivo"]
     M["Metadatos<br/>+ renombrado"]
-    D["rename a _media/<br/>(nombre libre)"]
+    G["Agrupar en tomas<br/>(pares RAW+JPG, uniones)"]
+    D["rename a _media/<br/>(nombre libre por toma)"]
     X["EXIF → DTOs"]
     B["create_photos_batch()"]
     T["Miniaturas<br/>.thumbs/"]
     R["ImportResult"]
 
-    W --> I --> P --> C --> M --> D --> X --> B --> T --> R
+    W --> I --> P --> C --> M --> G --> D --> X --> B --> T --> R
 
     classDef ui fill:#dae8fc,stroke:#6c8ebf,color:#10243d
     classDef ipc fill:#c8e6c9,stroke:#388e3c,color:#10281a
@@ -35,7 +40,7 @@ flowchart LR
     classDef db fill:#ffcdd2,stroke:#c62828,color:#3d0d0d
     class W ui
     class I,R ipc
-    class P,C,M,D,X,T be
+    class P,C,M,G,D,X,T be
     class B db
 ```
 
@@ -44,9 +49,9 @@ flowchart LR
 ```mermaid
 flowchart TD
     start(["Usuario en Detalle de proyecto<br/>pulsa Importar (el proyecto es el destino)"])
-    s1["Paso 1 — Origen: seleccionar archivos<br/>• Clic en 'Browse' o arrastrar archivos (DropZone)<br/>• Validar extensiones: RAW, DNG, JPEG, video (MP4, MOV…)<br/>• Mostrar FileList con tamaño total acumulado"]
-    s2["Paso 2 — Ajustes de esta importación<br/>• Precargados de AppSettings + metadatos del fotógrafo<br/>• Renombrar sí/no (ejemplo con el nombre del proyecto)<br/>• Firmar sí/no + autor, copyright, URL editables<br/>• Restablecer a la configuración global<br/>• No modifica la configuración global"]
-    s3["Paso 3 — Confirmar e iniciar<br/>• Resumen: N fotos + M videos, proyecto, disco,<br/>espacio libre, renombrado y firma elegidos<br/>• Botón desactivado si no hay espacio suficiente<br/>• Usuario confirma → genera session_id único"]
+    s1["Paso 1 — Origen: seleccionar archivos<br/>• Clic en 'Browse' o arrastrar archivos (DropZone)<br/>• Validar extensiones: RAW, DNG, JPEG, video (MP4, MOV…)<br/>• Mostrar FileList con tamaño total acumulado<br/>• Desglose por tomas (analyze_import_selection):<br/>pares RAW+JPG, solo RAW, solo JPG y cuántos se unirán"]
+    s2["Paso 2 — Ajustes de esta importación<br/>• Precargados de AppSettings + metadatos del fotógrafo<br/>• Renombrar sí/no (ejemplo con el nombre del proyecto)<br/>• Firmar sí/no + autor, copyright, URL editables<br/>• Restablecer a la configuración global<br/>• No modifica la configuración global<br/>Bloque 'De este proyecto': entrega al aprobar<br/>(se guarda en el proyecto, con su aviso)"]
+    s3["Paso 3 — Confirmar e iniciar<br/>• Resumen: N fotos (por toma) + M videos, proyecto, disco,<br/>espacio libre, renombrado, entrega y firma elegidos<br/>• Botón desactivado si no hay espacio suficiente<br/>• Usuario confirma → genera session_id único"]
     invoke["api.startImport()<br/>listen('import-progress') + invoke('start_import', ImportRequest)<br/>{ session_id, source_files[], project_id,<br/>device_uuid (ignorado en Rust), mount_point,<br/>project_name, settings? }"]
     next(["continúa en §2"])
 
@@ -114,7 +119,7 @@ flowchart TD
     meta_android["Android · fase metadata<br/>rawler → extract_datetime → rename<br/>• Rename: {DateTimeOrig}__{proyecto}.{ext}<br/>• Sidecar .xmp: Artist, Copyright,<br/>ImageDescription@Año, CreatorURL, CreatorEmail<br/>(Rust puro, sin exiftool)"]
     copy_fail["FailedFile por archivo, el resto sigue<br/>exiftool falla → copia de prueba decide:<br/>source_unreadable · no_space · write_failed · metadata_failed"]
 
-    move["pipeline_move_to_dest(_media/)<br/>fs::rename (mismo disco; copia+borrado si EXDEV)<br/>free_name(): si existe → {stem}-001.{ext}, -002…<br/>(ráfagas del mismo segundo y nombres repetidos)<br/>el sidecar .xmp viaja con el mismo stem"]
+    move["Agrupar en tomas (§3b) y pipeline_move_shots(_media/)<br/>fs::rename (mismo disco; copia+borrado si EXDEV)<br/>suelto: free_name() → {stem}-001.{ext}, -002…<br/>par: free_stem() → el mismo nombre libre para RAW y JPG<br/>(libre en _media/, _culled/ y _exported/)<br/>unión: junto al archivo de la foto existente<br/>el sidecar .xmp viaja con el mismo stem"]
     cleanup["Drop de PipelineWorkspace<br/>borra .import-staging/{session} (y la raíz si queda vacía)<br/>también ante salidas tempranas"]
     next(["continúa en §4"])
 
@@ -139,6 +144,42 @@ flowchart TD
     class plat_q dec
     class copy_fail err
 ```
+
+## 3b. Pares RAW+JPG y uniones
+
+```mermaid
+flowchart TD
+    staged["Archivos en el staging<br/>(firmados y renombrados por archivo)"]
+    dates["MetadataTool::capture_dates()<br/>exiftool -fast2 en lote (Android: rawler)"]
+    key["Clave de toma = nombre de cámara del ORIGEN<br/>sin extensión (minúsculas) + fecha al segundo"]
+    group{"group_shots():<br/>¿exactamente 1 RAW + 1 JPEG<br/>con la misma clave?"}
+    pair["StagedShot::Pair<br/>→ una foto: dng_path = RAW,<br/>camera_jpg_path = JPG, source_stem"]
+    single{"¿Completa una foto suelta del proyecto?<br/>(loose_photos: misma clave, tipo contrario)"}
+    join["StagedShot::Join<br/>→ junto al archivo existente, con su nombre<br/>join_partner(): la foto pasa a ser par<br/>(conserva estrellas, color, tags, aprobación)"]
+    alone["StagedShot::Single<br/>→ foto suelta"]
+    approved{"¿La foto ya estaba<br/>aprobada?"}
+    deliver["CullPhoto::deliver_joined()<br/>entrega el JPG según la opción del proyecto"]
+    thumb["Miniatura y vista previa<br/>desde el JPG del par"]
+
+    staged --> dates --> key --> group
+    group -->|Sí| pair --> thumb
+    group -->|No| single
+    single -->|Sí| join --> approved
+    approved -->|Sí| deliver --> thumb
+    approved -->|No| thumb
+    single -->|No| alone
+
+    classDef be fill:#ffe0b2,stroke:#f57c00,color:#3d2600
+    classDef db fill:#ffcdd2,stroke:#c62828,color:#3d0d0d
+    classDef dec fill:#fff2cc,stroke:#d6b656,color:#3d3100
+    class staged,dates,key,pair,alone,deliver,thumb be
+    class join db
+    class group,single,approved dec
+```
+
+El reintento de fallidos por copia vuelve a `start_import`, así que un JPG que falló se une a su RAW
+por la misma regla. `register_existing` (fallidos al registrar, ya en `_media/`) empareja por el
+nombre final y no une con fotos existentes.
 
 ## 4. Extracción EXIF e inserción en base de datos
 
@@ -274,7 +315,8 @@ flowchart TD
 | Arranque (§2) | `src-tauri/src/commands/import_cmd.rs` — `start_import()`, particionado, `image_description = {desc}@{year}` · `src-tauri/src/application/import_settings.rs` — `resolve_import_settings()` (ajustes de la sesión contra los globales) |
 | Staging (§2–3) | `src-tauri/src/import/pipeline.rs` — `PipelineWorkspace::create(project_dir, session_id)` en `{proyecto}/.import-staging/`, `Drop` que limpia, `copy_with_progress()`, `pipeline_copy_videos()`, `pipeline_passthrough()` · `src-tauri/src/infrastructure/import_pipeline.rs` — `StdImportPipeline::import()`, eventos y `EmitThrottle` |
 | Metadatos (§3) | `src-tauri/src/import/pipeline.rs` — escritorio: `exiftool_metadata_args()`, `pipeline_stage_signed()`, `sign_one()` · Android: `pipeline_metadata()` · `src-tauri/src/exiftool.rs` — pool `run_text_in()` / `close_pool()` · `src-tauri/src/import/xmp.rs` — `write_xmp_sidecar()` (Rust puro) |
-| Movimiento (§3) | `src-tauri/src/import/pipeline.rs` — `pipeline_move_to_dest()`, `move_into()`, `free_name()` (sufijo `-001`…), `fs::rename` con respaldo copia+borrado, `.xmp` excluidos de la lista EXIF |
+| Movimiento (§3) | `src-tauri/src/import/pipeline.rs` — `pipeline_move_shots()`, `move_pair()`, `move_into()`, `free_name()` y `free_stem()` (sufijo `-001`…), `fs::rename` con respaldo copia+borrado, `.xmp` excluidos de la lista EXIF |
+| Pares (§3b) | `src-tauri/src/domain/pairs.rs` — `ShotKey`, `FileKind`, `group_shots()` · `src-tauri/src/infrastructure/import_pipeline.rs` — `stage_shots()` · `src-tauri/src/application/use_cases/import_photos.rs` — `existing_shots()`, `join()`, `import_breakdown()` · `src-tauri/src/commands/import_cmd.rs` — `analyze_import_selection()` |
 | EXIF (§4) | `src-tauri/src/commands.rs` — `extract_exif_metadata_batch()`, `exiftool -csv`, headers dinámicos, `-IFD0:Orientation` → `rotation°` · `src-tauri/src/exif_android.rs` — RAW con `rawler`, JPEG con `kamadak-exif` |
 | Inserción (§4) | `src-tauri/src/commands.rs` — `create_photos_batch()`, `CreatePhoto` incl. `rotation` · `src-tauri/src/db/queries.rs` · `db/project_schema.sql`; migración automática `ALTER TABLE ADD COLUMN rotation` |
 | Miniaturas (§5) | `src-tauri/src/commands.rs` — `cache_thumbnail()`, `cache_thumbnails_parallel()` · `src-tauri/src/exif_android.rs` — `rawler::extract_thumbnail_pixels()`, `image::open()` + rotación `kamadak-exif` |

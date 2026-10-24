@@ -3,6 +3,8 @@ use super::AppState;
 use crate::application::error::{AppError, AppResult};
 use crate::db::models::*;
 use crate::db::ProjectDatabase;
+use crate::application::use_cases::change_delivery_mode::{ChangeDeliveryMode, DeliveryChangeOutcome, DeliveryPlan};
+use crate::domain::delivery::DeliveryMode;
 use crate::domain::project::{compare_dashboard, ProjectFolder};
 use chrono::Utc;
 use log::{debug, error, info, warn};
@@ -46,6 +48,60 @@ pub fn get_project(state: State<AppState>, id: String) -> AppResult<Option<Proje
     debug!("get_project called: {}", id);
     let project_db = state.project_db(&id)?;
     Ok(project_db.get_project()?)
+}
+
+/// Opción "Al aprobar, entregar directamente" del proyecto.
+#[tauri::command]
+pub fn get_project_delivery_mode(state: State<AppState>, project_id: String) -> AppResult<DeliveryMode> {
+    Ok(state.project_db(&project_id)?.delivery_mode()?)
+}
+
+/// Qué pasaría con las fotos aprobadas al cambiar a `mode` (para el aviso).
+#[tauri::command]
+pub fn plan_project_delivery_change(
+    state: State<AppState>,
+    project_id: String,
+    mode: DeliveryMode,
+) -> AppResult<DeliveryPlan> {
+    let project_db = state.project_db(&project_id)?;
+    Ok(ChangeDeliveryMode {
+        photos: project_db.as_ref(),
+        files: state.file_store.as_ref(),
+        finder_tags: state.finder_tags.as_ref(),
+        project_dir: &project_db.project_dir,
+    }
+    .plan(mode)?)
+}
+
+/// Cambia la opción de entrega del proyecto. Con `apply_to_approved`, también
+/// entrega o regresa los JPG de las fotos ya aprobadas; si no, solo aplica a
+/// las siguientes aprobaciones.
+#[tauri::command]
+pub fn set_project_delivery_mode(
+    state: State<AppState>,
+    project_id: String,
+    mode: DeliveryMode,
+    apply_to_approved: Option<bool>,
+) -> AppResult<Option<DeliveryChangeOutcome>> {
+    info!(
+        "set_project_delivery_mode: project={} mode={} apply={:?}",
+        project_id,
+        mode.as_str(),
+        apply_to_approved
+    );
+    let project_db = state.project_db(&project_id)?;
+    project_db.set_delivery_mode(mode)?;
+    if !apply_to_approved.unwrap_or(false) {
+        return Ok(None);
+    }
+    let outcome = ChangeDeliveryMode {
+        photos: project_db.as_ref(),
+        files: state.file_store.as_ref(),
+        finder_tags: state.finder_tags.as_ref(),
+        project_dir: &project_db.project_dir,
+    }
+    .apply(mode)?;
+    Ok(Some(outcome))
 }
 
 #[tauri::command]
@@ -95,6 +151,11 @@ pub fn create_project(state: State<AppState>, project: CreateProject) -> AppResu
         &project.device_uuid,
         std::path::PathBuf::from(&device.mount_point),
     )?;
+
+    // La entrega al aprobar del proyecto parte del valor de fábrica global y
+    // después es del proyecto: cambiar el global no la toca.
+    let delivery_mode = state.global_db.get_app_settings()?.default_delivery_mode;
+    project_db.set_delivery_mode(delivery_mode)?;
 
     // Create _exported subfolder inside the project directory
     let exported_dir = project_dir.join("_exported");

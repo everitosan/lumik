@@ -53,7 +53,7 @@ flowchart TD
     fe_err["En error: revertir valores locales de<br/>stars / colorLabel / tags<br/>+ setSaveState('error') → '✕ Error al guardar'"]
     fin(["Rating visible en sidebar, tarjeta de galería y futuros filtros<br/>Persistido en project.db · Independiente del dispositivo montado"])
 
-    sidecar["Efecto adicional (solo color labels)<br/>Linux/Windows · si finder_tags_sidecar = ON:<br/>→ escribe sidecar AppleDouble ._nombre<br/>(Finder tags de macOS/iPad) al DNG y al JPG<br/>→ invalida .Spotlight-V100 del volumen<br/>(el iPad reindexa al reconectar)<br/>Best-effort: el rating no falla si esto falla<br/>stars/tags: sin XMP ni exiftool"]
+    sidecar["Efecto adicional (solo color labels)<br/>Linux/Windows · si finder_tags_sidecar = ON:<br/>→ escribe sidecar AppleDouble ._nombre<br/>(Finder tags de macOS/iPad) al original,<br/>al JPG de cámara de un par y al exportado<br/>→ invalida .Spotlight-V100 del volumen<br/>(el iPad reindexa al reconectar)<br/>Best-effort: el rating no falla si esto falla<br/>stars/tags: sin XMP ni exiftool"]
 
     be --> get_db --> val_q
     val_q -->|Inválido| val_err -.-> fe_err
@@ -87,6 +87,7 @@ flowchart TD
 | Formato en BD | `color_label` son IDs separados por coma (`"1,3,5"`); `tags` es texto libre separado por coma (`"boda,mejor"`); `null` cuando no hay valor. |
 | Sin movimiento de archivo | A diferencia del [culling](flujo-culling.md), el rating nunca toca el sistema de archivos del proyecto. |
 | Finder tags para iPad | Solo para color labels, solo en Linux/Windows y solo con `finder_tags_sidecar` activo. Hay que invalidar `.Spotlight-V100` para que el iPad reindexe y pueda filtrar. |
+| Pares RAW+JPG | La calificación es de la foto (una fila). El sidecar se escribe para el RAW y el JPG, y para el exportado si es otro archivo; un JPG que se une a una foto con color recibe el suyo al importar. |
 | Independiente del dispositivo | El rating vive en `project.db`, junto a las fotos, así que viaja con el disco externo. |
 
 ## Archivos de código

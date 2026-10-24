@@ -1,3 +1,4 @@
+use crate::domain::delivery::DeliveryMode;
 use serde::{Deserialize, Serialize};
 
 /// Photographer (local user)
@@ -68,7 +69,7 @@ pub enum BackupStatus {
 }
 
 /// Photography (photo)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Photo {
     pub id: String,
     pub project_id: String,
@@ -100,6 +101,20 @@ pub struct Photo {
     pub focal_length: Option<String>,
     pub lens_model: Option<String>,
     pub rotation: i32,
+    /// JPEG de cámara de un par RAW+JPEG (`dng_path` es el RAW). `None` si no es par.
+    #[serde(default)]
+    pub camera_jpg_path: Option<String>,
+    /// Nombre de cámara sin extensión (`DSCF1234`), para emparejar un archivo que llega después.
+    #[serde(default)]
+    pub source_stem: Option<String>,
+    /// Huella del JPG entregado a `_exported/` al aprobar (spec `camera-jpeg-delivery`).
+    #[serde(default)]
+    pub delivered_size: Option<i64>,
+    #[serde(default)]
+    pub delivered_sha256: Option<String>,
+    /// Cómo se entregó: `moved` (JPG de un par) o `copied` (copia de un JPG suelto).
+    #[serde(default)]
+    pub delivery_kind: Option<String>,
 }
 
 /// Photographer metadata for XMP writing
@@ -177,7 +192,7 @@ pub struct UpdatePhotographerMetadata {
     pub contact_url: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct CreatePhoto {
     pub project_id: String,
     pub dng_path: String,
@@ -195,6 +210,11 @@ pub struct CreatePhoto {
     pub focal_length: Option<String>,
     pub lens_model: Option<String>,
     pub rotation: i32,
+    /// JPEG de cámara si la foto es un par RAW+JPEG.
+    #[serde(default)]
+    pub camera_jpg_path: Option<String>,
+    #[serde(default)]
+    pub source_stem: Option<String>,
 }
 
 // ============================================================================
@@ -222,6 +242,10 @@ pub struct AppSettings {
     /// a un iPad/Mac.
     #[serde(default = "default_true")]
     pub finder_tags_sidecar: bool,
+    /// Valor de fábrica de "Al aprobar, entregar directamente" para proyectos
+    /// nuevos. Cada proyecto guarda el suyo (ver `ProjectDatabase::delivery_mode`).
+    #[serde(default)]
+    pub default_delivery_mode: DeliveryMode,
 }
 
 fn default_true() -> bool {
@@ -234,6 +258,7 @@ impl Default for AppSettings {
             embed_metadata_on_import: true,
             rename_on_import: true,
             finder_tags_sidecar: true,
+            default_delivery_mode: DeliveryMode::None,
         }
     }
 }
