@@ -177,6 +177,49 @@ impl Rclone {
         Ok(())
     }
 
+    /// Borra la carpeta `dir` del remote con todo su contenido (`rclone purge`).
+    /// Devuelve `false` si la carpeta ya no existía (p. ej. se borró a mano en la
+    /// web del proveedor). En Mega los archivos van a la papelera del proveedor.
+    pub fn purge(&self, config_contents: &str, remote_name: &str, dir: &str) -> Result<bool, String> {
+        let out = self.run(config_contents, &["purge", &format!("{remote_name}:{dir}")])?;
+        if out.status.success() {
+            return Ok(true);
+        }
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        // Código 3 de rclone: directorio no encontrado.
+        if out.status.code() == Some(3) || stderr.contains("directory not found") {
+            return Ok(false);
+        }
+        Err(format!("rclone purge falló: {}", stderr.trim()))
+    }
+
+    /// Borra la carpeta `dir` del remote solo si está vacía (`rclone rmdir`).
+    pub fn rmdir(&self, config_contents: &str, remote_name: &str, dir: &str) -> Result<(), String> {
+        let out = self.run(config_contents, &["rmdir", &format!("{remote_name}:{dir}")])?;
+        if !out.status.success() {
+            return Err(format!(
+                "rclone rmdir falló: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Ok(())
+    }
+
+    /// Corre rclone con una config temporal (se borra al terminar).
+    fn run(&self, config_contents: &str, args: &[&str]) -> Result<std::process::Output, String> {
+        let conf_path =
+            std::env::temp_dir().join(format!("lumik-rclone-{}.conf", uuid::Uuid::new_v4()));
+        std::fs::write(&conf_path, config_contents)
+            .map_err(|e| format!("no se pudo escribir config temporal: {e}"))?;
+        let result = Command::new(&self.bin)
+            .args(args)
+            .arg("--config")
+            .arg(&conf_path)
+            .output();
+        let _ = std::fs::remove_file(&conf_path);
+        result.map_err(|e| format!("rclone {}: {e}", args.first().unwrap_or(&"")))
+    }
+
     /// Sube `local` al remote `remote_name:dest` usando la config dada.
     /// `copyto` copia archivo→archivo (respeta el nombre destino).
     pub fn copy_to(
@@ -253,5 +296,27 @@ mod tests {
         let landed = dest_root.join("sub/copia.txt");
         assert!(landed.exists(), "el archivo debió copiarse vía rclone");
         assert_eq!(std::fs::read_to_string(landed).unwrap(), "hola lumik");
+    }
+
+    #[test]
+    fn purge_removes_dir_and_tolerates_missing() {
+        let Some(r) = rclone() else {
+            eprintln!("(saltado: rclone no disponible)");
+            return;
+        };
+        let root = std::env::temp_dir().join(format!("lumik-purge-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("p/_exported")).unwrap();
+        std::fs::write(root.join("p/_exported/a.jpg"), b"x").unwrap();
+        let cfg = r
+            .config_for("t", &json!({ "type": "alias", "remote": root.to_string_lossy() }))
+            .unwrap();
+
+        assert!(r.purge(&cfg, "t", "p/_exported").unwrap());
+        assert!(!root.join("p/_exported").exists());
+        r.rmdir(&cfg, "t", "p").unwrap();
+        assert!(!root.join("p").exists());
+        // Ya no existe: no es error.
+        assert!(!r.purge(&cfg, "t", "p/_exported").unwrap());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

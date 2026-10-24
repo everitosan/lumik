@@ -60,6 +60,15 @@
     "close": "Cerrar",
     "noProviders": "Conecta un proveedor abajo para poder subir."
   },
+  "deleteBackup": {
+    "title": "Borrar respaldo",
+    "message": "Se borrará el respaldo de «{{name}}» en la nube.",
+    "warning": "Se borra la carpeta del proyecto en cada proveedor conectado y Lumik olvida qué fotos ya subió; el siguiente respaldo sube todo de nuevo. Las fotos en el disco del fotógrafo no se tocan. En Mega los archivos van a su papelera.",
+    "typeName": "Escribe «{{name}}» para confirmar",
+    "cancel": "Cancelar",
+    "confirm": "Borrar respaldo",
+    "deleting": "Borrando…"
+  },
   "providers": {
     "title": "Servicios de respaldo",
     "subtitle": "Conecta dónde se guardarán tus fotos",

@@ -60,6 +60,15 @@
     "close": "Close",
     "noProviders": "Connect a provider below to upload."
   },
+  "deleteBackup": {
+    "title": "Delete backup",
+    "message": "The cloud backup of \"{{name}}\" will be deleted.",
+    "warning": "The project folder is deleted from every connected provider and Lumik forgets which photos it already uploaded; the next backup uploads everything again. Photos on the photographer's drive are not touched. On Mega, files go to its trash.",
+    "typeName": "Type \"{{name}}\" to confirm",
+    "cancel": "Cancel",
+    "confirm": "Delete backup",
+    "deleting": "Deleting…"
+  },
   "providers": {
     "title": "Backup services",
     "subtitle": "Connect where your photos will be stored",

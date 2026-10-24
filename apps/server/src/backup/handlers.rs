@@ -485,6 +485,70 @@ pub async fn relocate_backup(
     }
 }
 
+/// `DELETE /v1/projects/{id}/backup` — borra el respaldo del proyecto: su
+/// carpeta en cada remote del fotógrafo y sus fotos del catálogo. El proyecto
+/// sigue en el catálogo (el desktop lo vuelve a publicar) y el siguiente
+/// respaldo sube todo de nuevo. Si un remote falla, el catálogo no se toca, para
+/// poder reintentar.
+pub async fn delete_backup(
+    State(state): State<AppState>,
+    auth: AuthPhotographer,
+    Path(project_id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
+    let row: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT backup_dir FROM project WHERE id = $1 AND photographer_id = $2")
+            .bind(project_id)
+            .bind(auth.0)
+            .fetch_optional(&state.pool)
+            .await?;
+    let Some((stored,)) = row else {
+        return Err(ApiError::NotFound);
+    };
+
+    // Sin ancla no se subió nada: no hay carpeta que borrar.
+    let mut purged = 0usize;
+    if let Some(dir) = stored {
+        let prepared = resolve_remotes(&state, auth.0, None).await?;
+        let rclone_bin = state.cfg.rclone_bin.clone();
+        let purge_res: Result<usize, String> = tokio::task::spawn_blocking(move || {
+            let rc = Rclone::new(rclone_bin);
+            let mut purged = 0;
+            for (_provider, name, cfg) in prepared {
+                let conf = rc.config_for(&name, &cfg)?;
+                if rc.purge(&conf, &name, &dir)? {
+                    purged += 1;
+                }
+                // La carpeta del proyecto (padre de `_exported`) se va si quedó vacía.
+                if let Some((parent, _)) = dir.rsplit_once('/') {
+                    let _ = rc.rmdir(&conf, &name, parent);
+                }
+            }
+            Ok(purged)
+        })
+        .await
+        .map_err(|e| ApiError::Internal(anyhow::anyhow!("tarea purge: {e}")))?;
+        purged = purge_res.map_err(|e| {
+            tracing::warn!(%project_id, error = %e, "borrar respaldo falló");
+            ApiError::Internal(anyhow::anyhow!("no se pudo borrar la carpeta en la nube: {e}"))
+        })?;
+    }
+
+    let deleted = sqlx::query("DELETE FROM photo WHERE project_id = $1")
+        .bind(project_id)
+        .execute(&state.pool)
+        .await?
+        .rows_affected();
+    sqlx::query(
+        "UPDATE project SET backup_dir = NULL, workflow_status = NULL, updated_at = now() WHERE id = $1",
+    )
+        .bind(project_id)
+        .execute(&state.pool)
+        .await?;
+
+    tracing::info!(%project_id, deleted, purged, "respaldo del proyecto borrado");
+    Ok(Json(json!({ "deleted_photos": deleted, "purged_remotes": purged })))
+}
+
 /// Mapea el nivel de calidad a `(lado mayor máx en px, calidad JPEG)`.
 /// `None` (o "original") → sin recomprimir.
 fn quality_preset(q: &str) -> Option<(u32, u8)> {
@@ -506,11 +570,27 @@ fn to_jpg_name(filename: &str) -> String {
 
 /// Decodifica, redimensiona (si excede `max_edge`) y re-encodea como JPEG.
 /// Devuelve `None` si no se puede decodificar (se usará el original).
+///
+/// La orientación se aplica a los píxeles: el JPG de cámara de una foto
+/// vertical guarda los píxeles en horizontal y la etiqueta Orientation. Los
+/// metadatos del original (EXIF, XMP, IPTC y perfil ICC) se copian al
+/// resultado con la Orientation en 1, para que la firma del fotógrafo
+/// (autor, copyright) llegue a la nube y la foto no se gire dos veces.
 fn convert_jpeg(bytes: &[u8], max_edge: u32, jpeg_quality: u8) -> Option<Vec<u8>> {
     use image::codecs::jpeg::JpegEncoder;
     use image::imageops::FilterType;
+    use image::{DynamicImage, ImageDecoder, ImageReader};
 
-    let img = image::load_from_memory(bytes).ok()?;
+    let mut decoder = ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?
+        .into_decoder()
+        .ok()?;
+    let orientation = decoder.orientation().ok();
+    let mut img = DynamicImage::from_decoder(decoder).ok()?;
+    if let Some(orientation) = orientation {
+        img.apply_orientation(orientation);
+    }
     let img = if img.width().max(img.height()) > max_edge {
         // Triangle (bilineal): mucho más rápido que Lanczos3 con buena calidad
         // al reducir; el cuello de botella era el filtro.
@@ -523,5 +603,239 @@ fn convert_jpeg(bytes: &[u8], max_edge: u32, jpeg_quality: u8) -> Option<Vec<u8>
     JpegEncoder::new_with_quality(&mut out, jpeg_quality)
         .encode_image(&rgb)
         .ok()?;
-    Some(out)
+    Some(with_metadata_of(bytes, out))
+}
+
+const EXIF_HEADER: &[u8] = b"Exif\0\0";
+const XMP_HEADER: &[u8] = b"http://ns.adobe.com/xap/1.0/\0";
+const ICC_HEADER: &[u8] = b"ICC_PROFILE\0";
+const IPTC_HEADER: &[u8] = b"Photoshop 3.0\0";
+
+/// Segmentos de metadatos de un JPEG (marcador + longitud + contenido), en
+/// orden: EXIF y XMP (APP1), ICC (APP2) e IPTC (APP13). Se detiene en el
+/// inicio de los datos de imagen (SOS).
+fn metadata_segments(jpeg: &[u8]) -> Vec<Vec<u8>> {
+    let mut segments = Vec::new();
+    if !jpeg.starts_with(&[0xFF, 0xD8]) {
+        return segments;
+    }
+    let mut pos = 2;
+    while pos + 4 <= jpeg.len() && jpeg[pos] == 0xFF {
+        let marker = jpeg[pos + 1];
+        if marker == 0xFF {
+            pos += 1; // relleno
+            continue;
+        }
+        if marker == 0xDA || marker == 0xD9 {
+            break;
+        }
+        let len = u16::from_be_bytes([jpeg[pos + 2], jpeg[pos + 3]]) as usize;
+        let end = pos + 2 + len;
+        if len < 2 || end > jpeg.len() {
+            break;
+        }
+        let payload = &jpeg[pos + 4..end];
+        let keep = match marker {
+            0xE1 => payload.starts_with(EXIF_HEADER) || payload.starts_with(XMP_HEADER),
+            0xE2 => payload.starts_with(ICC_HEADER),
+            0xED => payload.starts_with(IPTC_HEADER),
+            _ => false,
+        };
+        if keep {
+            segments.push(jpeg[pos..end].to_vec());
+        }
+        pos = end;
+    }
+    segments
+}
+
+/// Pone en 1 la Orientation del IFD0 de un segmento EXIF (APP1). Sin el tag,
+/// o con un TIFF malformado, no cambia nada.
+fn reset_exif_orientation(segment: &mut [u8]) {
+    let Some(tiff) = segment.get_mut(4 + EXIF_HEADER.len()..) else {
+        return;
+    };
+    let big_endian = match tiff.get(..2) {
+        Some(b"MM") => true,
+        Some(b"II") => false,
+        _ => return,
+    };
+    let read_u16 = |b: &[u8], at: usize| -> Option<u16> {
+        let v = [*b.get(at)?, *b.get(at + 1)?];
+        Some(if big_endian { u16::from_be_bytes(v) } else { u16::from_le_bytes(v) })
+    };
+    let read_u32 = |b: &[u8], at: usize| -> Option<u32> {
+        let v = [*b.get(at)?, *b.get(at + 1)?, *b.get(at + 2)?, *b.get(at + 3)?];
+        Some(if big_endian { u32::from_be_bytes(v) } else { u32::from_le_bytes(v) })
+    };
+    let Some(ifd0) = read_u32(tiff, 4).map(|v| v as usize) else {
+        return;
+    };
+    let Some(count) = read_u16(tiff, ifd0) else {
+        return;
+    };
+    for i in 0..count as usize {
+        let entry = ifd0 + 2 + i * 12;
+        if read_u16(tiff, entry) == Some(0x0112) {
+            let one = if big_endian { 1u16.to_be_bytes() } else { 1u16.to_le_bytes() };
+            if let Some(value) = tiff.get_mut(entry + 8..entry + 10) {
+                value.copy_from_slice(&one);
+            }
+            return;
+        }
+    }
+}
+
+/// Pone en 1 la `tiff:Orientation` de un segmento XMP, como atributo o como
+/// elemento. El valor es de un dígito, así que la longitud no cambia.
+fn reset_xmp_orientation(segment: &mut [u8]) {
+    for (open, close) in [(&b"tiff:Orientation=\""[..], b'"'), (&b"<tiff:Orientation>"[..], b'<')] {
+        let mut from = 0;
+        while let Some(at) = segment[from..]
+            .windows(open.len())
+            .position(|w| w == open)
+            .map(|p| from + p + open.len())
+        {
+            if segment.get(at).is_some_and(u8::is_ascii_digit) && segment.get(at + 1) == Some(&close) {
+                segment[at] = b'1';
+            }
+            from = at;
+        }
+    }
+}
+
+/// Inserta en `encoded` (recién codificado, sin metadatos) los metadatos de
+/// `original`, con la orientación en 1. Van tras el APP0 (JFIF) del encoder.
+fn with_metadata_of(original: &[u8], encoded: Vec<u8>) -> Vec<u8> {
+    let mut segments = metadata_segments(original);
+    if segments.is_empty() || !encoded.starts_with(&[0xFF, 0xD8]) {
+        return encoded;
+    }
+    for segment in &mut segments {
+        let payload = &segment[4..];
+        if payload.starts_with(EXIF_HEADER) {
+            reset_exif_orientation(segment);
+        } else if payload.starts_with(XMP_HEADER) {
+            reset_xmp_orientation(segment);
+        }
+    }
+    let mut insert_at = 2;
+    if encoded.get(2..4) == Some(&[0xFF, 0xE0]) {
+        let len = u16::from_be_bytes([encoded[4], encoded[5]]) as usize;
+        insert_at = 4 + len;
+    }
+    let mut out = Vec::with_capacity(encoded.len() + segments.iter().map(Vec::len).sum::<usize>());
+    out.extend_from_slice(&encoded[..insert_at]);
+    for segment in &segments {
+        out.extend_from_slice(segment);
+    }
+    out.extend_from_slice(&encoded[insert_at..]);
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{ImageDecoder, ImageReader};
+
+    const ARTIST: &[u8] = b"Ana Perez\0";
+    const XMP: &str = "<x:xmpmeta><rdf:RDF><rdf:Description tiff:Orientation=\"6\">\
+        <dc:creator>Ana Perez</dc:creator></rdf:Description></rdf:RDF></x:xmpmeta>";
+
+    fn segment(marker: u8, payload: &[u8]) -> Vec<u8> {
+        let mut out = vec![0xFF, marker];
+        out.extend_from_slice(&((payload.len() + 2) as u16).to_be_bytes());
+        out.extend_from_slice(payload);
+        out
+    }
+
+    /// JPEG de 40×20 con EXIF (Orientation `orientation` y Artist, en el orden
+    /// de bytes `big_endian`) y XMP con `tiff:Orientation` y `dc:creator`.
+    fn camera_jpeg(orientation: u16, big_endian: bool) -> Vec<u8> {
+        let img = image::RgbImage::from_pixel(40, 20, image::Rgb([200, 30, 30]));
+        let mut plain = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut plain, 90)
+            .encode_image(&img)
+            .unwrap();
+
+        let u16b = |v: u16| if big_endian { v.to_be_bytes() } else { v.to_le_bytes() };
+        let u32b = |v: u32| if big_endian { v.to_be_bytes() } else { v.to_le_bytes() };
+        // IFD0 en el offset 8 con dos entradas: Artist (ASCII, fuera de línea) y Orientation.
+        let artist_at = 8 + 2 + 2 * 12 + 4;
+        let mut tiff = if big_endian { b"MM".to_vec() } else { b"II".to_vec() };
+        tiff.extend_from_slice(&u16b(42));
+        tiff.extend_from_slice(&u32b(8));
+        tiff.extend_from_slice(&u16b(2));
+        tiff.extend_from_slice(&u16b(0x013B));
+        tiff.extend_from_slice(&u16b(2));
+        tiff.extend_from_slice(&u32b(ARTIST.len() as u32));
+        tiff.extend_from_slice(&u32b(artist_at as u32));
+        tiff.extend_from_slice(&u16b(0x0112));
+        tiff.extend_from_slice(&u16b(3));
+        tiff.extend_from_slice(&u32b(1));
+        tiff.extend_from_slice(&u16b(orientation));
+        tiff.extend_from_slice(&[0, 0]);
+        tiff.extend_from_slice(&u32b(0));
+        tiff.extend_from_slice(ARTIST);
+        let exif = [EXIF_HEADER, &tiff].concat();
+        let xmp = [XMP_HEADER, XMP.as_bytes()].concat();
+
+        let mut out = plain[..2].to_vec(); // SOI
+        out.extend(segment(0xE1, &exif));
+        out.extend(segment(0xE1, &xmp));
+        out.extend_from_slice(&plain[2..]);
+        out
+    }
+
+    fn orientation_of(jpeg: &[u8]) -> image::metadata::Orientation {
+        let mut decoder = ImageReader::new(std::io::Cursor::new(jpeg))
+            .with_guessed_format()
+            .unwrap()
+            .into_decoder()
+            .unwrap();
+        decoder.orientation().unwrap()
+    }
+
+    fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+        haystack.windows(needle.len()).any(|w| w == needle)
+    }
+
+    #[test]
+    fn convert_jpeg_applies_exif_orientation() {
+        // Orientation 6 (girar 90°): una vertical de cámara llega en vertical.
+        for big_endian in [true, false] {
+            let out = convert_jpeg(&camera_jpeg(6, big_endian), 3840, 90).unwrap();
+            let img = image::load_from_memory(&out).unwrap();
+            assert_eq!((img.width(), img.height()), (20, 40));
+            // Los píxeles ya van girados: la etiqueta queda en 1 para no girar dos veces.
+            assert_eq!(orientation_of(&out), image::metadata::Orientation::NoTransforms);
+        }
+    }
+
+    #[test]
+    fn convert_jpeg_keeps_landscape_without_rotation() {
+        let out = convert_jpeg(&camera_jpeg(1, true), 3840, 90).unwrap();
+        let img = image::load_from_memory(&out).unwrap();
+        assert_eq!((img.width(), img.height()), (40, 20));
+    }
+
+    #[test]
+    fn convert_jpeg_keeps_photographer_metadata() {
+        let out = convert_jpeg(&camera_jpeg(6, false), 3840, 90).unwrap();
+        assert!(contains(&out, ARTIST), "EXIF Artist");
+        assert!(contains(&out, b"<dc:creator>Ana Perez</dc:creator>"), "XMP dc:creator");
+        assert!(contains(&out, b"tiff:Orientation=\"1\""), "XMP Orientation");
+        assert!(!contains(&out, b"tiff:Orientation=\"6\""));
+    }
+
+    #[test]
+    fn convert_jpeg_without_metadata_is_unchanged() {
+        let img = image::RgbImage::from_pixel(8, 8, image::Rgb([0, 0, 0]));
+        let mut plain = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut plain, 90)
+            .encode_image(&img)
+            .unwrap();
+        let out = convert_jpeg(&plain, 3840, 90).unwrap();
+        assert!(metadata_segments(&out).is_empty());
+    }
 }

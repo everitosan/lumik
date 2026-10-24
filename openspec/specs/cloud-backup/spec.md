@@ -39,6 +39,13 @@ El desktop SHALL ofrecer un modal por proyecto que liste los archivos de `_expor
 - **WHEN** el fotógrafo no tiene proveedores conectados e intenta respaldar
 - **THEN** la subida se rechaza indicando que no hay proveedores conectados
 
+### Requirement: Recompresión con orientación y metadatos
+Al recomprimir, el servidor SHALL girar los píxeles según la orientación del original y SHALL conservar sus metadatos (autor, copyright, datos de cámara y perfil de color) con la orientación en normal, para que la foto se vea derecha y con la firma del fotógrafo en la nube.
+
+#### Scenario: JPG de cámara vertical recomprimido
+- **WHEN** el fotógrafo respalda con calidad media el JPG de cámara de una foto vertical, que guarda los píxeles en horizontal y la etiqueta de orientación
+- **THEN** en la nube la foto se ve vertical y conserva el autor y el copyright del original
+
 ### Requirement: Subida en segundo plano con progreso
 El respaldo SHALL ejecutarse en segundo plano con hasta 6 subidas en paralelo, sin congelar la interfaz. El fotógrafo SHALL poder cerrar el modal, seguir usando la app y volver a abrirlo para ver el progreso de cada archivo, desde el proyecto o desde la tarjeta del respaldo en la barra lateral. Un archivo que ya se está subiendo no SHALL lanzarse otra vez.
 

@@ -199,6 +199,16 @@ export const backupApi = {
       body: JSON.stringify({ provider }),
     }),
 
+  /**
+   * Borra el respaldo del proyecto: su carpeta en cada proveedor y sus fotos del
+   * catálogo. Si la carpeta ya no estaba en la nube, no es error.
+   */
+  deleteBackup: (projectId: string) =>
+    request<{ deleted_photos: number; purged_remotes: number }>(
+      `/v1/projects/${projectId}/backup`,
+      { method: 'DELETE' }
+    ),
+
   /** Sube un archivo (multipart) al `_exported/` remoto del proyecto. */
   uploadFile: (
     projectId: string,

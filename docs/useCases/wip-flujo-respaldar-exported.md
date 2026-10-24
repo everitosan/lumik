@@ -78,3 +78,45 @@ flowchart TD
 | Barra lateral | Respaldos aparece solo con jobs y se oculta al terminar el último. Respaldos y Almacenamiento se pueden colapsar (estado en `global_db`). Colapsada, Respaldos muestra `en curso · subidos/total` o cuántos terminaron con errores. Se expande sola al lanzar un respaldo, no al reanudarlo. |
 | Sin sesión | Respaldar muestra un aviso con "Ir a Ajustes" (pestaña Respaldo) en lugar del modal; la cola no se reanuda hasta iniciar sesión (ver [login](wip-flujo-login-cuenta.md)). |
 | Confirmación al cerrar | `onCloseRequested` en el frontend + `ask` del plugin de diálogo; cerrar usa `destroy()` (`core:window:allow-destroy`). |
+
+## Borrar el respaldo del proyecto
+
+Solo desde el **portal web** (menú de la tarjeta → "Borrar respaldo", en proyectos con fotos
+subidas), nunca desde la app de escritorio, para no borrar un respaldo por error. Hay que escribir
+el nombre del proyecto para confirmar. Borra la carpeta del proyecto en la nube y sus fotos del
+catálogo; el disco del fotógrafo no se toca y el siguiente respaldo sube todo de nuevo.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Fotógrafo
+    participant W as Portal web (DeleteBackupModal)
+    participant SV as Server (DELETE /v1/projects/{id}/backup)
+    participant C as Nube (remotes del fotógrafo)
+    participant DB as Postgres (catálogo)
+
+    U->>W: Borrar respaldo → escribe el nombre del proyecto
+    W->>SV: DELETE /v1/projects/{id}/backup
+    SV->>DB: backup_dir del proyecto (del fotógrafo, o 404)
+    opt hay backup_dir
+        loop cada remote
+            SV->>C: rclone purge {backup_dir}<br/>(no encontrada = ya borrada, no es error)
+            SV->>C: rclone rmdir carpeta del proyecto si quedó vacía
+        end
+    end
+    alt un remote falla
+        SV-->>W: error (el catálogo no se toca, se puede reintentar)
+    else todo bien
+        SV->>DB: DELETE photo del proyecto<br/>backup_dir = NULL, workflow_status = NULL
+        SV-->>W: deleted_photos, purged_remotes
+        W->>W: recarga los proyectos
+    end
+```
+
+| Punto | Detalle |
+|-------|---------|
+| Para qué | Volver a subir un proyecto cuyo respaldo se borró a mano en la nube: el catálogo lo seguía dando por subido. |
+| Mega | `rclone purge` manda los archivos a la papelera del proveedor (sin `hard_delete`). |
+| Proyecto en el catálogo | Se queda (el portal lo muestra sin fotos); solo se borran sus fotos, el ancla `backup_dir` y el estado fijado. |
+| Desktop | No cambia su estado local: el proyecto sigue mostrando sus proveedores hasta el siguiente respaldo. El modal de respaldo consulta el catálogo, así que ofrece subir todo de nuevo. |
+| Código | Server `backup::handlers::delete_backup`, `Rclone::purge`/`rmdir`; web `components/DeleteBackupModal.tsx`, `pages/Dashboard.tsx`, `backupApi.deleteBackup`; `ProjectCard.onDeleteBackup` en `@lumik/ui`. |

@@ -168,3 +168,115 @@ async fn backup_uploads_via_alias_and_updates_catalog(pool: PgPool) {
 
     let _ = std::fs::remove_dir_all(&dest_root);
 }
+
+/// Sube `IMG_1.jpg` a la foto `photo_id` del proyecto `pid`.
+async fn upload(app: &Router, token: &str, pid: Uuid, photo_id: Uuid) -> StatusCode {
+    let boundary = "XBOUNDARY";
+    let body = format!(
+        "--{b}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"IMG_1.jpg\"\r\n\
+         Content-Type: application/octet-stream\r\n\r\nfoto\r\n--{b}--\r\n",
+        b = boundary
+    );
+    app.clone()
+        .oneshot(
+            Request::post(format!("/v1/projects/{pid}/photos/{photo_id}/backup"))
+                .header(AUTHORIZATION, format!("Bearer {token}"))
+                .header("content-type", format!("multipart/form-data; boundary={boundary}"))
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+        .status()
+}
+
+async fn photos(app: &Router, token: &str, pid: Uuid) -> Value {
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::get(format!("/v1/projects/{pid}/photos"))
+                .header(AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    json_body(resp).await
+}
+
+fn delete_backup(pid: Uuid, token: &str) -> Request<Body> {
+    Request::delete(format!("/v1/projects/{pid}/backup"))
+        .header(AUTHORIZATION, format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap()
+}
+
+#[sqlx::test]
+async fn delete_backup_removes_cloud_folder_and_catalog_photos(pool: PgPool) {
+    let cfg = test_config();
+    if lumik_server::rclone::Rclone::new(&cfg.rclone_bin)
+        .version()
+        .is_err()
+    {
+        eprintln!("(saltado: rclone no disponible)");
+        return;
+    }
+
+    let app = app(pool.clone());
+    let (token, photographer_id) = register(&app, "del@lumik.mx").await;
+    let pid = Uuid::new_v4();
+    let photo_id = Uuid::new_v4();
+    app.clone()
+        .oneshot(post_json(
+            "/v1/sync/projects",
+            &token,
+            json!([{ "id": pid, "name": "Boda", "session_date": "2024-06-15", "slug": "Boda" }]),
+        ))
+        .await
+        .unwrap();
+
+    let dest_root = std::env::temp_dir().join(format!("lumik-del-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&dest_root).unwrap();
+    let token_enc = Crypto::new(KEY)
+        .unwrap()
+        .encrypt(&json!({ "type": "alias", "remote": dest_root.to_string_lossy() }).to_string())
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO remote (photographer_id, provider, name, token) VALUES ($1, 'mega', 'test_alias', $2)",
+    )
+    .bind(Uuid::parse_str(&photographer_id).unwrap())
+    .bind(&token_enc)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(upload(&app, &token, pid, photo_id).await, StatusCode::OK);
+    let project_dir = dest_root.join("Lumik/2024/06/15_Boda");
+    assert!(project_dir.join("_exported/IMG_1.jpg").exists());
+
+    // Borrar el respaldo: carpeta fuera de la nube y fotos fuera del catálogo.
+    let resp = app.clone().oneshot(delete_backup(pid, &token)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let v = json_body(resp).await;
+    assert_eq!(v["deleted_photos"], 1);
+    assert_eq!(v["purged_remotes"], 1);
+    assert!(!project_dir.exists(), "la carpeta del proyecto debió borrarse");
+    assert_eq!(photos(&app, &token, pid).await.as_array().unwrap().len(), 0);
+
+    // Si la carpeta ya se borró a mano en la nube, no es error.
+    let resp = app.clone().oneshot(delete_backup(pid, &token)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Se puede volver a respaldar.
+    assert_eq!(upload(&app, &token, pid, photo_id).await, StatusCode::OK);
+    assert!(project_dir.join("_exported/IMG_1.jpg").exists());
+    assert_eq!(photos(&app, &token, pid).await[0]["backup_status"], "uploaded");
+
+    // Otro fotógrafo no puede borrar el respaldo ajeno.
+    let (other, _) = register(&app, "otro@lumik.mx").await;
+    let resp = app.clone().oneshot(delete_backup(pid, &other)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    assert!(project_dir.join("_exported/IMG_1.jpg").exists());
+
+    let _ = std::fs::remove_dir_all(&dest_root);
+}
