@@ -17,6 +17,7 @@ const meta: Meta<typeof PhotoCard> = {
       control: { type: 'range', min: 0, max: 5, step: 1 },
     },
     culled: { control: 'boolean' },
+    format: { control: 'select', options: [undefined, 'RAW+JPG', 'RAW', 'JPG'] },
   },
 };
 
@@ -53,6 +54,30 @@ export const MultipleLabels: Story = {
     stars: 5,
     captureDate: '2024-03-15T18:05:01',
     colorLabels: [1, 3, 5],
+  },
+  decorators: [(Story) => <div style={{ width: 220 }}><Story /></div>],
+};
+
+export const RawJpegPair: Story = {
+  args: {
+    filename: '2024-03-15__18-05-01__Boda.raf',
+    thumbnailUrl:
+      'https://images.unsplash.com/photo-1519741497674-611481863552?w=400&h=300&fit=crop',
+    stars: 4,
+    captureDate: '2024-03-15T18:05:01',
+    colorLabels: [1],
+    format: 'RAW+JPG',
+  },
+  decorators: [(Story) => <div style={{ width: 220 }}><Story /></div>],
+};
+
+export const FormatOnBrightPhoto: Story = {
+  args: {
+    filename: 'DSCF0008.JPG',
+    thumbnailUrl:
+      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400&h=300&fit=crop',
+    captureDate: '2024-03-15T12:00:00',
+    format: 'JPG',
   },
   decorators: [(Story) => <div style={{ width: 220 }}><Story /></div>],
 };

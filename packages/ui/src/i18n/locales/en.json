@@ -27,6 +27,7 @@
         "edit": "Edit",
         "archive": "Archive",
         "unarchive": "Unarchive",
+        "deleteBackup": "Delete backup",
         "delete": "Delete"
       }
     },
@@ -64,6 +65,10 @@
       "failed_other": "{{count}} failed",
       "retry": "Retry",
       "dismiss": "Dismiss"
+    },
+    "formatBadge": {
+      "showRaw": "Show the RAW of this pair",
+      "showJpg": "Show the JPG of this pair"
     }
   },
   "dashboard": {

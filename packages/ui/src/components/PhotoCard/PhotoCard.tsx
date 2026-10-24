@@ -2,6 +2,7 @@ import { type CSSProperties, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CardMenu, type CardMenuItem } from '../CardMenu';
 import { Icon } from '../Icon';
+import { FormatBadge, type PhotoFormat } from '../FormatBadge';
 
 export type ColorLabel = 1 | 2 | 3 | 4 | 5;
 
@@ -12,6 +13,8 @@ export interface PhotoCardProps {
   culled?: boolean;
   captureDate?: string;
   colorLabels?: ColorLabel[];
+  /** Formato de la foto (`RAW+JPG`, `RAW`, `JPG`), en la esquina superior derecha de la miniatura. */
+  format?: PhotoFormat | null;
   onClick?: () => void;
   onStarClick?: (value: number, e: MouseEvent) => void;
   /** Each handler, when provided, adds its item to the 3-dot menu in the header.
@@ -78,6 +81,12 @@ const thumbnailImgStyles: CSSProperties = {
   height: '100%',
   objectFit: 'contain',
   display: 'block',
+};
+
+const formatBadgePosition: CSSProperties = {
+  position: 'absolute',
+  top: '6px',
+  right: '6px',
 };
 
 const placeholderStyles: CSSProperties = {
@@ -234,6 +243,7 @@ export function PhotoCard({
   culled = false,
   captureDate,
   colorLabels = [],
+  format,
   onClick,
   onStarClick,
   onRevealInFolder,
@@ -285,6 +295,7 @@ export function PhotoCard({
             <Icon name="image" size={40} />
           </div>
         )}
+        {format && <FormatBadge format={format} style={formatBadgePosition} />}
       </div>
 
       <div style={footerStyles}>

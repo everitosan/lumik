@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CloudOff,
   CloudUpload,
   Database,
   Eject,
@@ -58,6 +59,7 @@ export type IconName =
   | 'folder-open'
   | 'sd-card'
   | 'upload-cloud'
+  | 'cloud-off'
   | 'zoom-in'
   | 'zoom-out'
   | 'rotate-ccw'
@@ -124,6 +126,7 @@ const icons: Record<IconName, IconComponent> = {
   'folder-open': FolderOpen,
   'sd-card': SdCard,
   'upload-cloud': CloudUpload,
+  'cloud-off': CloudOff,
   'zoom-in': ZoomIn,
   'zoom-out': ZoomOut,
   'rotate-ccw': RotateCcw,

@@ -25,6 +25,8 @@ export interface ProjectCardProps {
   onEdit?: () => void;
   /** Archivar / desarchivar (el texto del menú depende de `archived`). */
   onToggleArchive?: () => void;
+  /** Borrar el respaldo del proyecto en la nube (solo si está respaldado). */
+  onDeleteBackup?: () => void;
   onDelete?: () => void;
   /** Proyecto archivado: se muestra atenuado y con la etiqueta "Archivado". */
   archived?: boolean;
@@ -185,6 +187,7 @@ export function ProjectCard({
   onOpenFolder,
   onEdit,
   onToggleArchive,
+  onDeleteBackup,
   onDelete,
   archived = false,
   className,
@@ -205,6 +208,14 @@ export function ProjectCard({
       icon: archived ? 'archive-restore' : 'archive',
       label: archived ? t('components.projectCard.menu.unarchive') : t('components.projectCard.menu.archive'),
       onSelect: onToggleArchive,
+    });
+  }
+  if (onDeleteBackup) {
+    menuItems.push({
+      icon: 'cloud-off',
+      label: t('components.projectCard.menu.deleteBackup'),
+      onSelect: onDeleteBackup,
+      danger: true,
     });
   }
   if (onDelete) {
