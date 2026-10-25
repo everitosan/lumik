@@ -76,6 +76,21 @@ export const WithThumbnail: Story = {
   },
 };
 
+/** Abierto en otro dispositivo (candado del proyecto). */
+export const LockedByOtherDevice: Story = {
+  args: {
+    name: 'XV Ana',
+    photoCount: 1204,
+    date: '2026-10-18',
+    driveName: 'Samsung T7',
+    status: 'edited',
+    lockedBy: 'iPad de Ana',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=400&h=300&fit=crop',
+    onEdit: () => {},
+    onDelete: () => {},
+  },
+};
+
 export const LongName: Story = {
   args: {
     name: 'Sesión de fotos para el catálogo de primavera-verano 2024',

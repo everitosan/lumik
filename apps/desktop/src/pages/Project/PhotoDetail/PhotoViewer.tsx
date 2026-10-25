@@ -33,7 +33,8 @@ export interface PhotoViewerProps {
   hasNext: boolean;
   onPrev: () => void;
   onNext: () => void;
-  onRotationChange: (rotation: number) => void;
+  /** Sin él (proyecto en solo lectura) no se ofrece rotar. */
+  onRotationChange?: (rotation: number) => void;
   onHistogramReady?: (bins: HistogramBins) => void;
   /** Se dibuja encima de la imagen, en la esquina superior derecha (indicador de formato). */
   cornerOverlay?: ReactNode;
@@ -163,6 +164,7 @@ export const PhotoViewer = forwardRef<PhotoViewerHandle, PhotoViewerProps>(
     }, [scheduleRedraw]);
 
     const rotateLeft = useCallback(() => {
+      if (!onRotationChange) return;
       rotationRef.current = (rotationRef.current - 90 + 360) % 360;
       fitToScreen();
       // Defer the save until after the canvas has painted so the rotation
@@ -171,6 +173,7 @@ export const PhotoViewer = forwardRef<PhotoViewerHandle, PhotoViewerProps>(
     }, [fitToScreen, onRotationChange]);
 
     const rotateRight = useCallback(() => {
+      if (!onRotationChange) return;
       rotationRef.current = (rotationRef.current + 90) % 360;
       fitToScreen();
       requestAnimationFrame(() => onRotationChange(rotationRef.current));
@@ -441,8 +444,8 @@ export const PhotoViewer = forwardRef<PhotoViewerHandle, PhotoViewerProps>(
           onZoomIn={zoomIn}
           onZoomOut={zoomOut}
           onFitToScreen={fitToScreen}
-          onRotateLeft={rotateLeft}
-          onRotateRight={rotateRight}
+          onRotateLeft={onRotationChange ? rotateLeft : undefined}
+          onRotateRight={onRotationChange ? rotateRight : undefined}
         />
       </div>
     );

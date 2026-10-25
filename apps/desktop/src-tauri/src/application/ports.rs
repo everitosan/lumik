@@ -488,3 +488,14 @@ pub trait FinderTagWriter: Send + Sync {
     /// Invalida el índice de Spotlight del volumen para forzar reindexado en Apple.
     fn invalidate_spotlight_index(&self, volume_root: &Path) -> std::io::Result<()>;
 }
+
+/// Candado del proyecto (`.lumik-lock` en su carpeta, spec `project-lock`).
+/// La impl real escribe en un temporal y lo renombra, para que nadie lea un
+/// candado a medias.
+pub trait ProjectLockStore: Send + Sync {
+    /// Candado actual; `None` si no hay o es ilegible.
+    fn read(&self, project_dir: &Path) -> Option<crate::domain::lock::ProjectLock>;
+    fn write(&self, project_dir: &Path, lock: &crate::domain::lock::ProjectLock) -> Result<(), String>;
+    /// Quita el candado; no es error si ya no estaba.
+    fn remove(&self, project_dir: &Path) -> Result<(), String>;
+}

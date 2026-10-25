@@ -33,7 +33,23 @@ export interface ProjectDashboard {
   /** Archivado: oculto en el dashboard salvo que se muestren los archivados */
   archived: boolean;
   device_uuid: string;
+  /** Otra instalación tiene el proyecto (candado); null si está libre o es esta. */
+  locked_by: ProjectLockHolder | null;
 }
+
+/** Quién tiene un proyecto según su candado (spec project-lock). */
+export interface ProjectLockHolder {
+  name: string;
+  /** Inicio de su sesión (RFC 3339). */
+  since: string;
+  /** Dejó cambios que no llegaron al disco. */
+  pending: boolean;
+}
+
+/** Cómo se abrió la vista de un proyecto. */
+export type ProjectAccess =
+  | { access: 'open' }
+  | { access: 'read_only'; holder: ProjectLockHolder };
 
 export type WorkflowStatus = 'imported' | 'edited' | 'delivered';
 

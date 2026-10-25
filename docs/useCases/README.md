@@ -17,6 +17,7 @@ precedidos de una **vista general** que cabe en una pantalla. Cada sección se p
 | [Papelera y restaurar foto](flujo-papelera-foto.md) | Menú de la card, borrado lógico a la papelera (`_trash/`), restaurar, mostrar en carpeta, rollback | 3 |
 | [Rating de estrellas](flujo-rating-estrellas.md) | Estrellas, color labels, tags y el sidecar AppleDouble para iPad | 2 |
 | [Rotación](flujo-rotacion.md) | Rotación optimista en canvas, regeneración de miniatura, escritura EXIF/XMP | 3 |
+| [Candado del proyecto](flujo-candado-proyecto.md) | Uso exclusivo entre dispositivos: `.lumik-lock`, solo lectura, tomar el control, expulsión | 3 |
 
 ## WIP — respaldo en la nube (SaaS)
 

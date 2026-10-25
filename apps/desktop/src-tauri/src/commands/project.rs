@@ -5,6 +5,8 @@ use crate::db::models::*;
 use crate::db::ProjectDatabase;
 use crate::application::use_cases::change_delivery_mode::{ChangeDeliveryMode, DeliveryChangeOutcome, DeliveryPlan};
 use crate::domain::delivery::DeliveryMode;
+use crate::domain::lock::LockState;
+use crate::application::project_session::ViewLock;
 use crate::domain::project::{compare_dashboard, ProjectFolder};
 use chrono::Utc;
 use log::{debug, error, info, warn};
@@ -25,7 +27,12 @@ pub fn get_projects_dashboard(state: State<AppState>) -> AppResult<Vec<ProjectDa
     let mut dashboard = Vec::new();
     for project_db in &project_dbs {
         match project_db.get_project_dashboard_entry() {
-            Ok(Some(entry)) => dashboard.push(entry),
+            Ok(Some(mut entry)) => {
+                if let LockState::Foreign(lock) = state.sessions.state(&project_db.project_dir) {
+                    entry.locked_by = Some(lock.into());
+                }
+                dashboard.push(entry)
+            }
             Ok(None) => {} // deleted
             Err(e) => warn!("Dashboard entry error for project {}: {}", project_db.project_id, e),
         }
@@ -41,6 +48,37 @@ pub fn get_projects_dashboard(state: State<AppState>) -> AppResult<Vec<ProjectDa
 
     debug!("get_projects_dashboard returning {} projects", dashboard.len());
     Ok(dashboard)
+}
+
+/// La vista de un proyecto se abre: toma su candado, o lo abre en solo lectura
+/// si lo tiene otra instalación (spec `project-lock`).
+#[tauri::command]
+pub fn open_project_session(state: State<AppState>, project_id: String) -> AppResult<ProjectAccess> {
+    let db = state.project_db(&project_id)?;
+    let access = match state.sessions.open_view(&project_id, &db.project_dir, db.generation()?)? {
+        ViewLock::Open => ProjectAccess::Open,
+        ViewLock::ReadOnly(lock) => {
+            info!("open_project_session: {} en solo lectura (lo tiene {})", project_id, lock.install_name);
+            ProjectAccess::ReadOnly { holder: lock.into() }
+        }
+    };
+    Ok(access)
+}
+
+/// La vista de un proyecto se cierra: suelta su candado si no queda otra
+/// operación en curso sobre él.
+#[tauri::command]
+pub fn close_project_session(state: State<AppState>, project_id: String) {
+    state.sessions.close_view(&project_id);
+}
+
+/// Toma el control de un proyecto que tiene otra instalación.
+#[tauri::command]
+pub fn take_project_control(state: State<AppState>, project_id: String) -> AppResult<()> {
+    let db = state.project_db(&project_id)?;
+    info!("take_project_control: {}", project_id);
+    state.sessions.take_control(&project_id, &db.project_dir, db.generation()?)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -89,7 +127,8 @@ pub fn set_project_delivery_mode(
         mode.as_str(),
         apply_to_approved
     );
-    let project_db = state.project_db(&project_id)?;
+    let session = state.write_session(&project_id)?;
+    let project_db = session.db()?;
     project_db.set_delivery_mode(mode)?;
     if !apply_to_approved.unwrap_or(false) {
         return Ok(None);
@@ -185,8 +224,8 @@ pub fn create_project(state: State<AppState>, project: CreateProject) -> AppResu
 #[tauri::command]
 pub fn set_project_archived(state: State<AppState>, id: String, archived: bool) -> AppResult<()> {
     info!("set_project_archived called: {} -> {}", id, archived);
-    let project_db = state.project_db(&id)?;
-    Ok(project_db.set_archived(archived)?)
+    let session = state.write_session(&id)?;
+    Ok(session.db()?.set_archived(archived)?)
 }
 
 /// Permanently delete a project: removes its folder and all files from disk.
@@ -195,6 +234,9 @@ pub fn set_project_archived(state: State<AppState>, id: String, archived: bool) 
 #[tauri::command]
 pub fn delete_project(state: State<AppState>, id: String) -> AppResult<()> {
     info!("delete_project called: {}", id);
+    state.ensure_not_locked(&id)?;
+    // La carpeta (con su candado) desaparece: se olvidan sus sesiones.
+    state.sessions.release(std::slice::from_ref(&id));
 
     let project_db = state
         .registry
@@ -268,6 +310,7 @@ pub(crate) fn relocate_project_folder(
         reinsert_at(&old_dir);
         return Err(format!("Failed to move project folder: {}", e));
     }
+    state.sessions.relocate(project_id, new_dir);
 
     // Remove empty ancestor dirs left behind, but never go above the mount point.
     let mut ancestor = old_dir.parent();
@@ -352,6 +395,7 @@ fn edit_project_blocking(app: &AppHandle, state: &AppState, request: EditProject
         .filter(|d| !d.is_empty())
         .map(str::to_string);
     info!("edit_project called: {} -> {} / {}", request.id, name, submitted);
+    state.ensure_not_locked(&request.id)?;
 
     let current_db = state.project_db(&request.id)?;
     let current = current_db.get_project()?.ok_or("Project not found")?;
@@ -362,11 +406,12 @@ fn edit_project_blocking(app: &AppHandle, state: &AppState, request: EditProject
     // 2. Fecha efectiva y carpeta destino (misma regla que al crear).
     let session_date = effective_session_date(current.session_date.as_deref(), &current.created_at, &submitted);
     let new_dir = ProjectFolder::path(&mount_point, &year, &month, &day, &name);
-    let db = if new_dir != old_dir {
-        relocate_project_folder(state, &request.id, &new_dir)?
-    } else {
-        state.project_db(&request.id)?
-    };
+    if new_dir != old_dir {
+        relocate_project_folder(state, &request.id, &new_dir)?;
+    }
+    // El resto escribe en la base y los archivos ya en su carpeta final.
+    let session = state.write_session(&request.id)?;
+    let db = session.db()?;
 
     // 3. Datos del proyecto.
     db.update_project_details(&name, session_date.as_deref(), description.as_deref())

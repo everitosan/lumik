@@ -237,6 +237,19 @@
       }
     }
   },
+  "projectLock": {
+    "notice": {
+      "upToDate": "Abierto en {{name}} desde {{time}}. El disco está al día. Puedes verlo todo, pero no cambiar nada mientras no tomes el control.",
+      "pending": "Abierto en {{name}} desde {{time}}. Ese dispositivo tiene cambios que todavía no llegaron al disco: si tomas el control, esos cambios se quedan fuera."
+    },
+    "takeControl": "Tomar el control",
+    "taking": "Tomando el control…",
+    "takeError": "No se pudo tomar el control: {{error}}",
+    "cancel": "Cancelar",
+    "dialogTitle": "Proyecto abierto en otro dispositivo",
+    "readOnly": "Solo lectura",
+    "lockedBy": "En {{name}}"
+  },
   "settings": {
     "title": "Configuración",
     "loading": "Cargando configuración...",
@@ -261,6 +274,11 @@
       "deliveryDefaultHint": "Cada proyecto toma este valor al crearse y después guarda el suyo. Se cambia en Editar proyecto o al importar."
     },
     "language": "Idioma",
+    "installName": {
+      "label": "Nombre de este equipo",
+      "hint": "Es el nombre que ven otros dispositivos cuando este equipo tiene un proyecto abierto, por ejemplo «Abierto en estudio-pc».",
+      "save": "Guardar nombre"
+    },
     "tabs": {
       "import": "Importar",
       "shortcuts": "Shortcuts",

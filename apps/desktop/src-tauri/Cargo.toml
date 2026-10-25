@@ -48,6 +48,8 @@ base64 = "0.22"
 
 # Huella SHA-256 del JPG entregado al aprobar
 sha2 = "0.10"
+# Nombre del equipo para la identidad de la instalación (spec project-lock).
+gethostname = "0.5"
 
 # Cliente HTTP para el server de respaldo (Fase 4). rustls para evitar OpenSSL.
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }

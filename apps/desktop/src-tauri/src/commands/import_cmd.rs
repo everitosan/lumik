@@ -50,8 +50,10 @@ pub async fn start_import(
     // Reporter de progreso/log detrás del puerto (desacopla el import de app.emit).
     let reporter = crate::infrastructure::progress::TauriProgressReporter { app };
 
-    // Look up project DB before entering the async body to release the lock immediately
-    let project_db = state.project_db(&request.project_id)?;
+    // La importación mantiene el candado del proyecto hasta terminar, aunque el
+    // usuario vuelva al dashboard (spec project-lock).
+    let session = state.write_session(&request.project_id)?;
+    let project_db = session.db()?;
 
     let global_settings = state.global_db.get_app_settings()?;
 
@@ -160,7 +162,8 @@ pub async fn retry_import_register(
     );
 
     let reporter = crate::infrastructure::progress::TauriProgressReporter { app };
-    let project_db = state.project_db(&request.project_id)?;
+    let session = state.write_session(&request.project_id)?;
+    let project_db = session.db()?;
 
     let params = ImportParams {
         session_id: request.session_id.clone(),

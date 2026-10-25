@@ -9,6 +9,8 @@ import {
   updateAppSettings,
   getKeybindings,
   updateKeybinding,
+  getInstallName,
+  setInstallName,
 } from '../lib/api';
 import type { PhotographerMetadata, AppSettings, Keybinding, DeliveryMode } from '../lib/types';
 import { BackupAccountSection } from './BackupAccountSection';
@@ -619,10 +621,68 @@ export function SettingsPage({ initialTab = 'import' }: SettingsPageProps) {
               </Button>
             </div>
           </div>
+          <InstallNameField />
         </section>
       )}
 
       {activeTab === 'backup' && <BackupAccountSection />}
+    </div>
+  );
+}
+
+/**
+ * Nombre de este equipo: el que ven otros dispositivos cuando tiene un
+ * proyecto abierto (spec `project-lock`). Se guarda aparte del resto de Ajustes.
+ */
+function InstallNameField() {
+  const { t } = useTranslation();
+  const [saved, setSaved] = useState('');
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getInstallName()
+      .then((n) => { setSaved(n); setName(n); })
+      .catch(() => undefined);
+  }, []);
+
+  const changed = name.trim() !== '' && name.trim() !== saved;
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await setInstallName(name);
+      setSaved(result);
+      setName(result);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 280px', maxWidth: '420px' }}>
+          <Input
+            label={t('settings.installName.label')}
+            value={name}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
+            disabled={saving}
+            fullWidth
+          />
+        </div>
+        <Button variant="primary" size="sm" onClick={save} disabled={!changed || saving}>
+          {saving ? t('common.loading') : t('settings.installName.save')}
+        </Button>
+      </div>
+      <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--lumik-on-surface-variant, #c2c6d7)' }}>
+        {t('settings.installName.hint')}
+      </p>
+      {error && <p style={{ margin: 0, fontSize: '13px', color: 'var(--lumik-error, #ffb4ab)' }}>{error}</p>}
     </div>
   );
 }

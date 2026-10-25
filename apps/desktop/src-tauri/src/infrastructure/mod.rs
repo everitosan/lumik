@@ -13,6 +13,7 @@ pub mod finder_tags;
 pub mod folder;
 pub mod fs;
 pub mod imaging;
+pub mod lock;
 pub mod import_pipeline;
 pub mod metadata;
 pub mod persistence;

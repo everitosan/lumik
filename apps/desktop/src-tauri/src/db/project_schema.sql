@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS project (
     archived        INTEGER NOT NULL DEFAULT 0,
     deleted         INTEGER NOT NULL DEFAULT 0,
     creator_id      TEXT NOT NULL,          -- references global photographer.id (no FK)
-    cover_photo_path TEXT                   -- relative path to thumbnail, e.g. ".thumbs/{photo_id}.jpg"
+    cover_photo_path TEXT,                  -- relative path to thumbnail, e.g. ".thumbs/{photo_id}.jpg"
+    generation      INTEGER NOT NULL DEFAULT 0  -- sube con cada escritura; se copia al candado (.lumik-lock)
 );
 
 CREATE INDEX IF NOT EXISTS idx_project_date ON project(session_date) WHERE deleted = 0;

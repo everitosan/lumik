@@ -152,6 +152,14 @@ proyectos abiertos se puebla al arrancar y se refresca en cada
 `scan_connected_devices`; si el disco se desmonta, sus proyectos desaparecen y el
 comando devuelve error "device not mounted".
 
+**Candado del proyecto** (`sessions: Arc<ProjectSessions>`,
+`application/project_session.rs`): la vista abierta y cada comando que escribe
+abren una sesión del proyecto; la primera escribe `.lumik-lock` en su carpeta y la
+última lo quita. Todo comando que cambia archivos o la base empieza con
+`state.write_session(&project_id)?` (falla con `AppError::ProjectLocked`, que viaja
+como `project_locked:<dispositivo>`); `delete_project` y `edit_project` usan
+`ensure_not_locked` porque cierran la base. Ver `docs/useCases/flujo-candado-proyecto.md`.
+
 ## Estructura de carpetas en disco externo
 
 ```
@@ -330,11 +338,11 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 
 Plataforma: `get_platform`, `open_external_url`
 Dispositivos: `scan_connected_devices`, `eject_device`, `get_known_devices`
-Proyectos: `get_projects_dashboard`, `get_project`, `create_project`, `edit_project`, `set_project_archived`, `delete_project`, `open_project_folder`, `get_project_cover_thumbnail`, `set_project_cover_photo`, `get_project_settings`, `update_project_settings`, `get_project_delivery_mode`, `plan_project_delivery_change`, `set_project_delivery_mode`
+Proyectos: `get_projects_dashboard`, `get_project`, `open_project_session`, `close_project_session`, `take_project_control`, `create_project`, `edit_project`, `set_project_archived`, `delete_project`, `open_project_folder`, `get_project_cover_thumbnail`, `set_project_cover_photo`, `get_project_settings`, `update_project_settings`, `get_project_delivery_mode`, `plan_project_delivery_change`, `set_project_delivery_mode`
 Fotos: `get_project_photos`, `get_project_trashed_photos`, `trash_photo`, `restore_photo`, `reveal_photo`, `get_project_thumbnails`, `get_thumbnail`, `get_photo_preview`, `save_photo_rotation`, `save_photo_rating`, `save_photo_culled`, `regenerate_project_thumbnails`
 Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`
-Ajustes: `get_app_settings`, `update_app_settings`, `get_dashboard_sort`, `update_dashboard_sort`, `get_dashboard_show_archived`, `set_dashboard_show_archived`, `get_sidebar_sections`, `set_sidebar_section_collapsed`
+Ajustes: `get_app_settings`, `update_app_settings`, `get_install_name`, `set_install_name`, `get_dashboard_sort`, `update_dashboard_sort`, `get_dashboard_show_archived`, `set_dashboard_show_archived`, `get_sidebar_sections`, `set_sidebar_section_collapsed`
 Keybindings: `get_keybindings`, `update_keybinding`
 Import: `start_import`, `analyze_import_selection`, `retry_import_register`
 Respaldo — cuenta: `get_backup_server_url`, `set_backup_server_url`, `backup_register`, `backup_login`, `backup_logout`, `get_backup_session`

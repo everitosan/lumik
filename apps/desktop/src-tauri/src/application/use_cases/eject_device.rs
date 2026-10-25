@@ -2,18 +2,22 @@
 //!
 //! 1. Marca como "ejecting" el dispositivo y los que comparten su disco físico,
 //!    para que el scan de fondo no reabra sus BDs.
-//! 2. Cierra (suelta los `Arc`) todas las `ProjectDatabase` en esos dispositivos,
-//!    liberando los handles SQLite que dejarían el volumen ocupado.
+//! 2. Suelta los candados de esta instalación en sus proyectos (spec
+//!    `project-lock`) y cierra (suelta los `Arc`) todas las `ProjectDatabase` en
+//!    esos dispositivos, liberando los handles SQLite que dejarían el volumen
+//!    ocupado.
 //! 3. Pide al SO desmontar / expulsar.
 //! 4. Limpia las marcas "ejecting", también si el SO falló.
 
 use crate::application::ports::DeviceScanner;
+use crate::application::project_session::ProjectSessions;
 use crate::application::registry::ProjectRegistry;
 use log::info;
 
 pub struct EjectDevice<'a> {
     pub scanner: &'a dyn DeviceScanner,
     pub registry: &'a ProjectRegistry,
+    pub sessions: &'a ProjectSessions,
 }
 
 impl EjectDevice<'_> {
@@ -39,6 +43,10 @@ impl EjectDevice<'_> {
         for uuid in &uuids {
             self.registry.mark_ejecting(uuid);
         }
+
+        // Primero los candados: así otro dispositivo abre estos proyectos sin aviso.
+        let ids: Vec<String> = uuids.iter().flat_map(|u| self.registry.ids_on_device(u)).collect();
+        self.sessions.release(&ids);
 
         let mut closed = 0;
         for uuid in &uuids {
@@ -69,7 +77,10 @@ impl EjectDevice<'_> {
 mod tests {
     use super::*;
     use crate::db::ProjectDatabase;
+    use crate::db::models::InstallIdentity;
     use crate::devices::DetectedDevice;
+    use crate::domain::lock::LOCK_FILE;
+    use crate::infrastructure::lock::FsLockStore;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
@@ -120,7 +131,13 @@ mod tests {
         (dir, Arc::new(db))
     }
 
-    fn run(tag: &str, eject_result: Result<(), String>) -> (ProjectRegistry, FakeScanner, Result<(), String>) {
+    fn sessions() -> ProjectSessions {
+        ProjectSessions::new(Arc::new(FsLockStore), InstallIdentity { id: "pc".into(), name: "estudio-pc".into() })
+    }
+
+    /// Expulsa devA con los proyectos `pa` (devA) y `pc` (devC) abiertos en la
+    /// vista. Devuelve además si quedaron sus candados.
+    fn run(tag: &str, eject_result: Result<(), String>) -> (ProjectRegistry, FakeScanner, Result<(), String>, [bool; 2]) {
         let registry = ProjectRegistry::new();
         let (dir_a, a) = open_project(&format!("{tag}_a"), "pa", "devA");
         let (dir_b, b) = open_project(&format!("{tag}_b"), "pb", "devB");
@@ -135,17 +152,22 @@ mod tests {
             eject_result,
             ejected: Mutex::new(Vec::new()),
         };
-        let result = EjectDevice { scanner: &scanner, registry: &registry }.execute("devA");
+        let sessions = sessions();
+        sessions.open_view("pa", &dir_a, 0).unwrap();
+        sessions.open_view("pc", &dir_c, 0).unwrap();
+        let result = EjectDevice { scanner: &scanner, registry: &registry, sessions: &sessions }.execute("devA");
+        let locks = [dir_a.join(LOCK_FILE).exists(), dir_c.join(LOCK_FILE).exists()];
 
         for dir in [dir_a, dir_b, dir_c] {
             let _ = std::fs::remove_dir_all(dir);
         }
-        (registry, scanner, result)
+        (registry, scanner, result, locks)
     }
 
     #[test]
     fn closes_projects_on_sibling_partitions_and_clears_ejecting() {
-        let (registry, scanner, result) = run("ok", Ok(()));
+        let (registry, scanner, result, locks) = run("ok", Ok(()));
+        assert_eq!(locks, [false, true], "se suelta el candado del disco expulsado, no el de otro");
         assert!(result.is_ok());
         assert!(!registry.contains("pa"));
         assert!(!registry.contains("pb"), "sibling partition project must be closed");
@@ -159,7 +181,7 @@ mod tests {
 
     #[test]
     fn os_failure_still_clears_ejecting() {
-        let (registry, _scanner, result) = run("err", Err("busy".into()));
+        let (registry, _scanner, result, _) = run("err", Err("busy".into()));
         assert_eq!(result, Err("busy".to_string()));
         assert!(registry.ejecting_snapshot().is_empty());
         assert!(!registry.contains("pa"));
@@ -175,7 +197,7 @@ mod tests {
             eject_result: Err("must not be called".into()),
             ejected: Mutex::new(Vec::new()),
         };
-        let result = EjectDevice { scanner: &scanner, registry: &registry }.execute("devA");
+        let result = EjectDevice { scanner: &scanner, registry: &registry, sessions: &sessions() }.execute("devA");
         assert!(result.is_ok());
         assert!(scanner.ejected.lock().unwrap().is_empty());
         assert!(registry.ejecting_snapshot().is_empty());

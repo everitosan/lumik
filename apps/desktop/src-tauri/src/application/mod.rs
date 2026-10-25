@@ -5,5 +5,6 @@
 pub mod error;
 pub mod import_settings;
 pub mod ports;
+pub mod project_session;
 pub mod registry;
 pub mod use_cases;

@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type {
   EditProjectProgress,
@@ -25,7 +25,65 @@ import type {
   ImportBreakdown,
   RetryRegisterRequest,
   BackupSession,
+  ProjectAccess,
 } from './types';
+
+// ============================================================================
+// CANDADO DE PROYECTO (spec project-lock)
+// ============================================================================
+
+/** Prefijo del error de un proyecto que tiene otra instalación. */
+const PROJECT_LOCKED_PREFIX = 'project_locked:';
+
+/** Evento de ventana que avisa que una escritura chocó con el candado de otro. */
+export const PROJECT_LOCKED_EVENT = 'lumik:project-locked';
+
+/** Nombre del dispositivo que tiene el proyecto, si `err` es el error de candado. */
+export function projectLockHolder(err: unknown): string | null {
+  const text = typeof err === 'string' ? err : err instanceof Error ? err.message : '';
+  return text.startsWith(PROJECT_LOCKED_PREFIX) ? text.slice(PROJECT_LOCKED_PREFIX.length) : null;
+}
+
+/**
+ * `invoke` de Tauri que, además, avisa por `PROJECT_LOCKED_EVENT` cuando un
+ * comando falla porque otra instalación tomó el proyecto, para que la vista
+ * pase a solo lectura sin que cada llamada lo maneje.
+ */
+async function invoke<T>(cmd: string, args?: Parameters<typeof tauriInvoke>[1]): Promise<T> {
+  try {
+    return await tauriInvoke<T>(cmd, args);
+  } catch (err) {
+    const holder = projectLockHolder(err);
+    if (holder !== null) {
+      window.dispatchEvent(new CustomEvent(PROJECT_LOCKED_EVENT, { detail: holder }));
+    }
+    throw err;
+  }
+}
+
+/** Abre la vista de un proyecto: toma su candado o la abre en solo lectura. */
+export async function openProjectSession(projectId: string): Promise<ProjectAccess> {
+  return invoke('open_project_session', { projectId });
+}
+
+/** Cierra la vista de un proyecto y suelta su candado si no queda nada en curso. */
+export async function closeProjectSession(projectId: string): Promise<void> {
+  return invoke('close_project_session', { projectId });
+}
+
+/** Toma el control de un proyecto que tiene otra instalación. */
+export async function takeProjectControl(projectId: string): Promise<void> {
+  return invoke('take_project_control', { projectId });
+}
+
+/** Nombre de esta instalación, el que ven otros dispositivos en el candado. */
+export async function getInstallName(): Promise<string> {
+  return invoke('get_install_name');
+}
+
+export async function setInstallName(name: string): Promise<string> {
+  return invoke('set_install_name', { name });
+}
 
 // ============================================================================
 // PLATFORM

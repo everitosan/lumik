@@ -5,6 +5,7 @@
 
 pub mod delivery;
 pub mod error;
+pub mod lock;
 pub mod pairs;
 pub mod paths;
 pub mod photo;

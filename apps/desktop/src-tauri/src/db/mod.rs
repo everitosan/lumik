@@ -287,6 +287,41 @@ mod tests {
     }
 
     #[test]
+    fn generation_starts_at_zero_and_bumps() {
+        let dir = std::env::temp_dir().join(format!("lumik_generation_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let project = ProjectDatabase::create(
+            dir.join("p").join("project.db"), "p1", "Boda", "c", None, None, "", dir.clone(),
+        )
+        .unwrap();
+        assert_eq!(project.generation().unwrap(), 0);
+        assert_eq!(project.bump_generation().unwrap(), 1);
+        assert_eq!(project.bump_generation().unwrap(), 2);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn install_identity_is_stable_and_renamable() {
+        let dir = std::env::temp_dir().join(format!("lumik_install_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let global = GlobalDatabase::new(dir.join("lumik.db")).unwrap();
+
+        let first = global.install_identity("estudio-pc").unwrap();
+        assert_eq!(first.name, "estudio-pc");
+        // Segunda vez: mismo id, y el nombre por defecto ya no lo cambia.
+        let again = global.install_identity("otro-nombre").unwrap();
+        assert_eq!(again, first);
+
+        global.set_install_name("  Estudio  ").unwrap();
+        global.set_install_name("   ").unwrap();
+        let renamed = global.install_identity("x").unwrap();
+        assert_eq!((renamed.id, renamed.name.as_str()), (first.id, "Estudio"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn delivery_mode_defaults_and_is_independent_per_project() {
         use crate::domain::delivery::DeliveryMode;
         let dir = std::env::temp_dir().join(format!("lumik_delivery_{}", std::process::id()));

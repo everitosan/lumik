@@ -21,6 +21,8 @@ export interface PhotoDetailProps {
   onThumbnailChanged?: (photoIds: string[]) => void;
   onPhotoChanged?: (photoId: string, updates: Partial<Pick<Photo, 'stars' | 'color_label' | 'tags' | 'culled' | 'rotation'>>) => void;
   onCoverPhotoChange?: (photoId: string | null) => void;
+  /** Proyecto en otra instalación (spec project-lock): se ve todo, no se cambia nada. */
+  readOnly?: boolean;
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -87,6 +89,7 @@ export function PhotoDetail({
   onThumbnailChanged,
   onPhotoChanged,
   onCoverPhotoChange,
+  readOnly = false,
 }: PhotoDetailProps) {
   const { t } = useTranslation();
   const platform = usePlatform();
@@ -183,6 +186,7 @@ export function PhotoDetail({
   );
 
   const saveRating = (stars: number, colorLabels: ColorLabel[], tags: string[]) => {
+    if (readOnly) return;
     setSaveState('saving');
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     const color_label = colorLabels.length > 0 ? colorLabels.join(',') : null;
@@ -197,16 +201,19 @@ export function PhotoDetail({
   };
 
   const handleStarsChange = (stars: number) => {
+    if (readOnly) return;
     setLocalStars(stars);
     saveRating(stars, localColorLabels, localTags);
   };
 
   const handleColorChange = (colorLabels: ColorLabel[]) => {
+    if (readOnly) return;
     setLocalColorLabels(colorLabels);
     saveRating(localStars, colorLabels, localTags);
   };
 
   const handleTagsChange = (tags: string[]) => {
+    if (readOnly) return;
     setLocalTags(tags);
     saveRating(localStars, localColorLabels, tags);
   };
@@ -214,6 +221,7 @@ export function PhotoDetail({
   const isCover = coverPhotoPath === `.thumbs/${photo.id}.jpg`;
 
   const handleCoverToggle = useCallback(() => {
+    if (readOnly) return;
     const newCoverId = isCover ? null : photo.id;
     api.setProjectCoverPhoto(photo.project_id, newCoverId)
       .then(() => {
@@ -222,12 +230,12 @@ export function PhotoDetail({
         api.syncProjectCover(photo.project_id).catch(() => undefined);
       })
       .catch(() => setSaveState('error'));
-  }, [isCover, photo.id, photo.project_id, onCoverPhotoChange]);
+  }, [readOnly, isCover, photo.id, photo.project_id, onCoverPhotoChange]);
 
   const handleCulledChange = useCallback((culled: boolean) => {
     // Una foto en la papelera no se aprueba (el backend también lo rechaza): sin
     // actualización optimista, para no mostrar un cambio que no ocurrirá.
-    if (photo.deleted) return;
+    if (photo.deleted || readOnly) return;
     setLocalCulled(culled);
     setSaveState('saving');
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -241,7 +249,7 @@ export function PhotoDetail({
         setLocalCulled(!culled);
         setSaveState('error');
       });
-  }, [photo.id, photo.project_id, photo.deleted, onPhotoChanged]);
+  }, [photo.id, photo.project_id, photo.deleted, readOnly, onPhotoChanged]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -256,7 +264,7 @@ export function PhotoDetail({
       if (matchesKey(e, kb['photo_detail.rotate_left']))   { viewerRef.current?.rotateLeft(); return; }
       if (matchesKey(e, kb['photo_detail.rotate_right']))  { viewerRef.current?.rotateRight(); return; }
       if (matchesKey(e, kb['photo_detail.cull']))          { handleCulledChange(!localCulled); return; }
-      if (matchesKey(e, kb['photo_detail.add_tag']))       { e.preventDefault(); tagManagerRef.current?.startAdding(); return; }
+      if (matchesKey(e, kb['photo_detail.add_tag']))       { e.preventDefault(); if (!readOnly) tagManagerRef.current?.startAdding(); return; }
       if (matchesKey(e, kb['photo_detail.toggle_raw']))    { if (format === 'RAW+JPG') setShowRaw((v) => !v); return; }
       if (matchesKey(e, kb['photo_detail.stars_0']))       { handleStarsChange(0); return; }
       if (matchesKey(e, kb['photo_detail.stars_1']))       { handleStarsChange(1); return; }
@@ -267,7 +275,7 @@ export function PhotoDetail({
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [kb, onClose, goPrev, goNext, localCulled, handleCulledChange, localColorLabels, localTags, format]);
+  }, [kb, onClose, goPrev, goNext, localCulled, handleCulledChange, localColorLabels, localTags, format, readOnly]);
 
   return (
     <div style={rootStyle}>
@@ -291,6 +299,11 @@ export function PhotoDetail({
             {filename}
           </span>
         </div>
+        {readOnly ? (
+          <span style={{ fontFamily: 'var(--lumik-font-primary, Inter)', fontSize: '12px', color: 'var(--lumik-secondary, #e9c349)', flexShrink: 0 }}>
+            {t('projectLock.readOnly')}
+          </span>
+        ) : (
         <button
           onClick={handleCoverToggle}
           title={isCover ? t('photo.detail.removeCover') : t('photo.detail.setCover')}
@@ -304,6 +317,7 @@ export function PhotoDetail({
         >
           <Icon name={isCover ? 'star-filled' : 'star'} size={18} />
         </button>
+        )}
         <span style={{ fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)', fontSize: '12px', color: 'var(--lumik-outline, #8c90a0)', flexShrink: 0 }}>
           {currentIndex + 1} / {photos.length}
         </span>
@@ -333,7 +347,7 @@ export function PhotoDetail({
           hasNext={hasNext}
           onPrev={goPrev}
           onNext={goNext}
-          onRotationChange={handleRotationChange}
+          onRotationChange={readOnly ? undefined : handleRotationChange}
           onHistogramReady={setHistogramBins}
           cornerOverlay={
             format && (

@@ -237,6 +237,19 @@
       }
     }
   },
+  "projectLock": {
+    "notice": {
+      "upToDate": "Open on {{name}} since {{time}}. The drive is up to date. You can see everything, but not change anything until you take control.",
+      "pending": "Open on {{name}} since {{time}}. That device has changes that have not reached the drive yet: if you take control, those changes are left out."
+    },
+    "takeControl": "Take control",
+    "taking": "Taking control…",
+    "takeError": "Could not take control: {{error}}",
+    "cancel": "Cancel",
+    "dialogTitle": "Project open on another device",
+    "readOnly": "Read only",
+    "lockedBy": "On {{name}}"
+  },
   "settings": {
     "title": "Settings",
     "loading": "Loading settings...",
@@ -261,6 +274,11 @@
       "deliveryDefaultHint": "Each project takes this value when it is created and then keeps its own. Change it in Edit project or when importing."
     },
     "language": "Language",
+    "installName": {
+      "label": "Name of this computer",
+      "hint": "Other devices see this name when this computer has a project open, for example \"Open on studio-pc\".",
+      "save": "Save name"
+    },
     "tabs": {
       "import": "Import",
       "shortcuts": "Shortcuts",

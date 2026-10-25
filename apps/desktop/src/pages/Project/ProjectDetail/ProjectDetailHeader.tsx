@@ -185,6 +185,7 @@ export function ProjectDetailHeader({
           </>
         )}
 
+        {onImport && (
         <button
           style={{
             display: 'flex',
@@ -205,6 +206,7 @@ export function ProjectDetailHeader({
           <Icon name="import" size={14} />
           {t('import.title')}
         </button>
+        )}
       </div>
     </header>
   );

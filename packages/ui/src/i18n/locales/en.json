@@ -21,6 +21,7 @@
         "delivered": "Delivered"
       },
       "archived": "Archived",
+      "lockedBy": "On {{name}}",
       "menu": {
         "label": "Project options",
         "openFolder": "Open folder",

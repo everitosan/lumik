@@ -52,6 +52,7 @@ pub fn eject_device(
     let result = EjectDevice {
         scanner: state.device_scanner.as_ref(),
         registry: &state.registry,
+        sessions: &state.sessions,
     }
     .execute(&device_uuid);
 

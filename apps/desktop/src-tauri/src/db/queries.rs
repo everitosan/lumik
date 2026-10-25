@@ -244,6 +244,36 @@ impl GlobalDatabase {
         self.get_app_settings()
     }
 
+    /// Identidad de la instalación. La primera vez genera el id y toma
+    /// `default_name` (el nombre del equipo) como nombre legible.
+    pub fn install_identity(&self, default_name: &str) -> DbResult<InstallIdentity> {
+        let id = match self.get_setting("install.id")? {
+            Some(id) => id,
+            None => {
+                let id = uuid::Uuid::new_v4().to_string();
+                self.set_setting("install.id", &id)?;
+                id
+            }
+        };
+        let name = match self.get_setting("install.name")? {
+            Some(name) => name,
+            None => {
+                self.set_setting("install.name", default_name)?;
+                default_name.to_string()
+            }
+        };
+        Ok(InstallIdentity { id, name })
+    }
+
+    /// Cambia el nombre legible de la instalación (vacío = se queda el anterior).
+    pub fn set_install_name(&self, name: &str) -> DbResult<()> {
+        let name = name.trim();
+        if !name.is_empty() {
+            self.set_setting("install.name", name)?;
+        }
+        Ok(())
+    }
+
     /// Orden del dashboard elegido por el usuario (claves propias, independientes
     /// de `AppSettings` para que guardar Ajustes no lo restablezca).
     pub fn get_dashboard_sort(&self) -> DbResult<DashboardSort> {
@@ -524,6 +554,7 @@ impl ProjectDatabase {
                         backup_providers: row.get(7)?,
                         archived: row.get::<_, i32>(8)? != 0,
                         device_uuid: String::new(), // filled below
+                        locked_by: None, // lo llena el comando
                     })
                 },
             )
@@ -658,6 +689,23 @@ impl ProjectDatabase {
             params![culled as i32, dng_path, id],
         )?;
         Ok(())
+    }
+
+    /// Generación del proyecto: sube con cada escritura (spec `project-lock`).
+    pub fn generation(&self) -> DbResult<i64> {
+        let conn = self.conn();
+        Ok(conn
+            .query_row("SELECT generation FROM project LIMIT 1", [], |r| r.get(0))
+            .optional()?
+            .unwrap_or(0))
+    }
+
+    /// Sube la generación del proyecto y devuelve la nueva.
+    pub fn bump_generation(&self) -> DbResult<i64> {
+        let conn = self.conn();
+        conn.execute("UPDATE project SET generation = generation + 1", [])?;
+        drop(conn);
+        self.generation()
     }
 
     /// Fija el estado del proyecto y los proveedores usados tras respaldar (Fase 8).

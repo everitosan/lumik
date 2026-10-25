@@ -455,7 +455,14 @@ pub async fn sync_exported(
     let state = (*state).clone();
     tauri::async_runtime::spawn_blocking(move || {
 
-    let project_db = state.project_db(&project_id)?;
+    // Con el proyecto en otra instalación no se toca la base (solo lectura); la
+    // vista lo llama al abrir, así que se omite sin error.
+    let session = match state.write_session(&project_id) {
+        Ok(s) => s,
+        Err(AppError::ProjectLocked(_)) => return Ok(SyncExportedResult::default()),
+        Err(e) => return Err(e),
+    };
+    let project_db = session.db()?;
     let photos = project_db.get_project_photos()?;
     let exported = list_exported_files(&project_db.project_dir)?;
 
@@ -702,7 +709,9 @@ pub async fn backup_exported_file(
     let Some((base, mut access, refresh)) = stored_session(&state)? else {
         return Err(AppError::from("inicia sesión de respaldo primero"));
     };
-    let project_db = state.project_db(&project_id)?;
+    // El respaldo mantiene el candado mientras sube (spec project-lock).
+    let session = state.write_session(&project_id)?;
+    let project_db = session.db()?;
     let file_path = project_db.project_dir.join("_exported").join(&filename);
     if !file_path.exists() {
         return Err(AppError::from(format!("no se encontró {filename}")));
@@ -825,7 +834,8 @@ pub async fn finalize_backup(
 ) -> AppResult<String> {
     let state = (*state).clone();
     tauri::async_runtime::spawn_blocking(move || -> AppResult<String> {
-        let project_db = state.project_db(&project_id)?;
+        let session = state.write_session(&project_id)?;
+        let project_db = session.db()?;
         let exported = count_photos_in(&project_db.project_dir.join("_exported"), EXPORTED_EXTS);
         let culled = count_photos_in(&project_db.project_dir.join("_culled"), CULLED_EXTS);
         let status = if exported >= culled { "delivered" } else { "edited" };

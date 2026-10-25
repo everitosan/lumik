@@ -2,6 +2,7 @@ use crate::application::ports::{
     BackupAuthClient, BackupClient, CatalogClient, DeviceScanner, FileStore, FinderTagWriter,
     ImageProcessor, MetadataTool,
 };
+use crate::application::project_session::{ProjectSessions, SessionGuard};
 use crate::application::registry::ProjectRegistry;
 use crate::db::{discover_projects_on_device, GlobalDatabase, ProjectDatabase};
 use std::collections::HashSet;
@@ -35,6 +36,8 @@ pub struct AppState {
     /// Ids `project_id/photo_id` con subida en curso (evita duplicados al reabrir
     /// el modal y re-lanzar la misma subida).
     pub uploading: Arc<Mutex<HashSet<String>>>,
+    /// Sesiones de trabajo por proyecto y su candado (spec `project-lock`).
+    pub sessions: Arc<ProjectSessions>,
 }
 
 impl AppState {
@@ -47,6 +50,62 @@ impl AppState {
                 project_id
             )
         })
+    }
+
+    /// Falla con `ProjectLocked` si otra instalación tiene el proyecto. Para las
+    /// operaciones que cierran la base y mueven o borran la carpeta, que no
+    /// pueden sostener una sesión abierta.
+    pub(crate) fn ensure_not_locked(&self, project_id: &str) -> crate::application::error::AppResult<()> {
+        let db = self.project_db(project_id)?;
+        match self.sessions.state(&db.project_dir) {
+            crate::domain::lock::LockState::Foreign(lock) => {
+                Err(crate::application::error::AppError::ProjectLocked(lock.install_name))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// Sesión de escritura sobre un proyecto mientras vive el valor devuelto:
+    /// toma el candado (o falla con `ProjectLocked` si es de otra instalación) y,
+    /// al soltarse, sube la generación del proyecto y cierra la sesión. Todo
+    /// comando que cambia archivos o la base del proyecto la abre primero.
+    pub(crate) fn write_session(
+        &self,
+        project_id: &str,
+    ) -> crate::application::error::AppResult<WriteSession> {
+        let db = self.project_db(project_id)?;
+        let guard = SessionGuard::begin(&self.sessions, project_id, &db.project_dir, db.generation()?)?;
+        Ok(WriteSession {
+            registry: self.registry.clone(),
+            project_id: project_id.to_string(),
+            _guard: guard,
+        })
+    }
+}
+
+/// Ver `AppState::write_session`. No sostiene la base: la busca en el registro,
+/// porque una operación puede mover la carpeta y reabrirla (el import que fija la
+/// fecha, editar el proyecto), y en Windows una base abierta impide moverla. La
+/// generación se sube en `drop`, antes de que `_guard` cierre la sesión.
+pub(crate) struct WriteSession {
+    registry: Arc<ProjectRegistry>,
+    project_id: String,
+    _guard: SessionGuard,
+}
+
+impl WriteSession {
+    pub(crate) fn db(&self) -> Result<Arc<ProjectDatabase>, String> {
+        self.registry.get(&self.project_id).ok_or_else(|| {
+            format!("Project '{}' not available — device may not be mounted", self.project_id)
+        })
+    }
+}
+
+impl Drop for WriteSession {
+    fn drop(&mut self) {
+        if let Some(db) = self.registry.get(&self.project_id) {
+            let _ = db.bump_generation();
+        }
     }
 }
 

@@ -20,6 +20,7 @@ import {
   Import,
   Info,
   LayoutGrid,
+  Lock,
   Plus,
   RotateCcw,
   RotateCw,
@@ -69,6 +70,7 @@ export type IconName =
   | 'eject'
   | 'sort'
   | 'archive'
+  | 'lock'
   | 'archive-restore';
 
 
@@ -135,6 +137,7 @@ const icons: Record<IconName, IconComponent> = {
   eject: Eject,
   sort: ArrowUpDown,
   archive: Archive,
+  lock: Lock,
   'archive-restore': ArchiveRestore,
 };
 

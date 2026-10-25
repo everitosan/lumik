@@ -30,6 +30,8 @@ export interface ProjectCardProps {
   onDelete?: () => void;
   /** Proyecto archivado: se muestra atenuado y con la etiqueta "Archivado". */
   archived?: boolean;
+  /** Nombre del dispositivo que tiene el proyecto abierto (candado), si es otro. */
+  lockedBy?: string;
   className?: string;
   style?: CSSProperties;
 }
@@ -130,6 +132,17 @@ const archivedLabelStyles: CSSProperties = {
   borderRadius: 'var(--lumik-radius-full, 9999px)',
 };
 
+const lockedLabelStyles: CSSProperties = {
+  ...archivedLabelStyles,
+  left: 'auto',
+  right: '8px',
+  maxWidth: 'calc(100% - 16px)',
+  color: 'var(--lumik-secondary, #e9c349)',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
+
 const statusBadgeBaseStyles: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -190,6 +203,7 @@ export function ProjectCard({
   onDeleteBackup,
   onDelete,
   archived = false,
+  lockedBy,
   className,
   style,
 }: ProjectCardProps) {
@@ -256,6 +270,12 @@ export function ProjectCard({
           <span style={archivedLabelStyles}>
             <Icon name="archive" size="sm" aria-hidden="true" />
             {t('components.projectCard.archived')}
+          </span>
+        )}
+        {lockedBy && (
+          <span style={lockedLabelStyles} title={t('components.projectCard.lockedBy', { name: lockedBy })}>
+            <Icon name="lock" size="sm" aria-hidden="true" />
+            {t('components.projectCard.lockedBy', { name: lockedBy })}
           </span>
         )}
       </div>

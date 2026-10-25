@@ -89,6 +89,25 @@ pub fn update_app_settings(state: State<AppState>, settings: AppSettings) -> App
     Ok(result)
 }
 
+/// Nombre de esta instalación, el que ven otros dispositivos en el candado de
+/// los proyectos (spec `project-lock`).
+#[tauri::command]
+pub fn get_install_name(state: State<AppState>) -> String {
+    state.sessions.install().name
+}
+
+#[tauri::command]
+pub fn set_install_name(state: State<AppState>, name: String) -> AppResult<String> {
+    state.global_db.set_install_name(&name)?;
+    let saved = state
+        .global_db
+        .install_identity(&crate::infrastructure::lock::device_name())?
+        .name;
+    state.sessions.set_install_name(&saved);
+    info!("set_install_name: {}", saved);
+    Ok(saved)
+}
+
 #[tauri::command]
 pub fn get_dashboard_show_archived(state: State<AppState>) -> AppResult<bool> {
     Ok(state.global_db.get_dashboard_show_archived()?)

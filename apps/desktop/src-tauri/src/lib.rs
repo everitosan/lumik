@@ -106,6 +106,15 @@ pub fn run() {
     let backup: Arc<dyn application::ports::BackupClient> =
         Arc::new(infrastructure::backup_client::HttpBackup);
 
+    // Candado de proyectos (spec project-lock): identidad de esta instalación.
+    let install = global_db
+        .install_identity(&infrastructure::lock::device_name())
+        .expect("Failed to read install identity");
+    let sessions = Arc::new(application::project_session::ProjectSessions::new(
+        Arc::new(infrastructure::lock::FsLockStore),
+        install,
+    ));
+
     info!("Scanning for project databases on connected devices...");
     refresh_open_projects(device_scanner.as_ref(), &global_db, &registry);
     info!("Found {} open project(s) at startup", registry.open_count());
@@ -122,6 +131,7 @@ pub fn run() {
         catalog,
         backup,
         uploading: Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+        sessions,
     };
 
     info!("Starting Tauri application...");
@@ -170,6 +180,9 @@ pub fn run() {
             // ── Proyectos (gestión / consulta) ──────────────────────────────
             commands::get_projects_dashboard,
             commands::get_project,
+            commands::open_project_session,
+            commands::close_project_session,
+            commands::take_project_control,
             commands::set_project_archived,
             commands::delete_project,
             commands::edit_project,
@@ -202,6 +215,8 @@ pub fn run() {
             commands::update_app_settings,
             commands::get_dashboard_sort,
             commands::update_dashboard_sort,
+            commands::get_install_name,
+            commands::set_install_name,
             commands::get_dashboard_show_archived,
             commands::set_dashboard_show_archived,
             commands::get_sidebar_sections,
@@ -231,9 +246,12 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app, event| {
-            // Exiftool con -stay_open no termina solo al salir Lumik.
+        .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
+                // Suelta los candados de los proyectos abiertos (spec project-lock).
+                use tauri::Manager;
+                app.state::<AppState>().sessions.release_all();
+                // Exiftool con -stay_open no termina solo al salir Lumik.
                 #[cfg(not(target_os = "android"))]
                 exiftool::shutdown();
             }

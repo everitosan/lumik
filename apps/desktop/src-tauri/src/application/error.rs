@@ -20,9 +20,25 @@ pub enum AppError {
     #[error(transparent)]
     Domain(#[from] DomainError),
 
+    /// El proyecto lo tiene otra instalación (spec `project-lock`). Viaja como
+    /// `project_locked:<nombre del dispositivo>`; el frontend lo reconoce por el
+    /// prefijo y muestra el aviso con su texto.
+    #[error("project_locked:{0}")]
+    ProjectLocked(String),
+
     /// Cualquier otro error, con su mensaje ya listo para mostrar.
     #[error("{0}")]
     Message(String),
+}
+
+impl From<crate::application::project_session::SessionError> for AppError {
+    fn from(e: crate::application::project_session::SessionError) -> Self {
+        use crate::application::project_session::SessionError;
+        match e {
+            SessionError::Locked(lock) => AppError::ProjectLocked(lock.install_name),
+            SessionError::Io(msg) => AppError::Message(msg),
+        }
+    }
 }
 
 impl From<String> for AppError {

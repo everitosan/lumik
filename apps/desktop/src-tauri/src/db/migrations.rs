@@ -38,6 +38,7 @@ pub(super) fn run_project_migrations(conn: &Connection, project_dir: Option<&Pat
     ensure_project_settings_row(conn)?;
     migrate_project_settings_columns(conn)?;
     migrate_delivery_mode_column(conn)?;
+    migrate_generation_column(conn)?;
     migrate_photo_paths_to_project_relative(conn, project_dir)?;
 
     Ok(())
@@ -191,6 +192,18 @@ fn migrate_delivery_mode_column(conn: &Connection) -> DbResult<()> {
     Ok(())
 }
 
+/// Agrega `project.generation` si falta: contador que sube con cada escritura
+/// y se copia al candado del proyecto (spec `project-lock`).
+fn migrate_generation_column(conn: &Connection) -> DbResult<()> {
+    if !has_column(conn, "project", "generation") {
+        conn.execute(
+            "ALTER TABLE project ADD COLUMN generation INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    Ok(())
+}
+
 /// Garantiza la única fila de `project_settings` (id = 1).
 fn ensure_project_settings_row(conn: &Connection) -> DbResult<()> {
     conn.execute("INSERT OR IGNORE INTO project_settings (id) VALUES (1)", [])?;
@@ -314,6 +327,9 @@ mod tests {
             .query_row("SELECT delivery_mode FROM project_settings WHERE id=1", [], |r| r.get(0))
             .unwrap();
         assert_eq!(mode, "none");
+
+        // Candado: la generación arranca en 0.
+        assert!(column_names(&conn, "project").contains(&"generation".to_string()));
     }
 
     #[test]

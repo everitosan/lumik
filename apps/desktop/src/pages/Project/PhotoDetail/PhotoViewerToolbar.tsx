@@ -11,8 +11,9 @@ export interface PhotoViewerToolbarProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFitToScreen: () => void;
-  onRotateLeft: () => void;
-  onRotateRight: () => void;
+  /** Sin ellos (solo lectura) no se muestran los botones de rotar. */
+  onRotateLeft?: () => void;
+  onRotateRight?: () => void;
 }
 
 const toolbarStyle: CSSProperties = {
@@ -119,14 +120,18 @@ export function PhotoViewerToolbar({
 
       <div style={sepStyle} />
 
-      <ToolbarBtn onClick={onRotateLeft} title={t('photo.viewer.rotateLeft')}>
-        <Icon name="rotate-ccw" size={18} />
-      </ToolbarBtn>
-      <ToolbarBtn onClick={onRotateRight} title={t('photo.viewer.rotateRight')}>
-        <Icon name="rotate-cw" size={18} />
-      </ToolbarBtn>
+      {onRotateLeft && onRotateRight && (
+        <>
+          <ToolbarBtn onClick={onRotateLeft} title={t('photo.viewer.rotateLeft')}>
+            <Icon name="rotate-ccw" size={18} />
+          </ToolbarBtn>
+          <ToolbarBtn onClick={onRotateRight} title={t('photo.viewer.rotateRight')}>
+            <Icon name="rotate-cw" size={18} />
+          </ToolbarBtn>
 
-      <div style={sepStyle} />
+          <div style={sepStyle} />
+        </>
+      )}
 
       <ToolbarBtn onClick={onNext} disabled={!hasNext} title={t('photo.viewer.next')}>
         <Icon name="chevron-right" size={20} />

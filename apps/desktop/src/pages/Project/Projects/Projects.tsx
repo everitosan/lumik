@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchBar, ProjectCard, Button, Icon, FilterBar, FilterBarDivider } from '@lumik/ui';
 import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, useDashboardShowArchived, useDashboardSort, matchesKey, usePlatform } from '../../../lib/hooks';
-import { createProject, ensureProjectSynced, setProjectArchived, relocateBackup, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink } from '../../../lib/api';
+import { createProject, ensureProjectSynced, setProjectArchived, relocateBackup, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink, takeProjectControl, closeProjectSession } from '../../../lib/api';
+import { TakeControlDialog } from '../../../components/ProjectLockNotice';
 import { CreateProjectModal, type ProjectFormData } from '../../../components/CreateProjectModal';
 import { EditProjectModal } from './EditProjectModal';
 import { DeleteProjectModal } from './DeleteProjectModal';
@@ -301,6 +302,9 @@ export function Projects({ onProjectClick }: ProjectsProps) {
   const [deletingProject, setDeletingProject] = useState<ProjectDashboard | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Acción pedida sobre un proyecto que tiene otra instalación: espera a que
+  // se confirme tomar el control (spec project-lock).
+  const [lockedAction, setLockedAction] = useState<{ project: ProjectDashboard; run: () => void } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const platform = usePlatform();
   // Opening a folder in a file manager isn't available on Android.
@@ -403,6 +407,24 @@ export function Projects({ onProjectClick }: ProjectsProps) {
     void setProjectArchived(project.id, !project.archived)
       .then(() => refetch())
       .catch((err) => console.error('setProjectArchived failed:', err));
+  };
+
+  /** Corre `run` sobre el proyecto, o pide antes tomar el control si es de otro. */
+  const withControl = (project: ProjectDashboard, run: () => void) => {
+    if (project.locked_by) setLockedAction({ project, run });
+    else run();
+  };
+
+  // Desde el dashboard no hay vista abierta: se toma el control y se suelta
+  // enseguida, así el proyecto queda libre y la acción sigue con normalidad.
+  const handleTakeControl = async () => {
+    if (!lockedAction) return;
+    const { project, run } = lockedAction;
+    await takeProjectControl(project.id);
+    await closeProjectSession(project.id);
+    setLockedAction(null);
+    refetch();
+    run();
   };
 
   const handleProjectClick = (project: ProjectDashboard) => {
@@ -540,9 +562,10 @@ export function Projects({ onProjectClick }: ProjectsProps) {
                     }}
                     onClick={() => handleProjectClick(project)}
                     onOpenFolder={canOpenFolder ? () => handleOpenFolder(project) : undefined}
-                    onEdit={() => setEditingProject(project)}
-                    onToggleArchive={() => handleToggleArchive(project)}
-                    onDelete={() => setDeletingProject(project)}
+                    onEdit={() => withControl(project, () => setEditingProject(project))}
+                    onToggleArchive={() => withControl(project, () => handleToggleArchive(project))}
+                    onDelete={() => withControl(project, () => setDeletingProject(project))}
+                    lockedBy={project.locked_by?.name}
                     archived={project.archived}
                   />
                 ))}
@@ -588,6 +611,12 @@ export function Projects({ onProjectClick }: ProjectsProps) {
         project={editingProject}
         onClose={() => setEditingProject(null)}
         onSaved={(result) => handleEdited(result.project.id)}
+      />
+
+      <TakeControlDialog
+        holder={lockedAction?.project.locked_by ?? null}
+        onClose={() => setLockedAction(null)}
+        onTakeControl={handleTakeControl}
       />
 
       <DeleteProjectModal

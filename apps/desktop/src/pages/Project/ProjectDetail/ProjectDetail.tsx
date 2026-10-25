@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { CSSProperties } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT, photoFormat, type ColorLabel } from '@lumik/ui';
-import type { Photo } from '../../../lib/types';
+import type { Photo, ProjectAccess, ProjectSettings } from '../../../lib/types';
 import { useProjectPhotos, useProjectTrashedPhotos, useProjectThumbnails, useContextKeybindings, matchesKey, usePlatform } from '../../../lib/hooks';
 import * as api from '../../../lib/api';
 import { ProjectDetailHeader } from './ProjectDetailHeader';
@@ -12,6 +12,7 @@ import { useBackup } from '../../../lib/BackupContext';
 import { TrashPhotoModal } from './TrashPhotoModal';
 import { ImportPage } from '../../ImportPage';
 import { PhotoDetail } from '../PhotoDetail';
+import { ProjectLockBanner } from '../../../components/ProjectLockNotice';
 
 export interface ProjectDetailProps {
   projectId: string;
@@ -160,6 +161,44 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
       .catch((e) => console.debug('backup sync skipped:', e));
   }, [projectId]);
 
+  // Candado del proyecto (spec project-lock): la vista lo toma al abrir y lo
+  // suelta al cerrar. Si lo tiene otra instalación, se abre en solo lectura.
+  const [access, setAccess] = useState<ProjectAccess | null>(null);
+  const readOnly = access?.access === 'read_only';
+  const readOnlyRef = useRef(false);
+  readOnlyRef.current = readOnly;
+  useEffect(() => {
+    let active = true;
+    api
+      .openProjectSession(projectId)
+      .then((a) => { if (active) setAccess(a); })
+      .catch((e) => console.error('open project session failed', e));
+    return () => {
+      active = false;
+      api.closeProjectSession(projectId).catch(() => undefined);
+    };
+  }, [projectId]);
+  // Una escritura chocó con el candado de otro (tomó el control mientras
+  // estábamos aquí): se vuelve a mirar y la vista pasa a solo lectura.
+  useEffect(() => {
+    const recheck = () => {
+      api.openProjectSession(projectId).then(setAccess).catch(() => undefined);
+    };
+    window.addEventListener(api.PROJECT_LOCKED_EVENT, recheck);
+    return () => window.removeEventListener(api.PROJECT_LOCKED_EVENT, recheck);
+  }, [projectId]);
+  const handleTakeControl = useCallback(async () => {
+    await api.takeProjectControl(projectId);
+    setAccess({ access: 'open' });
+    api.syncExported(projectId).catch(() => undefined);
+  }, [projectId]);
+
+  // En solo lectura los ajustes de vista (filtros, panel) se quedan en memoria.
+  const saveViewSettings = (settings: Partial<ProjectSettings>) => {
+    if (readOnlyRef.current) return;
+    api.updateProjectSettings(projectId, settings as ProjectSettings).catch(() => undefined);
+  };
+
   const [sortBy, setSortBy] = useState<SortOption>('date');
   const [viewMode, setViewMode] = useState<'grid' | 'by-date'>('by-date');
   const [showImport, setShowImport] = useState(false);
@@ -199,12 +238,12 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
   const handleSidebarToggle = useCallback((open: boolean) => {
     setSidebarOpen(open);
-    api.updateProjectSettings(projectId, { sidebar_open: open, show_culled: showCulledOnly });
+    saveViewSettings({ sidebar_open: open, show_culled: showCulledOnly });
   }, [projectId, showCulledOnly]);
 
   const handleShowCulledChange = useCallback((value: boolean) => {
     setShowCulledOnly(value);
-    api.updateProjectSettings(projectId, {
+    saveViewSettings({
       sidebar_open: sidebarOpen,
       show_culled: value,
       min_stars: minStars,
@@ -215,7 +254,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
   const handleMinStarsChange = useCallback((stars: number | null) => {
     setMinStars(stars);
-    api.updateProjectSettings(projectId, {
+    saveViewSettings({
       sidebar_open: sidebarOpen,
       show_culled: showCulledOnly,
       min_stars: stars,
@@ -227,7 +266,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
   const handleStarsFilterModeChange = useCallback((mode: 'exact' | 'inclusive') => {
     setStarsFilterMode(mode);
-    api.updateProjectSettings(projectId, {
+    saveViewSettings({
       sidebar_open: sidebarOpen,
       show_culled: showCulledOnly,
       min_stars: minStars,
@@ -240,7 +279,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
   const handleViewModeChange = useCallback((mode: 'grid' | 'by-date') => {
     setViewMode(mode);
-    api.updateProjectSettings(projectId, {
+    saveViewSettings({
       sidebar_open: sidebarOpen,
       show_culled: showCulledOnly,
       min_stars: minStars,
@@ -253,7 +292,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
   const handleSelectedTagsChange = useCallback((tags: Set<string>) => {
     setSelectedTags(tags);
-    api.updateProjectSettings(projectId, {
+    saveViewSettings({
       sidebar_open: sidebarOpen,
       show_culled: showCulledOnly,
       min_stars: minStars,
@@ -264,7 +303,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
   const handleSelectedColorsChange = useCallback((colors: Set<number>) => {
     setSelectedColors(colors);
-    api.updateProjectSettings(projectId, {
+    saveViewSettings({
       sidebar_open: sidebarOpen,
       show_culled: showCulledOnly,
       min_stars: minStars,
@@ -282,7 +321,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         e.preventDefault();
         setShowCulledOnly((v) => {
           const next = !v;
-          api.updateProjectSettings(projectId, { sidebar_open: sidebarOpen, show_culled: next });
+          saveViewSettings({ sidebar_open: sidebarOpen, show_culled: next });
           return next;
         });
       }
@@ -292,7 +331,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
       }
       if (matchesKey(e, kb['project.import'])) {
         e.preventDefault();
-        setShowImport(true);
+        if (!readOnlyRef.current) setShowImport(true);
       }
     }
     document.addEventListener('keydown', onKey);
@@ -318,11 +357,11 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
   // Auto-show import when project has no photos (only once per mount)
   useEffect(() => {
-    if (!photosState.loading && !photosState.error && photos && photos.length === 0 && !autoRedirectedToImport.current) {
+    if (access?.access === 'open' && !photosState.loading && !photosState.error && photos && photos.length === 0 && !autoRedirectedToImport.current) {
       autoRedirectedToImport.current = true;
       setShowImport(true);
     }
-  }, [photosState.loading, photosState.error, photos]);
+  }, [access, photosState.loading, photosState.error, photos]);
 
   // Optimistic overrides: merged on top of the DB-loaded photos array so that
   // edits made in PhotoDetailView are reflected immediately when navigating back.
@@ -564,6 +603,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
           }}
         onPhotoChanged={handlePhotoChanged}
         onCoverPhotoChange={onCoverPhotoChange}
+        readOnly={readOnly}
       />
     );
   }
@@ -575,9 +615,13 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         onBack={onBack}
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
-        onImport={() => setShowImport(true)}
-        onBackup={() => openBackupDetail(projectId, projectName)}
+        onImport={readOnly ? undefined : () => setShowImport(true)}
+        onBackup={readOnly ? undefined : () => openBackupDetail(projectId, projectName)}
       />
+
+      {access?.access === 'read_only' && (
+        <ProjectLockBanner holder={access.holder} onTakeControl={handleTakeControl} />
+      )}
 
       <div ref={setScrollEl} style={gridScrollStyles}>
         {loading && <div style={feedbackStyles}>{t('projectDetail.loading')}</div>}
@@ -646,8 +690,8 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
                         cache={thumbnailCache}
                         onClick={() => setSelectedPhotoId(photo.id)}
                         onRevealInFolder={canRevealInFolder ? () => handleRevealInFolder(photo.id) : undefined}
-                        onTrash={showTrash ? undefined : () => { setTrashError(null); setPendingTrash(photo); }}
-                        onRestore={showTrash ? () => handleRestore(photo.id) : undefined}
+                        onTrash={showTrash || readOnly ? undefined : () => { setTrashError(null); setPendingTrash(photo); }}
+                        onRestore={showTrash && !readOnly ? () => handleRestore(photo.id) : undefined}
                       />
                     );
                   })}

@@ -161,6 +161,36 @@ pub struct ProjectDashboard {
     pub archived: bool,
     /// UUID of the device where this project's database lives
     pub device_uuid: String,
+    /// Otra instalación tiene el proyecto (spec `project-lock`); `None` si está
+    /// libre o lo tiene esta.
+    #[serde(default)]
+    pub locked_by: Option<ProjectLockHolder>,
+}
+
+/// Quién tiene un proyecto según su candado, como lo ve el frontend.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectLockHolder {
+    pub name: String,
+    /// Inicio de su sesión (RFC 3339).
+    pub since: String,
+    /// Dejó cambios que no llegaron al disco.
+    pub pending: bool,
+}
+
+impl From<crate::domain::lock::ProjectLock> for ProjectLockHolder {
+    fn from(l: crate::domain::lock::ProjectLock) -> Self {
+        Self { name: l.install_name, since: l.since, pending: l.pending }
+    }
+}
+
+/// Cómo se abrió la vista de un proyecto.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "access", rename_all = "snake_case")]
+pub enum ProjectAccess {
+    /// Se trabaja con normalidad.
+    Open,
+    /// Lo tiene otra instalación: solo lectura.
+    ReadOnly { holder: ProjectLockHolder },
 }
 
 /// Entrada de la cola de respaldo persistida (para reanudar al arrancar).
@@ -246,6 +276,14 @@ pub struct AppSettings {
     /// nuevos. Cada proyecto guarda el suyo (ver `ProjectDatabase::delivery_mode`).
     #[serde(default)]
     pub default_delivery_mode: DeliveryMode,
+}
+
+/// Identidad de esta instalación de Lumik (spec `project-lock`): aparece en el
+/// candado de los proyectos en los que trabaja.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstallIdentity {
+    pub id: String,
+    pub name: String,
 }
 
 fn default_true() -> bool {

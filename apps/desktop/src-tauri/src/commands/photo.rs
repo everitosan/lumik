@@ -150,7 +150,8 @@ pub fn save_photo_rotation(
 ) -> AppResult<()> {
     let t_total = std::time::Instant::now();
 
-    let project_db = state.project_db(&project_id)?;
+    let session = state.write_session(&project_id)?;
+    let project_db = session.db()?;
 
     // Parte sincrónica (validar, persistir rotación, rotar thumbnail) en el use case.
     let files_rel = RotatePhoto {
@@ -216,7 +217,8 @@ pub fn save_photo_rating(
     color_label: Option<String>,
     tags: Option<String>,
 ) -> AppResult<()> {
-    let project_db = state.project_db(&project_id)?;
+    let session = state.write_session(&project_id)?;
+    let project_db = session.db()?;
     let mount = project_db.mount_point.clone();
 
     // El ajuste finder_tags_sidecar decide si se tocan los sidecars.
@@ -275,7 +277,8 @@ pub fn reveal_photo(
 /// Mueve una foto a la papelera (borrado lógico): la aparta en `_trash/` con su exportado.
 #[tauri::command]
 pub fn trash_photo(state: State<AppState>, project_id: String, photo_id: String) -> AppResult<()> {
-    let project_db = state.project_db(&project_id)?;
+    let session = state.write_session(&project_id)?;
+    let project_db = session.db()?;
     TrashPhoto {
         photos: project_db.as_ref(),
         files: state.file_store.as_ref(),
@@ -291,7 +294,8 @@ pub fn trash_photo(state: State<AppState>, project_id: String, photo_id: String)
 /// Restaura una foto de la papelera a `_media/` o `_culled/` (y su exportado a `_exported/`).
 #[tauri::command]
 pub fn restore_photo(state: State<AppState>, project_id: String, photo_id: String) -> AppResult<()> {
-    let project_db = state.project_db(&project_id)?;
+    let session = state.write_session(&project_id)?;
+    let project_db = session.db()?;
     RestorePhoto {
         photos: project_db.as_ref(),
         files: state.file_store.as_ref(),
@@ -311,7 +315,8 @@ pub fn save_photo_culled(
     project_id: String,
     culled: bool,
 ) -> AppResult<()> {
-    let project_db = state.project_db(&project_id)?;
+    let session = state.write_session(&project_id)?;
+    let project_db = session.db()?;
     CullPhoto {
         photos: project_db.as_ref(),
         files: state.file_store.as_ref(),
@@ -356,7 +361,8 @@ pub fn set_project_cover_photo(
     project_id: String,
     photo_id: Option<String>,
 ) -> AppResult<()> {
-    let project_db = state.project_db(&project_id)?;
+    let session = state.write_session(&project_id)?;
+    let project_db = session.db()?;
     let path = photo_id.map(|id| format!(".thumbs/{}.jpg", id));
     Ok(project_db.set_cover_photo(path.as_deref())?)
 }
@@ -376,7 +382,8 @@ pub fn update_project_settings(
     project_id: String,
     settings: ProjectSettings,
 ) -> AppResult<()> {
-    let project_db = state.project_db(&project_id)?;
+    let session = state.write_session(&project_id)?;
+    let project_db = session.db()?;
     Ok(project_db.update_project_settings(&settings)?)
 }
 
@@ -385,7 +392,8 @@ pub fn update_project_settings(
 /// before the orientation-aware thumbnail pipeline was in place.
 #[tauri::command]
 pub fn regenerate_project_thumbnails(state: State<AppState>, project_id: String) -> AppResult<u32> {
-    let project_db = state.project_db(&project_id)?;
+    let session = state.write_session(&project_id)?;
+    let project_db = session.db()?;
     let photos = project_db.get_project_photos()?;
 
     // Delete existing thumbnails (both .jpg and legacy .webp) so they get recreated

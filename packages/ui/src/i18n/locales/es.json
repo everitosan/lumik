@@ -21,6 +21,7 @@
         "delivered": "Entregado"
       },
       "archived": "Archivado",
+      "lockedBy": "En {{name}}",
       "menu": {
         "label": "Opciones del proyecto",
         "openFolder": "Abrir carpeta",
