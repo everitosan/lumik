@@ -1,9 +1,15 @@
 use super::models::*;
 use super::{GlobalDatabase, ProjectDatabase, DbResult};
+use crate::domain::delivery::DeliveryMode;
 use crate::domain::project::DashboardSort;
 use chrono::Utc;
 use rusqlite::params;
+use std::collections::HashSet;
 use uuid::Uuid;
+
+/// Rutas por consulta en `get_registered_dng_paths` (SQLite admite 999 parámetros
+/// en las versiones antiguas).
+pub(crate) const REGISTERED_PATHS_CHUNK: usize = 500;
 
 // ============================================================================
 // GLOBAL DATABASE QUERIES
@@ -208,10 +214,16 @@ impl GlobalDatabase {
             .map(|v| v == "true")
             .unwrap_or(true);
 
+        let default_delivery_mode = self
+            .get_setting("default_delivery_mode")?
+            .map(|v| DeliveryMode::parse(&v))
+            .unwrap_or_default();
+
         Ok(AppSettings {
             embed_metadata_on_import: embed_metadata,
             rename_on_import,
             finder_tags_sidecar,
+            default_delivery_mode,
         })
     }
 
@@ -228,6 +240,7 @@ impl GlobalDatabase {
             "finder_tags_sidecar",
             if settings.finder_tags_sidecar { "true" } else { "false" },
         )?;
+        self.set_setting("default_delivery_mode", settings.default_delivery_mode.as_str())?;
         self.get_app_settings()
     }
 
@@ -342,6 +355,7 @@ impl GlobalDatabase {
             ("photo_detail.stars_4",      "4",          "4 estrellas"),
             ("photo_detail.stars_5",      "5",          "5 estrellas"),
             ("photo_detail.add_tag",      "t",          "Agregar etiqueta"),
+            ("photo_detail.toggle_raw",   "s",          "Ver el RAW o el JPG de un par"),
             ("project.show_culled",        "Ctrl+c",     "Mostrar solo fotos aprobadas"),
             ("projects.new_project",        "n",          "Crear nuevo proyecto"),
             ("projects.focus_search",       "s",          "Enfocar barra de búsqueda"),
@@ -443,6 +457,25 @@ impl ProjectDatabase {
             },
         );
         Ok(result.unwrap_or_default())
+    }
+
+    /// Opción de entrega al aprobar del proyecto. Va aparte de `ProjectSettings`
+    /// para que guardar los filtros de la vista no la toque.
+    pub fn delivery_mode(&self) -> DbResult<DeliveryMode> {
+        let value: String = self.conn().query_row(
+            "SELECT delivery_mode FROM project_settings WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(DeliveryMode::parse(&value))
+    }
+
+    pub fn set_delivery_mode(&self, mode: DeliveryMode) -> DbResult<()> {
+        self.conn().execute(
+            "UPDATE project_settings SET delivery_mode = ?1 WHERE id = 1",
+            [mode.as_str()],
+        )?;
+        Ok(())
     }
 
     pub fn update_project_settings(&self, settings: &ProjectSettings) -> DbResult<()> {
@@ -656,12 +689,13 @@ impl ProjectDatabase {
         deleted: bool,
         dng_path: &str,
         jpg_path: Option<&str>,
+        camera_jpg_path: Option<&str>,
     ) -> DbResult<()> {
         let conn = self.conn();
         let tx = conn.unchecked_transaction()?;
         tx.execute(
-            "UPDATE photo SET deleted = ?1, dng_path = ?2, jpg_path = ?3 WHERE id = ?4",
-            params![deleted as i32, dng_path, jpg_path, id],
+            "UPDATE photo SET deleted = ?1, dng_path = ?2, jpg_path = ?3, camera_jpg_path = ?4 WHERE id = ?5",
+            params![deleted as i32, dng_path, jpg_path, camera_jpg_path, id],
         )?;
         if deleted {
             tx.execute(
@@ -682,7 +716,83 @@ impl ProjectDatabase {
         Ok(())
     }
 
+    /// De las rutas dadas (relativas al proyecto), las que ya tienen una foto
+    /// registrada. Consulta en tandas para no pasar del límite de parámetros de SQLite.
+    pub fn get_registered_dng_paths(&self, dng_paths: &[String]) -> DbResult<HashSet<String>> {
+        let conn = self.conn();
+        let mut found = HashSet::new();
+        for chunk in dng_paths.chunks(REGISTERED_PATHS_CHUNK) {
+            let placeholders = vec!["?"; chunk.len()].join(", ");
+            let sql = format!("SELECT dng_path FROM photo WHERE dng_path IN ({placeholders})");
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map(rusqlite::params_from_iter(chunk), |row| row.get::<_, String>(0))?;
+            for path in rows {
+                found.insert(path?);
+            }
+        }
+        Ok(found)
+    }
+
     /// Insert all photos in a single transaction. Returns them in the same order as the input.
+    /// Guarda la aprobación con las rutas y la entrega del JPG de cámara.
+    pub fn update_photo_cull(&self, id: &str, u: &crate::application::ports::CullUpdate) -> DbResult<()> {
+        self.conn().execute(
+            "UPDATE photo SET culled = ?2, dng_path = ?3, camera_jpg_path = ?4, jpg_path = ?5,
+                    workflow_status = ?6, delivered_size = ?7, delivered_sha256 = ?8, delivery_kind = ?9
+             WHERE id = ?1",
+            params![
+                id,
+                u.culled as i32,
+                u.dng_path,
+                u.camera_jpg_path,
+                u.jpg_path,
+                u.workflow_status,
+                u.delivered.as_ref().map(|f| f.size as i64),
+                u.delivered.as_ref().map(|f| f.sha256.clone()),
+                u.delivery_kind,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Fotos aprobadas fuera de la papelera.
+    pub fn get_approved_photos(&self) -> DbResult<Vec<Photo>> {
+        let conn = self.conn();
+        let sql = format!("SELECT {PHOTO_COLUMNS} FROM photo WHERE deleted = 0 AND culled = 1");
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map([], photo_from_row)?.collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Fotos fuera de la papelera que no forman par (spec `photo-pairs`).
+    pub fn get_loose_photos(&self) -> DbResult<Vec<Photo>> {
+        let conn = self.conn();
+        let sql = format!("SELECT {PHOTO_COLUMNS} FROM photo WHERE deleted = 0 AND camera_jpg_path IS NULL");
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map([], photo_from_row)?.collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Une a una foto suelta su otra mitad (ver `PhotoRepository::join_partner`).
+    pub fn join_photo_partner(&self, id: &str, rel_path: &str, raw_format: Option<&str>) -> DbResult<()> {
+        let conn = self.conn();
+        let changed = match raw_format {
+            None => conn.execute(
+                "UPDATE photo SET camera_jpg_path = ?2 WHERE id = ?1 AND camera_jpg_path IS NULL",
+                params![id, rel_path],
+            )?,
+            Some(format) => conn.execute(
+                "UPDATE photo SET camera_jpg_path = dng_path, dng_path = ?2, original_format = ?3
+                 WHERE id = ?1 AND camera_jpg_path IS NULL",
+                params![id, rel_path, format],
+            )?,
+        };
+        if changed == 0 {
+            return Err(super::DbError::InvalidValue(format!("la foto {} no está suelta", id)));
+        }
+        Ok(())
+    }
+
     pub fn create_photos_batch(&self, photos: &[CreatePhoto]) -> DbResult<Vec<Photo>> {
         if photos.is_empty() {
             return Ok(Vec::new());
@@ -704,9 +814,10 @@ impl ProjectDatabase {
                         original_format, import_date, capture_date,
                         width, height, file_size_bytes,
                         iso, aperture, shutter_speed, exposure_compensation,
-                        focal_length, lens_model, rotation
+                        focal_length, lens_model, rotation,
+                        camera_jpg_path, source_stem
                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-                              ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+                              ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
                     params![
                         id,
                         photo.project_id,
@@ -726,6 +837,8 @@ impl ProjectDatabase {
                         photo.focal_length,
                         photo.lens_model,
                         photo.rotation,
+                        photo.camera_jpg_path,
+                        photo.source_stem,
                     ],
                 )?;
                 temp_ids.push(id);
@@ -756,7 +869,8 @@ const PHOTO_COLUMNS: &str = "id, project_id, dng_path, jpg_path, device_uuid, \
     workflow_status, backup_status, backup_url, backup_date, backup_retries, \
     deleted, stars, color_label, tags, capture_date, width, height, \
     file_size_bytes, iso, aperture, shutter_speed, exposure_compensation, \
-    focal_length, lens_model, rotation";
+    focal_length, lens_model, rotation, camera_jpg_path, source_stem, \
+    delivered_size, delivered_sha256, delivery_kind";
 
 /// Mapea una fila de `photo` (seleccionada con `PHOTO_COLUMNS`) a `Photo`.
 /// Fuente única para `get_photo` y `get_project_photos`.
@@ -792,6 +906,11 @@ fn photo_from_row(row: &rusqlite::Row) -> rusqlite::Result<Photo> {
         focal_length: row.get(27)?,
         lens_model: row.get(28)?,
         rotation: row.get::<_, i32>(29).unwrap_or(0),
+        camera_jpg_path: row.get(30)?,
+        source_stem: row.get(31)?,
+        delivered_size: row.get(32)?,
+        delivered_sha256: row.get(33)?,
+        delivery_kind: row.get(34)?,
     })
 }
 

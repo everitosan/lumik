@@ -5,13 +5,17 @@ use super::{relocate_project_folder, AppState};
 use crate::application::error::AppResult;
 use crate::application::import_settings::{resolve_import_settings, ImportSessionSettings};
 use crate::application::ports::ProgressReporter;
-use crate::application::use_cases::import_photos::{ImportParams, ImportPhotos};
+use crate::application::use_cases::import_photos::{
+    existing_shots, import_breakdown, ImportBreakdown, ImportOutcome, ImportParams, ImportPhotos,
+};
+use crate::db::ProjectDatabase;
 use crate::domain::project::{image_description, ProjectFolder};
 use crate::import::{ImportLogEntry, ImportLogKind, ImportPhase, ImportProgress, ImportResult};
 use crate::infrastructure::import_pipeline::{is_video_file, StdImportPipeline};
 use log::{info, warn};
 use serde::Deserialize;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -84,6 +88,8 @@ pub async fn start_import(
         images: state.image_processor.as_ref(),
         pipeline: &StdImportPipeline,
         reporter: &reporter,
+        finder_tags: global_settings.finder_tags_sidecar.then_some(state.finder_tags.as_ref()),
+        files: state.file_store.as_ref(),
     }
     .execute(&ImportParams {
         session_id: request.session_id.clone(),
@@ -97,8 +103,117 @@ pub async fn start_import(
         metadata: settings.metadata,
         image_description,
         rename_on_import: settings.rename_on_import,
+        delivery: project_db.delivery_mode()?,
     });
 
+    Ok(finish_import(
+        &state,
+        &reporter,
+        project_db,
+        &request.session_id,
+        &request.project_id,
+        &request.project_name,
+        total_files,
+        outcome,
+    ))
+}
+
+/// Desglose por tomas de una selección, para el paso de origen y el resumen
+/// del import: pares, RAW y JPG sueltos, y cuántos se unirán a fotos del proyecto.
+#[tauri::command]
+pub async fn analyze_import_selection(
+    state: State<'_, AppState>,
+    project_id: String,
+    source_files: Vec<String>,
+) -> AppResult<ImportBreakdown> {
+    let project_db = state.project_db(&project_id)?;
+    let photo_paths: Vec<PathBuf> =
+        source_files.iter().map(PathBuf::from).filter(|p| !is_video_file(p)).collect();
+    let dates = state.metadata.capture_dates(&photo_paths);
+    let existing = existing_shots(project_db.get_loose_photos()?, &project_db.project_dir);
+    Ok(import_breakdown(&photo_paths, &dates, &existing))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RetryRegisterRequest {
+    pub session_id: String,
+    pub project_id: String,
+    pub project_name: String,
+    /// Nombres en `_media/` de las fotos cuyo registro falló.
+    pub file_names: Vec<String>,
+}
+
+/// Reintenta solo el registro de fotos que ya están en `_media/` (fallaron con
+/// `register_failed`): no copia, no borra y no registra dos veces. Como
+/// `start_import`, devuelve `Err` solo para las precondiciones.
+#[tauri::command]
+pub async fn retry_import_register(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: RetryRegisterRequest,
+) -> AppResult<ImportResult> {
+    info!(
+        "retry_import_register called: session={}, files={}, project={}",
+        request.session_id,
+        request.file_names.len(),
+        request.project_name
+    );
+
+    let reporter = crate::infrastructure::progress::TauriProgressReporter { app };
+    let project_db = state.project_db(&request.project_id)?;
+
+    let params = ImportParams {
+        session_id: request.session_id.clone(),
+        photo_paths: Vec::new(),
+        video_paths: Vec::new(),
+        project_id: request.project_id.clone(),
+        project_name: request.project_name.clone(),
+        project_dir: project_db.project_dir.clone(),
+        dest_folder: project_db.project_dir.join("_media"),
+        video_dest_folder: project_db.project_dir.join("_video"),
+        metadata: None,
+        image_description: None,
+        rename_on_import: false,
+        delivery: project_db.delivery_mode()?,
+    };
+    let outcome = ImportPhotos {
+        photos: project_db.as_ref(),
+        metadata: state.metadata.as_ref(),
+        images: state.image_processor.as_ref(),
+        pipeline: &StdImportPipeline,
+        reporter: &reporter,
+        // El registro de lo que ya está en `_media/` no une archivos.
+        finder_tags: None,
+        files: state.file_store.as_ref(),
+    }
+    .register_existing(state.file_store.as_ref(), &params, &request.file_names);
+
+    Ok(finish_import(
+        &state,
+        &reporter,
+        project_db,
+        &request.session_id,
+        &request.project_id,
+        &request.project_name,
+        request.file_names.len(),
+        outcome,
+    ))
+}
+
+/// Cierre común de `start_import` y `retry_import_register`: si hubo fotos
+/// importadas y el proyecto no tiene fecha, la infiere de la foto más antigua y
+/// mueve la carpeta; después emite `complete` y `done` y arma el resultado.
+#[allow(clippy::too_many_arguments)]
+fn finish_import(
+    state: &AppState,
+    reporter: &dyn ProgressReporter,
+    project_db: Arc<ProjectDatabase>,
+    session_id: &str,
+    project_id: &str,
+    project_name: &str,
+    total_files: usize,
+    outcome: ImportOutcome,
+) -> ImportResult {
     let successful = outcome.successful;
 
     // If session_date was not provided, infer it from the oldest imported photo,
@@ -115,7 +230,7 @@ pub async fn start_import(
                 &year,
                 &month,
                 &day,
-                &request.project_name,
+                project_name,
             );
             let date_str = format!("{}-{}-{}", year, month, day);
             Some((new_dir, date_str))
@@ -127,21 +242,21 @@ pub async fn start_import(
             drop(project_db);
 
             let db = if needs_move {
-                match relocate_project_folder(&state, &request.project_id, &new_project_dir) {
+                match relocate_project_folder(state, project_id, &new_project_dir) {
                     Ok(db) => {
                         reporter.log(
-                            ImportLogEntry::new(&request.session_id, ImportLogKind::FolderMoved)
+                            ImportLogEntry::new(session_id, ImportLogKind::FolderMoved)
                                 .detail(new_project_dir.display().to_string()),
                         );
                         Some(db)
                     }
                     Err(e) => {
                         warn!("Auto-rename after import failed: {}", e);
-                        state.project_db(&request.project_id).ok()
+                        state.project_db(project_id).ok()
                     }
                 }
             } else {
-                state.project_db(&request.project_id).ok()
+                state.project_db(project_id).ok()
             };
 
             if let Some(db) = db {
@@ -153,7 +268,7 @@ pub async fn start_import(
     }
 
     reporter.progress(ImportProgress {
-        session_id: request.session_id.clone(),
+        session_id: session_id.to_string(),
         phase: ImportPhase::Complete,
         file_name: String::new(),
         file_index: 0,
@@ -165,13 +280,14 @@ pub async fn start_import(
     });
 
     let result = ImportResult {
-        session_id: request.session_id.clone(),
+        session_id: session_id.to_string(),
         total_files,
         successful,
         failed: outcome.failed_files.len(),
         failed_files: outcome.failed_files,
         skipped_files: outcome.skipped_files,
         videos_copied: outcome.videos_copied,
+        joined: outcome.joined,
         fatal: outcome.fatal,
     };
 
@@ -185,6 +301,6 @@ pub async fn start_import(
             result.successful, result.failed, result.skipped_files.len()
         ),
     }
-    reporter.log(ImportLogEntry::new(&request.session_id, ImportLogKind::Done).count(result.successful));
-    Ok(result)
+    reporter.log(ImportLogEntry::new(session_id, ImportLogKind::Done).count(result.successful));
+    result
 }

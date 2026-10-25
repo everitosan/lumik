@@ -1,6 +1,7 @@
 //! Casos de uso: orquestan los puertos para ejecutar una operación del negocio.
 //! Sin acceso directo a SQLite/exiftool/fs; testeables con dobles de los puertos.
 
+pub mod change_delivery_mode;
 pub mod cull_photo;
 pub mod eject_device;
 pub mod ensure_catalog_synced;

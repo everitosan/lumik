@@ -103,6 +103,32 @@ export interface AppSettings {
   embed_metadata_on_import: boolean;
   rename_on_import: boolean;
   finder_tags_sidecar: boolean;
+  /** Valor de fábrica de la entrega al aprobar para proyectos nuevos */
+  default_delivery_mode: DeliveryMode;
+}
+
+/**
+ * "Al aprobar, entregar directamente": nada, el JPG de los pares RAW+JPG, o
+ * todo JPG de cámara (pares y JPG sueltos). Cada proyecto guarda el suyo.
+ */
+export type DeliveryMode = 'none' | 'pairs' | 'all_camera_jpg';
+
+export const DELIVERY_MODES: DeliveryMode[] = ['none', 'pairs', 'all_camera_jpg'];
+
+/** Qué pasaría con las fotos aprobadas al cambiar la entrega (para el aviso) */
+export interface DeliveryPlan {
+  deliver: number;
+  return_back: number;
+  edits_kept: number;
+  in_cloud: number;
+}
+
+export interface DeliveryChangeOutcome {
+  delivered: number;
+  returned: number;
+  edits_kept: number;
+  /** [id de foto, motivo] */
+  failed: [string, string][];
 }
 
 // Orden del dashboard elegido por el usuario (BD global)
@@ -151,6 +177,15 @@ export interface ImportRequest {
   project_name: string;
   /** Sin ajustes, el backend usa la configuración global. */
   settings?: ImportSessionSettings;
+}
+
+/** Reintento del registro de fotos que ya están en `_media/` (fallaron con `register_failed`). */
+export interface RetryRegisterRequest {
+  session_id: string;
+  project_id: string;
+  project_name: string;
+  /** Nombres en `_media/` (`FailedFile.name`). */
+  file_names: string[];
 }
 
 export type ImportPhase =
@@ -240,7 +275,21 @@ export interface ImportResult {
   failed_files: FailedFile[];
   skipped_files: SkippedFile[];
   videos_copied: number;
+  /** Archivos que se unieron a una foto que ya estaba en el proyecto (la otra mitad de un par) */
+  joined: number;
   fatal: FatalError | null;
+}
+
+/** Desglose por tomas de una selección (un par RAW+JPG cuenta como una foto) */
+export interface ImportBreakdown {
+  /** Fotos nuevas: pares + sueltos */
+  photos: number;
+  pairs: number;
+  raw_only: number;
+  jpg_only: number;
+  other: number;
+  /** Archivos que se unirán a una foto que ya está en el proyecto */
+  joins: number;
 }
 
 export type ImportLogKind =
@@ -249,6 +298,7 @@ export type ImportLogKind =
   | 'file_failed'
   | 'file_skipped'
   | 'photos_registered'
+  | 'photos_joined'
   | 'thumbnails'
   | 'thumbnail'
   | 'folder_moved'
@@ -299,6 +349,13 @@ export interface Photo {
   focal_length: string | null;
   lens_model: string | null;
   rotation: number;
+  /** JPG de cámara de un par RAW+JPG (`dng_path` es el RAW); null si no es par */
+  camera_jpg_path: string | null;
+  source_stem: string | null;
+  /** Huella del JPG entregado a _exported/ al aprobar */
+  delivered_size: number | null;
+  delivered_sha256: string | null;
+  delivery_kind: 'moved' | 'copied' | null;
 }
 
 // Sesión de la cuenta de respaldo (server de respaldo — Fase 4)

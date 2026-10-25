@@ -11,6 +11,9 @@ inverso.
 Igual que en el [culling](flujo-culling.md), los archivos se mueven **antes** del `UPDATE`, y si
 algo falla se devuelven a su sitio.
 
+Un par RAW+JPG va a la papelera y vuelve **con sus dos archivos**: el JPG de cámara se aparta en
+`_trash/` junto al RAW (o, si ya se entregó, viaja como exportado a `_trash/_exported/`).
+
 > La papelera no se propaga todavía al catálogo del servidor: el portal web y el iPad siguen
 > mostrando la foto. Las copias ya respaldadas se conservan.
 
@@ -72,12 +75,12 @@ flowchart TD
     get_photo["PhotoRepository::get(photo_id)"]
     noop_q{"¿Ya está en el<br/>estado pedido?"}
     noop_ok["No-op<br/>return Ok()"]
-    paths["Calcular destinos (domain::paths)<br/>Papelera: original → _trash/ · exportado → _trash/_exported/<br/>Restaurar: original → _culled/ o _media/ (según culled)<br/>· exportado → _exported/"]
+    paths["Calcular destinos (domain::paths)<br/>Papelera: original → _trash/ · exportado → _trash/_exported/<br/>· JPG de cámara de un par → _trash/ (si no es el exportado)<br/>Restaurar: original y JPG de cámara → _culled/ o _media/ (según culled)<br/>· exportado → _exported/"]
     free_q{"¿Algún destino<br/>ya existe?"}
     conflict["Error 'Ya existe un archivo…'<br/>Nada se mueve"]
-    move["Mover original (obligatorio)<br/>+ .xmp y ._nombre (mejor esfuerzo)<br/>Mover exportado (obligatorio) + ._nombre"]
+    move["Mover original (obligatorio)<br/>+ .xmp y ._nombre (mejor esfuerzo)<br/>Mover exportado y JPG de cámara (obligatorios) + ._nombre"]
     move_q{"¿Error al mover<br/>algo obligatorio?"}
-    db_update["UPDATE photo SET deleted, dng_path, jpg_path<br/>Al mover a la papelera, en la misma transacción:<br/>UPDATE project SET cover_photo_path = NULL<br/>si era la portada"]
+    db_update["UPDATE photo SET deleted, dng_path, jpg_path, camera_jpg_path<br/>Al mover a la papelera, en la misma transacción:<br/>UPDATE project SET cover_photo_path = NULL<br/>si era la portada"]
     db_q{"¿Error<br/>en BD?"}
     rollback["ROLLBACK<br/>deshacer los movimientos<br/>en orden inverso"]
     ok["return Ok() → IPC response"]

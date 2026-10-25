@@ -287,6 +287,41 @@ mod tests {
     }
 
     #[test]
+    fn delivery_mode_defaults_and_is_independent_per_project() {
+        use crate::domain::delivery::DeliveryMode;
+        let dir = std::env::temp_dir().join(format!("lumik_delivery_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let global = GlobalDatabase::new(dir.join("lumik.db")).unwrap();
+
+        // Instalación nueva: el valor de fábrica es no entregar.
+        let mut settings = global.get_app_settings().unwrap();
+        assert_eq!(settings.default_delivery_mode, DeliveryMode::None);
+
+        // El global persiste.
+        settings.default_delivery_mode = DeliveryMode::AllCameraJpg;
+        global.update_app_settings(&settings).unwrap();
+        assert_eq!(global.get_app_settings().unwrap().default_delivery_mode, DeliveryMode::AllCameraJpg);
+
+        // Un proyecto guarda su propio valor (create_project le copia el global).
+        let project = ProjectDatabase::create(
+            dir.join("p").join("project.db"), "p1", "Boda", "c", None, None, "", dir.clone(),
+        )
+        .unwrap();
+        assert_eq!(project.delivery_mode().unwrap(), DeliveryMode::None);
+        project.set_delivery_mode(DeliveryMode::Pairs).unwrap();
+
+        // Cambiar el global no toca el proyecto, ni guardar sus filtros de vista.
+        settings.default_delivery_mode = DeliveryMode::None;
+        global.update_app_settings(&settings).unwrap();
+        project.update_project_settings(&project.get_project_settings().unwrap()).unwrap();
+        assert_eq!(project.delivery_mode().unwrap(), DeliveryMode::Pairs);
+
+        drop(project);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn sidebar_sections_default_expanded_and_persist() {
         let dir = std::env::temp_dir().join(format!("lumik_sidebar_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -344,7 +379,29 @@ mod tests {
             focal_length: None,
             lens_model: None,
             rotation: 0,
+            ..Default::default()
         }
+    }
+
+    #[test]
+    fn registered_dng_paths_returns_only_inserted_paths_across_chunks() {
+        let (dir, db) = temp_project("registered_paths");
+        let n = crate::db::queries::REGISTERED_PATHS_CHUNK + 3;
+        let inserted: Vec<String> = (0..n).map(|i| format!("_media/IMG_{i:04}.cr2")).collect();
+        let creates: Vec<CreatePhoto> = inserted.iter().map(|p| new_photo(p)).collect();
+        db.create_photos_batch(&creates).unwrap();
+
+        let mut asked = inserted.clone();
+        asked.push("_media/NO_EXISTE.cr2".into());
+        let found = db.get_registered_dng_paths(&asked).unwrap();
+        assert_eq!(found.len(), n, "todas las insertadas, en más de una tanda");
+        assert!(found.contains("_media/IMG_0000.cr2"));
+        assert!(found.contains(&format!("_media/IMG_{:04}.cr2", n - 1)));
+        assert!(!found.contains("_media/NO_EXISTE.cr2"));
+        assert!(db.get_registered_dng_paths(&[]).unwrap().is_empty());
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -356,7 +413,7 @@ mod tests {
         let (a, b) = (&photos[0], &photos[1]);
         db.set_cover_photo(Some(&format!(".thumbs/{}.jpg", a.id))).unwrap();
 
-        db.set_photo_deleted(&a.id, true, "lumik/Boda/_trash/A.dng", Some("lumik/Boda/_trash/_exported/A.jpg"))
+        db.set_photo_deleted(&a.id, true, "lumik/Boda/_trash/A.dng", Some("lumik/Boda/_trash/_exported/A.jpg"), None)
             .unwrap();
 
         let listed: Vec<String> = db.get_project_photos().unwrap().into_iter().map(|p| p.id).collect();
@@ -373,7 +430,7 @@ mod tests {
         assert_eq!(db.get_project_trashed_photos().unwrap().len(), 1);
 
         // Restaurar: vuelve al listado; la portada no se recupera.
-        db.set_photo_deleted(&a.id, false, "lumik/Boda/_media/A.dng", None).unwrap();
+        db.set_photo_deleted(&a.id, false, "lumik/Boda/_media/A.dng", None, None).unwrap();
         assert_eq!(db.get_project_photos().unwrap().len(), 2);
         assert!(db.get_project_trashed_photos().unwrap().is_empty());
         assert_eq!(db.get_project_dashboard_entry().unwrap().unwrap().cover_photo_path, None);
@@ -391,7 +448,7 @@ mod tests {
         let cover = format!(".thumbs/{}.jpg", photos[0].id);
         db.set_cover_photo(Some(&cover)).unwrap();
 
-        db.set_photo_deleted(&photos[1].id, true, "lumik/Boda/_trash/B.dng", None).unwrap();
+        db.set_photo_deleted(&photos[1].id, true, "lumik/Boda/_trash/B.dng", None, None).unwrap();
 
         assert_eq!(db.get_project_dashboard_entry().unwrap().unwrap().cover_photo_path, Some(cover));
         drop(db);

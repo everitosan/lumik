@@ -18,6 +18,7 @@ async function openBackupLocation(projectId: string, homeUrl: string, provider: 
   }
 }
 import { ProjectBackupModal } from '../components/ProjectBackupModal';
+import { DeleteBackupModal } from '../components/DeleteBackupModal';
 
 const VALID_STATUS = ['imported', 'edited', 'delivered'] as const;
 
@@ -43,9 +44,11 @@ const yearOf = (p: CatalogProject) => dateOf(p).slice(0, 4) || '—';
 function ProjectCardWithCover({
   project,
   onClick,
+  onDeleteBackup,
 }: {
   project: CatalogProject;
   onClick: () => void;
+  onDeleteBackup?: () => void;
 }) {
   const { t } = useTranslation();
   const [cover, setCover] = useState<string | undefined>(undefined);
@@ -75,6 +78,7 @@ function ProjectCardWithCover({
       providers={providersOf(project)}
       onProviderOpen={(url, provider) => openBackupLocation(project.id, url, provider)}
       onClick={onClick}
+      onDeleteBackup={onDeleteBackup}
     />
   );
 }
@@ -84,13 +88,17 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<CatalogProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<CatalogProject | null>(null);
+  const [deleting, setDeleting] = useState<CatalogProject | null>(null);
 
-  useEffect(() => {
+  const load = () =>
     catalogApi
       .listProjects()
       .then(setProjects)
       .catch(() => setProjects([]))
       .finally(() => setLoading(false));
+
+  useEffect(() => {
+    load();
   }, []);
 
   // Agrupado por año: años DESC; dentro de cada año, ASC por fecha (como la desktop).
@@ -121,7 +129,13 @@ export default function Dashboard() {
             <h2 className="year-title">{year}</h2>
             <div className="projects-grid">
               {items.map((p) => (
-                <ProjectCardWithCover key={p.id} project={p} onClick={() => setActive(p)} />
+                <ProjectCardWithCover
+                  key={p.id}
+                  project={p}
+                  onClick={() => setActive(p)}
+                  // Solo proyectos con algo en la nube.
+                  onDeleteBackup={(p.backed_up ?? 0) > 0 ? () => setDeleting(p) : undefined}
+                />
               ))}
             </div>
           </section>
@@ -129,6 +143,16 @@ export default function Dashboard() {
       )}
 
       {active && <ProjectBackupModal project={active} onClose={() => setActive(null)} />}
+      {deleting && (
+        <DeleteBackupModal
+          project={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            setDeleting(null);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }

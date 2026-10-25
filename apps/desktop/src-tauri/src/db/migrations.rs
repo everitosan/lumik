@@ -34,8 +34,10 @@ pub(super) fn run_project_migrations(conn: &Connection, project_dir: Option<&Pat
     migrate_cover_column(conn)?;
     migrate_rotation_column(conn);
     migrate_project_backup_columns(conn);
+    migrate_pair_columns(conn)?;
     ensure_project_settings_row(conn)?;
     migrate_project_settings_columns(conn)?;
+    migrate_delivery_mode_column(conn)?;
     migrate_photo_paths_to_project_relative(conn, project_dir)?;
 
     Ok(())
@@ -146,6 +148,47 @@ fn migrate_rotation_column(conn: &Connection) {
         "ALTER TABLE photo ADD COLUMN rotation INTEGER NOT NULL DEFAULT 0",
         [],
     );
+}
+
+/// ¿Existe `column` en `table`? (Un SELECT de la columna falla si no existe.)
+fn has_column(conn: &Connection, table: &str, column: &str) -> bool {
+    conn.prepare(&format!("SELECT {column} FROM {table} LIMIT 0")).is_ok()
+}
+
+/// Agrega las columnas de pares RAW+JPG y de entrega del JPG de cámara a
+/// `photo` si faltan, y el índice para emparejar un archivo que llega después.
+fn migrate_pair_columns(conn: &Connection) -> DbResult<()> {
+    let columns = [
+        ("camera_jpg_path", "TEXT"),
+        ("source_stem", "TEXT"),
+        ("delivered_size", "INTEGER"),
+        ("delivered_sha256", "TEXT"),
+        ("delivery_kind", "TEXT CHECK(delivery_kind IN ('moved', 'copied'))"),
+    ];
+    for (name, ty) in &columns {
+        if !has_column(conn, "photo", name) {
+            conn.execute(&format!("ALTER TABLE photo ADD COLUMN {name} {ty}"), [])?;
+        }
+    }
+    // El índice vive aquí y no en el esquema: en una BD vieja el esquema corre
+    // antes de que existan las columnas.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_photo_source_stem ON photo(project_id, source_stem) WHERE deleted = 0",
+        [],
+    )?;
+    Ok(())
+}
+
+/// Agrega `project_settings.delivery_mode` (`'none'` en proyectos existentes).
+fn migrate_delivery_mode_column(conn: &Connection) -> DbResult<()> {
+    if !has_column(conn, "project_settings", "delivery_mode") {
+        conn.execute(
+            "ALTER TABLE project_settings ADD COLUMN delivery_mode TEXT NOT NULL DEFAULT 'none' \
+             CHECK(delivery_mode IN ('none', 'pairs', 'all_camera_jpg'))",
+            [],
+        )?;
+    }
+    Ok(())
 }
 
 /// Garantiza la única fila de `project_settings` (id = 1).
@@ -261,6 +304,16 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM project_settings WHERE id=1", [], |r| r.get(0))
             .unwrap();
         assert_eq!(has_row, 1);
+
+        // Pares RAW+JPG y entrega: columnas nuevas, y los proyectos viejos no entregan.
+        let photo_cols = column_names(&conn, "photo");
+        for c in ["camera_jpg_path", "source_stem", "delivered_size", "delivered_sha256", "delivery_kind"] {
+            assert!(photo_cols.contains(&c.to_string()), "falta columna {c}");
+        }
+        let mode: String = conn
+            .query_row("SELECT delivery_mode FROM project_settings WHERE id=1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(mode, "none");
     }
 
     #[test]

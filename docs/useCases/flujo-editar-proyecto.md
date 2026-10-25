@@ -7,6 +7,11 @@ la descripción. Siempre se actualizan `project.db` y, si cambian el nombre o la
 carpeta del proyecto. Dos casillas opcionales extienden el cambio a las fotos ya importadas:
 renombrar los archivos y reescribir la descripción embebida.
 
+El mismo formulario cambia la opción **"Al aprobar, entregar directamente"** del proyecto. Se guarda
+aparte (`set_project_delivery_mode`, no mueve la carpeta) y antes que lo demás; si afecta a fotos
+ya aprobadas, un aviso pregunta si se aplica también a ellas (ver
+[flujo-culling.md §4](flujo-culling.md#4-entrega-del-jpg-de-cámara)).
+
 ## Vista general
 
 ```mermaid
@@ -37,26 +42,38 @@ flowchart LR
 ```mermaid
 flowchart TD
     open(["Menú del proyecto → Editar"])
-    load["Precargar campos<br/>• nombre<br/>• fecha = session_date ?? fecha de created_at (la de la carpeta)<br/>• descripción (get_project)"]
+    load["Precargar campos<br/>• nombre<br/>• fecha = session_date ?? fecha de created_at (la de la carpeta)<br/>• descripción (get_project)<br/>• entrega al aprobar (get_project_delivery_mode)"]
     edit["El usuario edita<br/>nombre y fecha obligatorios"]
     chk{"¿Qué cambió?"}
     cb1["Casilla 'Renombrar también los archivos'<br/>(si cambió el nombre y hay fotos)<br/>+ aviso de editores externos"]
     cb2["Casilla 'Actualizar los metadatos'<br/>(si cambió la descripción o el año y hay fotos)"]
     save["Guardar → editProject(request)<br/>escucha 'edit-project-progress'"]
+    delivery{"¿Cambió la entrega?"}
+    plan["plan_project_delivery_change<br/>¿afecta a fotos aprobadas?"]
+    notice["Aviso: entregar / regresar N JPG,<br/>ediciones que se quedan, en la nube<br/>Aplicar también · Solo la opción · Cancelar"]
+    setmode["set_project_delivery_mode<br/>{ apply_to_approved }"]
     next(["continúa en §2"])
 
     open --> load --> edit --> chk
-    chk -->|nombre| cb1 --> save
-    chk -->|descripción / año| cb2 --> save
-    chk -->|solo fecha / nada más| save
+    chk -->|nombre| cb1 --> delivery
+    chk -->|descripción / año| cb2 --> delivery
+    chk -->|solo fecha / nada más| delivery
+    delivery -->|Sí| plan
+    plan -->|Sí| notice --> setmode
+    plan -->|No| setmode
+    notice -.->|Cancelar: no guarda nada| open
+    setmode --> save
+    delivery -->|No| save
     save --> next
 
     classDef term fill:#d5e8d4,stroke:#82b366,color:#102a12
     classDef ui fill:#dae8fc,stroke:#6c8ebf,color:#10243d
     classDef dec fill:#fff2cc,stroke:#d6b656,color:#3d3100
+    classDef ipc fill:#c8e6c9,stroke:#388e3c,color:#10281a
     class open,next term
-    class load,edit,cb1,cb2,save ui
-    class chk dec
+    class load,edit,cb1,cb2,save,notice ui
+    class plan,setmode ipc
+    class chk,delivery dec
 ```
 
 ## 2. Backend (`edit_project`)

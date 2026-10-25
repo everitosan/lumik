@@ -73,7 +73,9 @@ src-tauri/src/
 
   domain/                           # núcleo puro (sin SQLite/exiftool/Tauri/fs), 100% testeable
     photo.rs                        #   VOs: Rotation, Stars, normalize_tags
-    paths.rs                        #   cull_destination (_media↔_culled), destinos de _trash/, path_to_slash
+    paths.rs                        #   cull_destination (_media↔_culled), destinos de _trash/ y _exported/, path_to_slash
+    pairs.rs                        #   pares RAW+JPEG: ShotKey (nombre de cámara + fecha), group_shots
+    delivery.rs                     #   DeliveryMode (nada / pares / todo JPG de cámara), delivery_for
     project.rs                      #   ProjectFolder (slug/date_parts/path), compare_dashboard
     error.rs                        #   DomainError
 
@@ -82,7 +84,8 @@ src-tauri/src/
                                     #   FileStore, PhotoRepository, ImportPipeline, ProgressReporter
     registry.rs                     #   ProjectRegistry (proyectos abiertos, ejecting, rotation-gen)
     use_cases/                      #   cull_photo, trash_photo, rate_photo, rotate_photo, import_photos,
-                                    #   eject_device, ensure_catalog_synced, sync_exported (con tests de fakes)
+                                    #   eject_device, ensure_catalog_synced, sync_exported, change_delivery_mode
+                                    #   (con tests de fakes)
 
   infrastructure/                   # implementa los puertos (aquí vive el #[cfg] de plataforma)
     metadata.rs                     #   ExiftoolMetadata (desktop) / AndroidMetadata (rawler)
@@ -227,7 +230,9 @@ source files
     sin nada que escribir: pipeline_passthrough → staging (copia tal cual, fase copy)
     Android: pipeline_passthrough + pipeline_metadata (rawler + sidecar XMP, fase metadata)
     (un archivo por subcarpeta del staging, formato original, sin conversión)
-  → pipeline_move_to_dest(_media/) → fs::rename con free_name() (sufijo -001… si ya existe)
+  → stage_shots: agrupa en tomas (par RAW+JPEG por nombre de cámara + fecha de captura, o
+      unión con una foto suelta del proyecto) → pipeline_move_shots(_media/): free_name() por
+      archivo suelto, free_stem() por par (el mismo nombre libre para los dos archivos)
   → MetadataTool::extract_batch (UN proceso exiftool para todos, salida CSV)
   → PhotoRepository::create_batch (UNA transacción SQLite)
   → cache_thumbnails_parallel (ImageProcessor, paralelo por CPU cores, max 8)
@@ -251,6 +256,13 @@ total (copia por bloques de 4 MiB con `copy_with_progress`, como máximo un even
 El registro va por `"import-log"` como entradas estructuradas (`ImportLogEntry { kind, … }`) que
 el frontend traduce (`import.log.*`, `import.errors.codes.*`). `useImport()` expone el estado
 `idle | importing | done`, y el paso 3 muestra siempre el resultado (completo, parcial o fallido).
+
+**Reintentar fallidos:** desde el resultado, "Reintentar (N)" (`useImport().retry()`) procesa solo los
+fallidos con los mismos ajustes, en serie y cada tanda con su `session_id`: los `register_failed` ya están
+en `_media/` y van a `retry_import_register` (`ImportPhotos::register_existing`: solo EXIF + BD +
+miniaturas, por nombre contra la carpeta actual, sin registrar dos veces los `dng_path` que ya están); el
+resto vuelve a `start_import` con sus rutas de origen, si cabe en el disco. `mergeRetryResult()` acumula el
+total de la sesión. Los dos comandos cierran con `finish_import()` (fecha inferida y renombrado de carpeta).
 
 ## Flujo de navegación (frontend)
 
@@ -300,10 +312,11 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 
 | Flujo (`docs/useCases/`) | Comando (entry point)  | Caso de uso                  |
 |--------------------------|------------------------|------------------------------|
-| Importar Imágenes        | `start_import`         | `ImportPhotos`               |
+| Importar Imágenes        | `start_import`, `retry_import_register` | `ImportPhotos` (`execute`, `register_existing`) |
 | Crear Proyecto           | `create_project`       | — (lógica en el comando; `domain::ProjectFolder`) |
 | Editar Proyecto          | `edit_project`         | `RenameProjectFiles` (con rollback), `RewriteProjectDescription` |
-| Culling de imagen        | `save_photo_culled`    | `CullPhoto` (con rollback)   |
+| Culling de imagen        | `save_photo_culled`    | `CullPhoto` (con rollback y entrega del JPG de cámara) |
+| Entrega al aprobar       | `plan_project_delivery_change`, `set_project_delivery_mode` | `ChangeDeliveryMode` |
 | Papelera / restaurar foto | `trash_photo`, `restore_photo` | `TrashPhoto` / `RestorePhoto` (con rollback) |
 | Rating de estrellas      | `save_photo_rating`    | `RatePhoto`                  |
 | Rotación de imagen       | `save_photo_rotation`  | `RotatePhoto`                |
@@ -317,13 +330,13 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 
 Plataforma: `get_platform`, `open_external_url`
 Dispositivos: `scan_connected_devices`, `eject_device`, `get_known_devices`
-Proyectos: `get_projects_dashboard`, `get_project`, `create_project`, `edit_project`, `set_project_archived`, `delete_project`, `open_project_folder`, `get_project_cover_thumbnail`, `set_project_cover_photo`, `get_project_settings`, `update_project_settings`
+Proyectos: `get_projects_dashboard`, `get_project`, `create_project`, `edit_project`, `set_project_archived`, `delete_project`, `open_project_folder`, `get_project_cover_thumbnail`, `set_project_cover_photo`, `get_project_settings`, `update_project_settings`, `get_project_delivery_mode`, `plan_project_delivery_change`, `set_project_delivery_mode`
 Fotos: `get_project_photos`, `get_project_trashed_photos`, `trash_photo`, `restore_photo`, `reveal_photo`, `get_project_thumbnails`, `get_thumbnail`, `get_photo_preview`, `save_photo_rotation`, `save_photo_rating`, `save_photo_culled`, `regenerate_project_thumbnails`
 Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`
 Ajustes: `get_app_settings`, `update_app_settings`, `get_dashboard_sort`, `update_dashboard_sort`, `get_dashboard_show_archived`, `set_dashboard_show_archived`, `get_sidebar_sections`, `set_sidebar_section_collapsed`
 Keybindings: `get_keybindings`, `update_keybinding`
-Import: `start_import`
+Import: `start_import`, `analyze_import_selection`, `retry_import_register`
 Respaldo — cuenta: `get_backup_server_url`, `set_backup_server_url`, `backup_register`, `backup_login`, `backup_logout`, `get_backup_session`
 Respaldo — catálogo: `ensure_project_synced`, `sync_exported`, `sync_project_cover`
 Respaldo — subida: `list_exported_backup`, `list_backup_providers`, `prepare_backup`, `backup_exported_file`, `finalize_backup`, `relocate_backup`, `get_backup_folder_link`

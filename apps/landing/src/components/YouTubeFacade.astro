@@ -1,0 +1,59 @@
+---
+interface Props {
+  id: string;
+  title: string;
+  playLabel: string;
+  note?: string;
+}
+const { id, title, playLabel, note } = Astro.props;
+---
+<figure class="yt">
+  <div class="yt-frame">
+    <a
+      class="yt-facade"
+      href={`https://www.youtube.com/watch?v=${id}`}
+      role="button"
+      aria-label={`${playLabel}: ${title}`}
+      data-yt-id={id}
+      data-yt-title={title}
+    >
+      <img src={`https://i.ytimg.com/vi/${id}/maxresdefault.jpg`} alt={title} width="1280" height="720" loading="lazy" decoding="async" />
+      <span class="yt-play" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
+      </span>
+    </a>
+  </div>
+  {note && <figcaption class="yt-note">{note}</figcaption>}
+</figure>
+
+<style>
+  .yt { margin: 0; width: 100%; }
+  .yt-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--lumik-radius-lg); overflow: hidden; border: 1px solid var(--lumik-outline-variant); box-shadow: 0 8px 32px rgba(0,0,0,0.4); background: var(--lumik-surface-container-low); }
+  .yt-facade { position: absolute; inset: 0; display: block; cursor: pointer; }
+  .yt-facade img { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter var(--lumik-transition-normal); }
+  .yt-facade:hover img, .yt-facade:focus-visible img { filter: brightness(0.8); }
+  .yt-facade:focus-visible { outline: 2px solid var(--lumik-primary); outline-offset: -2px; }
+  .yt-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--lumik-primary-container); color: #fff; box-shadow: 0 8px 32px rgba(0,0,0,0.5); transition: transform var(--lumik-transition-fast); }
+  .yt-facade:hover .yt-play, .yt-facade:focus-visible .yt-play { transform: translate(-50%, -50%) scale(1.08); }
+  .yt-frame :global(iframe) { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .yt-note { margin-top: 10px; font-size: 13px; color: var(--lumik-outline); font-family: var(--lumik-font-mono); text-align: center; }
+</style>
+
+<script>
+  function play(facade: HTMLElement) {
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://www.youtube-nocookie.com/embed/${facade.dataset.ytId}?autoplay=1&rel=0`;
+    iframe.title = facade.dataset.ytTitle ?? '';
+    iframe.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    iframe.allowFullscreen = true;
+    facade.replaceWith(iframe);
+    iframe.focus();
+  }
+
+  document.querySelectorAll<HTMLElement>('.yt-facade').forEach(facade => {
+    facade.addEventListener('click', e => { e.preventDefault(); play(facade); });
+    facade.addEventListener('keydown', e => {
+      if (e.key === ' ') { e.preventDefault(); play(facade); }
+    });
+  });
+</script>

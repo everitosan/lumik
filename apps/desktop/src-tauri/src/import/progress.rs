@@ -149,6 +149,7 @@ pub enum ImportLogKind {
     FileFailed,
     FileSkipped,
     PhotosRegistered,
+    PhotosJoined,
     Thumbnails,
     Thumbnail,
     FolderMoved,
@@ -214,6 +215,10 @@ pub struct ImportResult {
     pub failed_files: Vec<FailedFile>,
     pub skipped_files: Vec<SkippedFile>,
     pub videos_copied: usize,
+    /// Archivos que se unieron a una foto que ya estaba en el proyecto (la otra
+    /// mitad de un par RAW+JPEG). No cuentan en `successful`.
+    #[serde(default)]
+    pub joined: usize,
     pub fatal: Option<FatalError>,
 }
 

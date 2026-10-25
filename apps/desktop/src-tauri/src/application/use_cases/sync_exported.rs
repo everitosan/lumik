@@ -104,10 +104,15 @@ mod tests {
             _deleted: bool,
             _dng_path: &str,
             _jpg_path: Option<&str>,
+            _camera_jpg_path: Option<&str>,
         ) -> Result<(), String> {
             unreachable!()
         }
         fn create_batch(&self, _: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
+            unimplemented!()
+        }
+
+        fn registered_dng_paths(&self, _: &[String]) -> Result<std::collections::HashSet<String>, String> {
             unimplemented!()
         }
     }

@@ -12,8 +12,8 @@ precedidos de una **vista general** que cabe en una pantalla. Cada sección se p
 |-------|-----------|---------------|
 | [Crear proyecto](flujo-crear-proyecto.md) | Modal de alta, detección del dispositivo destino, creación de `project.db` | 3 |
 | [Editar proyecto](flujo-editar-proyecto.md) | Nombre, fecha y descripción; carpeta, renombrado de archivos y descripción embebida opcionales | 3 |
-| [Importar imágenes](flujo-importar-imagenes.md) | Wizard de 3 pasos, pipeline de copia, metadatos, EXIF, miniaturas | 6 |
-| [Culling](flujo-culling.md) | Toggle `culled`, movimiento de archivo entre `_media/` y `_culled/`, rollback | 3 |
+| [Importar imágenes](flujo-importar-imagenes.md) | Wizard de 3 pasos, pipeline de copia, metadatos, pares RAW+JPG y uniones, EXIF, miniaturas | 7 |
+| [Culling](flujo-culling.md) | Toggle `culled`, movimiento de archivo entre `_media/` y `_culled/`, entrega del JPG de cámara a `_exported/`, rollback | 4 |
 | [Papelera y restaurar foto](flujo-papelera-foto.md) | Menú de la card, borrado lógico a la papelera (`_trash/`), restaurar, mostrar en carpeta, rollback | 3 |
 | [Rating de estrellas](flujo-rating-estrellas.md) | Estrellas, color labels, tags y el sidecar AppleDouble para iPad | 2 |
 | [Rotación](flujo-rotacion.md) | Rotación optimista en canvas, regeneración de miniatura, escritura EXIF/XMP | 3 |

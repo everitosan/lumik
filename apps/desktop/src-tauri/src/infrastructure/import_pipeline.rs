@@ -2,14 +2,18 @@
 //! (staging en el proyecto + exiftool + `rename` a destino). Traduce los avisos
 //! del pipeline en eventos de progreso y registro vía el puerto `ProgressReporter`.
 
-use crate::application::ports::{ImportPipeline, PipelineOutcome, PipelineRequest, ProgressReporter};
+use crate::application::ports::{
+    ExistingShot, ImportPipeline, ImportedJoin, ImportedShot, MetadataTool, PipelineOutcome, PipelineRequest,
+    ProgressReporter,
+};
+use crate::domain::pairs::{group_shots, stem_of, FileKind, Shot, ShotFile, ShotKey};
 #[cfg(target_os = "android")]
 use crate::import::pipeline_metadata;
 #[cfg(not(target_os = "android"))]
 use crate::import::pipeline::{exiftool_metadata_args, pipeline_stage_signed};
 use crate::import::{
     error_code_for, is_video_file as _is_video_file, pipeline_copy_videos,
-    pipeline_move_to_dest, pipeline_passthrough, FailedFile, FatalError,
+    pipeline_move_shots, pipeline_move_to_dest, pipeline_passthrough, FailedFile, FatalError, StagedFile, StagedShot,
     ImportLogEntry, ImportLogKind, ImportPhase, ImportProgress, IoSide, PipelineWorkspace,
     SkipReason, StageEvent,
 };
@@ -179,6 +183,50 @@ fn total_size(paths: &[PathBuf]) -> u64 {
     paths.iter().filter_map(|p| std::fs::metadata(p).ok()).filter(|m| m.is_file()).map(|m| m.len()).sum()
 }
 
+/// Agrupa lo copiado en tomas (spec `photo-pairs`): el nombre de cámara sale
+/// del origen y la fecha de captura de la copia en el staging. Un archivo que
+/// queda suelto y completa una foto suelta del proyecto (`existing`) se une a ella.
+fn stage_shots(ready: Vec<StagedFile>, metadata: &dyn MetadataTool, existing: &[ExistingShot]) -> Vec<StagedShot> {
+    let paths: Vec<PathBuf> = ready.iter().map(|f| f.staged.clone()).collect();
+    let dates = metadata.capture_dates(&paths);
+    let files = ready
+        .into_iter()
+        .map(|f| {
+            let date = dates.get(&f.staged).cloned().flatten();
+            ShotFile {
+                key: ShotKey::new(&stem_of(&f.source), date.as_deref()),
+                kind: FileKind::of(&f.source),
+                item: f,
+            }
+        })
+        .collect::<Vec<_>>();
+    let keys: std::collections::HashMap<PathBuf, (Option<ShotKey>, FileKind)> =
+        files.iter().map(|f| (f.item.staged.clone(), (f.key.clone(), f.kind))).collect();
+
+    // Cada foto existente acepta a lo sumo una otra mitad.
+    let mut open: Vec<&ExistingShot> = existing.iter().collect();
+    group_shots(files)
+        .into_iter()
+        .map(|shot| match shot {
+            Shot::Pair { raw, jpg } => StagedShot::Pair { raw, jpg },
+            Shot::Single(f) => {
+                let (key, kind) = keys.get(&f.staged).cloned().unwrap_or((None, FileKind::Other));
+                let partner = key.and_then(|key| {
+                    open.iter().position(|e| e.key == key && kind.partner() == Some(e.kind))
+                });
+                match partner {
+                    Some(i) => {
+                        let e = open.remove(i);
+                        let ext = f.staged.extension().and_then(|x| x.to_str()).unwrap_or("").to_string();
+                        StagedShot::Join { target: e.file.with_extension(ext), photo_id: e.photo_id.clone(), file: f }
+                    }
+                    None => StagedShot::Single(f),
+                }
+            }
+        })
+        .collect()
+}
+
 impl ImportPipeline for StdImportPipeline {
     fn import(&self, req: PipelineRequest, reporter: &dyn ProgressReporter) -> PipelineOutcome {
         let mut out = PipelineOutcome {
@@ -286,13 +334,24 @@ impl ImportPipeline for StdImportPipeline {
             ready
         };
 
-        // Fase mover: staging → _media/ con nombre libre.
+        // Fase mover: staging → _media/ con nombre libre; un par RAW+JPEG con
+        // el mismo nombre para los dos archivos.
         t.phase(ImportPhase::Move);
-        match pipeline_move_to_dest(ready, req.dest_folder, &mut |i, total, name| t.file(i, total, name)) {
+        let shots = stage_shots(ready, req.metadata_tool, req.existing);
+        match pipeline_move_shots(shots, req.dest_folder, &mut |i, total, name| t.file(i, total, name)) {
             Ok(moved) => {
                 moved.failed.iter().for_each(|f| t.failed(f));
                 out.failed.extend(moved.failed);
-                out.photos = moved.moved;
+                out.photos = moved
+                    .moved
+                    .into_iter()
+                    .map(|m| ImportedShot { source_stem: stem_of(&m.source), file: m.file, camera_jpg: m.camera_jpg })
+                    .collect();
+                out.joined = moved
+                    .joined
+                    .into_iter()
+                    .map(|j| ImportedJoin { photo_id: j.photo_id, file: j.file })
+                    .collect();
             }
             Err(e) => out.fatal = Some(fatal_from(e)),
         }
@@ -326,6 +385,60 @@ mod tests {
         assert!(t.ready(t0 + Duration::from_millis(151)), "un archivo nuevo emite en seguida");
     }
 
+    /// Fechas de captura por nombre de archivo (las del staging cambian de carpeta).
+    #[derive(Default)]
+    struct FakeDates(std::collections::HashMap<String, String>);
+    impl FakeDates {
+        fn with(pairs: &[(&str, &str)]) -> Self {
+            FakeDates(pairs.iter().map(|(n, d)| (n.to_string(), d.to_string())).collect())
+        }
+    }
+    impl MetadataTool for FakeDates {
+        fn read_rotation(&self, _f: &Path) -> i32 {
+            0
+        }
+        fn extract_batch(&self, _p: &[PathBuf]) -> std::collections::HashMap<PathBuf, crate::application::ports::FileMetadata> {
+            Default::default()
+        }
+        fn capture_dates(&self, paths: &[PathBuf]) -> std::collections::HashMap<PathBuf, Option<String>> {
+            paths
+                .iter()
+                .map(|p| (p.clone(), p.file_name().and_then(|n| self.0.get(n.to_str()?)).cloned()))
+                .collect()
+        }
+        fn set_orientation(&self, _f: &Path, _r: i32) -> Result<(), String> {
+            Ok(())
+        }
+        fn strip_orientation(&self, _f: &Path) {}
+        fn set_image_description(&self, _f: &Path, _d: Option<&str>) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    fn request<'a>(
+        photos: &'a [PathBuf],
+        videos: &'a [PathBuf],
+        project: &'a Path,
+        media: &'a Path,
+        video: &'a Path,
+        dates: &'a FakeDates,
+    ) -> PipelineRequest<'a> {
+        PipelineRequest {
+            session_id: "s1",
+            photos,
+            videos,
+            project_dir: project,
+            dest_folder: media,
+            video_dest_folder: video,
+            project_name: "Boda",
+            metadata: &None,
+            image_description: None,
+            rename: false,
+            metadata_tool: dates,
+            existing: &[],
+        }
+    }
+
     #[derive(Default)]
     struct Recorder {
         progress: Mutex<Vec<ImportProgress>>,
@@ -354,26 +467,17 @@ mod tests {
         let photos = vec![src.join("A.CR2"), src.join("B.CR2"), src.join("C.CR2")];
         let videos = vec![src.join("CLIP.mp4")];
         let rec = Recorder::default();
-        let out = StdImportPipeline.import(
-            PipelineRequest {
-                session_id: "s1",
-                photos: &photos,
-                videos: &videos,
-                project_dir: &project,
-                dest_folder: &project.join("_media"),
-                video_dest_folder: &project.join("_video"),
-                project_name: "Boda",
-                metadata: &None,
-                image_description: None,
-                rename: false,
-            },
-            &rec,
-        );
+        let dates = FakeDates::default();
+        let (media, video) = (project.join("_media"), project.join("_video"));
+        let out = StdImportPipeline.import(request(&photos, &videos, &project, &media, &video, &dates), &rec);
 
         assert!(out.fatal.is_none());
         assert_eq!(out.bytes_total, 1800);
         assert_eq!(out.videos_copied, 1);
-        assert_eq!(out.photos, [project.join("_media/A.CR2"), project.join("_media/C.CR2")]);
+        assert_eq!(
+            out.photos,
+            [ImportedShot::single(project.join("_media/A.CR2")), ImportedShot::single(project.join("_media/C.CR2"))]
+        );
         assert_eq!(out.failed.len(), 1);
         assert_eq!(out.failed[0].name, "B.CR2");
         assert!(project.join("_video/CLIP.mp4").is_file());
@@ -390,6 +494,96 @@ mod tests {
         assert!(kinds.contains(&(ImportLogKind::FileCopied, "A.CR2".into())));
         assert!(kinds.contains(&(ImportLogKind::FileFailed, "B.CR2".into())));
 
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Proyecto temporal con una tarjeta de origen.
+    fn temp_project(tag: &str) -> (PathBuf, PathBuf, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("lumik_{}_{}", tag, uuid::Uuid::new_v4().as_simple()));
+        let (src, project) = (dir.join("src"), dir.join("project"));
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::create_dir_all(&project).unwrap();
+        (dir, src, project)
+    }
+
+    const T1: &str = "2026:10:20 18:04:11";
+
+    #[test]
+    fn pair_is_moved_with_one_name_and_reported_as_one_shot() {
+        let (dir, src, project) = temp_project("pair");
+        // Doble ranura: el JPG viene de otra carpeta.
+        std::fs::create_dir_all(src.join("slot2")).unwrap();
+        std::fs::write(src.join("DSCF1234.RAF"), b"raw").unwrap();
+        std::fs::write(src.join("slot2/DSCF1234.JPG"), b"jpg").unwrap();
+        std::fs::write(src.join("DSCF0008.JPG"), b"solo").unwrap();
+        // Un RAW con el mismo nombre ya está aprobado: el par no puede usar ese nombre.
+        std::fs::create_dir_all(project.join("_culled")).unwrap();
+        std::fs::write(project.join("_culled/DSCF1234.RAF"), b"otro").unwrap();
+
+        let photos = vec![src.join("DSCF1234.RAF"), src.join("slot2/DSCF1234.JPG"), src.join("DSCF0008.JPG")];
+        let dates = FakeDates::with(&[("DSCF1234.RAF", T1), ("DSCF1234.JPG", T1), ("DSCF0008.JPG", T1)]);
+        let (media, video) = (project.join("_media"), project.join("_video"));
+        let out = StdImportPipeline.import(request(&photos, &[], &project, &media, &video, &dates), &Recorder::default());
+
+        assert!(out.failed.is_empty(), "{:?}", out.failed);
+        assert_eq!(
+            out.photos,
+            [
+                ImportedShot {
+                    file: media.join("DSCF1234-001.RAF"),
+                    camera_jpg: Some(media.join("DSCF1234-001.JPG")),
+                    source_stem: "DSCF1234".into(),
+                },
+                ImportedShot::single(media.join("DSCF0008.JPG")),
+            ]
+        );
+        assert_eq!(std::fs::read(media.join("DSCF1234-001.JPG")).unwrap(), b"jpg");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn same_name_from_another_session_is_not_a_pair() {
+        let (dir, src, project) = temp_project("nopair");
+        std::fs::write(src.join("DSCF0001.RAF"), b"raw").unwrap();
+        std::fs::write(src.join("DSCF0001.JPG"), b"jpg").unwrap();
+        let photos = vec![src.join("DSCF0001.RAF"), src.join("DSCF0001.JPG")];
+        let dates = FakeDates::with(&[("DSCF0001.RAF", "2025:03:01 10:00:00"), ("DSCF0001.JPG", T1)]);
+        let (media, video) = (project.join("_media"), project.join("_video"));
+        let out = StdImportPipeline.import(request(&photos, &[], &project, &media, &video, &dates), &Recorder::default());
+        assert_eq!(out.photos.len(), 2);
+        assert!(out.photos.iter().all(|s| s.camera_jpg.is_none()));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn jpg_joins_a_raw_already_in_the_project() {
+        let (dir, src, project) = temp_project("join");
+        std::fs::write(src.join("DSCF1234.JPG"), b"jpg").unwrap();
+        std::fs::write(src.join("DSCF0009.JPG"), b"otro").unwrap();
+        let culled = project.join("_culled");
+        std::fs::create_dir_all(&culled).unwrap();
+        std::fs::write(culled.join("2024-06-15__14-30-22__Boda-001.raf"), b"raw").unwrap();
+        let existing = [ExistingShot {
+            photo_id: "p1".into(),
+            key: ShotKey::new("DSCF1234", Some(T1)).unwrap(),
+            kind: FileKind::Raw,
+            file: culled.join("2024-06-15__14-30-22__Boda-001.raf"),
+        }];
+
+        let photos = vec![src.join("DSCF1234.JPG"), src.join("DSCF0009.JPG")];
+        let dates = FakeDates::with(&[("DSCF1234.JPG", T1), ("DSCF0009.JPG", T1)]);
+        let (media, video) = (project.join("_media"), project.join("_video"));
+        let mut req = request(&photos, &[], &project, &media, &video, &dates);
+        req.existing = &existing;
+        let out = StdImportPipeline.import(req, &Recorder::default());
+
+        assert!(out.failed.is_empty(), "{:?}", out.failed);
+        assert_eq!(
+            out.joined,
+            [ImportedJoin { photo_id: "p1".into(), file: culled.join("2024-06-15__14-30-22__Boda-001.JPG") }]
+        );
+        assert_eq!(out.photos, [ImportedShot::single(media.join("DSCF0009.JPG"))]);
+        assert_eq!(std::fs::read(culled.join("2024-06-15__14-30-22__Boda-001.JPG")).unwrap(), b"jpg");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

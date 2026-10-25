@@ -147,6 +147,8 @@ pub fn run() {
             // ── Flujos de producto (docs/useCases/) ─────────────────────────
             // Flujo: Importar Imágenes            → use_cases::ImportPhotos
             commands::start_import,
+            commands::analyze_import_selection,
+            commands::retry_import_register,
             // Flujo: Crear Proyecto               → (lógica en el comando; domain::ProjectFolder)
             commands::create_project,
             // Flujo: Culling de imagen            → use_cases::CullPhoto
@@ -183,6 +185,9 @@ pub fn run() {
             commands::set_project_cover_photo,
             commands::get_project_settings,
             commands::update_project_settings,
+            commands::get_project_delivery_mode,
+            commands::plan_project_delivery_change,
+            commands::set_project_delivery_mode,
             commands::regenerate_project_thumbnails,
             commands::reveal_photo,
 

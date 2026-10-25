@@ -960,6 +960,7 @@ mod tests {
             focal_length: None,
             lens_model: None,
             rotation: 0,
+            ..Default::default()
         }])
         .unwrap();
 

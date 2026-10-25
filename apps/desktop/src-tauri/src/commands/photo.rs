@@ -77,21 +77,32 @@ pub struct PhotoPreviewResult {
     pub rotation: i32,
 }
 
+/// Vista previa de una foto. De un par RAW+JPEG se muestra su JPEG, salvo que
+/// se pida el RAW (`raw = true`), cuya vista previa se cachea aparte
+/// (`.previews/{id}-raw.jpg`).
 #[tauri::command]
 pub fn get_photo_preview(
     state: State<AppState>,
     photo_id: String,
     project_id: String,
+    raw: Option<bool>,
 ) -> AppResult<PhotoPreviewResult> {
     use base64::{engine::general_purpose::STANDARD, Engine};
-    debug!("get_photo_preview: photo={} project={}", photo_id, project_id);
+    debug!("get_photo_preview: photo={} project={} raw={:?}", photo_id, project_id, raw);
 
     let project_db = state.project_db(&project_id)?;
     let photo = project_db
         .get_photo(&photo_id)?
         .ok_or_else(|| format!("Photo {} not found", photo_id))?;
 
-    let dng_full = project_db.photo_file(&photo.dng_path);
+    let show_raw = raw.unwrap_or(false);
+    let (shown, cache_id) = match (&photo.camera_jpg_path, show_raw) {
+        (Some(jpg), false) => (jpg.clone(), photo_id.clone()),
+        (Some(_), true) => (photo.dng_path.clone(), format!("{}-raw", photo_id)),
+        (None, _) => (photo.dng_path.clone(), photo_id.clone()),
+    };
+    let photo_id = cache_id;
+    let dng_full = project_db.photo_file(&shown);
     debug!("get_photo_preview: dng_full={:?} exists={}", dng_full, dng_full.exists());
 
     // JPEGs are already viewable — no permanent preview cache needed.
@@ -142,14 +153,15 @@ pub fn save_photo_rotation(
     let project_db = state.project_db(&project_id)?;
 
     // Parte sincrónica (validar, persistir rotación, rotar thumbnail) en el use case.
-    let dng_rel = RotatePhoto {
+    let files_rel = RotatePhoto {
         photos: project_db.as_ref(),
         images: state.image_processor.as_ref(),
         project_dir: &project_db.project_dir,
     }
     .execute(&photo_id, rotation)?;
 
-    let dng_full = project_db.photo_file(&dng_rel);
+    // El original y, en un par, también su JPG.
+    let files: Vec<std::path::PathBuf> = files_rel.iter().map(|rel| project_db.photo_file(rel)).collect();
 
     // Write orientation to the file after a short debounce (non-blocking).
     // Rapid successive rotations bump this photo's generation counter; only the
@@ -165,7 +177,7 @@ pub fn save_photo_rotation(
         let registry = state.registry.clone();
         let project_db_for_thread = project_db.clone();
         let photo_id_for_thread = photo_id.clone();
-        let dng_for_thread = dng_full.clone();
+        let files_for_thread = files.clone();
         let metadata = state.metadata.clone();
 
         std::thread::spawn(move || {
@@ -181,10 +193,12 @@ pub fn save_photo_rotation(
                 _ => return,
             };
 
-            let t = std::time::Instant::now();
-            match metadata.set_orientation(&dng_for_thread, rotation) {
-                Ok(_) => info!("[rotation] orientation write (background): {}ms", t.elapsed().as_millis()),
-                Err(e) => error!("[rotation] orientation write failed: {}", e),
+            for file in &files_for_thread {
+                let t = std::time::Instant::now();
+                match metadata.set_orientation(file, rotation) {
+                    Ok(_) => info!("[rotation] orientation write (background): {}ms", t.elapsed().as_millis()),
+                    Err(e) => error!("[rotation] orientation write failed for {:?}: {}", file, e),
+                }
             }
         });
     }
@@ -238,7 +252,8 @@ pub fn save_photo_rating(
     Ok(())
 }
 
-/// Abre el explorador del SO con el archivo original de la foto seleccionado.
+/// Abre el explorador del SO con el archivo de la foto seleccionado (el original,
+/// o el JPG en un par RAW+JPEG).
 /// Desktop only (ver `infrastructure::folder`).
 #[tauri::command]
 pub fn reveal_photo(
@@ -251,7 +266,9 @@ pub fn reveal_photo(
     let photo = project_db
         .get_photo(&photo_id)?
         .ok_or_else(|| format!("Photo {} not found", photo_id))?;
-    let file = project_db.photo_file(&photo.dng_path);
+    // De un par se muestra su JPG, que es la imagen del grid, esté donde esté.
+    let shown = photo.camera_jpg_path.as_deref().unwrap_or(&photo.dng_path);
+    let file = project_db.photo_file(shown);
     crate::infrastructure::folder::reveal_file(&app, &file).map_err(AppError::from)
 }
 
@@ -300,6 +317,7 @@ pub fn save_photo_culled(
         files: state.file_store.as_ref(),
         finder_tags: state.finder_tags.as_ref(),
         project_dir: &project_db.project_dir,
+        delivery: project_db.delivery_mode()?,
     }
     .execute(&photo_id, culled)?;
 

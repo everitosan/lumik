@@ -706,6 +706,168 @@ pub fn pipeline_move_to_dest(
     Ok(out)
 }
 
+/// Nombre base libre para los archivos de una toma: el primero de `stem`,
+/// `stem-001`, `stem-002`… con el que no existe ningún `{base}.{ext}` (para
+/// cada `ext` de `exts`) en ninguna de `dirs`. Así el RAW y el JPG de un par
+/// reciben el mismo nombre aunque haya una ráfaga en el mismo segundo.
+pub fn free_stem(dirs: &[PathBuf], stem: &str, exts: &[&str], exists: impl Fn(&Path) -> bool) -> String {
+    let taken = |base: &str| dirs.iter().any(|d| exts.iter().any(|ext| exists(&d.join(format!("{}.{}", base, ext)))));
+    if !taken(stem) {
+        return stem.to_string();
+    }
+    (1..)
+        .map(|n| format!("{}-{:03}", stem, n))
+        .find(|base| !taken(base))
+        .expect("unbounded range always yields a free stem")
+}
+
+/// Una toma en el staging, lista para mover a `_media/`.
+#[derive(Debug)]
+pub enum StagedShot {
+    Single(StagedFile),
+    /// Par RAW+JPEG de la misma toma (spec `photo-pairs`).
+    Pair { raw: StagedFile, jpg: StagedFile },
+    /// Otra mitad de una foto que ya está en el proyecto: va a `target`, junto
+    /// al archivo de la foto y con su mismo nombre.
+    Join { file: StagedFile, photo_id: String, target: PathBuf },
+}
+
+/// Toma movida a su carpeta final.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MovedShot {
+    /// Archivo principal: el RAW de un par o el archivo suelto.
+    pub file: PathBuf,
+    /// JPEG de un par.
+    pub camera_jpg: Option<PathBuf>,
+    /// Ruta de origen del archivo principal (de ahí sale el nombre de cámara).
+    pub source: PathBuf,
+}
+
+/// Archivo unido a una foto existente.
+#[derive(Debug, Clone, PartialEq)]
+pub struct JoinedFile {
+    pub photo_id: String,
+    pub file: PathBuf,
+}
+
+#[derive(Debug, Default)]
+pub struct MovedShotsOutcome {
+    pub moved: Vec<MovedShot>,
+    pub joined: Vec<JoinedFile>,
+    pub failed: Vec<FailedFile>,
+}
+
+/// Carpetas del proyecto donde el nombre de una toma ya estaría ocupado:
+/// `dest_dir` (`_media/`) y sus hermanas `_culled/` y `_exported/`.
+fn shot_dirs(dest_dir: &Path) -> Vec<PathBuf> {
+    let mut dirs = vec![dest_dir.to_path_buf()];
+    if let Some(project) = dest_dir.parent() {
+        dirs.push(project.join("_culled"));
+        dirs.push(project.join("_exported"));
+    }
+    dirs
+}
+
+fn extension_of(path: &Path) -> String {
+    path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string()
+}
+
+/// Mueve los dos archivos de un par con el mismo nombre base libre. El sidecar
+/// `.xmp` que acompaña al par es el del RAW (en Android cada archivo trae el
+/// suyo, con los mismos datos). Si falla el JPG, el RAW queda como foto suelta.
+fn move_pair(raw: &StagedFile, jpg: &StagedFile, dest_dir: &Path, out: &mut MovedShotsOutcome) {
+    let raw_ext = extension_of(&raw.staged);
+    let jpg_ext = extension_of(&jpg.staged);
+    let stem = raw.staged.file_stem().and_then(|s| s.to_str()).unwrap_or("photo");
+    let base = free_stem(&shot_dirs(dest_dir), stem, &[&raw_ext, &jpg_ext, "xmp"], |p| p.exists());
+    let raw_target = dest_dir.join(format!("{}.{}", base, raw_ext));
+    let jpg_target = dest_dir.join(format!("{}.{}", base, jpg_ext));
+
+    if let Err(e) = rename_or_copy(&raw.staged, &raw_target) {
+        warn!("Failed to move {}: {}", raw.staged.display(), e);
+        out.failed.push(FailedFile::new(&raw.source, error_code_for(&e, IoSide::Write), e.to_string()));
+        // El JPG sigue solo, con su nombre libre de siempre.
+        match move_into(&jpg.staged, dest_dir) {
+            Ok(file) => out.moved.push(MovedShot { file, camera_jpg: None, source: jpg.source.clone() }),
+            Err(e) => out.failed.push(FailedFile::new(&jpg.source, error_code_for(&e, IoSide::Write), e.to_string())),
+        }
+        return;
+    }
+    let sidecar = raw.staged.with_extension("xmp");
+    if sidecar.is_file() {
+        if let Err(e) = rename_or_copy(&sidecar, &raw_target.with_extension("xmp")) {
+            warn!("Failed to move XMP sidecar {}: {}", sidecar.display(), e);
+        }
+    }
+
+    let camera_jpg = match rename_or_copy(&jpg.staged, &jpg_target) {
+        Ok(()) => Some(jpg_target),
+        Err(e) => {
+            warn!("Failed to move {}: {}", jpg.staged.display(), e);
+            out.failed.push(FailedFile::new(&jpg.source, error_code_for(&e, IoSide::Write), e.to_string()));
+            None
+        }
+    };
+    info!("Moved pair: {} (+ {:?})", raw_target.display(), camera_jpg);
+    out.moved.push(MovedShot { file: raw_target, camera_jpg, source: raw.source.clone() });
+}
+
+/// Paso 3 de las fotos: mueve cada toma del staging a `dest_dir` sin
+/// sobrescribir; los dos archivos de un par con el mismo nombre. `on_file`
+/// avisa del archivo en curso. Solo falla del todo si no se puede crear `dest_dir`.
+pub fn pipeline_move_shots(
+    shots: Vec<StagedShot>,
+    dest_dir: &Path,
+    on_file: &mut dyn FnMut(usize, usize, &str),
+) -> Result<MovedShotsOutcome, ConvertError> {
+    fs::create_dir_all(dest_dir)?;
+    let mut out = MovedShotsOutcome::default();
+    let total: usize = shots.iter().map(|s| if matches!(s, StagedShot::Pair { .. }) { 2 } else { 1 }).sum();
+    let mut index = 0;
+    for shot in shots {
+        match shot {
+            StagedShot::Single(file) => {
+                index += 1;
+                on_file(index, total, &file_name_of(&file.source));
+                match move_into(&file.staged, dest_dir) {
+                    Ok(target) => out.moved.push(MovedShot { file: target, camera_jpg: None, source: file.source }),
+                    Err(e) => {
+                        warn!("Failed to move {}: {}", file.staged.display(), e);
+                        out.failed.push(FailedFile::new(&file.source, error_code_for(&e, IoSide::Write), e.to_string()));
+                    }
+                }
+            }
+            StagedShot::Pair { raw, jpg } => {
+                index += 2;
+                on_file(index, total, &file_name_of(&raw.source));
+                move_pair(&raw, &jpg, dest_dir, &mut out);
+            }
+            StagedShot::Join { file, photo_id, target } => {
+                index += 1;
+                on_file(index, total, &file_name_of(&file.source));
+                // Si el nombre ya está ocupado, entra como foto suelta.
+                let result = if target.exists() {
+                    move_into(&file.staged, dest_dir).map(|t| (t, false))
+                } else {
+                    target.parent().map_or(Ok(()), fs::create_dir_all)
+                        .and_then(|_| rename_or_copy(&file.staged, &target))
+                        .map(|_| (target.clone(), true))
+                };
+                match result {
+                    Ok((path, true)) => out.joined.push(JoinedFile { photo_id, file: path }),
+                    Ok((path, false)) => out.moved.push(MovedShot { file: path, camera_jpg: None, source: file.source }),
+                    Err(e) => {
+                        warn!("Failed to move {}: {}", file.staged.display(), e);
+                        out.failed.push(FailedFile::new(&file.source, error_code_for(&e, IoSide::Write), e.to_string()));
+                    }
+                }
+            }
+        }
+    }
+    info!("Moved {} shots to {}", out.moved.len(), dest_dir.display());
+    Ok(out)
+}
+
 /// Check whether a path is a supported video file
 pub fn is_video_file(path: &Path) -> bool {
     has_extension(path, VIDEO_EXTENSIONS)
@@ -996,5 +1158,53 @@ mod exiftool_tests {
         assert!(exiftool_metadata_args("Boda", &None, None, false).is_none());
         assert!(exiftool_metadata_args("Boda", &None, Some(""), false).is_none());
         assert!(exiftool_metadata_args("Boda", &None, None, true).is_some());
+    }
+
+    #[test]
+    fn burst_of_pairs_gets_one_free_name_per_pair() {
+        // Tres pares del mismo segundo, ya renombrados por fecha: cada archivo
+        // está solo en su carpeta del staging, con el mismo nombre.
+        let dir = std::env::temp_dir().join(format!("lumik_burst_{}", uuid::Uuid::new_v4().as_simple()));
+        let media = dir.join("_media");
+        let name = "2024-06-15__14-30-22__Boda";
+        let mut shots = Vec::new();
+        for n in 1..=3 {
+            let staged = |ext: &str| {
+                let slot = dir.join(format!(".stage/{}{}", n, ext));
+                std::fs::create_dir_all(&slot).unwrap();
+                let path = slot.join(format!("{}.{}", name, ext));
+                std::fs::write(&path, format!("{}{}", n, ext)).unwrap();
+                StagedFile { source: PathBuf::from(format!("/card/DSCF000{}.{}", n, ext.to_uppercase())), staged: path, size: 3 }
+            };
+            shots.push(StagedShot::Pair { raw: staged("raf"), jpg: staged("jpg") });
+        }
+
+        let out = pipeline_move_shots(shots, &media, &mut |_, _, _| {}).unwrap();
+        assert!(out.failed.is_empty());
+        let names: Vec<(String, String)> = out
+            .moved
+            .iter()
+            .map(|m| (file_name_of(&m.file), file_name_of(m.camera_jpg.as_ref().unwrap())))
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                (format!("{name}.raf"), format!("{name}.jpg")),
+                (format!("{name}-001.raf"), format!("{name}-001.jpg")),
+                (format!("{name}-002.raf"), format!("{name}-002.jpg")),
+            ]
+        );
+        // Cada RAW conserva su JPG.
+        assert_eq!(std::fs::read_to_string(media.join(format!("{name}-002.jpg"))).unwrap(), "3jpg");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn free_stem_skips_names_taken_by_any_file_of_the_shot() {
+        let dirs = [PathBuf::from("/p/_media"), PathBuf::from("/p/_culled"), PathBuf::from("/p/_exported")];
+        let taken = ["/p/_exported/IMG_1.jpg", "/p/_media/IMG_1-001.raf"];
+        let exists = |p: &Path| taken.iter().any(|t| Path::new(t) == p);
+        assert_eq!(free_stem(&dirs, "IMG_1", &["raf", "jpg"], exists), "IMG_1-002");
+        assert_eq!(free_stem(&dirs, "IMG_9", &["raf", "jpg"], exists), "IMG_9");
     }
 }

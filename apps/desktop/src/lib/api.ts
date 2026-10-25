@@ -5,6 +5,9 @@ import type {
   EditProjectRequest,
   EditProjectResult,
   AppSettings,
+  DeliveryMode,
+  DeliveryPlan,
+  DeliveryChangeOutcome,
   DashboardSort,
   DetectedDevice,
   Keybinding,
@@ -19,6 +22,8 @@ import type {
   UpdatePhotographerMetadata,
   ImportRequest,
   ImportResult,
+  ImportBreakdown,
+  RetryRegisterRequest,
   BackupSession,
 } from './types';
 
@@ -73,6 +78,23 @@ export async function updateProjectSettings(projectId: string, settings: Project
   return invoke('update_project_settings', { projectId, settings });
 }
 
+export async function getProjectDeliveryMode(projectId: string): Promise<DeliveryMode> {
+  return invoke('get_project_delivery_mode', { projectId });
+}
+
+export async function planProjectDeliveryChange(projectId: string, mode: DeliveryMode): Promise<DeliveryPlan> {
+  return invoke('plan_project_delivery_change', { projectId, mode });
+}
+
+/** Cambia la entrega del proyecto; con `applyToApproved`, también en las fotos ya aprobadas. */
+export async function setProjectDeliveryMode(
+  projectId: string,
+  mode: DeliveryMode,
+  applyToApproved = false,
+): Promise<DeliveryChangeOutcome | null> {
+  return invoke('set_project_delivery_mode', { projectId, mode, applyToApproved });
+}
+
 export async function getProjectPhotos(projectId: string): Promise<Photo[]> {
   return invoke('get_project_photos', { projectId });
 }
@@ -108,11 +130,13 @@ export interface PhotoPreviewResult {
   rotation: number;
 }
 
+/** Vista previa de una foto; de un par RAW+JPEG, su JPEG salvo que se pida el RAW. */
 export async function getPhotoPreview(
   photoId: string,
   projectId: string,
+  raw = false,
 ): Promise<PhotoPreviewResult> {
-  return invoke('get_photo_preview', { photoId, projectId });
+  return invoke('get_photo_preview', { photoId, projectId, raw });
 }
 
 export async function savePhotoRotation(
@@ -327,8 +351,17 @@ export async function updateDashboardSort(sort: DashboardSort): Promise<Dashboar
 // IMPORT API
 // ============================================================================
 
+/** Desglose por tomas de los archivos elegidos, antes de importar. */
+export async function analyzeImportSelection(projectId: string, sourceFiles: string[]): Promise<ImportBreakdown> {
+  return invoke('analyze_import_selection', { projectId, sourceFiles });
+}
+
 export async function startImport(request: ImportRequest): Promise<ImportResult> {
   return invoke('start_import', { request });
+}
+
+export async function retryImportRegister(request: RetryRegisterRequest): Promise<ImportResult> {
+  return invoke('retry_import_register', { request });
 }
 
 // ============================================================================

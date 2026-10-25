@@ -12,10 +12,12 @@ import type {
   Photo,
   ProjectDashboard,
   Photographer,
+  FailedFile,
   ImportRequest,
   ImportLogEntry,
   ImportProgress,
   ImportResult,
+  RetryRegisterRequest,
 } from './types';
 
 interface AsyncState<T> {
@@ -290,7 +292,8 @@ export function useActivePhotographer() {
 // PHOTO PREVIEW HOOK
 // ============================================================================
 
-export function usePhotoPreview(photoId: string, projectId: string) {
+/** Vista previa de una foto; de un par RAW+JPG, su JPG salvo que se pida el RAW. */
+export function usePhotoPreview(photoId: string, projectId: string, raw = false) {
   const [state, setState] = useState<AsyncState<api.PhotoPreviewResult>>({
     data: null,
     loading: true,
@@ -301,7 +304,7 @@ export function usePhotoPreview(photoId: string, projectId: string) {
     let cancelled = false;
     setState({ data: null, loading: true, error: null });
     api
-      .getPhotoPreview(photoId, projectId)
+      .getPhotoPreview(photoId, projectId, raw)
       .then((result) => {
         if (!cancelled) setState({ data: result, loading: false, error: null });
       })
@@ -311,7 +314,7 @@ export function usePhotoPreview(photoId: string, projectId: string) {
     return () => {
       cancelled = true;
     };
-  }, [photoId, projectId]);
+  }, [photoId, projectId, raw]);
 
   return state;
 }
@@ -438,6 +441,7 @@ const DEFAULT_KEYBINDINGS: KeybindingMap = {
   'photo_detail.stars_4':      '4',
   'photo_detail.stars_5':      '5',
   'photo_detail.add_tag':      't',
+  'photo_detail.toggle_raw':   's',
   'projects.new_project':      'n',
   'projects.focus_search':     's',
   'project.show_culled':       'Ctrl+c',
@@ -516,6 +520,15 @@ export function useContextKeybindings(context: string): KeybindingMap {
  */
 export type ImportStatus = 'idle' | 'importing' | 'done';
 
+/**
+ * Una tanda de un reintento: `register` vuelve a registrar fotos que ya están en
+ * `_media/`; `import` vuelve a importar desde el origen. `files` son los fallidos
+ * del resultado anterior que cubre la tanda.
+ */
+export type ImportRetryStep =
+  | { kind: 'register'; request: RetryRegisterRequest; files: FailedFile[] }
+  | { kind: 'import'; request: ImportRequest; files: FailedFile[] };
+
 interface UseImportReturn {
   status: ImportStatus;
   progress: ImportProgress | null;
@@ -524,7 +537,30 @@ interface UseImportReturn {
   isImporting: boolean;
   error: string | null;
   startImport: (request: ImportRequest) => Promise<void>;
+  /** Reintenta en serie; conserva el registro y suma al resultado anterior. */
+  retry: (steps: ImportRetryStep[]) => Promise<void>;
   reset: () => void;
+}
+
+const failedKey = (f: FailedFile) => `${f.code}|${f.path}`;
+
+/**
+ * Total de la sesión tras un reintento: suma lo importado, quita de los fallidos
+ * los que se reintentaron (`retried`) y agrega los que volvieron a fallar.
+ * Los ignorados y el total de archivos son los del primer intento.
+ */
+export function mergeRetryResult(prev: ImportResult, retried: FailedFile[], next: ImportResult): ImportResult {
+  const retriedKeys = new Set(retried.map(failedKey));
+  const failed_files = [...prev.failed_files.filter((f) => !retriedKeys.has(failedKey(f))), ...next.failed_files];
+  return {
+    ...prev,
+    successful: prev.successful + next.successful,
+    videos_copied: prev.videos_copied + next.videos_copied,
+    joined: (prev.joined ?? 0) + (next.joined ?? 0),
+    failed: failed_files.length,
+    failed_files,
+    fatal: next.fatal ?? prev.fatal,
+  };
 }
 
 export function useImport(): UseImportReturn {
@@ -538,6 +574,7 @@ export function useImport(): UseImportReturn {
   const logBufferRef = useRef<ImportLogEntry[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const resultRef = useRef<ImportResult | null>(null);
 
   // Cleanup listeners on unmount
   useEffect(() => {
@@ -548,15 +585,16 @@ export function useImport(): UseImportReturn {
     };
   }, []);
 
-  const startImport = useCallback(async (request: ImportRequest) => {
-    setStatus('importing');
-    setError(null);
-    setResult(null);
-    setProgress(null);
-    setImportLog([]);
-    logBufferRef.current = [];
-    sessionIdRef.current = request.session_id;
+  const flushLog = useCallback(() => {
+    if (logBufferRef.current.length > 0) {
+      const pending = logBufferRef.current;
+      logBufferRef.current = [];
+      setImportLog((prev) => [...prev, ...pending]);
+    }
+  }, []);
 
+  // Escucha los eventos del import; `sessionIdRef` decide de qué sesión.
+  const startListening = useCallback(async () => {
     try {
       unlistenProgressRef.current = await listen<ImportProgress>('import-progress', (event) => {
         if (event.payload.session_id === sessionIdRef.current) {
@@ -571,46 +609,81 @@ export function useImport(): UseImportReturn {
       });
 
       // Flush log buffer to state every 150ms to avoid per-event re-renders
-      flushTimerRef.current = setInterval(() => {
-        if (logBufferRef.current.length > 0) {
-          const pending = logBufferRef.current;
-          logBufferRef.current = [];
-          setImportLog((prev) => [...prev, ...pending]);
-        }
-      }, 150);
+      flushTimerRef.current = setInterval(flushLog, 150);
     } catch (err) {
       console.error('Failed to setup import listeners:', err);
     }
+  }, [flushLog]);
 
+  const stopListening = useCallback(() => {
+    unlistenProgressRef.current?.();
+    unlistenProgressRef.current = null;
+    unlistenLogRef.current?.();
+    unlistenLogRef.current = null;
+    if (flushTimerRef.current !== null) {
+      clearInterval(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    // Final flush to capture any events that arrived before cleanup
+    flushLog();
+  }, [flushLog]);
+
+  const startImport = useCallback(async (request: ImportRequest) => {
+    setStatus('importing');
+    setError(null);
+    setResult(null);
+    resultRef.current = null;
+    setProgress(null);
+    setImportLog([]);
+    logBufferRef.current = [];
+    sessionIdRef.current = request.session_id;
+
+    await startListening();
     try {
       const importResult = await api.startImport(request);
+      resultRef.current = importResult;
       setResult(importResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setStatus('done');
-      unlistenProgressRef.current?.();
-      unlistenProgressRef.current = null;
-      unlistenLogRef.current?.();
-      unlistenLogRef.current = null;
-      if (flushTimerRef.current !== null) {
-        clearInterval(flushTimerRef.current);
-        flushTimerRef.current = null;
-      }
-      // Final flush to capture any events that arrived before cleanup
-      if (logBufferRef.current.length > 0) {
-        const pending = logBufferRef.current;
-        logBufferRef.current = [];
-        setImportLog((prev) => [...prev, ...pending]);
-      }
+      stopListening();
     }
-  }, []);
+  }, [startListening, stopListening]);
+
+  const retry = useCallback(async (steps: ImportRetryStep[]) => {
+    if (!resultRef.current || steps.length === 0) return;
+    setStatus('importing');
+    setError(null);
+    setProgress(null);
+
+    await startListening();
+    try {
+      for (const step of steps) {
+        sessionIdRef.current = step.request.session_id;
+        setProgress(null);
+        // Un `Err` (precondición) corta el reintento y deja el resultado como estaba.
+        const next = step.kind === 'register'
+          ? await api.retryImportRegister(step.request)
+          : await api.startImport(step.request);
+        const merged = mergeRetryResult(resultRef.current!, step.files, next);
+        resultRef.current = merged;
+        setResult(merged);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setStatus('done');
+      stopListening();
+    }
+  }, [startListening, stopListening]);
 
   const reset = useCallback(() => {
     setStatus('idle');
     setProgress(null);
     setImportLog([]);
     setResult(null);
+    resultRef.current = null;
     setError(null);
     logBufferRef.current = [];
     sessionIdRef.current = null;
@@ -624,6 +697,7 @@ export function useImport(): UseImportReturn {
     isImporting: status === 'importing',
     error,
     startImport,
+    retry,
     reset,
   };
 }

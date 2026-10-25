@@ -94,6 +94,10 @@ pub fn build_router(state: AppState) -> Router {
             get(catalog::handlers::list_photos),
         )
         .route(
+            "/projects/:project_id/backup",
+            delete(backup::handlers::delete_backup),
+        )
+        .route(
             "/projects/:project_id/backup/prepare",
             post(backup::handlers::prepare_backup),
         )

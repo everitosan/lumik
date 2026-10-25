@@ -161,7 +161,7 @@ El usuario SHALL poder elegir una foto del proyecto como portada o quitarla; la 
 - **THEN** el proyecto se muestra sin portada, sin error
 
 ### Requirement: Editar proyecto
-El usuario SHALL poder editar el nombre, la fecha de sesión y la descripción de un proyecto. El nombre y la fecha SHALL ser obligatorios. Al guardar se SHALL actualizar el proyecto y, si cambian el nombre o la fecha, mover su carpeta a `{montaje}/lumik/{año}/{mes}/{día}_{slug}`; sus fotos SHALL seguir abriéndose desde la nueva carpeta. Si ya existe una carpeta con la ruta destino, la edición SHALL fallar sin cambios.
+El usuario SHALL poder editar el nombre, la fecha de sesión, la descripción y la opción de entrega al aprobar de un proyecto. El nombre y la fecha SHALL ser obligatorios. Al guardar se SHALL actualizar el proyecto y, si cambian el nombre o la fecha, mover su carpeta a `{montaje}/lumik/{año}/{mes}/{día}_{slug}`; sus fotos SHALL seguir abriéndose desde la nueva carpeta. Si ya existe una carpeta con la ruta destino, la edición SHALL fallar sin cambios.
 
 #### Scenario: Renombrado correcto
 - **WHEN** el proyecto en `lumik/2024/06/15_Boda` se renombra a "Boda Ana"
@@ -186,6 +186,10 @@ El usuario SHALL poder editar el nombre, la fecha de sesión y la descripción d
 #### Scenario: Colisión de carpeta
 - **WHEN** ya existe una carpeta con la ruta destino
 - **THEN** la edición falla y el proyecto permanece en su ubicación original y con sus datos anteriores
+
+#### Scenario: Cambiar la entrega al aprobar
+- **WHEN** el usuario cambia la entrega del proyecto a *todo JPG de cámara* y guarda
+- **THEN** el proyecto guarda ese valor, la carpeta no se mueve, y las siguientes aprobaciones lo usan
 
 ### Requirement: Fecha de sesión al editar
 El campo de fecha SHALL precargarse con la fecha de sesión del proyecto o, si no tiene, con la fecha de su carpeta. Si el proyecto no tenía fecha de sesión y se guarda con la fecha precargada, SHALL seguir sin fecha de sesión. Cualquier otra fecha SHALL guardarse como fecha de sesión.

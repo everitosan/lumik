@@ -60,6 +60,7 @@ export const Archived: Story = {
     thumbnailUrl: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=400&h=300&fit=crop',
     onEdit: () => {},
     onToggleArchive: () => {},
+    onDeleteBackup: () => {},
     onDelete: () => {},
   },
 };

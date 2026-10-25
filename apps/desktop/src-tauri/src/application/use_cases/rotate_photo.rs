@@ -1,8 +1,9 @@
 //! Caso de uso: rotar una foto. Valida la rotación, la persiste y rota el
 //! thumbnail cacheado (parte sincrónica y testeable). La escritura de la
 //! orientación al archivo se agenda aparte, con debounce, en el caller (necesita
-//! hilos + estado de generación), por lo que `execute` devuelve el `dng_path`
-//! relativo para que el caller construya la ruta absoluta.
+//! hilos + estado de generación), por lo que `execute` devuelve las rutas
+//! relativas de los archivos a escribir: el original y, en un par RAW+JPEG,
+//! también su JPG.
 
 use crate::application::ports::{ImageProcessor, PhotoRepository};
 use crate::domain::photo::Rotation;
@@ -16,8 +17,9 @@ pub struct RotatePhoto<'a> {
 }
 
 impl RotatePhoto<'_> {
-    /// Persiste la rotación y rota el thumbnail. Devuelve el `dng_path` relativo.
-    pub fn execute(&self, photo_id: &str, rotation: i32) -> Result<String, String> {
+    /// Persiste la rotación y rota el thumbnail una vez. Devuelve las rutas
+    /// relativas de los archivos donde escribir la orientación.
+    pub fn execute(&self, photo_id: &str, rotation: i32) -> Result<Vec<String>, String> {
         let rotation_vo = Rotation::new(rotation).map_err(|e| e.to_string())?;
 
         let photo = self
@@ -35,7 +37,7 @@ impl RotatePhoto<'_> {
             self.images.rotate_thumbnail(self.project_dir, photo_id, delta);
         }
 
-        Ok(photo.dng_path)
+        Ok(std::iter::once(photo.dng_path).chain(photo.camera_jpg_path).collect())
     }
 }
 
@@ -78,6 +80,7 @@ mod tests {
             focal_length: None,
             lens_model: None,
             rotation,
+            ..Default::default()
         }
     }
 
@@ -118,6 +121,7 @@ mod tests {
             _deleted: bool,
             _dng_path: &str,
             _jpg_path: Option<&str>,
+            _camera_jpg_path: Option<&str>,
         ) -> Result<(), String> {
             unreachable!()
         }
@@ -126,6 +130,13 @@ mod tests {
             _photos: &[crate::db::models::CreatePhoto],
         ) -> Result<Vec<Photo>, String> {
             unreachable!("RotatePhoto no crea fotos")
+        }
+
+        fn registered_dng_paths(
+            &self,
+            _dng_paths: &[String],
+        ) -> Result<std::collections::HashSet<String>, String> {
+            unreachable!("RotatePhoto no registra fotos")
         }
     }
 
@@ -161,11 +172,25 @@ mod tests {
         let dir = Path::new("/mnt/lumik/x");
         let uc = RotatePhoto { photos: &repo, images: &images, project_dir: dir };
 
-        let dng = uc.execute("p1", 90).unwrap();
-        assert_eq!(dng, "lumik/x/_media/IMG.dng");
+        let files = uc.execute("p1", 90).unwrap();
+        assert_eq!(files, vec!["lumik/x/_media/IMG.dng".to_string()]);
         assert_eq!(*repo.rotation_calls.lock().unwrap(), vec![90]);
         // delta 0→90 = 90
         assert_eq!(*images.rotate_calls.lock().unwrap(), vec![(dir.to_path_buf(), 90)]);
+    }
+
+    #[test]
+    fn a_pair_writes_both_files_and_rotates_the_thumbnail_once() {
+        let mut photo = make_photo(0);
+        photo.dng_path = "_media/IMG.raf".into();
+        photo.camera_jpg_path = Some("_media/IMG.jpg".into());
+        let repo = FakePhotoRepo { photo, rotation_calls: Mutex::new(vec![]) };
+        let images = FakeImages::default();
+        let uc = RotatePhoto { photos: &repo, images: &images, project_dir: Path::new("/d") };
+
+        let files = uc.execute("p1", 90).unwrap();
+        assert_eq!(files, vec!["_media/IMG.raf".to_string(), "_media/IMG.jpg".to_string()]);
+        assert_eq!(images.rotate_calls.lock().unwrap().len(), 1);
     }
 
     #[test]

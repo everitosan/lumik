@@ -55,6 +55,13 @@ El paso de ajustes SHALL mostrar, precargados con la configuración global, si s
 - **WHEN** el usuario llega al paso de confirmación
 - **THEN** ve si las fotos se renombrarán y con qué autor se firmarán, o que no se firmarán
 
+### Requirement: Opción de entrega en el import
+En un bloque aparte de los ajustes de la importación, identificado como del proyecto, el paso de ajustes SHALL mostrar y permitir cambiar la opción de entrega del proyecto destino; ese cambio SHALL guardarse en el proyecto y restablecer los ajustes no SHALL cambiarlo.
+
+#### Scenario: Cambiar la entrega del proyecto desde el import
+- **WHEN** el usuario cambia en el paso de ajustes la entrega del proyecto a *el JPG de los pares RAW+JPG*
+- **THEN** el proyecto guarda ese valor, la siguiente importación al mismo proyecto lo muestra, y restablecer no lo cambia
+
 ### Requirement: Espacio suficiente antes de importar
 El import no SHALL poder iniciarse si el espacio libre del disco del proyecto es menor que el tamaño total de los archivos seleccionados. El paso de confirmación SHALL mostrar el espacio disponible.
 
@@ -91,6 +98,17 @@ Si el renombrado está activo en los ajustes de la importación (por defecto, el
 #### Scenario: Renombrado desactivado
 - **WHEN** el renombrado está desactivado en los ajustes de la importación
 - **THEN** las fotos conservan su nombre original
+
+### Requirement: Nombre de los archivos de un par
+Con el renombrado activo, los dos archivos de un par SHALL recibir el mismo nombre, cada uno con su extensión, también cuando el JPG llega en otra importación y se une a un RAW ya renombrado.
+
+#### Scenario: Ráfaga de pares
+- **WHEN** se importan tres pares RAW+JPG capturados en el mismo segundo
+- **THEN** cada par recibe un nombre distinto (limpio, `-001`, `-002`) y su RAW y su JPG comparten ese nombre
+
+#### Scenario: JPG que se une a un RAW ya renombrado
+- **WHEN** se importa un JPG que se une a `2024-06-15__14-30-22__Boda_Ana-001.raf` del proyecto
+- **THEN** el JPG se guarda como `2024-06-15__14-30-22__Boda_Ana-001.jpg`
 
 ### Requirement: Metadatos del fotógrafo
 Si la firma está activa en los ajustes de la importación (por defecto, el valor global "embeber metadatos al importar", activo de fábrica), cada foto SHALL llevar el autor, el copyright y la URL de contacto elegidos para esa importación, los demás datos guardados del fotógrafo activo (email de contacto y condiciones de uso) y la descripción `{descripción}@{año}` si el proyecto tiene descripción. Los campos vacíos SHALL omitirse. En Linux, Windows y macOS se SHALL escribir dentro del archivo; en Android, en un sidecar `.xmp` junto a la foto.
@@ -158,3 +176,14 @@ Si el proyecto no tiene fecha de sesión y el import registró al menos una foto
 #### Scenario: Fecha fijada al editar
 - **WHEN** el usuario fijó la fecha `2023-12-01` al editar el proyecto y después importa fotos capturadas el 2023-11-04
 - **THEN** la fecha de sesión sigue siendo `2023-12-01`
+
+### Requirement: El import cuenta tomas
+El paso de origen, el resumen y el resultado del import SHALL contar fotos por toma: un par cuenta como una foto. El paso de origen y el resumen SHALL desglosar cuántas fotos son pares RAW+JPG, RAW sueltos y JPG sueltos. El registro de actividad SHALL seguir listando cada archivo.
+
+#### Scenario: Origen con pares
+- **WHEN** el usuario selecciona 300 pares, 3 RAW sin JPG y 1 JPG sin RAW
+- **THEN** el paso de origen muestra 304 fotos: 300 RAW+JPG, 3 solo RAW y 1 solo JPG
+
+#### Scenario: Resultado
+- **WHEN** esa importación termina sin fallos
+- **THEN** el resultado dice "304 fotografías importadas" y el registro lista los 604 archivos

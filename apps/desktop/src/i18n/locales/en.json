@@ -11,7 +11,18 @@
       "selectFolder": "Select a folder",
       "dragDrop": "Drag files here or click to browse",
       "supportedFormats": "Supports RAW, CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG, TIFF, MP4, MOV and more",
-      "selectFiles": "Selected files"
+      "selectFiles": "Selected files",
+      "breakdown": {
+        "analyzing": "Looking for RAW+JPG pairs…",
+        "photos_one": "{{count}} photo",
+        "photos_other": "{{count}} photos",
+        "pairs": "{{count}} RAW+JPG",
+        "rawOnly": "{{count}} RAW only",
+        "jpgOnly": "{{count}} JPG only",
+        "other": "{{count}} other format",
+        "joins_one": "{{count}} file will join a photo already in the project",
+        "joins_other": "{{count}} files will join photos already in the project"
+      }
     },
     "settings": {
       "title": "Settings for this import",
@@ -20,7 +31,9 @@
       "renameExampleLabel": "They'll look like:",
       "renameExample": "IMG_4821.CR3 → 2024-06-15__14-30-22__{{project}}.cr3",
       "embed": "Sign photos with my details",
-      "reset": "Reset to global settings"
+      "reset": "Reset to global settings",
+      "projectTitle": "For this project",
+      "projectDescription": "Saved in the project and applies to all its photos. You can also change it in Edit project."
     },
     "confirm": {
       "title": "Confirm import",
@@ -45,7 +58,9 @@
         "register": "Registering photos and generating thumbnails",
         "complete": "Finishing…"
       },
-      "fileOf": "File {{index}} of {{total}}"
+      "fileOf": "File {{index}} of {{total}}",
+      "joined_one": "file joined to a photo already in the project",
+      "joined_other": "files joined to photos already in the project"
     },
     "buttons": {
       "import": "Start import",
@@ -68,7 +83,9 @@
       "renameNo": "Original names",
       "signedBy": "Signature",
       "notSigned": "Not signed",
-      "notEnoughSpace": "Not enough space on the project's drive: {{required}} needed, {{available}} free."
+      "notEnoughSpace": "Not enough space on the project's drive: {{required}} needed, {{available}} free.",
+      "photosDetail": "{{pairs}} RAW+JPG, {{raw}} RAW, {{jpg}} JPG",
+      "delivery": "On approval"
     },
     "header": {
       "title": "Import photos",
@@ -106,6 +123,8 @@
       "file_skipped": "Skipped {{file}}: {{reason}}",
       "photos_registered_one": "{{count}} photo registered in the project",
       "photos_registered_other": "{{count}} photos registered in the project",
+      "photos_joined_one": "{{count}} file joined to a photo already in the project",
+      "photos_joined_other": "{{count}} files joined to photos already in the project",
       "thumbnails_one": "Generating {{count}} thumbnail…",
       "thumbnails_other": "Generating {{count}} thumbnails…",
       "thumbnail": "Thumbnail: {{file}} ({{detail}})",
@@ -127,7 +146,10 @@
       "showAll": "Show all ({{count}})",
       "showLess": "Show less",
       "fatal": "The import stopped: {{reason}}. Everything listed above was kept in the project.",
-      "couldNotStart": "The import could not start: {{error}}"
+      "couldNotStart": "The import could not start: {{error}}",
+      "retry": "Retry ({{count}})",
+      "retryNoSpace": "Not enough space to retry: {{required}} needed, {{available}} free.",
+      "retryError": "The retry could not run: {{error}}. Anything not retried is still listed."
     }
   },
   "project": {
@@ -186,7 +208,34 @@
       "warning": "This permanently deletes the project folder and all its files (photos, videos and metadata). This action cannot be undone.",
       "confirm": "Delete everything"
     },
-    "openFolderError": "Could not open the folder: {{error}}"
+    "openFolderError": "Could not open the folder: {{error}}",
+    "delivery": {
+      "label": "On approval, deliver directly",
+      "hint": "What is delivered goes to _exported/, ready to back up. The RAW stays in _culled/ in case you need to develop it.",
+      "modes": {
+        "none": "Nothing: I export from my editor",
+        "pairs": "The JPG of RAW+JPG pairs",
+        "all_camera_jpg": "Every camera JPG: pairs and standalone JPGs"
+      },
+      "change": {
+        "title": "Change delivery on approval",
+        "deliver_one": "{{count}} approved photo will deliver its JPG to _exported/.",
+        "deliver_other": "{{count}} approved photos will deliver their JPG to _exported/.",
+        "return_one": "{{count}} camera JPG will come back from _exported/.",
+        "return_other": "{{count}} camera JPGs will come back from _exported/.",
+        "editsKept_one": "{{count}} is already your edit and stays in _exported/.",
+        "editsKept_other": "{{count}} are already your edits and stay in _exported/.",
+        "inCloud_one": "{{count}} is already in your cloud and won't be deleted there.",
+        "inCloud_other": "{{count}} are already in your cloud and won't be deleted there.",
+        "question": "Apply the change to the photos already approved too?",
+        "apply": "Apply to approved photos too",
+        "onlyOption": "Only change the option",
+        "cancel": "Cancel",
+        "failed_one": "{{count}} photo could not be changed: {{reason}}",
+        "failed_other": "{{count}} photos could not be changed: {{reason}}",
+        "close": "Close"
+      }
+    }
   },
   "settings": {
     "title": "Settings",
@@ -207,7 +256,9 @@
       "renameExampleLabel": "They'll look like:",
       "renameExample": "IMG_4821.CR2 → 2024-06-15__14-30-22__Smith_Wedding.cr2",
       "finderTags": "Write color tags for iPad/macOS",
-      "finderTagsHint": "When you assign a color to a photo, a sibling file (._name) is generated so the tag shows up when the disk is connected to an iPad or Mac."
+      "finderTagsHint": "When you assign a color to a photo, a sibling file (._name) is generated so the tag shows up when the disk is connected to an iPad or Mac.",
+      "deliveryDefault": "Delivery on approval for new projects",
+      "deliveryDefaultHint": "Each project takes this value when it is created and then keeps its own. Change it in Edit project or when importing."
     },
     "language": "Language",
     "tabs": {
@@ -266,6 +317,7 @@
         "photo_detail.stars_4": "4 stars",
         "photo_detail.stars_5": "5 stars",
         "photo_detail.add_tag": "Add tag",
+        "photo_detail.toggle_raw": "Show the RAW or the JPG of a pair",
         "project.show_culled": "Show only approved photos",
         "projects.new_project": "Create new project",
         "projects.focus_search": "Focus search bar",

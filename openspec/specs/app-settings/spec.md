@@ -29,15 +29,19 @@ El usuario SHALL poder editar los datos que se escriben en las fotos al importar
 - **THEN** la página de Ajustes sigue mostrando el autor anterior
 
 ### Requirement: Ajustes de importación y sidecars
-La app SHALL ofrecer tres ajustes, activos por defecto: embeber los metadatos del fotógrafo al importar, renombrar los archivos por fecha de captura al importar (con un ejemplo del nombre resultante) y generar sidecars de etiquetas para iPad y Mac. Los ajustes SHALL persistir entre reinicios.
+La app SHALL ofrecer tres ajustes, activos por defecto: embeber los metadatos del fotógrafo al importar, renombrar los archivos por fecha de captura al importar (con un ejemplo del nombre resultante) y generar sidecars de etiquetas para iPad y Mac. Además SHALL ofrecer el valor de fábrica de "Al aprobar, entregar directamente" para proyectos nuevos, que en una instalación nueva es *nada*. Los ajustes SHALL persistir entre reinicios.
 
 #### Scenario: Instalación nueva
 - **WHEN** se consultan los ajustes en una instalación nueva
-- **THEN** los tres ajustes están activos
+- **THEN** los tres ajustes están activos y la entrega al aprobar de proyectos nuevos es *nada*
 
 #### Scenario: Desactivar renombrado
 - **WHEN** el usuario desactiva el renombrado y reinicia la app
 - **THEN** el ajuste sigue desactivado y los imports conservan los nombres originales
+
+#### Scenario: Cambiar el valor de fábrica de la entrega
+- **WHEN** el usuario elige *todo JPG de cámara* como valor de fábrica y reinicia la app
+- **THEN** el ajuste conserva *todo JPG de cámara*, los proyectos que cree desde entonces lo toman, y los existentes conservan su propio valor
 
 ### Requirement: Atajos de teclado configurables
 La app SHALL tener atajos para el visor (cerrar, anterior, siguiente, zoom, ajustar, rotar, aprobar, estrellas 0–5, añadir tag) y para las vistas de proyectos (nuevo proyecto, buscar, solo aprobadas, volver, importar). El usuario SHALL poder reasignar cada uno pulsando la nueva tecla, opcionalmente con el modificador de la plataforma: `Cmd` en macOS y `Ctrl` en las demás. Un atajo con modificador SHALL valer en todas las plataformas y mostrarse en Ajustes con el símbolo de la plataforma (`⌘` en macOS, `Ctrl+` en las demás). Las teclas modificadoras sueltas y una tecla vacía SHALL rechazarse.

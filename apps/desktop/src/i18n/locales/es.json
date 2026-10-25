@@ -11,7 +11,18 @@
       "selectFolder": "Selecciona una carpeta",
       "dragDrop": "Arrastra tus fotos aquí o haz clic para explorar",
       "supportedFormats": "Compatible con RAW, CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG, JPEG, TIFF, MP4, MOV y más",
-      "selectFiles": "Archivos seleccionados"
+      "selectFiles": "Archivos seleccionados",
+      "breakdown": {
+        "analyzing": "Buscando pares RAW+JPG…",
+        "photos_one": "{{count}} foto",
+        "photos_other": "{{count}} fotos",
+        "pairs": "{{count}} RAW+JPG",
+        "rawOnly": "{{count}} solo RAW",
+        "jpgOnly": "{{count}} solo JPG",
+        "other": "{{count}} otro formato",
+        "joins_one": "{{count}} archivo se unirá a una foto que ya está en el proyecto",
+        "joins_other": "{{count}} archivos se unirán a fotos que ya están en el proyecto"
+      }
     },
     "settings": {
       "title": "Ajustes de esta importación",
@@ -20,7 +31,9 @@
       "renameExampleLabel": "Quedarán así:",
       "renameExample": "IMG_4821.CR3 → 2024-06-15__14-30-22__{{project}}.cr3",
       "embed": "Firmar las fotos con mis datos",
-      "reset": "Restablecer a la configuración global"
+      "reset": "Restablecer a la configuración global",
+      "projectTitle": "De este proyecto",
+      "projectDescription": "Se guarda en el proyecto y aplica a todas sus fotos. También se cambia en Editar proyecto."
     },
     "confirm": {
       "title": "Confirmar importación",
@@ -45,7 +58,9 @@
         "register": "Registrando fotos y generando miniaturas",
         "complete": "Terminando…"
       },
-      "fileOf": "Archivo {{index}} de {{total}}"
+      "fileOf": "Archivo {{index}} de {{total}}",
+      "joined_one": "archivo unido a una foto que ya estaba en el proyecto",
+      "joined_other": "archivos unidos a fotos que ya estaban en el proyecto"
     },
     "buttons": {
       "import": "Iniciar importación",
@@ -68,7 +83,9 @@
       "renameNo": "Nombres originales",
       "signedBy": "Firma",
       "notSigned": "Sin firma",
-      "notEnoughSpace": "No hay espacio suficiente en el disco del proyecto: se necesitan {{required}} y hay {{available}} libres."
+      "notEnoughSpace": "No hay espacio suficiente en el disco del proyecto: se necesitan {{required}} y hay {{available}} libres.",
+      "photosDetail": "{{pairs}} RAW+JPG, {{raw}} RAW, {{jpg}} JPG",
+      "delivery": "Al aprobar"
     },
     "header": {
       "title": "Importar fotos",
@@ -106,6 +123,8 @@
       "file_skipped": "Ignorado {{file}}: {{reason}}",
       "photos_registered_one": "{{count}} foto registrada en el proyecto",
       "photos_registered_other": "{{count}} fotos registradas en el proyecto",
+      "photos_joined_one": "{{count}} archivo unido a una foto que ya estaba en el proyecto",
+      "photos_joined_other": "{{count}} archivos unidos a fotos que ya estaban en el proyecto",
       "thumbnails_one": "Generando {{count}} miniatura…",
       "thumbnails_other": "Generando {{count}} miniaturas…",
       "thumbnail": "Miniatura: {{file}} ({{detail}})",
@@ -127,7 +146,10 @@
       "showAll": "Ver todos ({{count}})",
       "showLess": "Ver menos",
       "fatal": "La importación se detuvo: {{reason}}. Lo que aparece arriba sí quedó en el proyecto.",
-      "couldNotStart": "No se pudo iniciar la importación: {{error}}"
+      "couldNotStart": "No se pudo iniciar la importación: {{error}}",
+      "retry": "Reintentar ({{count}})",
+      "retryNoSpace": "No hay espacio para reintentar: se necesitan {{required}} y hay {{available}} libres.",
+      "retryError": "No se pudo reintentar: {{error}}. Lo que no se reintentó sigue en la lista."
     }
   },
   "project": {
@@ -186,7 +208,34 @@
       "warning": "Se eliminarán de forma permanente la carpeta del proyecto y todos sus archivos (fotos, videos y metadatos). Esta acción no se puede deshacer.",
       "confirm": "Eliminar todo"
     },
-    "openFolderError": "No se pudo abrir la carpeta: {{error}}"
+    "openFolderError": "No se pudo abrir la carpeta: {{error}}",
+    "delivery": {
+      "label": "Al aprobar, entregar directamente",
+      "hint": "Lo que se entrega va a _exported/, listo para respaldar. El RAW se queda en _culled/ por si hace falta revelarlo.",
+      "modes": {
+        "none": "Nada: yo exporto desde mi editor",
+        "pairs": "El JPG de los pares RAW+JPG",
+        "all_camera_jpg": "Todo JPG de cámara: pares y JPG sueltos"
+      },
+      "change": {
+        "title": "Cambiar la entrega al aprobar",
+        "deliver_one": "{{count}} foto aprobada entregará su JPG a _exported/.",
+        "deliver_other": "{{count}} fotos aprobadas entregarán su JPG a _exported/.",
+        "return_one": "Regresará {{count}} JPG de cámara de _exported/.",
+        "return_other": "Regresarán {{count}} JPG de cámara de _exported/.",
+        "editsKept_one": "{{count}} ya es una edición tuya y se queda en _exported/.",
+        "editsKept_other": "{{count}} ya son ediciones tuyas y se quedan en _exported/.",
+        "inCloud_one": "{{count}} ya está en tu nube y no se borrará de ahí.",
+        "inCloud_other": "{{count}} ya están en tu nube y no se borrarán de ahí.",
+        "question": "¿Aplicar el cambio también a las fotos ya aprobadas?",
+        "apply": "Aplicar también a las aprobadas",
+        "onlyOption": "Solo cambiar la opción",
+        "cancel": "Cancelar",
+        "failed_one": "No se pudo cambiar {{count}} foto: {{reason}}",
+        "failed_other": "No se pudieron cambiar {{count}} fotos: {{reason}}",
+        "close": "Cerrar"
+      }
+    }
   },
   "settings": {
     "title": "Configuración",
@@ -207,7 +256,9 @@
       "renameExampleLabel": "Quedarán así:",
       "renameExample": "IMG_4821.CR2 → 2024-06-15__14-30-22__Boda_García.cr2",
       "finderTags": "Escribir etiquetas de color para iPad/macOS",
-      "finderTagsHint": "Al asignar un color a una foto se genera un archivo hermano (._nombre) para que la etiqueta se vea al conectar el disco a un iPad o Mac."
+      "finderTagsHint": "Al asignar un color a una foto se genera un archivo hermano (._nombre) para que la etiqueta se vea al conectar el disco a un iPad o Mac.",
+      "deliveryDefault": "Entrega al aprobar en proyectos nuevos",
+      "deliveryDefaultHint": "Cada proyecto toma este valor al crearse y después guarda el suyo. Se cambia en Editar proyecto o al importar."
     },
     "language": "Idioma",
     "tabs": {
@@ -266,6 +317,7 @@
         "photo_detail.stars_4": "4 estrellas",
         "photo_detail.stars_5": "5 estrellas",
         "photo_detail.add_tag": "Agregar etiqueta",
+        "photo_detail.toggle_raw": "Ver el RAW o el JPG de un par",
         "project.show_culled": "Mostrar solo fotos aprobadas",
         "projects.new_project": "Crear nuevo proyecto",
         "projects.focus_search": "Enfocar barra de búsqueda",

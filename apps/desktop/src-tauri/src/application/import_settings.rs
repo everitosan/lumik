@@ -90,6 +90,7 @@ mod tests {
             embed_metadata_on_import: embed,
             rename_on_import: rename,
             finder_tags_sidecar: true,
+            default_delivery_mode: Default::default(),
         }
     }
 
