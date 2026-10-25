@@ -15,6 +15,7 @@ pub mod fs;
 pub mod imaging;
 pub mod lock;
 pub mod import_pipeline;
+pub mod import_signing;
 pub mod metadata;
 pub mod persistence;
 pub mod progress;

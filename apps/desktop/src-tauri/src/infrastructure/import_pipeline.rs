@@ -8,9 +8,9 @@ use crate::application::ports::{
 };
 use crate::domain::pairs::{group_shots, stem_of, FileKind, Shot, ShotFile, ShotKey};
 #[cfg(target_os = "android")]
-use crate::import::pipeline_metadata;
+use crate::infrastructure::import_signing::pipeline_metadata;
 #[cfg(not(target_os = "android"))]
-use crate::import::pipeline::{exiftool_metadata_args, pipeline_stage_signed};
+use crate::infrastructure::import_signing::{exiftool_metadata_args, pipeline_stage_signed};
 use crate::import::{
     error_code_for, is_video_file as _is_video_file, pipeline_copy_videos,
     pipeline_move_shots, pipeline_move_to_dest, pipeline_passthrough, FailedFile, FatalError, StagedFile, StagedShot,
