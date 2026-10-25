@@ -23,6 +23,7 @@ pub fn get_platform() -> &'static str {
 pub fn scan_connected_devices(state: State<AppState>) -> Vec<DetectedDevice> {
     // debug!("scan_connected_devices called");
     refresh_open_projects(state.device_scanner.as_ref(), &state.global_db, &state.registry);
+    super::request_index_of_open_projects(&state);
     let devices = state.device_scanner.scan();
     // debug!("scan_connected_devices returning {} devices", devices.len());
 

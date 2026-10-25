@@ -2,6 +2,7 @@ use crate::application::ports::{
     BackupAuthClient, BackupClient, CatalogClient, DeviceScanner, FileStore, FinderTagWriter,
     ImageProcessor, MetadataTool,
 };
+use crate::application::index_queue::IndexQueue;
 use crate::application::project_session::{ProjectSessions, SessionGuard};
 use crate::application::registry::ProjectRegistry;
 use crate::db::{discover_projects_on_device, GlobalDatabase, ProjectDatabase};
@@ -38,6 +39,8 @@ pub struct AppState {
     pub uploading: Arc<Mutex<HashSet<String>>>,
     /// Sesiones de trabajo por proyecto y su candado (spec `project-lock`).
     pub sessions: Arc<ProjectSessions>,
+    /// Proyectos por reindexar en la búsqueda (spec `photo-search`).
+    pub index_queue: Arc<IndexQueue>,
 }
 
 impl AppState {
@@ -77,6 +80,7 @@ impl AppState {
         let guard = SessionGuard::begin(&self.sessions, project_id, &db.project_dir, db.generation()?)?;
         Ok(WriteSession {
             registry: self.registry.clone(),
+            index_queue: self.index_queue.clone(),
             project_id: project_id.to_string(),
             _guard: guard,
         })
@@ -89,6 +93,7 @@ impl AppState {
 /// generación se sube en `drop`, antes de que `_guard` cierre la sesión.
 pub(crate) struct WriteSession {
     registry: Arc<ProjectRegistry>,
+    index_queue: Arc<IndexQueue>,
     project_id: String,
     _guard: SessionGuard,
 }
@@ -106,7 +111,50 @@ impl Drop for WriteSession {
         if let Some(db) = self.registry.get(&self.project_id) {
             let _ = db.bump_generation();
         }
+        // La búsqueda se pone al día cuando se calman las escrituras.
+        self.index_queue.request(&self.project_id, REINDEX_AFTER_WRITE);
     }
+}
+
+/// Espera tras la última escritura antes de reindexar el proyecto.
+const REINDEX_AFTER_WRITE: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Pide reindexar ya todos los proyectos abiertos; los que no cambiaron de
+/// generación se saltan solos (spec `photo-search`).
+pub fn request_index_of_open_projects(state: &AppState) {
+    for db in state.registry.all_open() {
+        state.index_queue.request(&db.project_id, std::time::Duration::ZERO);
+    }
+}
+
+/// Hilo que atiende la cola de reindexado mientras viva la app.
+pub fn spawn_index_worker(state: AppState) {
+    use crate::application::use_cases::index_project::{IndexProject, SeenOn};
+    std::thread::Builder::new()
+        .name("search-index".into())
+        .spawn(move || loop {
+            for project_id in state.index_queue.next_due() {
+                let Some(db) = state.registry.get(&project_id) else { continue };
+                let device_name = state
+                    .global_db
+                    .get_known_devices()
+                    .ok()
+                    .and_then(|ds| ds.into_iter().find(|d| d.uuid == db.device_uuid))
+                    .map(|d| d.name);
+                let seen_on = device_name.as_deref().map(|name| SeenOn { uuid: &db.device_uuid, name });
+                let started = std::time::Instant::now();
+                match (IndexProject { global: &state.global_db, images: state.image_processor.as_ref() })
+                    .execute(&db, seen_on, false)
+                {
+                    Ok(crate::application::use_cases::index_project::IndexOutcome::Indexed { photos }) => {
+                        log::info!("search index: {} ({} fotos) en {} ms", project_id, photos, started.elapsed().as_millis())
+                    }
+                    Ok(_) => {}
+                    Err(e) => log::warn!("search index: {} falló: {}", project_id, e),
+                }
+            }
+        })
+        .expect("no se pudo arrancar el hilo del índice de búsqueda");
 }
 
 /// Scan all mounted devices, update the device registry, and open any
@@ -229,6 +277,9 @@ pub use photo::*;
 
 mod settings;
 pub use settings::*;
+
+mod search;
+pub use search::*;
 
 mod backup;
 pub use backup::*;

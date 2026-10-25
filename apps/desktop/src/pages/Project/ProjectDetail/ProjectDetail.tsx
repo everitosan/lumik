@@ -19,6 +19,8 @@ export interface ProjectDetailProps {
   projectName: string;
   deviceUuid: string;
   coverPhotoPath: string | null;
+  /** Foto que se abre en el visor al entrar (al venir de la búsqueda). */
+  initialPhotoId?: string | null;
   onBack?: () => void;
   onCoverPhotoChange?: (photoId: string | null) => void;
 }
@@ -148,7 +150,7 @@ const feedbackStyles: CSSProperties = {
   color: 'var(--lumik-on-surface-variant, #c2c6d7)',
 };
 
-export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPath, onBack, onCoverPhotoChange }: ProjectDetailProps) {
+export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPath, initialPhotoId, onBack, onCoverPhotoChange }: ProjectDetailProps) {
   const { t, i18n } = useTranslation();
 
   // Al abrir el proyecto: (1) asegura que exista en el catálogo (Fase 5) y
@@ -484,6 +486,22 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
     }
     return tags;
   }, [photosWithOverrides]);
+
+  // Al venir de la búsqueda se abre esa foto. Si los filtros guardados del
+  // proyecto la esconden, se quitan (solo en memoria) para que se vea.
+  const openedInitialPhoto = useRef(false);
+  useEffect(() => {
+    if (!initialPhotoId || openedInitialPhoto.current || !activePhotos) return;
+    if (!activePhotos.some((p) => p.id === initialPhotoId)) return;
+    openedInitialPhoto.current = true;
+    if (!sortedPhotos.some((p) => p.id === initialPhotoId)) {
+      setShowCulledOnly(false);
+      setMinStars(null);
+      setSelectedTags(new Set());
+      setSelectedColors(new Set());
+    }
+    setSelectedPhotoId(initialPhotoId);
+  }, [initialPhotoId, activePhotos, sortedPhotos]);
 
   const selectedPhotoIndex = useMemo(
     () => (selectedPhotoId ? sortedPhotos.findIndex((p) => p.id === selectedPhotoId) : -1),

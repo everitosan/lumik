@@ -4,6 +4,7 @@
 
 pub mod error;
 pub mod import_settings;
+pub mod index_queue;
 pub mod ports;
 pub mod project_session;
 pub mod registry;

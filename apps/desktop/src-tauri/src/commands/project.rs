@@ -237,6 +237,10 @@ pub fn delete_project(state: State<AppState>, id: String) -> AppResult<()> {
     state.ensure_not_locked(&id)?;
     // La carpeta (con su candado) desaparece: se olvidan sus sesiones.
     state.sessions.release(std::slice::from_ref(&id));
+    // Y sale de la búsqueda.
+    if let Err(e) = state.global_db.remove_project_index(&id) {
+        warn!("delete_project: no se pudo quitar del índice: {}", e);
+    }
 
     let project_db = state
         .registry

@@ -26,6 +26,8 @@ import type {
   RetryRegisterRequest,
   BackupSession,
   ProjectAccess,
+  SearchQuery,
+  SearchResult,
 } from './types';
 
 // ============================================================================
@@ -580,4 +582,33 @@ export async function clearPendingBackup(projectId: string): Promise<void> {
 /** Lista los respaldos pendientes (para reanudar al arrancar). */
 export async function getPendingBackups(): Promise<PendingBackup[]> {
   return invoke('get_pending_backups');
+}
+
+// ============================================================================
+// BÚSQUEDA DE FOTOS (spec photo-search)
+// ============================================================================
+
+/** Busca en el índice de todos los proyectos que ha visto este equipo. */
+export async function searchPhotos(query: string): Promise<SearchResult> {
+  return invoke('search_photos', { query });
+}
+
+/** Miniatura del índice de una foto (data URL), aunque su disco no esté conectado. */
+export async function getSearchThumbnail(photoId: string): Promise<string | null> {
+  return invoke('get_search_thumbnail', { photoId });
+}
+
+/** Cuántas fotos hay en el índice. */
+export async function getSearchIndexCount(): Promise<number> {
+  return invoke('get_search_index_count');
+}
+
+/** Interpreta lo escrito en el cuadro (para precargar el panel avanzado). */
+export async function parseSearchQuery(query: string): Promise<SearchQuery> {
+  return invoke('parse_search_query', { query });
+}
+
+/** Escribe lo elegido en el panel como operadores, en el idioma de la app. */
+export async function formatSearchQuery(query: SearchQuery, lang: 'es' | 'en'): Promise<string> {
+  return invoke('format_search_query', { query, lang });
 }

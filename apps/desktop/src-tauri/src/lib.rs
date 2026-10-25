@@ -133,7 +133,12 @@ pub fn run() {
         backup,
         uploading: Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
         sessions,
+        index_queue: Arc::new(application::index_queue::IndexQueue::new()),
     };
+
+    // Índice de búsqueda (spec photo-search): al día con los proyectos abiertos.
+    commands::spawn_index_worker(state.clone());
+    commands::request_index_of_open_projects(&state);
 
     info!("Starting Tauri application...");
 
@@ -180,6 +185,11 @@ pub fn run() {
 
             // ── Proyectos (gestión / consulta) ──────────────────────────────
             commands::get_projects_dashboard,
+            commands::search_photos,
+            commands::get_search_thumbnail,
+            commands::get_search_index_count,
+            commands::parse_search_query,
+            commands::format_search_query,
             commands::get_project,
             commands::open_project_session,
             commands::close_project_session,

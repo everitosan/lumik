@@ -381,3 +381,59 @@ export interface BackupSession {
   name: string | null;
   server_url: string;
 }
+
+// ============================================================================
+// BÚSQUEDA DE FOTOS (spec photo-search)
+// ============================================================================
+
+export type StarsFilter = { mode: 'exact' | 'at_least'; value: number };
+
+export type SearchPeriod =
+  | { kind: 'year'; year: number }
+  | { kind: 'month'; year: number; month: number };
+
+/** Consulta interpretada: es lo que edita el panel de búsqueda avanzada. */
+export interface SearchQuery {
+  text: string[];
+  tags: string[];
+  not_tags: string[];
+  stars: StarsFilter | null;
+  /** 1 rojo … 5 púrpura */
+  colors: number[];
+  camera: string | null;
+  lens: string | null;
+  period: SearchPeriod | null;
+  /** `AAAA-MM-DD`, sin incluir el día */
+  before: string | null;
+  after: string | null;
+  project: string | null;
+  approved: boolean;
+  delivered: boolean;
+  pair: boolean;
+  include_archived: boolean;
+}
+
+export interface SearchHit {
+  photo_id: string;
+  project_id: string;
+  project_name: string;
+  project_date: string | null;
+  /** Último disco donde se vio el proyecto */
+  device_name: string | null;
+  file_name: string;
+  capture_date: string | null;
+  stars: number;
+  colors: number[];
+  tags: string | null;
+  culled: boolean;
+  delivered: boolean;
+  is_pair: boolean;
+  /** El disco del proyecto está conectado: se puede abrir */
+  connected: boolean;
+}
+
+export interface SearchResult {
+  hits: SearchHit[];
+  /** Había más resultados que los mostrados */
+  truncated: boolean;
+}

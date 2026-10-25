@@ -12,16 +12,16 @@
 
 ## 3. Refresco (desktop)
 
-- [ ] 3.1 Reindexar por generación al arrancar y en cada escaneo de discos, en segundo plano, proyecto por proyecto. Verificar con un test de que un proyecto con la misma generación no se reindexa.
-- [ ] 3.2 Marcar el proyecto para reindexar al cerrar una `WriteSession`, con debounce. Verificar con un test de que dos escrituras seguidas reindexan una vez.
+- [x] 3.1 Reindexar por generación al arrancar y en cada escaneo de discos, en segundo plano, proyecto por proyecto. Verificar con un test de que un proyecto con la misma generación no se reindexa.
+- [x] 3.2 Marcar el proyecto para reindexar al cerrar una `WriteSession`, con debounce. Verificar con un test de que dos escrituras seguidas reindexan una vez.
 
 ## 4. Interfaz
 
-- [ ] 4.1 Comando `search_photos` y vista "Buscar" en la barra lateral, con el cuadro, resultados agrupados por proyecto y virtualizados, y estado vacío. Verificar con `tsc` y en `dev`.
-- [ ] 4.2 Panel de búsqueda avanzada con sus campos, ida y vuelta con el cuadro. Verificar en `dev` los escenarios de "Búsqueda avanzada".
-- [ ] 4.3 Abrir un resultado: visor del proyecto si el disco está conectado; miniatura y aviso del disco si no. Textos `es`/`en`. Verificar en `dev` con un disco conectado y otro desconectado.
+- [ ] 4.1 *(Código hecho: `search_photos`, `get_search_thumbnail`, `get_search_index_count`, sección "Buscar" con cuadro, resumen, resultados agrupados y virtualizados con `PhotoCard`, estados vacíos; `tsc` y build limpios; falta la comprobación en `dev`.)* Comando `search_photos` y vista "Buscar" en la barra lateral, con el cuadro, resultados agrupados por proyecto y virtualizados, y estado vacío. Verificar con `tsc` y en `dev`.
+- [ ] 4.2 *(Código hecho: `AdvancedSearchPanel` con ida y vuelta vía `parse_search_query`/`format_search_query` en el idioma de la app; falta la comprobación en `dev`.)* Panel de búsqueda avanzada con sus campos, ida y vuelta con el cuadro. Verificar en `dev` los escenarios de "Búsqueda avanzada".
+- [ ] 4.3 *(Código hecho: con disco conectado abre el proyecto en esa foto (y quita en memoria los filtros que la escondan); sin disco, aviso con la miniatura y el nombre del disco; textos `es`/`en`; falta la comprobación en `dev`.)* Abrir un resultado: visor del proyecto si el disco está conectado; miniatura y aviso del disco si no. Textos `es`/`en`. Verificar en `dev` con un disco conectado y otro desconectado.
 
 ## 5. Documentación y verificación
 
-- [ ] 5.1 Diagrama del flujo en `docs/useCases/` y comandos en `apps/desktop/CLAUDE.md`. Verificar que el Mermaid parsea.
+- [x] 5.1 Diagrama del flujo en `docs/useCases/` y comandos en `apps/desktop/CLAUDE.md`. Verificar que el Mermaid parsea.
 - [ ] 5.2 Prueba con el disco real: indexar todos sus proyectos, medir el tiempo de una búsqueda con 3 operadores y texto libre (objetivo < 200 ms) y el tamaño de `lumik.db`, desconectar el disco y repetir. Correr los tests del núcleo y del desktop, el build y `openspec validate photo-search --strict`.

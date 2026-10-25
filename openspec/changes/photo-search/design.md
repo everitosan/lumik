@@ -71,7 +71,9 @@ Con `semantic-search`, el texto libre pasará a ordenar por parecido entre las c
 
 ### D5. Interfaz
 
-- Vista "Buscar" en la barra lateral y atajo de teclado. El buscador del dashboard sigue filtrando proyectos por nombre.
+- Vista "Buscar" en la barra lateral (un atajo de teclado global queda para después). El buscador del dashboard sigue filtrando proyectos por nombre.
+- La ida y vuelta entre el cuadro y el panel la hace el núcleo (`parse_search_query` / `format_search_query`), para no duplicar en TypeScript la interpretación de la consulta.
+- Los resultados llegan sin miniatura; cada tarjeta visible la pide aparte (`get_search_thumbnail`), como el grid del proyecto.
 - El panel avanzado se despliega desde el cuadro, como en Gmail.
 - Resultados con virtualización, como el grid del proyecto.
 - Abrir un resultado con disco conectado navega al visor de su proyecto; sin disco, muestra la miniatura y el aviso.

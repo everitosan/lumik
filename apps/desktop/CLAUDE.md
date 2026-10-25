@@ -80,6 +80,7 @@ crates/lumik-core/src/              # núcleo compartido (desktop y tablet)
     pairs.rs                        #   pares RAW+JPEG: ShotKey (nombre de cámara + fecha), group_shots
     delivery.rs                     #   DeliveryMode (nada / pares / todo JPG de cámara), delivery_for
     lock.rs                         #   candado del proyecto (.lumik-lock): ProjectLock, LockState
+    search.rs                       #   SearchQuery: operadores de búsqueda y texto libre (ida y vuelta)
     device.rs                       #   DetectedDevice
     project.rs                      #   ProjectFolder (slug/date_parts/path), compare_dashboard
     error.rs                        #   DomainError
@@ -89,6 +90,7 @@ crates/lumik-core/src/              # núcleo compartido (desktop y tablet)
                                     #   FileStore, PhotoRepository, ImportPipeline, ProgressReporter, ProjectLockStore
     registry.rs                     #   ProjectRegistry (proyectos abiertos, ejecting, rotation-gen)
     project_session.rs              #   ProjectSessions: sesiones por proyecto y su candado
+    index_queue.rs                  #   IndexQueue: proyectos por reindexar en la búsqueda (debounce)
     use_cases/                      #   cull_photo, trash_photo, rate_photo, rotate_photo, import_photos,
                                     #   eject_device, ensure_catalog_synced, sync_exported, change_delivery_mode
                                     #   (con tests de fakes)
@@ -96,6 +98,7 @@ crates/lumik-core/src/              # núcleo compartido (desktop y tablet)
   import/                           # pipeline genérico (staging, mover, pares, nombres libres), converter, xmp, progress
   db/                               # persistencia SQLite (GlobalDatabase / ProjectDatabase)
     mod.rs, models.rs, queries.rs (photo_from_row), migrations.rs, persistence.rs (PhotoRepository), *_schema.sql
+    search_index.rs                 #   índice de búsqueda en lumik.db: escritura por proyecto y consulta
 
 src-tauri/src/                      # shell del desktop
   main.rs                           # entry point → lumik_lib::run()
@@ -358,6 +361,7 @@ Fotos: `get_project_photos`, `get_project_trashed_photos`, `trash_photo`, `resto
 Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`
 Ajustes: `get_app_settings`, `update_app_settings`, `get_install_name`, `set_install_name`, `get_dashboard_sort`, `update_dashboard_sort`, `get_dashboard_show_archived`, `set_dashboard_show_archived`, `get_sidebar_sections`, `set_sidebar_section_collapsed`
+Búsqueda: `search_photos`, `get_search_thumbnail`, `get_search_index_count`, `parse_search_query`, `format_search_query`
 Keybindings: `get_keybindings`, `update_keybinding`
 Import: `start_import`, `analyze_import_selection`, `retry_import_register`
 Respaldo — cuenta: `get_backup_server_url`, `set_backup_server_url`, `backup_register`, `backup_login`, `backup_logout`, `get_backup_session`

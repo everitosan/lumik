@@ -193,6 +193,12 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
           onClick={() => onSectionChange('projects')}
         />
         <SectionButton
+          icon="search"
+          label={t('navigation.search')}
+          active={activeSection === 'search'}
+          onClick={() => onSectionChange('search')}
+        />
+        <SectionButton
           icon="settings"
           label={t('navigation.settings')}
           active={activeSection === 'settings'}
