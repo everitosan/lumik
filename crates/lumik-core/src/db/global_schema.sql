@@ -82,3 +82,52 @@ CREATE TABLE IF NOT EXISTS backup_queue (
     quality     TEXT,                       -- original/high/medium/low
     created_at  TEXT NOT NULL               -- ISO 8601 datetime
 );
+
+
+-- ============================================================================
+-- SEARCH INDEX (spec photo-search)
+-- Copia de las fotos de todos los proyectos vistos por este equipo, para buscar
+-- aunque su disco no esté conectado. Desechable: se reconstruye desde cada
+-- project.db al conectar los discos. Las columnas *_norm van en minúsculas y
+-- sin acentos (domain::search::normalize).
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS search_project (
+    project_id          TEXT PRIMARY KEY,
+    name                TEXT NOT NULL,
+    description         TEXT,
+    session_date        TEXT,
+    created_at          TEXT NOT NULL,
+    archived            INTEGER NOT NULL DEFAULT 0,
+    device_uuid         TEXT,                   -- último disco donde se vio (para "conecta…")
+    device_name         TEXT,
+    name_norm           TEXT NOT NULL DEFAULT '',
+    text_norm           TEXT NOT NULL DEFAULT '', -- nombre + descripción
+    indexed_generation  INTEGER NOT NULL DEFAULT -1,
+    indexed_at          TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS search_photo (
+    photo_id        TEXT PRIMARY KEY,
+    project_id      TEXT NOT NULL REFERENCES search_project(project_id) ON DELETE CASCADE,
+    file_name       TEXT NOT NULL,
+    capture_date    TEXT,                       -- 'AAAA-MM-DD HH:MM:SS' (comparable como texto)
+    stars           INTEGER NOT NULL DEFAULT 0,
+    colors          TEXT NOT NULL DEFAULT ',',  -- ',1,3,'
+    tags            TEXT,                       -- como los ve el usuario: 'calle,retrato'
+    tags_norm       TEXT NOT NULL DEFAULT ',',  -- ',calle,retrato,'
+    text_norm       TEXT NOT NULL DEFAULT '',   -- tags + nombre de archivo
+    culled          INTEGER NOT NULL DEFAULT 0,
+    delivered       INTEGER NOT NULL DEFAULT 0,
+    is_pair         INTEGER NOT NULL DEFAULT 0,
+    camera          TEXT,
+    camera_norm     TEXT NOT NULL DEFAULT '',
+    lens            TEXT,
+    lens_norm       TEXT NOT NULL DEFAULT '',
+    rotation        INTEGER NOT NULL DEFAULT 0, -- con la que se hizo `thumb`
+    thumb           BLOB,                       -- JPEG de 128 px para resultados sin disco
+    embedding       BLOB                        -- vector de la foto (semantic-search); NULL por ahora
+);
+
+CREATE INDEX IF NOT EXISTS idx_search_photo_project ON search_photo(project_id);
+CREATE INDEX IF NOT EXISTS idx_search_photo_date ON search_photo(capture_date);

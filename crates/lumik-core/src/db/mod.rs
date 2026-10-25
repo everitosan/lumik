@@ -2,6 +2,7 @@ mod migrations;
 pub mod models;
 mod persistence;
 pub mod queries;
+pub mod search_index;
 mod schema;
 
 use rusqlite::Connection;
@@ -279,6 +280,26 @@ mod tests {
         assert_eq!(project.generation().unwrap(), 0);
         assert_eq!(project.bump_generation().unwrap(), 1);
         assert_eq!(project.bump_generation().unwrap(), 2);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn search_index_tables_exist_and_reopen() {
+        let dir = std::env::temp_dir().join(format!("lumik_search_schema_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("lumik.db");
+        drop(GlobalDatabase::new(path.clone()).unwrap());
+        // Reabrir aplica el esquema otra vez sin fallar ni duplicar.
+        let global = GlobalDatabase::new(path).unwrap();
+        let conn = global.conn();
+        for table in ["search_project", "search_photo"] {
+            let n: i64 = conn
+                .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1", [table], |r| r.get(0))
+                .unwrap();
+            assert_eq!(n, 1, "falta la tabla {table}");
+        }
+        assert!(conn.prepare("SELECT embedding, thumb, tags_norm, text_norm FROM search_photo").is_ok());
+        drop(conn);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

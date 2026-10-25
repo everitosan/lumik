@@ -2,13 +2,13 @@
 
 ## 1. Consulta (dominio)
 
-- [ ] 1.1 `domain::search`: `SearchQuery` con operadores y texto libre, `parse` y `to_string` (ida y vuelta), comillas, operadores inválidos como texto libre y normalización sin mayúsculas ni acentos. Verificar con tests de dominio de cada operador y de la ida y vuelta.
+- [x] 1.1 `domain::search`: `SearchQuery` con operadores y texto libre, `parse` y `to_string` (ida y vuelta), comillas, operadores inválidos como texto libre y normalización sin mayúsculas ni acentos. Verificar con tests de dominio de cada operador y de la ida y vuelta.
 
 ## 2. Índice (núcleo)
 
-- [ ] 2.1 Tablas `search_project` y `search_photo` en la base global, con columnas normalizadas para el texto libre y `embedding` vacío. Verificar con un test de esquema y de idempotencia.
-- [ ] 2.2 Reindexar un proyecto desde su `project.db`: fotos fuera de la papelera, miniatura de 128 px desde `.thumbs/`, generación indexada; y quitar del índice los proyectos eliminados. Verificar con tests: una foto en la papelera sale, una calificación cambia el índice, otro proyecto no se toca.
-- [ ] 2.3 Caso de uso de búsqueda: `SearchQuery` → SQL, orden por fecha, archivados fuera salvo que se pidan, y disco conectado o no por resultado. Verificar con tests de cada operador combinado sobre un índice de prueba.
+- [x] 2.1 Tablas `search_project` y `search_photo` en la base global, con columnas normalizadas para el texto libre y `embedding` vacío. Verificar con un test de esquema y de idempotencia.
+- [x] 2.2 Reindexar un proyecto desde su `project.db`: fotos fuera de la papelera, miniatura de 128 px desde `.thumbs/`, generación indexada; y quitar del índice los proyectos eliminados. Verificar con tests: una foto en la papelera sale, una calificación cambia el índice, otro proyecto no se toca.
+- [x] 2.3 Caso de uso de búsqueda: `SearchQuery` → SQL, orden por fecha, archivados fuera salvo que se pidan, y disco conectado o no por resultado. Verificar con tests de cada operador combinado sobre un índice de prueba.
 
 ## 3. Refresco (desktop)
 

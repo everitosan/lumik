@@ -469,6 +469,12 @@ pub trait ImageProcessor: Send + Sync {
     /// Descarta la miniatura y la vista previa en caché de una foto, para que se
     /// regeneren de otro archivo (p. ej. del JPEG que se le acaba de unir).
     fn invalidate_cached_images(&self, _project_dir: &Path, _photo_id: &str) {}
+
+    /// Miniatura del índice de búsqueda (JPEG de 128 px) a partir del thumbnail
+    /// `thumb` de `.thumbs/`, o `None` si no se puede (spec `photo-search`).
+    fn index_thumbnail(&self, _thumb: &Path) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 /// Escritura de Finder tags de macOS/iPadOS como sidecars AppleDouble (`._nombre`),

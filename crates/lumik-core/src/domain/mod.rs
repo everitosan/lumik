@@ -11,3 +11,4 @@ pub mod pairs;
 pub mod paths;
 pub mod photo;
 pub mod project;
+pub mod search;

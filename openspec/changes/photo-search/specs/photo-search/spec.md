@@ -17,15 +17,26 @@ Cada equipo SHALL mantener un índice de las fotos de todos los proyectos que ha
 - **THEN** una búsqueda `estrellas>=5` la incluye sin reconectar el disco
 
 ### Requirement: Operadores de búsqueda
-El cuadro de búsqueda SHALL entender estos operadores, combinables con Y: `tag:x` (tiene el tag), `-tag:x` (no lo tiene), `estrellas>=n`, `estrellas:n`, `color:nombre`, `camara:texto`, `lente:texto`, `en:AAAA` o `en:AAAA-MM`, `antes:AAAA-MM-DD`, `despues:AAAA-MM-DD`, `proyecto:texto` y `es:aprobada|entregada|par`. Los valores con espacios SHALL ir entre comillas. Lo que no sea un operador SHALL tratarse como texto libre.
+El cuadro de búsqueda SHALL entender estos operadores, combinables con Y: `tag:x`, `-tag:x`, `estrellas>=n`, `estrellas:n`, `color:nombre`, `camara:texto`, `lente:texto`, `en:AAAA` o `en:AAAA-MM`, `antes:AAAA-MM-DD`, `despues:AAAA-MM-DD`, `proyecto:texto`, `es:aprobada|entregada|par` e `incluir:archivados`.
 
 #### Scenario: Consulta combinada
 - **WHEN** el fotógrafo busca `tag:calle -tag:boda estrellas>=4 en:2025`
 - **THEN** ve las fotos de 2025 con el tag "calle", sin el tag "boda" y con 4 o más estrellas
 
+### Requirement: Lectura de la consulta
+Los operadores SHALL aceptarse también en inglés (`stars>=`, `camera:`, `is:approved`…). Los valores con espacios SHALL ir entre comillas. Lo que no sea un operador, o tenga un valor inválido, SHALL tratarse como texto libre.
+
+#### Scenario: Operadores en inglés
+- **WHEN** el fotógrafo busca `stars>=4 is:approved`
+- **THEN** ve las fotos aprobadas con 4 o más estrellas
+
 #### Scenario: Valor con espacios
 - **WHEN** el fotógrafo busca `camara:"X-T5"`
 - **THEN** ve las fotos tomadas con esa cámara
+
+#### Scenario: Valor inválido
+- **WHEN** el fotógrafo busca `estrellas>=9`
+- **THEN** se busca como texto libre y no como filtro de estrellas
 
 ### Requirement: Texto libre
 El texto libre SHALL buscar las fotos cuyos tags, nombre de archivo, nombre de proyecto o descripción del proyecto contengan todas sus palabras, sin distinguir mayúsculas ni acentos.
@@ -35,7 +46,7 @@ El texto libre SHALL buscar las fotos cuyos tags, nombre de archivo, nombre de p
 - **THEN** aparecen las fotos con el tag "calle" y las de proyectos cuyo nombre contiene "calle"
 
 ### Requirement: Búsqueda avanzada
-Un panel de búsqueda avanzada SHALL ofrecer los campos texto libre, tags, sin tags, estrellas, color, cámara, lente, fecha de captura (un año, un mes o un rango), proyecto, estado (aprobada, entregada, par RAW+JPG) e incluir archivados. Buscar desde el panel SHALL escribir en el cuadro los operadores equivalentes, y abrir el panel con una consulta escrita SHALL precargar sus campos.
+Un panel de búsqueda avanzada SHALL ofrecer los campos texto libre, tags, sin tags, estrellas, color, cámara, lente, fecha de captura (un año, un mes o un rango), proyecto, estado (aprobada, entregada, par RAW+JPG) e incluir archivados. Buscar desde el panel SHALL escribir en el cuadro los operadores equivalentes, en el idioma de la app, y abrir el panel con una consulta escrita SHALL precargar sus campos.
 
 #### Scenario: Del panel al cuadro
 - **WHEN** el fotógrafo elige en el panel el tag "retrato" y "4 o más estrellas" y pulsa buscar

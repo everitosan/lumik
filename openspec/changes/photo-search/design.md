@@ -64,7 +64,8 @@ Se descartó no guardar miniatura: los resultados sin disco serían solo nombres
 - El texto libre se separa en palabras. Cada una debe aparecer en tags, nombre de archivo o nombre o descripción del proyecto. Se compara sin mayúsculas ni acentos, con columnas normalizadas al indexar.
 - El orden es por fecha de captura descendente, y los resultados se agrupan por proyecto en el frontend.
 - Un operador mal escrito (`estrellas>=x`) se trata como texto libre.
-- Nombres de color: rojo, naranja, amarillo, verde, azul (los mismos del filtro por color).
+- Nombres de color: rojo, amarillo, verde, azul y púrpura (1 a 5, los del filtro por color), también en inglés.
+- Los operadores se leen en español y en inglés; el panel los escribe en el idioma de la app.
 
 Con `semantic-search`, el texto libre pasará a ordenar por parecido entre las candidatas que dejen los operadores, sin cambiar esta interfaz.
 

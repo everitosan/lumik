@@ -46,6 +46,22 @@ fn thumb_dest(src: &Path, photo_id: &str) -> Option<PathBuf> {
 
 /// Reaplica un delta de rotación al thumbnail cacheado. Idéntico en todas las
 /// plataformas (solo usa el crate `image`).
+/// Lado mayor y calidad de la miniatura del índice de búsqueda (spec photo-search).
+const INDEX_THUMB_EDGE: u32 = 128;
+const INDEX_THUMB_QUALITY: u8 = 70;
+
+/// Miniatura del índice a partir del thumbnail de `.thumbs/` (ya rotado).
+/// Igual en todas las plataformas (solo usa el crate `image`).
+fn index_thumbnail_from(thumb: &Path) -> Option<Vec<u8>> {
+    let img = image::open(thumb).ok()?;
+    let small = img.thumbnail(INDEX_THUMB_EDGE, INDEX_THUMB_EDGE).to_rgb8();
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, INDEX_THUMB_QUALITY)
+        .encode_image(&small)
+        .ok()?;
+    Some(out)
+}
+
 /// Borra la miniatura y las vistas previas en caché de una foto.
 fn remove_cached_images(project_dir: &Path, photo_id: &str) {
     for rel in [
@@ -328,6 +344,10 @@ impl ImageProcessor for DesktopImaging {
     fn invalidate_cached_images(&self, project_dir: &Path, photo_id: &str) {
         remove_cached_images(project_dir, photo_id);
     }
+
+    fn index_thumbnail(&self, thumb: &Path) -> Option<Vec<u8>> {
+        index_thumbnail_from(thumb)
+    }
 }
 
 /// Alias interno para leer la rotación en desktop sin duplicar la lógica exiftool.
@@ -381,6 +401,10 @@ impl ImageProcessor for AndroidImaging {
     fn invalidate_cached_images(&self, project_dir: &Path, photo_id: &str) {
         remove_cached_images(project_dir, photo_id);
     }
+
+    fn index_thumbnail(&self, thumb: &Path) -> Option<Vec<u8>> {
+        index_thumbnail_from(thumb)
+    }
 }
 
 // ============================================================================
@@ -389,6 +413,20 @@ impl ImageProcessor for AndroidImaging {
 
 #[cfg(all(test, not(target_os = "android")))]
 mod tests {
+    #[test]
+    fn index_thumbnail_is_small_and_keeps_aspect() {
+        let dir = std::env::temp_dir().join(format!("lumik_index_thumb_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let thumb = dir.join("t.jpg");
+        image::RgbImage::from_pixel(320, 240, image::Rgb([120, 90, 60])).save(&thumb).unwrap();
+        let bytes = index_thumbnail_from(&thumb).unwrap();
+        let img = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((img.width(), img.height()), (128, 96));
+        assert!(bytes.len() < 8 * 1024, "pesa {} bytes", bytes.len());
+        assert_eq!(index_thumbnail_from(&dir.join("no-existe.jpg")), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     use super::*;
     use crate::application::ports::MetadataTool;
 
