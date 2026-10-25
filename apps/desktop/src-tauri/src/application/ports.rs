@@ -5,7 +5,7 @@
 //! root (`lib.rs`). Se agregan puertos a medida que se cablean (Fase 2+).
 
 use crate::db::models::{CreatePhoto, Photo, PhotographerMetadata};
-use crate::devices::DetectedDevice;
+use crate::domain::device::DetectedDevice;
 use crate::import::{FailedFile, FatalError, ImportLogEntry, ImportProgress, SkippedFile};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

@@ -13,9 +13,6 @@ pub enum DbError {
     #[error("SQLite error: {0}")]
     Sqlite(#[from] rusqlite::Error),
 
-    #[error("Failed to get app data directory")]
-    NoAppDataDir,
-
     #[error("Database not initialized")]
     NotInitialized,
 
@@ -238,23 +235,6 @@ fn discover_recursive(
             continue;
         }
         discover_recursive(&path, device_uuid, mount_point, depth + 1, out);
-    }
-}
-
-pub fn get_default_db_path() -> DbResult<PathBuf> {
-    #[cfg(target_os = "android")]
-    {
-        // Android private app data dir. HOME may not be set in all environments,
-        // so we fall back to the standard /data/data/<package>/ path.
-        let base = std::env::var("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("/data/data/com.lumik.desktop"));
-        return Ok(base.join("lumik.db"));
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let data_dir = dirs::data_local_dir().ok_or(DbError::NoAppDataDir)?;
-        Ok(data_dir.join("com.lumik.app").join("lumik.db"))
     }
 }
 

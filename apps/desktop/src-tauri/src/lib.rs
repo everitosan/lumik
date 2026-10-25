@@ -15,6 +15,8 @@ mod exiftool;
 mod exif_android;
 mod import;
 mod util;
+#[cfg(all(test, not(target_os = "android")))]
+mod e2e_tests;
 
 use commands::{AppState, refresh_open_projects};
 use db::GlobalDatabase;
@@ -38,7 +40,7 @@ pub fn run() {
 
     info!("Lumik starting...");
 
-    let db_path = db::get_default_db_path().expect("Failed to get database path");
+    let db_path = infrastructure::app_data::default_global_db_path().expect("Failed to get database path");
     debug!("Global database path: {:?}", db_path);
 
     let global_db = match GlobalDatabase::new(db_path) {

@@ -78,9 +78,10 @@ mod tests {
     use super::*;
     use crate::db::ProjectDatabase;
     use crate::db::models::InstallIdentity;
-    use crate::devices::DetectedDevice;
-    use crate::domain::lock::LOCK_FILE;
-    use crate::infrastructure::lock::FsLockStore;
+    use crate::domain::device::DetectedDevice;
+    use crate::application::ports::ProjectLockStore;
+    use crate::domain::lock::ProjectLock;
+    use std::collections::HashMap;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
@@ -131,8 +132,30 @@ mod tests {
         (dir, Arc::new(db))
     }
 
+    /// Candados en memoria, por carpeta.
+    #[derive(Default)]
+    struct MemLocks(Mutex<HashMap<PathBuf, ProjectLock>>);
+
+    impl ProjectLockStore for MemLocks {
+        fn read(&self, dir: &std::path::Path) -> Option<ProjectLock> {
+            self.0.lock().unwrap().get(dir).cloned()
+        }
+        fn write(&self, dir: &std::path::Path, lock: &ProjectLock) -> Result<(), String> {
+            self.0.lock().unwrap().insert(dir.to_path_buf(), lock.clone());
+            Ok(())
+        }
+        fn remove(&self, dir: &std::path::Path) -> Result<(), String> {
+            self.0.lock().unwrap().remove(dir);
+            Ok(())
+        }
+    }
+
+    fn sessions_on(locks: Arc<MemLocks>) -> ProjectSessions {
+        ProjectSessions::new(locks, InstallIdentity { id: "pc".into(), name: "estudio-pc".into() })
+    }
+
     fn sessions() -> ProjectSessions {
-        ProjectSessions::new(Arc::new(FsLockStore), InstallIdentity { id: "pc".into(), name: "estudio-pc".into() })
+        sessions_on(Arc::new(MemLocks::default()))
     }
 
     /// Expulsa devA con los proyectos `pa` (devA) y `pc` (devC) abiertos en la
@@ -152,11 +175,12 @@ mod tests {
             eject_result,
             ejected: Mutex::new(Vec::new()),
         };
-        let sessions = sessions();
+        let disk = Arc::new(MemLocks::default());
+        let sessions = sessions_on(disk.clone());
         sessions.open_view("pa", &dir_a, 0).unwrap();
         sessions.open_view("pc", &dir_c, 0).unwrap();
         let result = EjectDevice { scanner: &scanner, registry: &registry, sessions: &sessions }.execute("devA");
-        let locks = [dir_a.join(LOCK_FILE).exists(), dir_c.join(LOCK_FILE).exists()];
+        let locks = [disk.read(&dir_a).is_some(), disk.read(&dir_c).is_some()];
 
         for dir in [dir_a, dir_b, dir_c] {
             let _ = std::fs::remove_dir_all(dir);

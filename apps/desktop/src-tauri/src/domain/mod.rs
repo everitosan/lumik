@@ -4,6 +4,7 @@
 //! (ver `docs/desktop-clean-architecture.md`).
 
 pub mod delivery;
+pub mod device;
 pub mod error;
 pub mod lock;
 pub mod pairs;
