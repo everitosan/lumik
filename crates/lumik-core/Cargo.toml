@@ -1,6 +1,6 @@
 [package]
 name = "lumik-core"
-version = "0.1.6"
+version = "0.2.0"
 description = "Núcleo de Lumik: dominio, casos de uso, import y persistencia SQLite, compartido por las apps de escritorio y de tablet"
 edition = "2021"
 publish = false

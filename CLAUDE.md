@@ -7,7 +7,7 @@ Permite organizar sesiones en proyectos, seleccionar, etiquetar, calificar y tag
 
 | App | Ubicacion | Stack | Estado |
 |-----|-----------|-------|--------|
-| Desktop (Linux, Windows, Android) | `apps/desktop/` | Tauri v2 (Rust + React) | Beta (v0.1.6) |
+| Desktop (Linux, Windows, Android) | `apps/desktop/` | Tauri v2 (Rust + React) | Beta (v0.2.0) |
 | Servidor de respaldo | `apps/server/` | Rust + axum + Postgres + rclone | Beta |
 | Portal web de respaldo | `apps/web/` | React 19 + Vite | Beta |
 | Landing | `apps/landing/` | Astro | Publicada |

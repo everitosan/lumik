@@ -5,6 +5,36 @@ Todos los cambios notables de Lumik se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.2.0-beta.1] — pendiente (en pruebas)
+
+Primera beta de la serie 0.2: buscar fotos en todos los proyectos y preparar
+Lumik para trabajar con el mismo disco en varios dispositivos.
+
+### Añadido
+- **Búsqueda de fotos en todos los proyectos**, desde el buscador del
+  dashboard: al escribir sigue filtrando proyectos; con Enter busca en las
+  fotos de todos los proyectos que ha visto el equipo, aunque su disco no esté
+  conectado. Entiende filtros al estilo Gmail (`tag:calle`, `-tag:boda`,
+  `estrellas>=4`, `color:rojo`, `camara:"X-T5"`, `en:2025`, `es:aprobada`…, en
+  español o inglés) y tiene un panel de búsqueda avanzada que los arma por ti.
+  Los resultados se agrupan por proyecto; una foto con su disco conectado se
+  abre en el visor y al cerrarlo vuelves a los resultados, y si el disco no
+  está, Lumik te dice cuál conectar.
+- **Candado de proyecto**: el dispositivo que trabaja en un proyecto deja un
+  candado en su carpeta. Otro dispositivo lo abre en solo lectura, con un aviso
+  de quién lo tiene, desde cuándo y si el disco está al día, y puede "Tomar el
+  control". El dashboard marca los proyectos abiertos en otro dispositivo, y
+  el nombre de este equipo se cambia en Ajustes → Apariencia.
+
+### Cambiado
+- El núcleo de Lumik (reglas de las fotos, importación y bases de datos) vive
+  en un módulo propio, listo para compartirlo con la futura app de tablet. No
+  cambia nada al usarlo.
+
+### Corregido
+- Las listas desplegables y los calendarios nativos se veían con fondo blanco;
+  ahora siguen el tema oscuro.
+
 ## [0.1.6-beta.2] — pendiente (en pruebas)
 
 Flujo RAW+JPEG: para quien dispara las dos cosas (por ejemplo, con recetas de
