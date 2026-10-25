@@ -66,46 +66,61 @@ El backend Rust sigue una arquitectura por capas (ver
 `docs/desktop-clean-architecture.md`). Las dependencias apuntan hacia adentro:
 `interface → application → domain`, y `infrastructure` implementa los puertos.
 
-```
-src-tauri/src/
-  main.rs                           # entry point → lumik_lib::run()
-  lib.rs                            # composition root: arma infra, elige impl por plataforma, registra comandos
+El núcleo vive en su propio crate, **`crates/lumik-core`**, compartido con la
+futura app de tablet (`openspec/changes/tablet-app-spike`). No depende de Tauri,
+de exiftool ni de `#[cfg(target_os)]`; `src-tauri` es el shell del desktop y lo
+reexporta en `lib.rs` (`pub use lumik_core::{application, db, domain, import}`),
+así que `crate::domain::…` sigue valiendo dentro del shell.
 
+```
+crates/lumik-core/src/              # núcleo compartido (desktop y tablet)
   domain/                           # núcleo puro (sin SQLite/exiftool/Tauri/fs), 100% testeable
     photo.rs                        #   VOs: Rotation, Stars, normalize_tags
     paths.rs                        #   cull_destination (_media↔_culled), destinos de _trash/ y _exported/, path_to_slash
     pairs.rs                        #   pares RAW+JPEG: ShotKey (nombre de cámara + fecha), group_shots
     delivery.rs                     #   DeliveryMode (nada / pares / todo JPG de cámara), delivery_for
+    lock.rs                         #   candado del proyecto (.lumik-lock): ProjectLock, LockState
+    device.rs                       #   DetectedDevice
     project.rs                      #   ProjectFolder (slug/date_parts/path), compare_dashboard
     error.rs                        #   DomainError
 
   application/                      # orquestación; define los puertos (traits)
     ports.rs                        #   DeviceScanner, MetadataTool, ImageProcessor, FinderTagWriter,
-                                    #   FileStore, PhotoRepository, ImportPipeline, ProgressReporter
+                                    #   FileStore, PhotoRepository, ImportPipeline, ProgressReporter, ProjectLockStore
     registry.rs                     #   ProjectRegistry (proyectos abiertos, ejecting, rotation-gen)
+    project_session.rs              #   ProjectSessions: sesiones por proyecto y su candado
     use_cases/                      #   cull_photo, trash_photo, rate_photo, rotate_photo, import_photos,
                                     #   eject_device, ensure_catalog_synced, sync_exported, change_delivery_mode
                                     #   (con tests de fakes)
 
+  import/                           # pipeline genérico (staging, mover, pares, nombres libres), converter, xmp, progress
+  db/                               # persistencia SQLite (GlobalDatabase / ProjectDatabase)
+    mod.rs, models.rs, queries.rs (photo_from_row), migrations.rs, persistence.rs (PhotoRepository), *_schema.sql
+
+src-tauri/src/                      # shell del desktop
+  main.rs                           # entry point → lumik_lib::run()
+  lib.rs                            # composition root: reexporta el núcleo, arma infra, elige impl por plataforma, registra comandos
+
   infrastructure/                   # implementa los puertos (aquí vive el #[cfg] de plataforma)
     metadata.rs                     #   ExiftoolMetadata (desktop) / AndroidMetadata (rawler)
     imaging.rs                      #   DesktopImaging / AndroidImaging (thumbnails/previews)
-    devices.rs, finder_tags.rs, folder.rs, fs.rs, progress.rs, import_pipeline.rs, persistence.rs
+    import_signing.rs               #   firma del import: pool de exiftool (desktop) / rawler + XMP (Android)
+    lock.rs                         #   FsLockStore (escritura atómica de .lumik-lock), nombre del equipo
+    app_data.rs                     #   ruta de lumik.db por plataforma
+    devices.rs, finder_tags.rs, folder.rs, fs.rs, progress.rs, import_pipeline.rs
     backup_auth.rs, catalog.rs, backup_client.rs   # clientes HTTP del server de respaldo
     disk_arbitration.rs             #   FFI mínimo de DiskArbitration (solo macOS): watcher y expulsión
 
-  commands.rs                       # AppState + refresh_open_projects + declaración de submódulos
+  commands.rs                       # AppState (+ write_session) + refresh_open_projects + declaración de submódulos
   commands/                         # comandos Tauri (adaptadores delgados) por dominio
     device.rs, project.rs, photo.rs, settings.rs, import_cmd.rs, backup.rs
 
-  db/                               # persistencia SQLite (GlobalDatabase / ProjectDatabase)
-    mod.rs, models.rs, queries.rs (photo_from_row), migrations.rs, *_schema.sql
   devices.rs                        # scan_mounted_devices() por plataforma (sysinfo / /proc); UUID en macOS
                                     #   vía diskutil (por punto de montaje o, si falla, por disco BSD); read_only
   device_watch.rs                   # watcher nativo de hotplug (Linux mountinfo, Windows WMI, macOS DiskArbitration)
   apple_tags.rs                     # sidecars AppleDouble (desktop-only)
   exiftool.rs / exif_android.rs     # herramientas EXIF por plataforma
-  import/                           # pipeline (passthrough → metadata → move), converter, xmp, progress
+  e2e_tests.rs                      # tests de punta a punta: núcleo + infraestructura real
   tests/fixtures/                   # JPEGs con EXIF conocido para tests de caracterización
 ```
 

@@ -1,5 +1,6 @@
 mod migrations;
 pub mod models;
+mod persistence;
 pub mod queries;
 mod schema;
 

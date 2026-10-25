@@ -3,6 +3,12 @@
 > Documento vivo. Marca cada checkpoint (`- [x]`) en cuanto se complete.
 > Ámbito: `apps/desktop/src-tauri/src/` (~5.500 líneas). No incluye el frontend.
 
+> **Actualización 2026-10-25:** `domain`, `application`, `import` y `db` se
+> extrajeron a `crates/lumik-core`, compartido con la futura app de tablet
+> (change `tablet-app-spike`). `src-tauri` quedó como shell del desktop: comandos
+> Tauri e infraestructura, y reexporta el núcleo en `lib.rs`. Las rutas de este
+> documento se refieren a la ubicación original.
+
 **Regla de oro del refactor:** cada fase compila y es mergeable por separado, y
 **ninguna regla de dominio se mueve sin su test**. El objetivo del refactor no es
 solo reorganizar carpetas, sino blindar las reglas frágiles (rotación, rutas de
@@ -194,7 +200,8 @@ dominio; tests de casos de uso con *fakes* de los puertos en
 `application/use_cases/*`. Comando para correrlos:
 
 ```
-cd apps/desktop/src-tauri && cargo test
+cd crates/lumik-core && cargo test        # núcleo
+cd apps/desktop/src-tauri && cargo test   # shell (comandos, infraestructura, e2e)
 ```
 
 Gate de cobertura por fase: no se marca una fase como completa si su regla

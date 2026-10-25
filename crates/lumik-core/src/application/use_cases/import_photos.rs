@@ -496,7 +496,7 @@ fn build_photo_inserts(
 }
 
 /// Una miniatura por generar. `rotation` es la del archivo si ya se conoce.
-pub(crate) struct ThumbJob {
+pub struct ThumbJob {
     pub src: PathBuf,
     pub photo_id: String,
     pub rotation: Option<i32>,
@@ -505,7 +505,7 @@ pub(crate) struct ThumbJob {
 /// Genera miniaturas en paralelo (acotado por CPUs, máx 8) vía `ImageProcessor`.
 /// `on_done(ruta, rotación)` se llama al terminar cada una (rotación `None` si
 /// no se pudo crear). Compartido con `regenerate_project_thumbnails`.
-pub(crate) fn cache_thumbnails_parallel(
+pub fn cache_thumbnails_parallel(
     image_processor: &dyn ImageProcessor,
     jobs: &[ThumbJob],
     on_done: Option<&(dyn Fn(&Path, Option<i32>) + Sync)>,

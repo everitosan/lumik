@@ -3,8 +3,8 @@
 //! delegan en los métodos de `db::queries` y mapean `DbError` → `String`.
 
 use crate::application::ports::{CullUpdate, PhotoRepository};
-use crate::db::models::{CreatePhoto, Photo};
-use crate::db::ProjectDatabase;
+use super::models::{CreatePhoto, Photo};
+use super::ProjectDatabase;
 use std::collections::HashSet;
 
 impl PhotoRepository for ProjectDatabase {

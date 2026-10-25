@@ -1,11 +1,11 @@
+// Núcleo compartido: se reexporta para que `crate::domain`, `crate::db`… sigan valiendo.
+pub use lumik_core::{application, db, domain, import};
+
 // Sidecars AppleDouble: solo desktop. En Android el FinderTagWriter es no-op y
 // no referencia este módulo, así que no se compila allí.
 #[cfg(not(target_os = "android"))]
 mod apple_tags;
-mod application;
 mod commands;
-mod db;
-mod domain;
 mod infrastructure;
 mod device_watch;
 mod devices;
@@ -13,7 +13,6 @@ mod devices;
 mod exiftool;
 #[cfg(target_os = "android")]
 mod exif_android;
-mod import;
 mod util;
 #[cfg(all(test, not(target_os = "android")))]
 mod e2e_tests;

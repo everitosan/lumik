@@ -1,0 +1,18 @@
+[package]
+name = "lumik-core"
+version = "0.1.6"
+description = "Núcleo de Lumik: dominio, casos de uso, import y persistencia SQLite, compartido por las apps de escritorio y de tablet"
+edition = "2021"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# SQLite embebido: el mismo project.db en todas las plataformas.
+rusqlite = { version = "0.31", features = ["bundled"] }
+uuid = { version = "1", features = ["v4", "v5", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1"
+log = "0.4"
+# Huella SHA-256 del JPG entregado al aprobar
+sha2 = "0.10"

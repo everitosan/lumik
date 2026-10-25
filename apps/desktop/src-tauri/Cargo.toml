@@ -13,6 +13,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# Núcleo compartido con la app de tablet (dominio, casos de uso, import, SQLite).
+lumik-core = { path = "../../../crates/lumik-core" }
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"

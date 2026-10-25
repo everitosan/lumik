@@ -2,7 +2,7 @@
 
 ## 1. Base del spike
 
-- [ ] 1.1 Extraer `domain`, `application` e `import` a `crates/lumik-core` sin dependencia de Tauri y hacer que el desktop lo use. Verificar con `cargo test` del desktop (todos los tests siguen pasando) y `pnpm --filter @lumik/desktop build`.
+- [x] 1.1 Extraer `domain`, `application`, `import` y `db` a `crates/lumik-core` sin dependencia de Tauri y hacer que el desktop lo use. Verificar con `cargo test` del desktop (todos los tests siguen pasando) y `pnpm --filter @lumik/desktop build`.
 - [ ] 1.2 Crear `apps/tablet-spike/` (Expo, iPad y Android) que compile y abra en un iPad y una tablet Android reales. Verificar abriendo la app en los dos dispositivos.
 
 ## 2. Experimentos

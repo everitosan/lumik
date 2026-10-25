@@ -30,6 +30,8 @@ lumik/
 ├── packages/
 │   ├── ts-types/     # Tipos compartidos (TS)
 │   └── ui/           # Componentes UI reutilizables
+├── crates/
+│   └── lumik-core/   # Núcleo Rust compartido (dominio, casos de uso, import, SQLite)
 ├── openspec/         # Specs de comportamiento y changes (OpenSpec)
 └── docs/             # Documentacion compartida
 ```

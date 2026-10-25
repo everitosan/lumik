@@ -30,12 +30,14 @@
                | IPC Tauri                +---------------+----------------+
                |                                          | uniffi-bindgen-react-native
        +-------v------------------------------------------v-------+
-       |  crates/lumik-core  (domain + application + import)      |
+       |  crates/lumik-core  (domain + application + import + db)  |
        +-------+-----------------------------+--------------------+
                |                             |
      infra desktop (exiftool,       infra movil (rawler, .xmp,
      mount watchers, std::fs)       bookmarks iOS / SAF Android)
 ```
+
+El núcleo incluye `db` (rusqlite con SQLite embebido): las dos apps usan el mismo `project.db`, y es lo que hace portátil el disco. La firma del import por plataforma (pool de exiftool en desktop, rawler + XMP en Android) queda en la infraestructura de cada app, y el núcleo no lleva `#[cfg(target_os)]`.
 
 Alternativas: Tauri también en tablet (una sola UI, pero web y con poca sensación nativa); SwiftUI y Compose por separado (la mejor sensación, pero dos UIs completas del flujo entero para una sola persona). React Native da una UI con piezas nativas reales donde se notan: Expo UI envuelve SwiftUI y Jetpack Compose, `react-native-screens` da la navegación nativa, y las variantes por sistema viven en archivos `.ios.tsx` / `.android.tsx` solo donde hace falta.
 
