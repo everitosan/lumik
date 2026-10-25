@@ -366,7 +366,6 @@
   "navigation": {
     "management": "Gestión",
     "projects": "Proyectos",
-    "search": "Buscar",
     "settings": "Configuración",
     "about": "Acerca de",
     "storage": "Almacenamiento",
@@ -387,7 +386,7 @@
   },
   "dashboard": {
     "title": "Proyectos",
-    "searchPlaceholder": "Buscar proyectos...",
+    "searchPlaceholder": "Buscar proyectos, o fotos con Enter (tag:calle estrellas>=4…)",
     "newProject": "Nuevo proyecto",
     "loading": "Cargando proyectos...",
     "empty": "No se encontraron proyectos",
@@ -478,20 +477,14 @@
     "showTrash": "Papelera ({{count}})"
   },
   "search": {
-    "title": "Buscar fotos",
-    "placeholder": "Busca en todos tus proyectos: tag:calle estrellas>=4 en:2025 …",
     "clear": "Borrar búsqueda",
     "advanced": "Búsqueda avanzada",
-    "submit": "Buscar",
     "summary_one": "1 foto",
     "summary_other": "{{count}} fotos",
     "inProjects_one": "1 proyecto",
     "inProjects_other": "{{count}} proyectos",
     "truncated": "se muestran las primeras; afina la búsqueda para ver el resto",
     "error": "No se pudo buscar: {{error}}",
-    "emptyIndex": "Todavía no hay fotos en el índice. Conecta un disco con proyectos de Lumik: se indexan solos en segundo plano.",
-    "hint_one": "Busca entre 1 foto de todos tus proyectos, aunque su disco no esté conectado. Combina filtros y texto libre, por ejemplo:",
-    "hint_other": "Busca entre {{count}} fotos de todos tus proyectos, aunque su disco no esté conectado. Combina filtros y texto libre, por ejemplo:",
     "noResults": "No hay fotos que coincidan con la búsqueda.",
     "photos_one": "1 foto",
     "photos_other": "{{count}} fotos",
@@ -511,6 +504,7 @@
       "any": "Cualquiera",
       "atLeast": "{{count}} o más",
       "exactly": "Exactamente {{count}}",
+      "atMost": "{{count}} o menos",
       "color": "Color",
       "camera": "Cámara y lente",
       "lensPlaceholder": "Lente",
@@ -526,7 +520,9 @@
       "includeArchived": "Incluir proyectos archivados",
       "clear": "Limpiar",
       "search": "Buscar"
-    }
+    },
+    "enterHint": "Enter para buscar en las fotos de todos tus proyectos",
+    "backToProjects": "Volver a proyectos"
   },
   "photo": {
     "colors": {

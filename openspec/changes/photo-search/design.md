@@ -31,12 +31,14 @@ Tablas nuevas en la base global:
 search_project(project_id PK, name, description, session_date, archived,
                device_uuid, device_name, indexed_generation, indexed_at)
 search_photo(photo_id PK, project_id FK, file_name, capture_date, stars,
-             color_label, tags, culled, delivered, is_pair, camera, lens,
-             thumb BLOB, embedding BLOB NULL)
+             colors, tags, culled, delivered, is_pair, camera, lens, *_norm)
+search_media(photo_id PK FK, rotation, thumb BLOB, embedding BLOB NULL)
 ```
 
+La miniatura y el vector van en `search_media`, aparte. Medido con 72 000 fotos: con la miniatura en la misma fila, cada búsqueda recorre ~300 MB de páginas (`estrellas>=3` tarda 80 ms y un texto libre amplio 186 ms); separada, 11 ms y 96 ms. Con el vector de `semantic-search` (~2 KB más por foto) la diferencia crecería. Una base con el esquema anterior se borra y se reconstruye al abrirla, porque el índice es desechable.
+
 - `device_uuid` y `device_name` son del último disco donde se vio el proyecto, solo para el aviso de "conecta…". La identidad sigue siendo `project.id`.
-- `embedding` queda vacío en este change.
+- `embedding` (en `search_media`) queda vacío en este change.
 - Borrar las dos tablas no pierde nada: se reconstruyen al conectar los discos.
 
 Se descartó guardar el índice en cada disco, porque buscar exigiría tenerlos todos conectados.
@@ -71,7 +73,8 @@ Con `semantic-search`, el texto libre pasará a ordenar por parecido entre las c
 
 ### D5. Interfaz
 
-- Vista "Buscar" en la barra lateral (un atajo de teclado global queda para después). El buscador del dashboard sigue filtrando proyectos por nombre.
+- Un solo buscador, el del dashboard: al escribir filtra proyectos por nombre como antes; Enter o el panel avanzado cambian el grid de proyectos por los resultados de fotos, con "Volver a proyectos". Mientras el texto parece llevar operadores (`palabra:` o `palabra>=`) no se filtran proyectos; cuáles son válidos lo decide el núcleo al buscar. Se descartó una sección "Buscar" aparte: dos buscadores confundían.
+- La búsqueda en curso vive en `App` (`SearchSnapshot`), así que abrir una foto y cerrar el visor vuelve al dashboard con los mismos resultados y la misma posición.
 - La ida y vuelta entre el cuadro y el panel la hace el núcleo (`parse_search_query` / `format_search_query`), para no duplicar en TypeScript la interpretación de la consulta.
 - Los resultados llegan sin miniatura; cada tarjeta visible la pide aparte (`get_search_thumbnail`), como el grid del proyecto.
 - El panel avanzado se despliega desde el cuadro, como en Gmail.

@@ -1,6 +1,6 @@
 import { useState, type CSSProperties, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Checkbox, Input } from '@lumik/ui';
+import { Button, Checkbox, Input, Select } from '@lumik/ui';
 import type { SearchPeriod, SearchQuery } from '../../lib/types';
 
 /** Colores de etiqueta, en el orden del filtro por color (1 rojo … 5 púrpura). */
@@ -29,7 +29,7 @@ const panelStyles: CSSProperties = {
 
 const labelStyles: CSSProperties = { color: 'var(--lumik-on-surface-variant, #c2c6d7)' };
 const rowStyles: CSSProperties = { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px' };
-const selectStyles: CSSProperties = {
+const dateInputStyles: CSSProperties = {
   padding: '8px 10px',
   background: 'var(--lumik-surface-container-high, #2a2a2a)',
   color: 'inherit',
@@ -59,9 +59,13 @@ function textToPeriod(value: string): SearchPeriod | null {
   return month >= 1 && month <= 12 ? { kind: 'month', year, month } : null;
 }
 
+const STARS_MODES = { ge: 'at_least', le: 'at_most', eq: 'exact' } as const;
+
+/** Valor del selector de estrellas: `ge:4`, `le:2`, `eq:3` o vacío. */
 function starsToValue(q: SearchQuery): string {
   if (!q.stars) return '';
-  return `${q.stars.mode === 'at_least' ? 'ge' : 'eq'}:${q.stars.value}`;
+  const key = (Object.keys(STARS_MODES) as (keyof typeof STARS_MODES)[]).find((k) => STARS_MODES[k] === q.stars?.mode);
+  return `${key}:${q.stars.value}`;
 }
 
 interface Props {
@@ -109,7 +113,7 @@ export function AdvancedSearchPanel({ initial, onSearch, onClose }: Props) {
       text: text.trim() ? text.trim().split(/\s+/) : [],
       tags: splitList(tags),
       not_tags: splitList(notTags),
-      stars: mode ? { mode: mode === 'ge' ? 'at_least' : 'exact', value: Number(value) } : null,
+      stars: mode ? { mode: STARS_MODES[mode as keyof typeof STARS_MODES], value: Number(value) } : null,
       colors,
       camera: camera.trim() || null,
       lens: lens.trim() || null,
@@ -145,15 +149,19 @@ export function AdvancedSearchPanel({ initial, onSearch, onClose }: Props) {
 
       <span style={labelStyles}>{t('search.panel.stars')}</span>
       <div style={rowStyles}>
-        <select style={selectStyles} value={stars} onChange={(e) => setStars(e.target.value)} aria-label={t('search.panel.stars')}>
-          <option value="">{t('search.panel.any')}</option>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <option key={`ge${n}`} value={`ge:${n}`}>{t('search.panel.atLeast', { count: n })}</option>
-          ))}
-          {[0, 1, 2, 3, 4, 5].map((n) => (
-            <option key={`eq${n}`} value={`eq:${n}`}>{t('search.panel.exactly', { count: n })}</option>
-          ))}
-        </select>
+        <div style={{ width: '200px' }}>
+          <Select
+            value={stars}
+            onChange={setStars}
+            options={[
+              { value: '', label: t('search.panel.any') },
+              ...[1, 2, 3, 4, 5].map((n) => ({ value: `ge:${n}`, label: t('search.panel.atLeast', { count: n }) })),
+              ...[0, 1, 2, 3, 4, 5].map((n) => ({ value: `eq:${n}`, label: t('search.panel.exactly', { count: n }) })),
+              ...[0, 1, 2, 3, 4].map((n) => ({ value: `le:${n}`, label: t('search.panel.atMost', { count: n }) })),
+            ]}
+            fullWidth
+          />
+        </div>
         <span style={labelStyles}>{t('search.panel.color')}</span>
         {[1, 2, 3, 4, 5].map((c) => (
           <button
@@ -183,9 +191,9 @@ export function AdvancedSearchPanel({ initial, onSearch, onClose }: Props) {
       <div style={rowStyles}>
         <div style={{ width: '140px' }}>{field(period, setPeriod, t('search.panel.periodPlaceholder'))}</div>
         <span style={labelStyles}>{t('search.panel.after')}</span>
-        <input type="date" value={after} onChange={(e) => setAfter(e.target.value)} style={selectStyles} aria-label={t('search.panel.after')} />
+        <input type="date" value={after} onChange={(e) => setAfter(e.target.value)} style={dateInputStyles} aria-label={t('search.panel.after')} />
         <span style={labelStyles}>{t('search.panel.before')}</span>
-        <input type="date" value={before} onChange={(e) => setBefore(e.target.value)} style={selectStyles} aria-label={t('search.panel.before')} />
+        <input type="date" value={before} onChange={(e) => setBefore(e.target.value)} style={dateInputStyles} aria-label={t('search.panel.before')} />
       </div>
 
       <span style={labelStyles}>{t('search.panel.project')}</span>

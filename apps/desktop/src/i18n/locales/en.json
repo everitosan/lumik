@@ -366,7 +366,6 @@
   "navigation": {
     "management": "Management",
     "projects": "Projects",
-    "search": "Search",
     "settings": "Settings",
     "about": "About",
     "storage": "Storage",
@@ -387,7 +386,7 @@
   },
   "dashboard": {
     "title": "Projects",
-    "searchPlaceholder": "Search projects...",
+    "searchPlaceholder": "Search projects, or photos with Enter (tag:street stars>=4…)",
     "newProject": "New project",
     "loading": "Loading projects...",
     "empty": "No projects found",
@@ -478,20 +477,14 @@
     "showTrash": "Trash ({{count}})"
   },
   "search": {
-    "title": "Search photos",
-    "placeholder": "Search all your projects: tag:street stars>=4 in:2025 …",
     "clear": "Clear search",
     "advanced": "Advanced search",
-    "submit": "Search",
     "summary_one": "1 photo",
     "summary_other": "{{count}} photos",
     "inProjects_one": "1 project",
     "inProjects_other": "{{count}} projects",
     "truncated": "showing the first ones; refine the search to see the rest",
     "error": "Could not search: {{error}}",
-    "emptyIndex": "There are no photos in the index yet. Connect a drive with Lumik projects: they are indexed in the background.",
-    "hint_one": "Search 1 photo across all your projects, even when its drive is not connected. Combine filters and free text, for example:",
-    "hint_other": "Search {{count}} photos across all your projects, even when their drive is not connected. Combine filters and free text, for example:",
     "noResults": "No photos match the search.",
     "photos_one": "1 photo",
     "photos_other": "{{count}} photos",
@@ -511,6 +504,7 @@
       "any": "Any",
       "atLeast": "{{count}} or more",
       "exactly": "Exactly {{count}}",
+      "atMost": "{{count}} or fewer",
       "color": "Color",
       "camera": "Camera and lens",
       "lensPlaceholder": "Lens",
@@ -526,7 +520,9 @@
       "includeArchived": "Include archived projects",
       "clear": "Clear",
       "search": "Search"
-    }
+    },
+    "enterHint": "Press Enter to search the photos of all your projects",
+    "backToProjects": "Back to projects"
   },
   "photo": {
     "colors": {

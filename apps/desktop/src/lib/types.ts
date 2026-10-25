@@ -386,7 +386,7 @@ export interface BackupSession {
 // BÚSQUEDA DE FOTOS (spec photo-search)
 // ============================================================================
 
-export type StarsFilter = { mode: 'exact' | 'at_least'; value: number };
+export type StarsFilter = { mode: 'exact' | 'at_least' | 'at_most'; value: number };
 
 export type SearchPeriod =
   | { kind: 'year'; year: number }
@@ -436,4 +436,11 @@ export interface SearchResult {
   hits: SearchHit[];
   /** Había más resultados que los mostrados */
   truncated: boolean;
+}
+
+/** Búsqueda de fotos en curso en el dashboard: se conserva al abrir una foto y volver. */
+export interface SearchSnapshot {
+  query: string;
+  result: SearchResult | null;
+  scrollTop: number;
 }

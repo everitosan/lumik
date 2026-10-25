@@ -4,7 +4,9 @@ Lumik Desktop · Linux · Windows · macOS · Android (y la futura app de tablet
 
 La búsqueda cruza todos los proyectos que ha visto el equipo, aunque su disco no esté conectado.
 Para eso cada equipo guarda un **índice** en su base global (`lumik.db`): una copia de las fotos de
-cada proyecto (tags, estrellas, color, fechas, cámara, lente, estado y una miniatura de 128 px).
+cada proyecto (tags, estrellas, color, fechas, cámara, lente y estado) y, en una tabla aparte
+(`search_media`) para que las búsquedas recorran filas chicas, una miniatura de 128 px y el vector
+de la foto.
 La fuente de verdad sigue siendo cada `project.db`; el índice se puede borrar y se reconstruye al
 conectar los discos.
 
@@ -15,7 +17,7 @@ flowchart LR
     A["Disco conectado<br/>o escritura en un proyecto"]
     B["IndexQueue<br/>ya / 2 s tras escribir"]
     C["IndexProject<br/>si cambió la generación"]
-    D["lumik.db<br/>search_project + search_photo"]
+    D["lumik.db<br/>search_project + search_photo<br/>+ search_media"]
     E["Cuadro o panel<br/>operadores + texto libre"]
     F["SearchPhotos<br/>SQL + conectado o no"]
     G["Resultados por proyecto<br/>abrir o 'conecta…'"]
@@ -82,11 +84,17 @@ flowchart TB
     class B,C,D,E be
 ```
 
+La búsqueda vive en el buscador del dashboard (`SearchBox`): al escribir filtra proyectos por nombre;
+Enter o el panel avanzado cambian el grid por los resultados de fotos (`PhotoSearchResults`), con
+"Volver a proyectos". Mientras el texto parece llevar operadores no se filtran proyectos.
+
 El panel de búsqueda avanzada no tiene lógica propia: al abrirse pide `parse_search_query` del
 cuadro, y al buscar pide `format_search_query` para escribir los operadores en el idioma de la app.
 
 Abrir un resultado con su disco conectado lleva al proyecto en esa foto (si los filtros guardados del
-proyecto la esconden, se quitan en memoria). Sin disco, se muestra la miniatura y qué disco conectar.
+proyecto la esconden, se quitan en memoria). Cerrar ese visor (Esc o "Volver") regresa a los resultados, con la
+misma consulta y en la misma posición: la búsqueda queda guardada en `App` (`SearchSnapshot`). Sin
+disco, se muestra la miniatura y qué disco conectar.
 
 El texto libre busca hoy por coincidencia. Con `semantic-search` pasará a ordenar por parecido entre
 las candidatas que dejen los operadores, usando la columna `embedding` que ya existe.
@@ -104,4 +112,4 @@ las candidatas que dejen los operadores, usando la columna `embedding` que ya ex
 | Hilo, pedidos al escanear y tras escribir | `src-tauri/src/commands.rs` |
 | Miniatura de 128 px | `src-tauri/src/infrastructure/imaging.rs` (`index_thumbnail`) |
 | Comandos | `src-tauri/src/commands/search.rs` |
-| Vista y panel | `src/pages/Search/SearchPage.tsx`, `AdvancedSearchPanel.tsx` |
+| Buscador, resultados y panel | `src/pages/Search/SearchBox.tsx`, `PhotoSearchResults.tsx`, `AdvancedSearchPanel.tsx` |

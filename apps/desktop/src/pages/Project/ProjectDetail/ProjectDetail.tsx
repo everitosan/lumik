@@ -21,6 +21,8 @@ export interface ProjectDetailProps {
   coverPhotoPath: string | null;
   /** Foto que se abre en el visor al entrar (al venir de la búsqueda). */
   initialPhotoId?: string | null;
+  /** Al cerrar el visor de esa foto se vuelve aquí (a la búsqueda) en lugar de al grid. */
+  onCloseInitialPhoto?: () => void;
   onBack?: () => void;
   onCoverPhotoChange?: (photoId: string | null) => void;
 }
@@ -150,7 +152,7 @@ const feedbackStyles: CSSProperties = {
   color: 'var(--lumik-on-surface-variant, #c2c6d7)',
 };
 
-export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPath, initialPhotoId, onBack, onCoverPhotoChange }: ProjectDetailProps) {
+export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPath, initialPhotoId, onCloseInitialPhoto, onBack, onCoverPhotoChange }: ProjectDetailProps) {
   const { t, i18n } = useTranslation();
 
   // Al abrir el proyecto: (1) asegura que exista en el catálogo (Fase 5) y
@@ -613,7 +615,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         coverPhotoPath={coverPhotoPath}
         sidebarOpen={sidebarOpen}
         onSidebarToggle={handleSidebarToggle}
-        onClose={() => setSelectedPhotoId(null)}
+        onClose={() => (onCloseInitialPhoto ? onCloseInitialPhoto() : setSelectedPhotoId(null))}
         onNavigate={(idx) => setSelectedPhotoId(sortedPhotos[idx].id)}
         onThumbnailChanged={(photoIds) => {
             for (const id of photoIds) thumbnailCache.current.delete(id);

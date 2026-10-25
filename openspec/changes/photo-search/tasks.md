@@ -17,11 +17,11 @@
 
 ## 4. Interfaz
 
-- [ ] 4.1 *(Código hecho: `search_photos`, `get_search_thumbnail`, `get_search_index_count`, sección "Buscar" con cuadro, resumen, resultados agrupados y virtualizados con `PhotoCard`, estados vacíos; `tsc` y build limpios; falta la comprobación en `dev`.)* Comando `search_photos` y vista "Buscar" en la barra lateral, con el cuadro, resultados agrupados por proyecto y virtualizados, y estado vacío. Verificar con `tsc` y en `dev`.
-- [ ] 4.2 *(Código hecho: `AdvancedSearchPanel` con ida y vuelta vía `parse_search_query`/`format_search_query` en el idioma de la app; falta la comprobación en `dev`.)* Panel de búsqueda avanzada con sus campos, ida y vuelta con el cuadro. Verificar en `dev` los escenarios de "Búsqueda avanzada".
-- [ ] 4.3 *(Código hecho: con disco conectado abre el proyecto en esa foto (y quita en memoria los filtros que la escondan); sin disco, aviso con la miniatura y el nombre del disco; textos `es`/`en`; falta la comprobación en `dev`.)* Abrir un resultado: visor del proyecto si el disco está conectado; miniatura y aviso del disco si no. Textos `es`/`en`. Verificar en `dev` con un disco conectado y otro desconectado.
+- [x] 4.1 Comando `search_photos` y buscador del dashboard (filtra proyectos al escribir; Enter o el panel buscan fotos), con el cuadro, resultados agrupados por proyecto y virtualizados, y estado vacío. Verificar con `tsc` y en `dev`.
+- [x] 4.2 Panel de búsqueda avanzada con sus campos, ida y vuelta con el cuadro. Verificar en `dev` los escenarios de "Búsqueda avanzada".
+- [x] 4.3 Abrir un resultado: visor del proyecto si el disco está conectado; miniatura y aviso del disco si no. Textos `es`/`en`. Verificar en `dev` con un disco conectado y otro desconectado.
 
 ## 5. Documentación y verificación
 
 - [x] 5.1 Diagrama del flujo en `docs/useCases/` y comandos en `apps/desktop/CLAUDE.md`. Verificar que el Mermaid parsea.
-- [ ] 5.2 Prueba con el disco real: indexar todos sus proyectos, medir el tiempo de una búsqueda con 3 operadores y texto libre (objetivo < 200 ms) y el tamaño de `lumik.db`, desconectar el disco y repetir. Correr los tests del núcleo y del desktop, el build y `openspec validate photo-search --strict`.
+- [x] 5.2 *(Medido el 2026-10-25: 1 808 fotos de 9 proyectos → `lumik.db` de 7.7 MB (3.2 KB de miniatura por foto) y ~15 ms por búsqueda; simulando 72 000 fotos → 297 MB, y 14 / 11 / 96 ms para una consulta selectiva, `estrellas>=3` y un texto libre amplio, tras separar `search_media`. Búsqueda con el disco desconectado comprobada en `dev`.)* Prueba con el disco real: indexar todos sus proyectos, medir el tiempo de una búsqueda con 3 operadores y texto libre (objetivo < 200 ms) y el tamaño de `lumik.db`, desconectar el disco y repetir. Correr los tests del núcleo y del desktop, el build y `openspec validate photo-search --strict`.

@@ -1,13 +1,16 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SearchBar, ProjectCard, Button, Icon, FilterBar, FilterBarDivider } from '@lumik/ui';
+import { ProjectCard, Button, Icon, FilterBar, FilterBarDivider } from '@lumik/ui';
 import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, useDashboardShowArchived, useDashboardSort, matchesKey, usePlatform } from '../../../lib/hooks';
 import { createProject, ensureProjectSynced, setProjectArchived, relocateBackup, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink, takeProjectControl, closeProjectSession } from '../../../lib/api';
 import { TakeControlDialog } from '../../../components/ProjectLockNotice';
+import { SearchBox, looksLikeOperators } from '../../Search/SearchBox';
+import { PhotoSearchResults } from '../../Search/PhotoSearchResults';
+import { searchPhotos } from '../../../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../../../components/CreateProjectModal';
 import { EditProjectModal } from './EditProjectModal';
 import { DeleteProjectModal } from './DeleteProjectModal';
-import type { DashboardSort, ProjectDashboard, SortDirection } from '../../../lib/types';
+import type { DashboardSort, ProjectDashboard, SearchSnapshot, SortDirection } from '../../../lib/types';
 
 const containerStyles: React.CSSProperties = {
   display: 'flex',
@@ -290,11 +293,43 @@ const emptyStyles: React.CSSProperties = {
 
 interface ProjectsProps {
   onProjectClick?: (project: ProjectDashboard) => void;
+  /** Búsqueda de fotos en curso (vive en App para volver a ella desde el visor). */
+  photoSearch?: SearchSnapshot | null;
+  onPhotoSearch?: (search: SearchSnapshot | null) => void;
+  /** Abre una foto encontrada (su disco está conectado). */
+  onOpenPhoto?: (projectId: string, photoId: string) => void;
 }
 
-export function Projects({ onProjectClick }: ProjectsProps) {
+export function Projects({ onProjectClick, photoSearch = null, onPhotoSearch, onOpenPhoto }: ProjectsProps) {
   const { t } = useTranslation();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(photoSearch?.query ?? '');
+  // Búsqueda de fotos (spec photo-search): Enter, operadores o el panel avanzado.
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const photoMode = photoSearch !== null || searching || searchError !== null;
+
+  const runPhotoSearch = async (query: string) => {
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const result = await searchPhotos(query);
+      onPhotoSearch?.({ query, result, scrollTop: 0 });
+    } catch (err) {
+      setSearchError(String(err));
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (!value.trim()) closePhotoSearch();
+  };
+
+  const closePhotoSearch = () => {
+    setSearchError(null);
+    onPhotoSearch?.(null);
+  };
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -364,11 +399,15 @@ export function Projects({ onProjectClick }: ProjectsProps) {
     [projects]
   );
 
+  // Al escribir se filtran proyectos por nombre; con operadores no, porque
+  // esa consulta es de fotos y se resuelve con Enter.
   const filteredProjects = useMemo(
     () =>
-      shownProjects.filter((project) =>
-        project.name.toLowerCase().includes(searchQuery.toLowerCase())
-      ),
+      looksLikeOperators(searchQuery)
+        ? shownProjects
+        : shownProjects.filter((project) =>
+            project.name.toLowerCase().includes(searchQuery.toLowerCase())
+          ),
     [shownProjects, searchQuery]
   );
 
@@ -502,10 +541,11 @@ export function Projects({ onProjectClick }: ProjectsProps) {
             </div>
           </div>
           <div style={headerCenterStyles}>
-            <SearchBar
-              ref={searchRef}
-              placeholder={t('dashboard.searchPlaceholder')}
-              onSearch={setSearchQuery}
+            <SearchBox
+              inputRef={searchRef}
+              value={searchQuery}
+              onChange={handleSearchChange}
+              onSearch={(q) => void runPhotoSearch(q)}
             />
           </div>
           <div style={headerRightStyles}>
@@ -519,6 +559,20 @@ export function Projects({ onProjectClick }: ProjectsProps) {
           </div>
         </div>
 
+        {photoMode ? (
+          <PhotoSearchResults
+            key={photoSearch?.query ?? ''}
+            result={photoSearch?.result ?? null}
+            searching={searching}
+            error={searchError}
+            initialScrollTop={photoSearch?.scrollTop ?? 0}
+            onOpenPhoto={(projectId, photoId, scrollTop) => {
+              if (photoSearch) onPhotoSearch?.({ ...photoSearch, scrollTop });
+              onOpenPhoto?.(projectId, photoId);
+            }}
+            onClose={() => { setSearchQuery(''); closePhotoSearch(); }}
+          />
+        ) : (
         <div style={gridContainerStyles}>
           {loading && (
             <div style={loadingStyles}>{t('dashboard.loading')}</div>
@@ -573,6 +627,7 @@ export function Projects({ onProjectClick }: ProjectsProps) {
             </div>
           ))}
         </div>
+        )}
       </div>
 
       <FilterBar

@@ -33,6 +33,8 @@ src/
     SettingsPage.tsx                # Tabs: Importación, Atajos, Apariencia, Respaldo (`initialTab` para abrir una concreta)
     BackupAccountSection.tsx        # Tab Respaldo: URL del server, login/registro o email + cerrar sesión
     AboutPage.tsx
+    Search/                         # Búsqueda de fotos en el buscador del dashboard: SearchBox (filtra proyectos al escribir;
+                                    #   Enter o el panel avanzado buscan fotos), PhotoSearchResults, AdvancedSearchPanel
     Project/
       Projects/
         Projects.tsx                # Dashboard: proyectos por año, menú (editar, eliminar, abrir carpeta), iconos de proveedor
