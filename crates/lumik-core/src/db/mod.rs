@@ -47,6 +47,7 @@ impl GlobalDatabase {
         }
         let conn = Connection::open(&path)?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+        migrations::reset_old_search_index(&conn)?;
         conn.execute_batch(schema::GLOBAL_SCHEMA)?;
         Ok(Self {
             conn: Mutex::new(conn),
@@ -298,8 +299,33 @@ mod tests {
                 .unwrap();
             assert_eq!(n, 1, "falta la tabla {table}");
         }
-        assert!(conn.prepare("SELECT embedding, thumb, tags_norm, text_norm FROM search_photo").is_ok());
+        assert!(conn.prepare("SELECT tags_norm, text_norm FROM search_photo").is_ok());
+        assert!(conn.prepare("SELECT rotation, thumb, embedding FROM search_media").is_ok());
         drop(conn);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn old_search_index_with_thumbs_inline_is_rebuilt() {
+        let dir = std::env::temp_dir().join(format!("lumik_search_reset_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("lumik.db");
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE search_project (project_id TEXT PRIMARY KEY, indexed_generation INTEGER);
+                 CREATE TABLE search_photo (photo_id TEXT PRIMARY KEY, project_id TEXT, thumb BLOB);
+                 INSERT INTO search_project VALUES ('p1', 7);
+                 INSERT INTO search_photo VALUES ('f1', 'p1', x'00');",
+            )
+            .unwrap();
+        }
+        let global = GlobalDatabase::new(path).unwrap();
+        // Se borró y se recreó vacío: la app reindexa todo al arrancar.
+        assert_eq!(global.indexed_generation("p1").unwrap(), None);
+        assert_eq!(global.indexed_photo_count().unwrap(), 0);
+        assert!(global.conn().prepare("SELECT thumb FROM search_photo").is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -20,6 +20,8 @@ pub enum StarsFilter {
     Exact(u8),
     /// `n` o más estrellas.
     AtLeast(u8),
+    /// `n` o menos estrellas.
+    AtMost(u8),
 }
 
 /// Un año o un mes de captura.
@@ -138,6 +140,22 @@ fn parse_stars(value: &str) -> Option<u8> {
     value.parse::<u8>().ok().filter(|n| *n <= 5)
 }
 
+/// `>=4`, `>4`, `<=2`, `<2`, `=3`, `:3` → filtro de estrellas. `>` y `<` se
+/// guardan como "o más" / "o menos" del número siguiente o anterior.
+fn parse_stars_filter(rest: &str) -> Option<StarsFilter> {
+    let (op, value) = [">=", "<=", ">", "<", "=", ":"]
+        .iter()
+        .find_map(|op| rest.strip_prefix(op).map(|v| (*op, v)))?;
+    let n = parse_stars(value)?;
+    match op {
+        ">=" => Some(StarsFilter::AtLeast(n)),
+        "<=" => Some(StarsFilter::AtMost(n)),
+        ">" => (n < 5).then(|| StarsFilter::AtLeast(n + 1)),
+        "<" => (n > 0).then(|| StarsFilter::AtMost(n - 1)),
+        _ => Some(StarsFilter::Exact(n)),
+    }
+}
+
 fn parse_color(value: &str) -> Option<u8> {
     let v = normalize(value);
     COLORS_ES
@@ -166,11 +184,13 @@ impl SearchQuery {
     /// Aplica `token` si es un operador válido; `false` si no lo es.
     fn apply_operator(&mut self, token: &str) -> bool {
         let lower = token.to_lowercase();
-        for (prefix, at_least) in [("estrellas>=", true), ("stars>=", true), ("estrellas:", false), ("stars:", false)] {
-            if let Some(v) = lower.strip_prefix(prefix) {
-                let Some(n) = parse_stars(v) else { return false };
-                self.stars = Some(if at_least { StarsFilter::AtLeast(n) } else { StarsFilter::Exact(n) });
-                return true;
+        for key in ["estrellas", "stars"] {
+            if let Some(rest) = lower.strip_prefix(key) {
+                if rest.starts_with(['>', '<', '=', ':']) {
+                    let Some(filter) = parse_stars_filter(rest) else { return false };
+                    self.stars = Some(filter);
+                    return true;
+                }
             }
         }
         let Some((key, raw)) = token.split_once(':') else { return false };
@@ -223,7 +243,8 @@ impl SearchQuery {
         }
         match self.stars {
             Some(StarsFilter::AtLeast(n)) => parts.push(format!("{}>={n}", pick("estrellas", "stars"))),
-            Some(StarsFilter::Exact(n)) => parts.push(format!("{}:{n}", pick("estrellas", "stars"))),
+            Some(StarsFilter::AtMost(n)) => parts.push(format!("{}<={n}", pick("estrellas", "stars"))),
+            Some(StarsFilter::Exact(n)) => parts.push(format!("{}={n}", pick("estrellas", "stars"))),
             None => {}
         }
         for c in &self.colors {
@@ -307,6 +328,25 @@ mod tests {
         assert_eq!(q.project.as_deref(), Some("Boda Ana"));
         assert!(q.approved && q.delivered && q.pair && q.include_archived);
         assert!(q.text.is_empty());
+    }
+
+    #[test]
+    fn stars_comparisons() {
+        let stars = |q: &str| SearchQuery::parse(q).stars;
+        assert_eq!(stars("estrellas=4"), Some(StarsFilter::Exact(4)));
+        assert_eq!(stars("estrellas:4"), Some(StarsFilter::Exact(4)));
+        assert_eq!(stars("estrellas>4"), Some(StarsFilter::AtLeast(5)));
+        assert_eq!(stars("estrellas>=4"), Some(StarsFilter::AtLeast(4)));
+        assert_eq!(stars("estrellas<3"), Some(StarsFilter::AtMost(2)));
+        assert_eq!(stars("estrellas<=3"), Some(StarsFilter::AtMost(3)));
+        assert_eq!(stars("stars>2"), Some(StarsFilter::AtLeast(3)));
+        // Imposibles o fuera de rango: texto libre.
+        for q in ["estrellas>5", "estrellas<0", "estrellas=6", "estrellas>=x"] {
+            assert_eq!(stars(q), None, "{q}");
+            assert_eq!(SearchQuery::parse(q).text.len(), 1, "{q}");
+        }
+        assert_eq!(SearchQuery::parse("estrellas<=2").to_query(QueryLang::Es), "estrellas<=2");
+        assert_eq!(SearchQuery::parse("estrellas:4").to_query(QueryLang::Es), "estrellas=4");
     }
 
     #[test]

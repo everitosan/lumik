@@ -192,6 +192,16 @@ fn migrate_delivery_mode_column(conn: &Connection) -> DbResult<()> {
     Ok(())
 }
 
+/// El índice de búsqueda guardaba la miniatura en `search_photo`; ahora va en
+/// `search_media`. Como el índice es desechable, si queda el esquema anterior
+/// se borran sus tablas y la app lo reconstruye (spec `photo-search`).
+pub(super) fn reset_old_search_index(conn: &Connection) -> DbResult<()> {
+    if has_column(conn, "search_photo", "thumb") {
+        conn.execute_batch("DROP TABLE search_photo; DROP TABLE IF EXISTS search_project;")?;
+    }
+    Ok(())
+}
+
 /// Agrega `project.generation` si falta: contador que sube con cada escritura
 /// y se copia al candado del proyecto (spec `project-lock`).
 fn migrate_generation_column(conn: &Connection) -> DbResult<()> {

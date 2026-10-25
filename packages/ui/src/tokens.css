@@ -1,4 +1,8 @@
 :root {
+  /* Tema oscuro también para los controles nativos (lista de <select>,
+     calendario de <input type=date>, barras de scroll del sistema). */
+  color-scheme: dark;
+
   /* Colors - Dark Theme */
   --lumik-background: #131313;
   --lumik-surface: #131313;

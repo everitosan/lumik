@@ -203,7 +203,11 @@ mod tests {
         fn column<T: rusqlite::types::FromSql>(&self, photo_id: &str, column: &str) -> T {
             self.global
                 .conn()
-                .query_row(&format!("SELECT {column} FROM search_photo WHERE photo_id = ?1"), [photo_id], |r| r.get(0))
+                .query_row(
+                    &format!("SELECT {column} FROM search_photo LEFT JOIN search_media USING (photo_id) WHERE photo_id = ?1"),
+                    [photo_id],
+                    |r| r.get(0),
+                )
                 .unwrap()
         }
     }

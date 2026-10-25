@@ -72,7 +72,9 @@ impl GlobalDatabase {
     pub fn indexed_photo_cache(&self, project_id: &str) -> DbResult<HashMap<String, IndexedPhotoCache>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT photo_id, rotation, thumb, embedding FROM search_photo WHERE project_id = ?1",
+            "SELECT m.photo_id, m.rotation, m.thumb, m.embedding
+             FROM search_media m JOIN search_photo p ON p.photo_id = m.photo_id
+             WHERE p.project_id = ?1",
         )?;
         let rows = stmt
             .query_map([project_id], |r| {
@@ -117,13 +119,17 @@ impl GlobalDatabase {
                 now,
             ],
         )?;
+        // Borra también su search_media (ON DELETE CASCADE).
         tx.execute("DELETE FROM search_photo WHERE project_id = ?1", [&project.project_id])?;
         {
             let mut insert = tx.prepare(
                 "INSERT INTO search_photo (photo_id, project_id, file_name, capture_date, stars, colors, tags,
                                            tags_norm, text_norm, culled, delivered, is_pair, camera, camera_norm,
-                                           lens, lens_norm, rotation, thumb, embedding)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+                                           lens, lens_norm)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            )?;
+            let mut insert_media = tx.prepare(
+                "INSERT INTO search_media (photo_id, rotation, thumb, embedding) VALUES (?1, ?2, ?3, ?4)",
             )?;
             for p in photos {
                 insert.execute(params![
@@ -143,10 +149,8 @@ impl GlobalDatabase {
                     p.camera_norm,
                     p.lens,
                     p.lens_norm,
-                    p.rotation,
-                    p.thumb,
-                    p.embedding,
                 ])?;
+                insert_media.execute(params![p.photo_id, p.rotation, p.thumb, p.embedding])?;
             }
         }
         tx.commit()?;
@@ -156,6 +160,7 @@ impl GlobalDatabase {
     /// Quita un proyecto y sus fotos del índice (al eliminarlo).
     pub fn remove_project_index(&self, project_id: &str) -> DbResult<()> {
         let conn = self.conn();
+        // search_media se va por ON DELETE CASCADE.
         conn.execute("DELETE FROM search_photo WHERE project_id = ?1", [project_id])?;
         conn.execute("DELETE FROM search_project WHERE project_id = ?1", [project_id])?;
         Ok(())
@@ -216,6 +221,7 @@ fn where_clause(q: &crate::domain::search::SearchQuery) -> (String, Vec<String>)
     match q.stars {
         Some(StarsFilter::AtLeast(n)) => conds.push(format!("p.stars >= {n}")),
         Some(StarsFilter::Exact(n)) => conds.push(format!("p.stars = {n}")),
+        Some(StarsFilter::AtMost(n)) => conds.push(format!("p.stars <= {n}")),
         None => {}
     }
     if !q.colors.is_empty() {
@@ -316,7 +322,7 @@ impl GlobalDatabase {
     pub fn search_thumbnail(&self, photo_id: &str) -> DbResult<Option<Vec<u8>>> {
         let conn = self.conn();
         Ok(conn
-            .query_row("SELECT thumb FROM search_photo WHERE photo_id = ?1", [photo_id], |r| r.get(0))
+            .query_row("SELECT thumb FROM search_media WHERE photo_id = ?1", [photo_id], |r| r.get(0))
             .optional()?
             .flatten())
     }
@@ -402,6 +408,9 @@ mod tests {
         assert_eq!(ids(&g, "tag:calle"), ["calle4", "boda5"], "más reciente primero, sin archivados");
         assert_eq!(ids(&g, "tag:calle -tag:boda estrellas>=4 en:2025"), ["calle4"]);
         assert_eq!(ids(&g, "estrellas:5"), ["boda5"]);
+        assert_eq!(ids(&g, "estrellas=4"), ["calle4"]);
+        assert_eq!(ids(&g, "estrellas>4"), ["boda5"]);
+        assert_eq!(ids(&g, "estrellas<4"), ["vieja"]);
         assert_eq!(ids(&g, "color:rojo"), ["calle4"]);
         assert_eq!(ids(&g, "camara:\"x-t5\""), ["calle4"]);
         assert_eq!(ids(&g, "en:2025-03"), ["boda5"]);
