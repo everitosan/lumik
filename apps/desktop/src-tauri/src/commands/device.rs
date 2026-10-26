@@ -50,6 +50,14 @@ pub fn eject_device(
 ) -> AppResult<()> {
     info!("eject_device called: {}", device_uuid);
 
+    // Un análisis en curso tiene la base abierta: se detiene antes de expulsar.
+    let mut uuids = state.device_scanner.devices_on_same_physical_disk(&device_uuid);
+    uuids.push(device_uuid.clone());
+    let analyzing: Vec<String> = uuids.iter().flat_map(|u| state.registry.ids_on_device(u)).collect();
+    if !state.analysis_queue.cancel_and_wait(&analyzing, std::time::Duration::from_secs(10)) {
+        log::warn!("eject_device: el análisis no se detuvo a tiempo");
+    }
+
     let result = EjectDevice {
         scanner: state.device_scanner.as_ref(),
         registry: &state.registry,

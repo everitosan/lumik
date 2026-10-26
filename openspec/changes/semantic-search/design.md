@@ -82,8 +82,10 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 ### D6. Analizar fotos
 
 - Caso de uso `AnalyzeProject`: corre dentro de una sesión de escritura del proyecto que abre el llamador (si está bloqueado, no se analiza; al cerrarla sube la generación), busca las fotos pendientes (sin vector, de otro modelo o rotadas), calcula sus vectores de uno en uno y los escribe en lotes de 32 en una transacción. Revisa una bandera de cancelación entre fotos.
-- Una cola de análisis en el desktop, con un hilo, como `IndexQueue`: un proyecto a la vez, en el orden en que se pidió. La alimentan "Analizar fotos", el final de una importación (si el proyecto está en `on_import` y el modelo instalado) y "Analizar" desde el aviso de los resultados.
-- Progreso con el evento `analysis-progress` (proyecto, hechas, total) y una tarjeta en la sección de actividad de la barra lateral, con "Detener". Expulsar el disco cancela su análisis.
+- Una cola de análisis (`application::analysis_queue::AnalysisQueue`, en el núcleo) y un hilo en el desktop (`spawn_analysis_worker`): un proyecto a la vez, en el orden en que se pidió, sin duplicados. La alimentan "Analizar fotos", el final de una importación (`finish_import`, si el proyecto está en `on_import` y el modelo instalado) y "Analizar" desde el aviso de los resultados.
+- El hilo abre una sesión de escritura por proyecto. Si está en otro dispositivo termina con `locked` sin tocarlo; al cerrar la sesión sube la generación y el índice copia los vectores nuevos.
+- Progreso con el evento `analysis-progress` (`AnalysisEvent`: proyecto, estado `running`/`done`/`cancelled`/`locked`/`no_model`/`failed`, hechas, total; como mucho cada 250 ms) y una tarjeta en la sección de actividad de la barra lateral, con "Detener".
+- Expulsar un disco detiene el análisis de sus proyectos y espera a que suelte la base (`cancel_and_wait`, hasta 10 s) antes de expulsar. Si el disco se desconecta sin expulsarlo, la escritura falla y el proyecto termina en `failed`; lo hecho hasta el último lote queda guardado.
 
 ### D7. Búsqueda
 

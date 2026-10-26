@@ -43,6 +43,8 @@ pub struct AppState {
     pub index_queue: Arc<IndexQueue>,
     /// Modelo de búsqueda por contenido de este equipo (spec `semantic-search`).
     pub content_model: Arc<crate::infrastructure::content_model::ContentModel>,
+    /// Proyectos por analizar con ese modelo, uno a la vez.
+    pub analysis_queue: Arc<crate::application::analysis_queue::AnalysisQueue>,
 }
 
 impl AppState {
@@ -161,6 +163,84 @@ pub fn spawn_index_worker(state: AppState, app: tauri::AppHandle) {
             }
         })
         .expect("no se pudo arrancar el hilo del índice de búsqueda");
+}
+
+/// Cómo va el análisis de un proyecto: evento `analysis-progress`.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AnalysisEvent {
+    pub project_id: String,
+    /// `running`, `done`, `cancelled`, `locked` (abierto en otro dispositivo),
+    /// `no_model` o `failed`.
+    pub status: &'static str,
+    pub done: usize,
+    pub total: usize,
+    pub analyzed: usize,
+    pub failed: usize,
+    pub error: Option<String>,
+}
+
+/// Hilo que analiza los proyectos de `analysis_queue` mientras viva la app
+/// (spec `semantic-search`). Cada proyecto corre en una sesión de escritura:
+/// si está en otro dispositivo no se toca, y al cerrarla sube su generación y
+/// el índice copia los vectores nuevos.
+pub fn spawn_analysis_worker(state: AppState, app: tauri::AppHandle) {
+    use crate::application::use_cases::analyze_project::AnalyzeProject;
+    use tauri::Emitter;
+    std::thread::Builder::new()
+        .name("content-analysis".into())
+        .spawn(move || loop {
+            let (project_id, cancel) = state.analysis_queue.next();
+            let event = |status: &'static str| AnalysisEvent {
+                project_id: project_id.clone(),
+                status,
+                done: 0,
+                total: 0,
+                analyzed: 0,
+                failed: 0,
+                error: None,
+            };
+            let finished = (|| -> AnalysisEvent {
+                let Some(model) = state.content_model.model() else { return event("no_model") };
+                let session = match state.write_session(&project_id) {
+                    Ok(session) => session,
+                    Err(crate::application::error::AppError::ProjectLocked(_)) => return event("locked"),
+                    Err(e) => return AnalysisEvent { error: Some(e.to_string()), ..event("failed") },
+                };
+                let db = match session.db() {
+                    Ok(db) => db,
+                    Err(e) => return AnalysisEvent { error: Some(e), ..event("failed") },
+                };
+                let started = std::time::Instant::now();
+                let mut last = started - std::time::Duration::from_secs(1);
+                let outcome = AnalyzeProject { model: model.as_ref() }.execute(&db, &cancel, &mut |done, total| {
+                    if last.elapsed() >= std::time::Duration::from_millis(250) || done == total {
+                        last = std::time::Instant::now();
+                        let _ = app.emit("analysis-progress", AnalysisEvent { done, total, ..event("running") });
+                    }
+                });
+                match outcome {
+                    Ok(o) => {
+                        log::info!(
+                            "análisis de {}: {} fotos, {} fallidas, en {} ms{}",
+                            project_id,
+                            o.analyzed,
+                            o.failed,
+                            started.elapsed().as_millis(),
+                            if o.cancelled { " (detenido)" } else { "" }
+                        );
+                        let status = if o.cancelled { "cancelled" } else { "done" };
+                        AnalysisEvent { analyzed: o.analyzed, failed: o.failed, ..event(status) }
+                    }
+                    Err(e) => AnalysisEvent { error: Some(e), ..event("failed") },
+                }
+            })();
+            if let Some(e) = &finished.error {
+                log::warn!("análisis de {}: {}", project_id, e);
+            }
+            state.analysis_queue.finish(&project_id);
+            let _ = app.emit("analysis-progress", finished);
+        })
+        .expect("no se pudo arrancar el hilo de análisis");
 }
 
 /// Scan all mounted devices, update the device registry, and open any

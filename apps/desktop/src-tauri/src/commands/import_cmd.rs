@@ -282,6 +282,18 @@ fn finish_import(
         bytes_total: 0,
     });
 
+    // Proyectos que se analizan al importar: en segundo plano, si hay modelo.
+    if successful > 0 && state.content_model.is_installed() {
+        let on_import = state
+            .project_db(project_id)
+            .ok()
+            .and_then(|db| db.analysis_mode().ok())
+            .is_some_and(|m| m == crate::domain::embedding::AnalysisMode::OnImport);
+        if on_import {
+            state.analysis_queue.request(project_id);
+        }
+    }
+
     let result = ImportResult {
         session_id: session_id.to_string(),
         total_files,

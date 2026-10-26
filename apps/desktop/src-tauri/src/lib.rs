@@ -140,6 +140,7 @@ pub fn run() {
             domain::embedding::CLIP_MULTILINGUAL,
             models_dir,
         )),
+        analysis_queue: Arc::new(application::analysis_queue::AnalysisQueue::new()),
     };
 
     // Índice de búsqueda (spec photo-search): al día con los proyectos abiertos.
@@ -160,6 +161,7 @@ pub fn run() {
             // "devices-changed" on mount/unmount so the UI updates without
             // busy-polling. Android falls back to frontend polling.
             device_watch::start(app.handle().clone());
+            commands::spawn_analysis_worker(index_state.clone(), app.handle().clone());
             commands::spawn_index_worker(index_state, app.handle().clone());
             Ok(())
         })

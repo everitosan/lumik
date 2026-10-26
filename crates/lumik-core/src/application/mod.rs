@@ -2,6 +2,7 @@
 //! de uso y estado de sesión. Depende solo de `domain`; la infraestructura
 //! implementa sus puertos. Ver `docs/desktop-clean-architecture.md`.
 
+pub mod analysis_queue;
 pub mod error;
 pub mod import_settings;
 pub mod index_queue;

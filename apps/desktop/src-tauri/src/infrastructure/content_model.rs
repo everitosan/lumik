@@ -251,6 +251,10 @@ impl ContentModel {
         result
     }
 
+    pub fn is_installed(&self) -> bool {
+        matches!(self.state(), ModelState::Installed { .. })
+    }
+
     pub fn cancel_download(&self) {
         self.cancel.store(true, Ordering::Relaxed);
     }
