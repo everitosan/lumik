@@ -126,6 +126,7 @@ mod tests {
             rotation: 0,
             thumb: None,
             embedding: None,
+            embedding_model: None,
         }
     }
 

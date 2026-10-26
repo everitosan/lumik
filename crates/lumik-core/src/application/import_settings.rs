@@ -91,6 +91,7 @@ mod tests {
             rename_on_import: rename,
             finder_tags_sidecar: true,
             default_delivery_mode: Default::default(),
+            default_analysis_mode: Default::default(),
         }
     }
 

@@ -131,5 +131,22 @@ CREATE TABLE IF NOT EXISTS project_settings (
     view_mode           TEXT,                         -- 'grid' | 'by-date' (or NULL for default 'by-date')
     -- What approving delivers straight to _exported/ (camera-jpeg-delivery).
     delivery_mode       TEXT NOT NULL DEFAULT 'none'
-                        CHECK(delivery_mode IN ('none', 'pairs', 'all_camera_jpg'))
+                        CHECK(delivery_mode IN ('none', 'pairs', 'all_camera_jpg')),
+    -- When photos get their content vector (semantic-search).
+    analysis_mode       TEXT NOT NULL DEFAULT 'on_demand'
+                        CHECK(analysis_mode IN ('on_import', 'on_demand'))
+);
+
+-- ============================================================================
+-- PHOTO EMBEDDINGS (semantic-search)
+-- Content vector of each photo, computed from its thumbnail. Lives on the disk
+-- so it travels with the project; `model` and `rotation` tell whether it is
+-- still valid (another model or a rotated photo means it must be recomputed).
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS photo_embedding (
+    photo_id    TEXT PRIMARY KEY REFERENCES photo(id) ON DELETE CASCADE,
+    model       TEXT NOT NULL,
+    rotation    INTEGER NOT NULL,
+    vector      BLOB NOT NULL      -- f32 little-endian, normalized
 );

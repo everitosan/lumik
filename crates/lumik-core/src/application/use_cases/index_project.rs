@@ -3,13 +3,14 @@
 //! Lee el proyecto y sus fotos fuera de la papelera de su `project.db`, arma las
 //! filas del índice y las escribe en la base global en una transacción. Si no
 //! cambiaron ni la generación del proyecto ni `_exported/` desde la última vez,
-//! no hace nada. La miniatura y el vector de una foto se conservan mientras no
-//! cambie su rotación.
+//! no hace nada. La miniatura de una foto se conserva mientras no cambie su
+//! rotación, y su vector de contenido se copia del `project.db`.
 
 use crate::application::ports::{DirFile, FileStore, ImageProcessor};
 use crate::application::use_cases::sync_exported::{photos_by_stem, stem_of_path, PhotoStem};
-use crate::db::models::Photo;
-use crate::db::search_index::{IndexedPhotoCache, SearchExportRow, SearchPhotoRow, SearchProjectRow};
+use crate::db::models::{Photo, PhotoEmbedding};
+use crate::domain::embedding::vector_to_bytes;
+use crate::db::search_index::{SearchExportRow, SearchPhotoRow, SearchProjectRow};
 use crate::domain::exported::{exported_id, is_exported_image};
 use std::collections::HashMap;
 use crate::db::{GlobalDatabase, ProjectDatabase};
@@ -65,6 +66,9 @@ impl IndexProject<'_> {
         };
         let photos = project.get_project_photos().map_err(|e| e.to_string())?;
         let cache = self.global.indexed_photo_cache(id).map_err(|e| e.to_string())?;
+        // Vectores del disco: se copian aunque este equipo no tenga el modelo.
+        let embeddings: HashMap<String, PhotoEmbedding> =
+            project.embeddings().map_err(|e| e.to_string())?.into_iter().map(|e| (e.photo_id.clone(), e)).collect();
 
         let rows: Vec<SearchPhotoRow> = photos
             .iter()
@@ -77,7 +81,7 @@ impl IndexProject<'_> {
                         .images
                         .index_thumbnail(&project.project_dir.join(".thumbs").join(format!("{}.jpg", p.id))),
                 };
-                photo_row(p, thumb, cached)
+                photo_row(p, thumb, embeddings.get(&p.id))
             })
             .collect();
 
@@ -168,7 +172,7 @@ fn file_name(path: &str) -> String {
     path.replace('\\', "/").rsplit('/').next().unwrap_or(path).to_string()
 }
 
-fn photo_row(p: &Photo, thumb: Option<Vec<u8>>, cached: Option<&IndexedPhotoCache>) -> SearchPhotoRow {
+fn photo_row(p: &Photo, thumb: Option<Vec<u8>>, embedding: Option<&PhotoEmbedding>) -> SearchPhotoRow {
     let name = file_name(&p.dng_path);
     let tags: Vec<String> = p.tags.as_deref().unwrap_or("").split(',').map(normalize).collect();
     SearchPhotoRow {
@@ -188,7 +192,8 @@ fn photo_row(p: &Photo, thumb: Option<Vec<u8>>, cached: Option<&IndexedPhotoCach
         lens: p.lens_model.clone(),
         rotation: p.rotation,
         thumb,
-        embedding: cached.and_then(|c| c.embedding.clone()),
+        embedding: embedding.map(|e| vector_to_bytes(&e.vector)),
+        embedding_model: embedding.map(|e| e.model.clone()),
         file_name: name,
     }
 }
@@ -455,6 +460,29 @@ mod tests {
         assert_eq!(uc.execute(&db, None, false).unwrap(), IndexOutcome::Indexed { photos: 1 });
         assert_eq!(exports(&f, "p1"), [("dscf0042.jpg".to_string(), Some(ids[0].clone()))]);
         assert_eq!(uc.execute(&db, None, false).unwrap(), IndexOutcome::UpToDate);
+    }
+
+    #[test]
+    fn vectors_on_disk_reach_the_index_without_a_model() {
+        let f = Fixture::new("vectors");
+        let images = CountingImages::default();
+        let (db, ids) = f.project("p1", "Boda", &[("_media/A.RAF", "2025:01:01 00:00:00", None), ("_media/B.RAF", "2025:01:01 00:00:00", None)]);
+        let uc = IndexProject { global: &f.global, images: &images, files: &f.files };
+        uc.execute(&db, None, false).unwrap();
+
+        // Otro equipo analizó la primera foto: su vector viene en el project.db.
+        db.save_embeddings(&[PhotoEmbedding { photo_id: ids[0].clone(), model: "m1".into(), rotation: 0, vector: vec![0.6, 0.8] }])
+            .unwrap();
+        db.bump_generation().unwrap();
+        uc.execute(&db, None, false).unwrap();
+
+        let conn = f.global.conn();
+        let row = |id: &str| -> (Option<Vec<u8>>, Option<String>) {
+            conn.query_row("SELECT embedding, embedding_model FROM search_media WHERE photo_id = ?1", [id], |r| Ok((r.get(0)?, r.get(1)?)))
+                .unwrap()
+        };
+        assert_eq!(row(&ids[0]), (Some(vector_to_bytes(&[0.6, 0.8])), Some("m1".to_string())));
+        assert_eq!(row(&ids[1]), (None, None), "la otra sigue sin analizar");
     }
 
     #[test]

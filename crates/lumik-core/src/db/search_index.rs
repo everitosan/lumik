@@ -46,7 +46,9 @@ pub struct SearchPhotoRow {
     pub lens_norm: String,
     pub rotation: i32,
     pub thumb: Option<Vec<u8>>,
+    /// Vector de contenido (`f32` little-endian) y el modelo que lo generó.
     pub embedding: Option<Vec<u8>>,
+    pub embedding_model: Option<String>,
 }
 
 /// Archivo de `_exported/` tal como queda en el índice.
@@ -69,7 +71,6 @@ pub type ExportCache = (String, Option<Vec<u8>>);
 pub struct IndexedPhotoCache {
     pub rotation: i32,
     pub thumb: Option<Vec<u8>>,
-    pub embedding: Option<Vec<u8>>,
 }
 
 impl GlobalDatabase {
@@ -97,11 +98,11 @@ impl GlobalDatabase {
             .optional()?)
     }
 
-    /// Miniatura, rotación y vector ya indexados de las fotos del proyecto.
+    /// Miniatura y rotación ya indexadas de las fotos del proyecto.
     pub fn indexed_photo_cache(&self, project_id: &str) -> DbResult<HashMap<String, IndexedPhotoCache>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT m.photo_id, m.rotation, m.thumb, m.embedding
+            "SELECT m.photo_id, m.rotation, m.thumb
              FROM search_media m JOIN search_photo p ON p.photo_id = m.photo_id
              WHERE p.project_id = ?1",
         )?;
@@ -109,7 +110,7 @@ impl GlobalDatabase {
             .query_map([project_id], |r| {
                 Ok((
                     r.get::<_, String>(0)?,
-                    IndexedPhotoCache { rotation: r.get(1)?, thumb: r.get(2)?, embedding: r.get(3)? },
+                    IndexedPhotoCache { rotation: r.get(1)?, thumb: r.get(2)? },
                 ))
             })?
             .collect::<Result<HashMap<_, _>, _>>()?;
@@ -175,7 +176,7 @@ impl GlobalDatabase {
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             )?;
             let mut insert_media = tx.prepare(
-                "INSERT INTO search_media (photo_id, rotation, thumb, embedding) VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO search_media (photo_id, rotation, thumb, embedding, embedding_model) VALUES (?1, ?2, ?3, ?4, ?5)",
             )?;
             for p in photos {
                 insert.execute(params![
@@ -196,7 +197,7 @@ impl GlobalDatabase {
                     p.lens,
                     p.lens_norm,
                 ])?;
-                insert_media.execute(params![p.photo_id, p.rotation, p.thumb, p.embedding])?;
+                insert_media.execute(params![p.photo_id, p.rotation, p.thumb, p.embedding, p.embedding_model])?;
             }
         }
         tx.execute("DELETE FROM search_export WHERE project_id = ?1", [&project.project_id])?;
@@ -410,6 +411,7 @@ mod tests {
             rotation: 0,
             thumb: Some(b"mini".to_vec()),
             embedding: None,
+            embedding_model: None,
         }
     }
 

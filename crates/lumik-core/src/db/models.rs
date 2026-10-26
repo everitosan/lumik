@@ -1,4 +1,5 @@
 use crate::domain::delivery::DeliveryMode;
+use crate::domain::embedding::AnalysisMode;
 use serde::{Deserialize, Serialize};
 
 /// Photographer (local user)
@@ -276,6 +277,10 @@ pub struct AppSettings {
     /// nuevos. Cada proyecto guarda el suyo (ver `ProjectDatabase::delivery_mode`).
     #[serde(default)]
     pub default_delivery_mode: DeliveryMode,
+    /// Cuándo se analizan las fotos de los proyectos nuevos (spec
+    /// `semantic-search`). Cada proyecto guarda el suyo.
+    #[serde(default)]
+    pub default_analysis_mode: AnalysisMode,
 }
 
 /// Identidad de esta instalación de Lumik (spec `project-lock`): aparece en el
@@ -297,6 +302,7 @@ impl Default for AppSettings {
             rename_on_import: true,
             finder_tags_sidecar: true,
             default_delivery_mode: DeliveryMode::None,
+            default_analysis_mode: AnalysisMode::OnDemand,
         }
     }
 }
@@ -339,4 +345,14 @@ impl Default for ProjectSettings {
 pub struct SidebarSections {
     pub backups_collapsed: bool,
     pub storage_collapsed: bool,
+}
+
+/// Vector de contenido de una foto (spec `semantic-search`), con el modelo que
+/// lo generó y la rotación de la foto en ese momento.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PhotoEmbedding {
+    pub photo_id: String,
+    pub model: String,
+    pub rotation: i32,
+    pub vector: Vec<f32>,
 }

@@ -1,6 +1,7 @@
 use super::models::*;
 use super::{GlobalDatabase, ProjectDatabase, DbResult};
 use crate::domain::delivery::DeliveryMode;
+use crate::domain::embedding::AnalysisMode;
 use crate::domain::project::DashboardSort;
 use chrono::Utc;
 use rusqlite::params;
@@ -219,11 +220,17 @@ impl GlobalDatabase {
             .map(|v| DeliveryMode::parse(&v))
             .unwrap_or_default();
 
+        let default_analysis_mode = self
+            .get_setting("default_analysis_mode")?
+            .map(|v| AnalysisMode::parse(&v))
+            .unwrap_or_default();
+
         Ok(AppSettings {
             embed_metadata_on_import: embed_metadata,
             rename_on_import,
             finder_tags_sidecar,
             default_delivery_mode,
+            default_analysis_mode,
         })
     }
 
@@ -241,6 +248,7 @@ impl GlobalDatabase {
             if settings.finder_tags_sidecar { "true" } else { "false" },
         )?;
         self.set_setting("default_delivery_mode", settings.default_delivery_mode.as_str())?;
+        self.set_setting("default_analysis_mode", settings.default_analysis_mode.as_str())?;
         self.get_app_settings()
     }
 
@@ -507,6 +515,64 @@ impl ProjectDatabase {
             [mode.as_str()],
         )?;
         Ok(())
+    }
+
+    /// Cuándo se analizan las fotos del proyecto (spec `semantic-search`).
+    pub fn analysis_mode(&self) -> DbResult<AnalysisMode> {
+        let value: String = self.conn().query_row(
+            "SELECT analysis_mode FROM project_settings WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(AnalysisMode::parse(&value))
+    }
+
+    pub fn set_analysis_mode(&self, mode: AnalysisMode) -> DbResult<()> {
+        self.conn().execute(
+            "UPDATE project_settings SET analysis_mode = ?1 WHERE id = 1",
+            [mode.as_str()],
+        )?;
+        Ok(())
+    }
+
+    /// Modelo y rotación con los que se calculó el vector de cada foto.
+    pub fn embedding_states(&self) -> DbResult<std::collections::HashMap<String, (String, i32)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT photo_id, model, rotation FROM photo_embedding")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get(2)?))))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Guarda (o reemplaza) vectores en una transacción.
+    pub fn save_embeddings(&self, embeddings: &[PhotoEmbedding]) -> DbResult<()> {
+        let conn = self.conn();
+        let tx = conn.unchecked_transaction()?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT OR REPLACE INTO photo_embedding (photo_id, model, rotation, vector) VALUES (?1, ?2, ?3, ?4)",
+            )?;
+            for e in embeddings {
+                stmt.execute(params![e.photo_id, e.model, e.rotation, crate::domain::embedding::vector_to_bytes(&e.vector)])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Vectores del proyecto con su modelo y rotación, para el índice de búsqueda.
+    pub fn embeddings(&self) -> DbResult<Vec<PhotoEmbedding>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT photo_id, model, rotation, vector FROM photo_embedding")?;
+        let rows = stmt.query_map([], |r| {
+            let bytes: Vec<u8> = r.get(3)?;
+            Ok(PhotoEmbedding {
+                photo_id: r.get(0)?,
+                model: r.get(1)?,
+                rotation: r.get(2)?,
+                vector: crate::domain::embedding::vector_from_bytes(&bytes).unwrap_or_default(),
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     pub fn update_project_settings(&self, settings: &ProjectSettings) -> DbResult<()> {

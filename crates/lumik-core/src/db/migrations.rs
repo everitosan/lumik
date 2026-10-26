@@ -38,6 +38,7 @@ pub(super) fn run_project_migrations(conn: &Connection, project_dir: Option<&Pat
     ensure_project_settings_row(conn)?;
     migrate_project_settings_columns(conn)?;
     migrate_delivery_mode_column(conn)?;
+    migrate_analysis_mode_column(conn)?;
     migrate_generation_column(conn)?;
     migrate_photo_paths_to_project_relative(conn, project_dir)?;
 
@@ -192,6 +193,19 @@ fn migrate_delivery_mode_column(conn: &Connection) -> DbResult<()> {
     Ok(())
 }
 
+/// Modo de análisis de las fotos (spec `semantic-search`); la tabla
+/// `photo_embedding` la crea el esquema.
+fn migrate_analysis_mode_column(conn: &Connection) -> DbResult<()> {
+    if !has_column(conn, "project_settings", "analysis_mode") {
+        conn.execute(
+            "ALTER TABLE project_settings ADD COLUMN analysis_mode TEXT NOT NULL DEFAULT 'on_demand' \
+             CHECK(analysis_mode IN ('on_import', 'on_demand'))",
+            [],
+        )?;
+    }
+    Ok(())
+}
+
 /// El índice de búsqueda guardaba la miniatura en `search_photo`; ahora va en
 /// `search_media`. Como el índice es desechable, si queda el esquema anterior
 /// se borran sus tablas y la app lo reconstruye (spec `photo-search`).
@@ -208,6 +222,14 @@ pub(super) fn reset_old_search_index(conn: &Connection) -> DbResult<()> {
     // del proyecto no cambie (se exportó con el disco fuera de Lumik).
     if has_column(conn, "search_project", "project_id") && !has_column(conn, "search_project", "exports_signature") {
         conn.execute("ALTER TABLE search_project ADD COLUMN exports_signature TEXT NOT NULL DEFAULT ''", [])?;
+    }
+    // Vectores de contenido (spec semantic-search): los proyectos se reindexan
+    // para copiar los que ya tengan en su disco.
+    if has_column(conn, "search_media", "photo_id") && !has_column(conn, "search_media", "embedding_model") {
+        conn.execute("ALTER TABLE search_media ADD COLUMN embedding_model TEXT", [])?;
+        if has_column(conn, "search_project", "project_id") {
+            conn.execute("UPDATE search_project SET indexed_generation = -1", [])?;
+        }
     }
     Ok(())
 }
@@ -350,6 +372,14 @@ mod tests {
 
         // Candado: la generación arranca en 0.
         assert!(column_names(&conn, "project").contains(&"generation".to_string()));
+
+        // Búsqueda por contenido: los proyectos viejos se analizan bajo demanda
+        // y tienen dónde guardar los vectores.
+        let mode: String = conn
+            .query_row("SELECT analysis_mode FROM project_settings WHERE id=1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(mode, "on_demand");
+        assert!(column_names(&conn, "photo_embedding").contains(&"vector".to_string()));
     }
 
     #[test]

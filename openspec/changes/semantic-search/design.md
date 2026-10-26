@@ -47,7 +47,7 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 - `vector`: 512 `f32` little-endian, normalizado (2 KB). `rotation` es la de la foto cuando se analizó: si cambia, la foto vuelve a estar pendiente, como su miniatura. Un `model` distinto al instalado también cuenta como pendiente.
 - Escribir vectores sube la generación, lo que dispara el reindexado normal y los copia al índice.
 - Alternativa descartada: guardarlos solo en `lumik.db`. Cada equipo, y sobre todo la tablet, tendría que recalcular lo que otro ya calculó.
-- Proyectos existentes: la migración agrega la tabla y deja `analysis_mode` en `on_demand`. El modo de los proyectos nuevos se lee de un ajuste global (`search.analysis_mode`, por defecto `on_demand`).
+- Proyectos existentes: la migración agrega la tabla y deja `analysis_mode` en `on_demand`. El modo de los proyectos nuevos se lee de un ajuste global (`AppSettings.default_analysis_mode`, por defecto `on_demand`), que `create_project` copia al proyecto como hace con `default_delivery_mode`.
 
 ### D4. Copia al índice
 
@@ -79,7 +79,7 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 
 ### D6. Analizar fotos
 
-- Caso de uso `AnalyzeProject`: toma una sesión de escritura del proyecto (si está bloqueado, no hace nada), busca las fotos pendientes (sin vector, de otro modelo o rotadas), calcula sus vectores de uno en uno y los escribe en lotes de 32 en una transacción. Revisa una bandera de cancelación entre fotos.
+- Caso de uso `AnalyzeProject`: corre dentro de una sesión de escritura del proyecto que abre el llamador (si está bloqueado, no se analiza; al cerrarla sube la generación), busca las fotos pendientes (sin vector, de otro modelo o rotadas), calcula sus vectores de uno en uno y los escribe en lotes de 32 en una transacción. Revisa una bandera de cancelación entre fotos.
 - Una cola de análisis en el desktop, con un hilo, como `IndexQueue`: un proyecto a la vez, en el orden en que se pidió. La alimentan "Analizar fotos", el final de una importación (si el proyecto está en `on_import` y el modelo instalado) y "Analizar" desde el aviso de los resultados.
 - Progreso con el evento `analysis-progress` (proyecto, hechas, total) y una tarjeta en la sección de actividad de la barra lateral, con "Detener". Expulsar el disco cancela su análisis.
 

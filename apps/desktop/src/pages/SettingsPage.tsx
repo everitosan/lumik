@@ -358,6 +358,8 @@ export function SettingsPage({ initialTab = 'import' }: SettingsPageProps) {
           rename_on_import: renameOnImport,
           finder_tags_sidecar: finderTags,
           default_delivery_mode: defaultDelivery,
+          // Lo edita la pestaña Búsqueda: aquí se conserva.
+          default_analysis_mode: appSettings?.default_analysis_mode ?? 'on_demand',
         }),
       ]);
 

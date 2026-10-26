@@ -406,6 +406,7 @@ mod tests {
             rotation: 0,
             thumb: Some(format!("thumb-{id}").into_bytes()),
             embedding: None,
+            embedding_model: None,
         }
     }
 

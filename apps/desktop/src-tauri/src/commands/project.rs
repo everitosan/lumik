@@ -193,8 +193,10 @@ pub fn create_project(state: State<AppState>, project: CreateProject) -> AppResu
 
     // La entrega al aprobar del proyecto parte del valor de fábrica global y
     // después es del proyecto: cambiar el global no la toca.
-    let delivery_mode = state.global_db.get_app_settings()?.default_delivery_mode;
-    project_db.set_delivery_mode(delivery_mode)?;
+    // Lo mismo con el análisis de las fotos (spec semantic-search).
+    let settings = state.global_db.get_app_settings()?;
+    project_db.set_delivery_mode(settings.default_delivery_mode)?;
+    project_db.set_analysis_mode(settings.default_analysis_mode)?;
 
     // Create _exported subfolder inside the project directory
     let exported_dir = project_dir.join("_exported");

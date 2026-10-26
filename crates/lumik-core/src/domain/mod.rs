@@ -5,6 +5,7 @@
 
 pub mod delivery;
 pub mod device;
+pub mod embedding;
 pub mod error;
 pub mod exported;
 pub mod lock;

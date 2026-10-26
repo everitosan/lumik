@@ -8,6 +8,7 @@
 //! es el coseno.
 
 use crate::application::ports::EmbeddingModel;
+pub use crate::domain::embedding::{normalize, similarity};
 use ort::session::Session;
 use ort::value::Tensor;
 use serde::Deserialize;
@@ -167,19 +168,6 @@ pub fn preprocess(img: &image::RgbImage, spec: &ImageSpec) -> Vec<f32> {
     out
 }
 
-/// Deja `v` con norma 1 (sin tocar un vector nulo).
-pub fn normalize(v: &mut [f32]) {
-    let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
-    if norm > 0.0 {
-        v.iter_mut().for_each(|x| *x /= norm);
-    }
-}
-
-/// Producto punto de dos vectores normalizados: su coseno.
-pub fn similarity(a: &[f32], b: &[f32]) -> f32 {
-    a.iter().zip(b).map(|(x, y)| x * y).sum()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,17 +211,6 @@ mod tests {
         assert!((out[0] - 1.0).abs() < 1e-5, "primer plano: rojo");
         assert!((out[16] + 1.0).abs() < 1e-5, "segundo plano: verde");
         assert!(out[32].abs() < 0.01, "tercer plano: azul a la mitad");
-    }
-
-    #[test]
-    fn normalize_and_similarity() {
-        let mut v = vec![3.0, 4.0];
-        normalize(&mut v);
-        assert!((similarity(&v, &v) - 1.0).abs() < 1e-6);
-        assert!((v[0] - 0.6).abs() < 1e-6);
-        let mut zero = vec![0.0, 0.0];
-        normalize(&mut zero);
-        assert_eq!(zero, [0.0, 0.0]);
     }
 
     #[test]

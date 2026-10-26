@@ -76,6 +76,7 @@ mod tests {
                 rotation: 0,
                 thumb: None,
                 embedding: None,
+                embedding_model: None,
             };
             global.write_project_index(&project, &[photo], &[]).unwrap();
         }

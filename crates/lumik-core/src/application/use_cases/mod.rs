@@ -2,6 +2,7 @@
 //! Sin acceso directo a SQLite/exiftool/fs; testeables con dobles de los puertos.
 
 pub mod albums;
+pub mod analyze_project;
 pub mod change_delivery_mode;
 pub mod cull_photo;
 pub mod eject_device;

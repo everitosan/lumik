@@ -121,7 +121,12 @@ export interface AppSettings {
   finder_tags_sidecar: boolean;
   /** Valor de fábrica de la entrega al aprobar para proyectos nuevos */
   default_delivery_mode: DeliveryMode;
+  /** Cuándo se analizan las fotos de los proyectos nuevos (semantic-search) */
+  default_analysis_mode: AnalysisMode;
 }
+
+/** Cuándo se calculan los vectores de las fotos de un proyecto (semantic-search). */
+export type AnalysisMode = 'on_import' | 'on_demand';
 
 /**
  * "Al aprobar, entregar directamente": nada, el JPG de los pares RAW+JPG, o

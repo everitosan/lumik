@@ -245,7 +245,7 @@ fn discover_recursive(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::models::{CreatePhoto, SidebarSections};
+    use crate::db::models::{CreatePhoto, PhotoEmbedding, SidebarSections};
 
     #[test]
     fn archived_project_stays_in_dashboard_entry_and_can_be_restored() {
@@ -370,6 +370,51 @@ mod tests {
         global.set_install_name("   ").unwrap();
         let renamed = global.install_identity("x").unwrap();
         assert_eq!((renamed.id, renamed.name.as_str()), (first.id, "Estudio"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn analysis_mode_and_embeddings() {
+        use crate::domain::embedding::AnalysisMode;
+        let dir = std::env::temp_dir().join(format!("lumik_embeddings_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let global = GlobalDatabase::new(dir.join("lumik.db")).unwrap();
+
+        // Valor de fábrica: bajo demanda; el global persiste.
+        let mut settings = global.get_app_settings().unwrap();
+        assert_eq!(settings.default_analysis_mode, AnalysisMode::OnDemand);
+        settings.default_analysis_mode = AnalysisMode::OnImport;
+        global.update_app_settings(&settings).unwrap();
+        assert_eq!(global.get_app_settings().unwrap().default_analysis_mode, AnalysisMode::OnImport);
+
+        let project = ProjectDatabase::create(
+            dir.join("p").join("project.db"), "p1", "Boda", "c", None, None, "", dir.clone(),
+        )
+        .unwrap();
+        assert_eq!(project.analysis_mode().unwrap(), AnalysisMode::OnDemand);
+        project.set_analysis_mode(AnalysisMode::OnImport).unwrap();
+        project.update_project_settings(&project.get_project_settings().unwrap()).unwrap();
+        assert_eq!(project.analysis_mode().unwrap(), AnalysisMode::OnImport, "guardar los filtros no lo toca");
+
+        let ids: Vec<String> = project
+            .create_photos_batch(&[CreatePhoto { project_id: "p1".into(), dng_path: "_media/a.dng".into(), ..Default::default() }])
+            .unwrap()
+            .into_iter()
+            .map(|p| p.id)
+            .collect();
+        let embedding = |model: &str, rotation: i32, v: f32| PhotoEmbedding {
+            photo_id: ids[0].clone(),
+            model: model.into(),
+            rotation,
+            vector: vec![v, 0.5],
+        };
+        project.save_embeddings(&[embedding("m1", 0, 1.0)]).unwrap();
+        project.save_embeddings(&[embedding("m2", 90, 2.0)]).unwrap();
+        assert_eq!(project.embedding_states().unwrap()[&ids[0]], ("m2".to_string(), 90), "se reemplaza");
+        assert_eq!(project.embeddings().unwrap(), [embedding("m2", 90, 2.0)]);
+
+        drop(project);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

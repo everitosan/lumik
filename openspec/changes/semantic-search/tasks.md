@@ -8,9 +8,9 @@
 
 ## 2. Vectores en el proyecto (núcleo)
 
-- [ ] 2.1 Tabla `photo_embedding` y `project_settings.analysis_mode` con su migración; ajuste global `search.analysis_mode` para proyectos nuevos. Verificar con tests de esquema y de migración sobre una base sin las columnas.
-- [ ] 2.2 Caso de uso `AnalyzeProject`: pendientes (sin vector, otro modelo, rotadas), lotes de 32, cancelación entre fotos, proyecto bloqueado sin escribir, generación que sube. Verificar con tests de fakes de cada caso.
-- [ ] 2.3 `IndexProject` copia los vectores a `search_media.embedding` y `embedding_model`, con migración y reindexado. Verificar con un test: un proyecto con vectores llega al índice sin el modelo instalado.
+- [x] 2.1 Tabla `photo_embedding` y `project_settings.analysis_mode` con su migración; ajuste global `default_analysis_mode` (en `AppSettings`, como `default_delivery_mode`) que `create_project` copia al proyecto nuevo. Verificar con tests de esquema y de migración sobre una base sin las columnas.
+- [x] 2.2 Caso de uso `AnalyzeProject`: pendientes (sin vector, otro modelo, rotadas), lotes de 32, cancelación entre fotos sin perder lo hecho, una foto que falla no detiene el resto. El candado y la subida de generación los pone la sesión de escritura del llamador (4.2). Verificar con tests de fakes de cada caso.
+- [x] 2.3 `IndexProject` copia los vectores a `search_media.embedding` y `embedding_model`, con migración y reindexado. Verificar con un test: un proyecto con vectores llega al índice sin el modelo instalado.
 
 ## 3. Búsqueda (núcleo)
 
