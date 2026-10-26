@@ -3,9 +3,17 @@ import { useTranslation } from 'react-i18next';
 import { Modal, Input, Button, Checkbox } from '@lumik/ui';
 import { DateField } from '../../../components/DateField';
 import { DeliveryModeSelect } from '../../../components/DeliveryModeSelect';
+import { AnalysisModeSelect } from '../../../components/AnalysisModeSelect';
 import { useDeliveryChange } from '../../../components/DeliveryChangeDialog';
-import { editProject, getProject, getProjectDeliveryMode } from '../../../lib/api';
-import type { DeliveryMode, EditProjectProgress, EditProjectResult, ProjectDashboard } from '../../../lib/types';
+import {
+  editProject,
+  getContentModelState,
+  getProject,
+  getProjectAnalysis,
+  getProjectDeliveryMode,
+  setProjectAnalysisMode,
+} from '../../../lib/api';
+import type { AnalysisMode, DeliveryMode, EditProjectProgress, EditProjectResult, ProjectDashboard } from '../../../lib/types';
 
 interface EditProjectModalProps {
   /** Proyecto a editar; `null` cierra el modal. */
@@ -99,6 +107,9 @@ export function EditProjectModal({ project, onClose, onSaved }: EditProjectModal
   const [rewriteMetadata, setRewriteMetadata] = useState(false);
   const [delivery, setDelivery] = useState<DeliveryMode>('none');
   const [originalDelivery, setOriginalDelivery] = useState<DeliveryMode>('none');
+  // Modo de análisis (semantic-search): solo se muestra con el modelo instalado.
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode | null>(null);
+  const [originalAnalysisMode, setOriginalAnalysisMode] = useState<AnalysisMode | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; date?: string }>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -133,6 +144,15 @@ export function EditProjectModal({ project, onClose, onSaved }: EditProjectModal
           setOriginalDelivery(mode);
         })
         .catch((err) => console.error('getProjectDeliveryMode failed:', err));
+      setAnalysisMode(null);
+      setOriginalAnalysisMode(null);
+      getContentModelState()
+        .then((model) => (model.state === 'installed' ? getProjectAnalysis(project.id) : null))
+        .then((analysis) => {
+          setAnalysisMode(analysis?.mode ?? null);
+          setOriginalAnalysisMode(analysis?.mode ?? null);
+        })
+        .catch((err) => console.error('getProjectAnalysis failed:', err));
     }
     prevOpen.current = open;
   }, [open, project]);
@@ -143,6 +163,7 @@ export function EditProjectModal({ project, onClose, onSaved }: EditProjectModal
   const nameChanged = name.trim() !== project.name;
   const descriptionChanged = description.trim() !== originalDescription.trim();
   const deliveryChanged = delivery !== originalDelivery;
+  const analysisChanged = analysisMode !== null && analysisMode !== originalAnalysisMode;
   const yearChanged = date.slice(0, 4) !== initialDate(project).slice(0, 4);
   const dateChanged = date !== initialDate(project);
   const showRenameFiles = hasPhotos && nameChanged && name.trim() !== '';
@@ -162,7 +183,7 @@ export function EditProjectModal({ project, onClose, onSaved }: EditProjectModal
     const wantsRename = showRenameFiles && renameFiles;
     const wantsRewrite = showRewrite && rewriteMetadata;
     const onlyDelivery = !nameChanged && !dateChanged && !descriptionChanged && !wantsRewrite;
-    if (onlyDelivery && !deliveryChanged) {
+    if (onlyDelivery && !deliveryChanged && !analysisChanged) {
       onClose();
       return;
     }
@@ -171,6 +192,10 @@ export function EditProjectModal({ project, onClose, onSaved }: EditProjectModal
     setError(null);
     setProgress(null);
     try {
+      if (analysisChanged && analysisMode) {
+        await setProjectAnalysisMode(project.id, analysisMode);
+        setOriginalAnalysisMode(analysisMode);
+      }
       // La entrega no mueve la carpeta: se guarda aparte y primero, con su
       // aviso si afecta a fotos ya aprobadas. Cancelar el aviso no guarda nada.
       if (deliveryChanged) {
@@ -274,6 +299,13 @@ export function EditProjectModal({ project, onClose, onSaved }: EditProjectModal
               <DeliveryModeSelect value={delivery} onChange={setDelivery} disabled={saving} />
               <p style={hintStyles}>{t('project.delivery.hint')}</p>
             </div>
+
+            {analysisMode && (
+              <div style={deliveryStyles}>
+                <AnalysisModeSelect value={analysisMode} onChange={setAnalysisMode} disabled={saving} />
+                <p style={hintStyles}>{t('project.analysis.hint')}</p>
+              </div>
+            )}
 
             {(showRenameFiles || showRewrite) && (
               <div style={optionsStyles}>

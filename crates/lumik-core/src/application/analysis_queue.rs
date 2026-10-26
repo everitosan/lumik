@@ -5,8 +5,11 @@
 //!
 //! Cada proyecto en curso tiene su bandera de cancelación: detenerlo, o expulsar
 //! su disco, la levanta y `AnalyzeProject` se detiene antes de la foto siguiente.
+//!
+//! También recuerda, mientras viva la app, qué fotos de cada proyecto no se
+//! pudieron analizar, para no seguir ofreciéndolas como pendientes.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
@@ -15,6 +18,7 @@ use std::time::{Duration, Instant};
 struct Inner {
     queued: VecDeque<String>,
     current: Option<(String, Arc<AtomicBool>)>,
+    failed: HashMap<String, HashSet<String>>,
 }
 
 #[derive(Default)]
@@ -103,6 +107,23 @@ impl AnalysisQueue {
         }
     }
 
+    /// Guarda las fotos que fallaron en un análisis de `project_id`. Uno completo
+    /// reemplaza las anteriores (las que ya salieron bien dejan de contar); uno
+    /// detenido solo las suma.
+    pub fn record_failed(&self, project_id: &str, photo_ids: Vec<String>, complete: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        let set = inner.failed.entry(project_id.to_string()).or_default();
+        if complete {
+            set.clear();
+        }
+        set.extend(photo_ids);
+    }
+
+    /// Fotos de `project_id` que fallaron en esta sesión.
+    pub fn failed(&self, project_id: &str) -> HashSet<String> {
+        self.inner.lock().unwrap().failed.get(project_id).cloned().unwrap_or_default()
+    }
+
     pub fn state(&self) -> AnalysisQueueState {
         let inner = self.inner.lock().unwrap();
         AnalysisQueueState {
@@ -140,6 +161,17 @@ mod tests {
         q.cancel("b");
         assert!(flag.load(Ordering::Relaxed));
         assert_eq!(q.state().queued, Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_complete_run_replaces_the_failed_photos_and_a_stopped_one_adds() {
+        let q = AnalysisQueue::new();
+        q.record_failed("a", vec!["f1".into()], true);
+        q.record_failed("a", vec!["f2".into()], false);
+        assert_eq!(q.failed("a"), HashSet::from(["f1".to_string(), "f2".to_string()]));
+        q.record_failed("a", vec![], true);
+        assert!(q.failed("a").is_empty());
+        assert!(q.failed("b").is_empty());
     }
 
     #[test]

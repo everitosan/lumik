@@ -182,7 +182,8 @@ impl ImageProcessor for DesktopImaging {
         // TIFFs with JPEG strip compression store image data in 16-row strips; exiftool
         // -PreviewImage returns only the first strip (16px tall), not a usable thumbnail.
         if !matches!(ext.as_str(), "tif" | "tiff") {
-            for tag in &["-PreviewImage", "-ThumbnailImage"] {
+            // Los DNG que exporta Lightroom solo traen `JpgFromRaw` (1024 px).
+            for tag in &["-PreviewImage", "-JpgFromRaw", "-ThumbnailImage"] {
                 let output = match crate::exiftool::command().args(["-b", tag, path_str]).output() {
                     Ok(o) => o,
                     Err(_) => continue,

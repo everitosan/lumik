@@ -730,3 +730,70 @@ export function useLanguage() {
     changeLanguage,
   };
 }
+
+// ============================================================================
+// Búsqueda por contenido (semantic-search)
+// ============================================================================
+
+/** ¿El modelo de búsqueda por contenido está instalado? Se actualiza al descargarlo o borrarlo. */
+export function useContentModelInstalled(): boolean {
+  const [installed, setInstalled] = useState(false);
+  useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | undefined;
+    api.getContentModelState().then((s) => active && setInstalled(s.state === 'installed')).catch(() => undefined);
+    api
+      .onContentModelState((s) => setInstalled(s.state === 'installed'))
+      .then((fn) => {
+        if (active) unlisten = fn;
+        else fn();
+      });
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, []);
+  return installed;
+}
+
+/** Análisis de un proyecto según los eventos `analysis-progress`. */
+export type AnalysisJob = Omit<import('./types').AnalysisEvent, 'project_id'>;
+
+/**
+ * Análisis en espera, en curso y terminados por proyecto. Arranca con la cola
+ * del backend y sigue los eventos; `dismiss` quita un terminado de la lista.
+ */
+export function useAnalysisJobs() {
+  const [jobs, setJobs] = useState<Record<string, AnalysisJob>>({});
+  useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | undefined;
+    const blank = { done: 0, total: 0, analyzed: 0, failed: 0, error: null };
+    api
+      .getAnalysisQueue()
+      .then((q) => {
+        if (!active) return;
+        setJobs((prev) => {
+          const next = { ...prev };
+          for (const id of q.queued) next[id] ??= { ...blank, status: 'queued' };
+          if (q.current) next[q.current] ??= { ...blank, status: 'running' };
+          return next;
+        });
+      })
+      .catch(() => undefined);
+    api
+      .onAnalysisProgress(({ project_id, ...job }) => setJobs((prev) => ({ ...prev, [project_id]: job })))
+      .then((fn) => {
+        if (active) unlisten = fn;
+        else fn();
+      });
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, []);
+  const dismiss = useCallback((projectId: string) => {
+    setJobs(({ [projectId]: _gone, ...rest }) => rest);
+  }, []);
+  return { jobs, dismiss };
+}

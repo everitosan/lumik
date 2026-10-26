@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '@lumik/ui';
+import type { AnalysisJob } from '../../../lib/hooks';
 
 
 export interface ProjectDetailHeaderProps {
@@ -12,6 +13,53 @@ export interface ProjectDetailHeaderProps {
   onBackup?: () => void;
   backingUp?: boolean;
   backupStatus?: string | null;
+  /** Análisis de las fotos (semantic-search); sin modelo instalado no se pasa. */
+  analysis?: {
+    /** Fotos sin analizar */
+    pending: number;
+    job?: AnalysisJob;
+    onAnalyze: () => void;
+    onStop: () => void;
+  };
+}
+
+const outlineButtonStyles: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  padding: '6px 12px',
+  fontFamily: 'var(--lumik-font-primary, Inter)',
+  fontSize: '13px',
+  color: 'var(--lumik-on-surface, #e5e2e1)',
+  background: 'transparent',
+  border: '1px solid var(--lumik-outline-variant, #424654)',
+  borderRadius: 'var(--lumik-radius-sm, 4px)',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+/** "Analizar fotos (N)", o el avance con "Detener" mientras se analizan. */
+function AnalyzeButton({ pending, job, onAnalyze, onStop }: NonNullable<ProjectDetailHeaderProps['analysis']>) {
+  const { t } = useTranslation();
+  if (job?.status === 'running' || job?.status === 'queued') {
+    const label =
+      job.status === 'queued'
+        ? t('project.analysis.queued')
+        : t('project.analysis.running', { done: job.done, total: job.total });
+    return (
+      <button style={outlineButtonStyles} onClick={onStop} title={t('project.analysis.stop')}>
+        <Icon name="x" size={14} />
+        {label}
+      </button>
+    );
+  }
+  if (pending === 0) return null;
+  return (
+    <button style={outlineButtonStyles} onClick={onAnalyze} title={t('project.analysis.analyzeHint')}>
+      <Icon name="search" size={14} />
+      {t('project.analysis.analyze', { count: pending })}
+    </button>
+  );
 }
 
 const headerStyles: CSSProperties = {
@@ -76,6 +124,7 @@ export function ProjectDetailHeader({
   onBackup,
   backingUp,
   backupStatus,
+  analysis,
 }: ProjectDetailHeaderProps) {
   const { t } = useTranslation();
 
@@ -146,6 +195,8 @@ export function ProjectDetailHeader({
             <Icon name="projects" size={14} />
           </button>
         </div>
+
+        {analysis && <AnalyzeButton {...analysis} />}
 
         {onBackup && (
           <>

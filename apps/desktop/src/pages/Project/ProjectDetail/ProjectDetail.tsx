@@ -4,7 +4,16 @@ import type { CSSProperties } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT, photoFormat, type ColorLabel } from '@lumik/ui';
 import type { Photo, ProjectAccess, ProjectSettings } from '../../../lib/types';
-import { useProjectPhotos, useProjectTrashedPhotos, useProjectThumbnails, useContextKeybindings, matchesKey, usePlatform } from '../../../lib/hooks';
+import {
+  useProjectPhotos,
+  useProjectTrashedPhotos,
+  useProjectThumbnails,
+  useContextKeybindings,
+  matchesKey,
+  usePlatform,
+  useContentModelInstalled,
+  useAnalysisJobs,
+} from '../../../lib/hooks';
 import * as api from '../../../lib/api';
 import { ProjectDetailHeader } from './ProjectDetailHeader';
 import { ProjectDetailFooter } from './ProjectDetailFooter';
@@ -360,6 +369,24 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
   // desde la barra lateral.
   const { openBackupDetail } = useBackup();
 
+  // Análisis de las fotos (semantic-search): cuántas faltan y cómo va.
+  const modelInstalled = useContentModelInstalled();
+  const { jobs: analysisJobs } = useAnalysisJobs();
+  const analysisJob = analysisJobs[projectId];
+  const [analysisPending, setAnalysisPending] = useState(0);
+  const photoCount = photos?.length ?? 0;
+  useEffect(() => {
+    if (!modelInstalled || analysisJob?.status === 'running') return;
+    let active = true;
+    api
+      .getProjectAnalysis(projectId)
+      .then((a) => active && setAnalysisPending(a.pending))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [projectId, modelInstalled, analysisJob?.status, photoCount]);
+
   // Auto-show import when project has no photos (only once per mount)
   useEffect(() => {
     if (access?.access === 'open' && !photosState.loading && !photosState.error && photos && photos.length === 0 && !autoRedirectedToImport.current) {
@@ -622,6 +649,16 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         onViewModeChange={handleViewModeChange}
         onImport={readOnly ? undefined : () => setShowImport(true)}
         onBackup={readOnly ? undefined : () => openBackupDetail(projectId, projectName)}
+        analysis={
+          modelInstalled && !readOnly
+            ? {
+                pending: analysisPending,
+                job: analysisJob,
+                onAnalyze: () => void api.analyzeProject(projectId).catch((err) => console.error('analyzeProject failed:', err)),
+                onStop: () => void api.stopProjectAnalysis(projectId),
+              }
+            : undefined
+        }
       />
 
       {access?.access === 'read_only' && (

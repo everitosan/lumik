@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Logo, SectionButton, DriveInfo, CollapsibleSection, BackupJobCard } from '@lumik/ui';
-import { useConnectedDevices, usePlatform } from '../lib/hooks';
+import { Logo, SectionButton, DriveInfo, CollapsibleSection, BackupJobCard, Icon } from '@lumik/ui';
+import { useConnectedDevices, usePlatform, useAnalysisJobs, type AnalysisJob } from '../lib/hooks';
 import * as api from '../lib/api';
 import { useBackup } from '../lib/BackupContext';
 import type { Section } from './Layout';
@@ -76,6 +76,81 @@ const backupListStyles: React.CSSProperties = {
   overflowY: 'auto',
 };
 
+const analysisCardStyles = (hasError: boolean): React.CSSProperties => ({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  padding: '10px 12px',
+  backgroundColor: 'var(--lumik-surface-container, #201f1f)',
+  borderRadius: 'var(--lumik-radius-sm, 4px)',
+  border: `1px solid ${hasError ? 'var(--lumik-error, #ffb4ab)' : 'var(--lumik-outline-variant, #424654)'}`,
+  fontFamily: 'var(--lumik-font-primary, Inter)',
+});
+
+const analysisIconButtonStyles: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '22px',
+  height: '22px',
+  padding: 0,
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+  cursor: 'pointer',
+  flexShrink: 0,
+};
+
+/**
+ * Análisis de las fotos de un proyecto (semantic-search): en espera, avance con
+ * "Detener", o cómo terminó con una × para quitarlo.
+ */
+function AnalysisJobCard({ name, job, onStop, onDismiss }: { name: string; job: AnalysisJob; onStop: () => void; onDismiss: () => void }) {
+  const { t } = useTranslation();
+  const active = job.status === 'running' || job.status === 'queued';
+  const hasError = job.status === 'failed' || job.status === 'locked' || job.status === 'no_model';
+  const line = (() => {
+    switch (job.status) {
+      case 'queued':
+        return t('navigation.analysis.queued');
+      case 'running':
+        return job.total > 0 ? t('navigation.analysis.running', { done: job.done, total: job.total }) : t('navigation.analysis.starting');
+      case 'done':
+        return job.failed > 0
+          ? t('navigation.analysis.doneWithFailures', { count: job.analyzed, failed: job.failed })
+          : t('navigation.analysis.done', { count: job.analyzed });
+      case 'cancelled':
+        return t('navigation.analysis.cancelled', { count: job.analyzed });
+      default:
+        return t(`navigation.analysis.${job.status}`);
+    }
+  })();
+  return (
+    <div style={analysisCardStyles(hasError)}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: '13px', fontWeight: 500, color: 'var(--lumik-on-surface, #e5e2e1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={name}>
+          {name}
+        </span>
+        <button
+          type="button"
+          style={analysisIconButtonStyles}
+          onClick={active ? onStop : onDismiss}
+          title={active ? t('navigation.analysis.stop') : t('navigation.analysis.dismiss')}
+          aria-label={active ? t('navigation.analysis.stop') : t('navigation.analysis.dismiss')}
+        >
+          <Icon name="x" size={14} />
+        </button>
+      </div>
+      {job.status === 'running' && job.total > 0 && (
+        <div style={{ height: '4px', borderRadius: '2px', background: 'var(--lumik-surface-container-highest, #353534)', overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${(job.done / job.total) * 100}%`, background: 'var(--lumik-primary, #aac0f0)', transition: 'width 0.2s' }} />
+        </div>
+      )}
+      <span style={{ fontSize: '12px', color: hasError ? 'var(--lumik-error, #ffb4ab)' : 'var(--lumik-on-surface-variant, #c2c6d7)' }}>{line}</span>
+    </div>
+  );
+}
+
 const closeBtnStyles: React.CSSProperties = {
   alignSelf: 'flex-end',
   width: '36px',
@@ -101,6 +176,20 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
   const canEject = platform !== 'android';
 
   const { jobs, retryBackup, dismissBackup, userLaunches, openBackupDetail } = useBackup();
+
+  // Análisis de fotos (semantic-search): nombres de los proyectos que aparecen.
+  const { jobs: analysisJobs, dismiss: dismissAnalysis } = useAnalysisJobs();
+  const [projectNames, setProjectNames] = useState<Record<string, string>>({});
+  const [analysisCollapsed, setAnalysisCollapsed] = useState(false);
+  const analysisIds = Object.keys(analysisJobs);
+  useEffect(() => {
+    if (analysisIds.every((id) => id in projectNames)) return;
+    api
+      .getProjectsDashboard()
+      .then((list) => setProjectNames(Object.fromEntries(list.map((p) => [p.id, p.name]))))
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisIds.join(',')]);
   // Motivo por el que no se pudo reintentar, por proyecto (p. ej. disco ausente).
   const [retryMessages, setRetryMessages] = useState<Record<string, string>>({});
 
@@ -236,6 +325,27 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
                 onClick={() => openBackupDetail(projectId, job.projectName)}
                 onRetry={() => handleRetry(projectId, job.projectName)}
                 onDismiss={() => handleDismiss(projectId)}
+              />
+            ))}
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {analysisIds.length > 0 && (
+        <CollapsibleSection
+          title={t('navigation.analysis.title')}
+          summary={analysisCollapsed ? t('navigation.analysis.summary', { count: analysisIds.length }) : undefined}
+          collapsed={analysisCollapsed}
+          onToggle={() => setAnalysisCollapsed((c) => !c)}
+        >
+          <div style={backupListStyles}>
+            {analysisIds.map((id) => (
+              <AnalysisJobCard
+                key={id}
+                name={projectNames[id] ?? '…'}
+                job={analysisJobs[id]}
+                onStop={() => void api.stopProjectAnalysis(id)}
+                onDismiss={() => dismissAnalysis(id)}
               />
             ))}
           </div>

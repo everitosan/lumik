@@ -241,7 +241,14 @@
       "modes": {
         "on_demand": "On demand",
         "on_import": "When importing"
-      }
+      },
+      "hint": "When importing, new photos are analyzed in the background. On demand, with \"Analyze photos\".",
+      "analyze_one": "Analyze {{count}} photo",
+      "analyze_other": "Analyze {{count}} photos",
+      "analyzeHint": "Works out on this computer what each photo shows, so you can find it by describing it",
+      "queued": "Waiting",
+      "running": "Analyzing {{done}}/{{total}}",
+      "stop": "Stop the analysis"
     }
   },
   "projectLock": {
@@ -413,7 +420,24 @@
       "notMounted": "Connect the drive of \"{{name}}\" to retry."
     },
     "storageSummary_one": "{{count}} drive",
-    "storageSummary_other": "{{count}} drives"
+    "storageSummary_other": "{{count}} drives",
+    "analysis": {
+      "title": "Analysis",
+      "summary_one": "{{count}} project",
+      "summary_other": "{{count}} projects",
+      "queued": "Waiting",
+      "starting": "Starting…",
+      "running": "{{done}} of {{total}} photos",
+      "done_one": "Done: {{count}} photo analyzed",
+      "done_other": "Done: {{count}} photos analyzed",
+      "doneWithFailures": "{{count}} analyzed, {{failed}} could not be analyzed",
+      "cancelled": "Stopped: {{count}} analyzed",
+      "locked": "Open on another device: not analyzed",
+      "no_model": "The model is not installed",
+      "failed": "The analysis could not finish",
+      "stop": "Stop",
+      "dismiss": "Dismiss"
+    }
   },
   "dashboard": {
     "title": "Projects",

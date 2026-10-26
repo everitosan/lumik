@@ -82,6 +82,7 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 ### D6. Analizar fotos
 
 - Caso de uso `AnalyzeProject`: corre dentro de una sesión de escritura del proyecto que abre el llamador (si está bloqueado, no se analiza; al cerrarla sube la generación), busca las fotos pendientes (sin vector, de otro modelo o rotadas), calcula sus vectores de uno en uno y los escribe en lotes de 32 en una transacción. Revisa una bandera de cancelación entre fotos.
+- Usa el thumbnail de `.thumbs/`. Si falta (por ejemplo, un DNG exportado por Lightroom que solo trae `JpgFromRaw`), lo genera antes. Las fotos que aun así fallan se recuerdan en la cola mientras viva la app y no cuentan en "Analizar N fotos"; un análisis completo del proyecto vuelve a intentarlas y reemplaza la lista.
 - Una cola de análisis (`application::analysis_queue::AnalysisQueue`, en el núcleo) y un hilo en el desktop (`spawn_analysis_worker`): un proyecto a la vez, en el orden en que se pidió, sin duplicados. La alimentan "Analizar fotos", el final de una importación (`finish_import`, si el proyecto está en `on_import` y el modelo instalado) y "Analizar" desde el aviso de los resultados.
 - El hilo abre una sesión de escritura por proyecto. Si está en otro dispositivo termina con `locked` sin tocarlo; al cerrar la sesión sube la generación y el índice copia los vectores nuevos.
 - Progreso con el evento `analysis-progress` (`AnalysisEvent`: proyecto, estado `running`/`done`/`cancelled`/`locked`/`no_model`/`failed`, hechas, total; como mucho cada 250 ms) y una tarjeta en la sección de actividad de la barra lateral, con "Detener".
@@ -101,7 +102,8 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 ### D8. Interfaz
 
 - Ajustes → IA (`AiSettingsSection`), pestaña pensada para agrupar las funciones con modelos que lleguen después. El título de la búsqueda por contenido va arriba; debajo, dos columnas que pasan a una en pantallas angostas (`grid` con `auto-fit`): la explicación y la nota de privacidad, y el bloque del modelo (no instalado con su tamaño y "Descargar", descargando con progreso y "Cancelar", instalado con "Borrar"). Abajo, el modo de análisis de los proyectos nuevos, que solo aparece con el modelo instalado.
-- Proyecto: en su menú, el modo de análisis y "Analizar fotos (N pendientes)". Sin modelo, no aparecen.
+- Proyecto: el modo de análisis va en "Editar proyecto", junto a la entrega al aprobar, donde ya viven los ajustes de cada proyecto. "Analizar N fotos" es un botón de la barra superior del proyecto, junto a Respaldar; mientras se analiza muestra "Analizando 120/300" y al pulsarlo se detiene, y con todo analizado no aparece. Sin modelo, no aparece ninguno de los dos.
+- Barra lateral: sección "Análisis", como la de Respaldos, mientras haya proyectos en espera, en curso o terminados sin quitar. Cada tarjeta muestra el avance con "Detener", o cómo terminó (listo, detenido, abierto en otro dispositivo, error) con una × para quitarla. El backend avisa también cuando un proyecto entra a la cola (`queued`) y cuando empieza (`running`), para que aparezca de inmediato.
 - Resultados: el aviso "N fotos sin analizar" con "Analizar", solo en búsquedas con texto libre y modelo instalado.
 - About: rawler, exiftool, Tauri, React y rusqlite, más el motor elegido, `tokenizers`, CLIP ViT-B/32 (MIT) y clip-ViT-B-32-multilingual-v1 (Apache-2.0), estos dos con la nota "si se descarga".
 

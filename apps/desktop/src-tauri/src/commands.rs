@@ -169,8 +169,8 @@ pub fn spawn_index_worker(state: AppState, app: tauri::AppHandle) {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AnalysisEvent {
     pub project_id: String,
-    /// `running`, `done`, `cancelled`, `locked` (abierto en otro dispositivo),
-    /// `no_model` o `failed`.
+    /// `queued`, `running`, `done`, `cancelled`, `locked` (abierto en otro
+    /// dispositivo), `no_model` o `failed`.
     pub status: &'static str,
     pub done: usize,
     pub total: usize,
@@ -183,6 +183,12 @@ pub struct AnalysisEvent {
 /// (spec `semantic-search`). Cada proyecto corre en una sesión de escritura:
 /// si está en otro dispositivo no se toca, y al cerrarla sube su generación y
 /// el índice copia los vectores nuevos.
+impl AnalysisEvent {
+    pub fn new(project_id: &str, status: &'static str) -> Self {
+        Self { project_id: project_id.to_string(), status, done: 0, total: 0, analyzed: 0, failed: 0, error: None }
+    }
+}
+
 pub fn spawn_analysis_worker(state: AppState, app: tauri::AppHandle) {
     use crate::application::use_cases::analyze_project::AnalyzeProject;
     use tauri::Emitter;
@@ -190,15 +196,8 @@ pub fn spawn_analysis_worker(state: AppState, app: tauri::AppHandle) {
         .name("content-analysis".into())
         .spawn(move || loop {
             let (project_id, cancel) = state.analysis_queue.next();
-            let event = |status: &'static str| AnalysisEvent {
-                project_id: project_id.clone(),
-                status,
-                done: 0,
-                total: 0,
-                analyzed: 0,
-                failed: 0,
-                error: None,
-            };
+            let event = |status: &'static str| AnalysisEvent::new(&project_id, status);
+            let _ = app.emit("analysis-progress", event("running"));
             let finished = (|| -> AnalysisEvent {
                 let Some(model) = state.content_model.model() else { return event("no_model") };
                 let session = match state.write_session(&project_id) {
@@ -212,7 +211,8 @@ pub fn spawn_analysis_worker(state: AppState, app: tauri::AppHandle) {
                 };
                 let started = std::time::Instant::now();
                 let mut last = started - std::time::Duration::from_secs(1);
-                let outcome = AnalyzeProject { model: model.as_ref() }.execute(&db, &cancel, &mut |done, total| {
+                let images = state.image_processor.as_ref();
+                let outcome = AnalyzeProject { model: model.as_ref(), images }.execute(&db, &cancel, &mut |done, total| {
                     if last.elapsed() >= std::time::Duration::from_millis(250) || done == total {
                         last = std::time::Instant::now();
                         let _ = app.emit("analysis-progress", AnalysisEvent { done, total, ..event("running") });
@@ -224,12 +224,14 @@ pub fn spawn_analysis_worker(state: AppState, app: tauri::AppHandle) {
                             "análisis de {}: {} fotos, {} fallidas, en {} ms{}",
                             project_id,
                             o.analyzed,
-                            o.failed,
+                            o.failed.len(),
                             started.elapsed().as_millis(),
                             if o.cancelled { " (detenido)" } else { "" }
                         );
                         let status = if o.cancelled { "cancelled" } else { "done" };
-                        AnalysisEvent { analyzed: o.analyzed, failed: o.failed, ..event(status) }
+                        let failed = o.failed.len();
+                        state.analysis_queue.record_failed(&project_id, o.failed, !o.cancelled);
+                        AnalysisEvent { analyzed: o.analyzed, failed, ..event(status) }
                     }
                     Err(e) => AnalysisEvent { error: Some(e), ..event("failed") },
                 }

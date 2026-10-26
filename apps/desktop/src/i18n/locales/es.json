@@ -241,7 +241,14 @@
       "modes": {
         "on_demand": "Bajo demanda",
         "on_import": "Al importar"
-      }
+      },
+      "hint": "Al importar, las fotos nuevas se analizan en segundo plano. Bajo demanda, con \"Analizar fotos\".",
+      "analyze_one": "Analizar {{count}} foto",
+      "analyze_other": "Analizar {{count}} fotos",
+      "analyzeHint": "Calcula en este equipo lo que muestra cada foto, para encontrarla describiéndola",
+      "queued": "En espera",
+      "running": "Analizando {{done}}/{{total}}",
+      "stop": "Detener el análisis"
     }
   },
   "projectLock": {
@@ -413,7 +420,24 @@
       "notMounted": "Conecta el disco de «{{name}}» para reintentar."
     },
     "storageSummary_one": "{{count}} disco",
-    "storageSummary_other": "{{count}} discos"
+    "storageSummary_other": "{{count}} discos",
+    "analysis": {
+      "title": "Análisis",
+      "summary_one": "{{count}} proyecto",
+      "summary_other": "{{count}} proyectos",
+      "queued": "En espera",
+      "starting": "Empezando…",
+      "running": "{{done}} de {{total}} fotos",
+      "done_one": "Listo: {{count}} foto analizada",
+      "done_other": "Listo: {{count}} fotos analizadas",
+      "doneWithFailures": "{{count}} analizadas, {{failed}} no se pudieron analizar",
+      "cancelled": "Detenido: {{count}} analizadas",
+      "locked": "Abierto en otro dispositivo: no se analizó",
+      "no_model": "El modelo no está instalado",
+      "failed": "No se pudo terminar el análisis",
+      "stop": "Detener",
+      "dismiss": "Quitar"
+    }
   },
   "dashboard": {
     "title": "Proyectos",

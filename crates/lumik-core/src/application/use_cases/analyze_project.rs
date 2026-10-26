@@ -3,11 +3,12 @@
 //!
 //! Solo procesa las pendientes: sin vector, con el de otro modelo o rotadas
 //! desde que se analizaron. Usa el thumbnail de `.thumbs/` (ya rotado), de una
-//! foto a la vez, y guarda en lotes. Se puede detener entre fotos sin perder lo
+//! foto a la vez, y guarda en lotes. Si a una foto le falta el thumbnail (no se
+//! pudo generar al importarla), lo genera antes. Se puede detener entre fotos sin perder lo
 //! hecho. El candado y la generación son del llamador, que corre esto dentro de
 //! una sesión de escritura del proyecto.
 
-use crate::application::ports::EmbeddingModel;
+use crate::application::ports::{EmbeddingModel, ImageProcessor};
 use crate::db::models::PhotoEmbedding;
 use crate::db::ProjectDatabase;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,18 +16,20 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// Vectores que se guardan por transacción.
 const BATCH: usize = 32;
 
-/// Foto por analizar: id y la rotación con la que se analizará.
+/// Foto por analizar: id, archivo (relativo al proyecto) y la rotación con la
+/// que se analizará.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingPhoto {
     pub id: String,
+    pub dng_path: String,
     pub rotation: i32,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct AnalyzeOutcome {
     pub analyzed: usize,
-    /// Fotos que no se pudieron analizar (sin thumbnail, archivo dañado).
-    pub failed: usize,
+    /// Ids de las fotos que no se pudieron analizar (sin thumbnail, archivo dañado).
+    pub failed: Vec<String>,
     pub cancelled: bool,
 }
 
@@ -38,12 +41,14 @@ pub fn pending_photos(project: &ProjectDatabase, model_id: &str) -> Result<Vec<P
         .map_err(|e| e.to_string())?
         .into_iter()
         .filter(|p| !matches!(states.get(&p.id), Some((model, rotation)) if model == model_id && *rotation == p.rotation))
-        .map(|p| PendingPhoto { id: p.id, rotation: p.rotation })
+        .map(|p| PendingPhoto { id: p.id, dng_path: p.dng_path, rotation: p.rotation })
         .collect())
 }
 
 pub struct AnalyzeProject<'a> {
     pub model: &'a dyn EmbeddingModel,
+    /// Para generar el thumbnail que falte.
+    pub images: &'a dyn ImageProcessor,
 }
 
 impl AnalyzeProject<'_> {
@@ -74,14 +79,18 @@ impl AnalyzeProject<'_> {
                 outcome.cancelled = true;
                 break;
             }
-            match self.model.embed_image(&thumbs.join(format!("{}.jpg", photo.id))) {
+            let thumb = thumbs.join(format!("{}.jpg", photo.id));
+            if !thumb.exists() {
+                self.images.cache_thumbnail(&project.photo_file(&photo.dng_path), &photo.id, Some(photo.rotation));
+            }
+            match self.model.embed_image(&thumb) {
                 Ok(vector) => {
                     batch.push(PhotoEmbedding { photo_id: photo.id, model: model_id.clone(), rotation: photo.rotation, vector });
                     outcome.analyzed += 1;
                 }
                 Err(e) => {
                     log::warn!("analizar {}: {}", photo.id, e);
-                    outcome.failed += 1;
+                    outcome.failed.push(photo.id);
                 }
             }
             if batch.len() >= BATCH {
@@ -130,6 +139,32 @@ mod tests {
         }
     }
 
+    /// Procesador falso: con `generates`, escribe el thumbnail que se le pide.
+    #[derive(Default)]
+    struct FakeImages {
+        generates: bool,
+        asked: std::sync::Mutex<Vec<PathBuf>>,
+    }
+
+    impl ImageProcessor for FakeImages {
+        fn cache_thumbnail(&self, src: &Path, photo_id: &str, rotation: Option<i32>) -> Option<i32> {
+            self.asked.lock().unwrap().push(src.to_path_buf());
+            if !self.generates {
+                return None;
+            }
+            let thumbs = src.parent()?.parent()?.join(".thumbs");
+            std::fs::write(thumbs.join(format!("{photo_id}.jpg")), b"nueva").ok()?;
+            rotation
+        }
+        fn rotate_thumbnail(&self, _: &Path, _: &str, _: i32) {}
+        fn ensure_preview(&self, _: &Path, _: &Path, _: &str) -> Option<PathBuf> {
+            None
+        }
+        fn jpeg_preview_bytes(&self, _: &Path) -> Result<Vec<u8>, String> {
+            Err("no".into())
+        }
+    }
+
     struct Fixture {
         dir: PathBuf,
         db: ProjectDatabase,
@@ -158,7 +193,9 @@ mod tests {
         }
 
         fn run(&self, model: &FakeModel) -> AnalyzeOutcome {
-            AnalyzeProject { model }.execute(&self.db, &AtomicBool::new(false), &mut |_, _| {}).unwrap()
+            AnalyzeProject { model, images: &FakeImages::default() }
+                .execute(&self.db, &AtomicBool::new(false), &mut |_, _| {})
+                .unwrap()
         }
     }
 
@@ -172,7 +209,7 @@ mod tests {
     fn analyzes_only_pending_photos() {
         let f = Fixture::new("pending", 3, &[]);
         let model = FakeModel::new("m1");
-        assert_eq!(f.run(&model), AnalyzeOutcome { analyzed: 3, failed: 0, cancelled: false });
+        assert_eq!(f.run(&model), AnalyzeOutcome { analyzed: 3, failed: vec![], cancelled: false });
         assert_eq!(f.db.embeddings().unwrap().len(), 3);
         assert!(pending_photos(&f.db, "m1").unwrap().is_empty());
 
@@ -186,7 +223,10 @@ mod tests {
         let f = Fixture::new("stale", 3, &[]);
         f.run(&FakeModel::new("m1"));
         f.db.update_photo_rotation(&f.ids[1], 90).unwrap();
-        assert_eq!(pending_photos(&f.db, "m1").unwrap(), [PendingPhoto { id: f.ids[1].clone(), rotation: 90 }]);
+        assert_eq!(
+            pending_photos(&f.db, "m1").unwrap(),
+            [PendingPhoto { id: f.ids[1].clone(), dng_path: "_media/1.dng".into(), rotation: 90 }]
+        );
         assert_eq!(f.run(&FakeModel::new("m1")).analyzed, 1);
         assert_eq!(f.db.embedding_states().unwrap()[&f.ids[1]], ("m1".to_string(), 90));
 
@@ -197,8 +237,20 @@ mod tests {
     #[test]
     fn a_photo_without_thumbnail_does_not_stop_the_rest() {
         let f = Fixture::new("failed", 3, &[1]);
-        assert_eq!(f.run(&FakeModel::new("m1")), AnalyzeOutcome { analyzed: 2, failed: 1, cancelled: false });
+        assert_eq!(f.run(&FakeModel::new("m1")), AnalyzeOutcome { analyzed: 2, failed: vec![f.ids[1].clone()], cancelled: false });
         assert_eq!(pending_photos(&f.db, "m1").unwrap().len(), 1, "la fallida sigue pendiente");
+    }
+
+    #[test]
+    fn a_missing_thumbnail_is_generated_before_analyzing() {
+        let f = Fixture::new("regenerate", 3, &[1]);
+        let images = FakeImages { generates: true, ..Default::default() };
+        let outcome = AnalyzeProject { model: &FakeModel::new("m1"), images: &images }
+            .execute(&f.db, &AtomicBool::new(false), &mut |_, _| {})
+            .unwrap();
+        assert_eq!(outcome, AnalyzeOutcome { analyzed: 3, failed: vec![], cancelled: false });
+        assert_eq!(*images.asked.lock().unwrap(), [f.db.photo_file("_media/1.dng")], "solo la que no tenía");
+        assert!(pending_photos(&f.db, "m1").unwrap().is_empty());
     }
 
     #[test]
@@ -207,7 +259,7 @@ mod tests {
         let model = FakeModel::new("m1");
         let cancel = AtomicBool::new(false);
         let mut seen = Vec::new();
-        let outcome = AnalyzeProject { model: &model }
+        let outcome = AnalyzeProject { model: &model, images: &FakeImages::default() }
             .execute(&f.db, &cancel, &mut |done, total| {
                 seen.push((done, total));
                 if done == 5 {
@@ -215,7 +267,7 @@ mod tests {
                 }
             })
             .unwrap();
-        assert_eq!(outcome, AnalyzeOutcome { analyzed: 5, failed: 0, cancelled: true });
+        assert_eq!(outcome, AnalyzeOutcome { analyzed: 5, failed: vec![], cancelled: true });
         assert_eq!(seen.last(), Some(&(5, 40)));
         assert_eq!(f.db.embeddings().unwrap().len(), 5, "lo analizado se guarda aunque no llene un lote");
 

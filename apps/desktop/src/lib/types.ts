@@ -153,7 +153,7 @@ export interface AnalysisQueueState {
 /** Evento `analysis-progress`. */
 export interface AnalysisEvent {
   project_id: string;
-  status: 'running' | 'done' | 'cancelled' | 'locked' | 'no_model' | 'failed';
+  status: 'queued' | 'running' | 'done' | 'cancelled' | 'locked' | 'no_model' | 'failed';
   done: number;
   total: number;
   analyzed: number;
