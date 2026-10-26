@@ -16,3 +16,13 @@ thiserror = "1"
 log = "0.4"
 # Huella SHA-256 del JPG entregado al aprobar
 sha2 = "0.10"
+
+# Búsqueda por contenido (feature `embeddings`): ONNX Runtime enlazado de forma
+# estática, tokenizer en Rust puro y decodificación del thumbnail.
+ort = { version = "=2.0.0-rc.15", optional = true }
+tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"], optional = true }
+image = { version = "0.25", default-features = false, features = ["jpeg"], optional = true }
+
+[features]
+default = []
+embeddings = ["dep:ort", "dep:tokenizers", "dep:image"]

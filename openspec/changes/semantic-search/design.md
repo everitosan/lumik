@@ -55,7 +55,7 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 
 ### D5. Inferencia en el núcleo
 
-- Un puerto `EmbeddingModel` en `application/ports.rs` con `embed_image(&Path) -> Vec<f32>` y `embed_text(&str) -> Vec<f32>`. Lo implementa un adaptador en el núcleo, sin `cfg(target_os)`.
+- Un puerto `EmbeddingModel` en `application/ports.rs` con `id()`, `embed_image(&Path)` y `embed_text(&str)`, que devuelven vectores normalizados. Lo implementa `embedding::ClipModel` en el núcleo, sin `cfg(target_os)`, detrás de la feature `embeddings` (la activa el desktop): así el núcleo compila sin ONNX Runtime para quien no lo necesita.
 - Motor: **`ort` 2.0** (ONNX Runtime 1.31, MIT / Apache-2.0), elegido en el spike (abajo) frente a `tract`. `ort` enlaza ONNX Runtime de forma estática con los binarios precompilados que descarga al compilar, así que la app no carga bibliotecas aparte. `candle` no carga ONNX, así que obligaría a reescribir el modelo.
 - Tokenizer: `tokenizers` 0.22 de Hugging Face sin features por defecto y con `fancy-regex` (Rust puro, sin `onig` ni C++), con el `tokenizer.json` del paquete.
 

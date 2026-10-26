@@ -519,3 +519,16 @@ pub trait ProjectLockStore: Send + Sync {
     /// Quita el candado; no es error si ya no estaba.
     fn remove(&self, project_dir: &Path) -> Result<(), String>;
 }
+
+/// Modelo de búsqueda por contenido (spec `semantic-search`): convierte una
+/// foto o un texto en un vector del mismo espacio, normalizado, para comparar
+/// con producto punto. Lo implementa `embedding::ClipModel`; los casos de uso
+/// lo reciben como puerto para poder testearse con un doble.
+pub trait EmbeddingModel: Send + Sync {
+    /// Id del modelo (el del paquete), que se guarda junto a cada vector.
+    fn id(&self) -> &str;
+    /// Vector de una imagen JPEG (el thumbnail de `.thumbs/`, ya rotado).
+    fn embed_image(&self, jpeg: &Path) -> Result<Vec<f32>, String>;
+    /// Vector de un texto en español o inglés.
+    fn embed_text(&self, text: &str) -> Result<Vec<f32>, String>;
+}
