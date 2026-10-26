@@ -64,9 +64,30 @@ proyectos. El aviso de discos faltantes cuenta, por disco, los elementos cuyo pr
 abierto.
 
 El índice incluye los archivos de `_exported/` (`search_export`), ligados a su foto por
-`photo.jpg_path`, con una miniatura de la edición que solo se rehace si cambia el tamaño o la fecha
-del archivo. Una exportación hecha con el proyecto cerrado aparece al abrirlo: `sync_exported` la
-liga, sube la generación y el proyecto se reindexa.
+`photo.jpg_path` o, si todavía no hay enlace, por nombre con la misma regla que `sync_exported`
+(stem sin extensión, sin distinguir mayúsculas). La miniatura de la edición solo se rehace si
+cambia el tamaño o la fecha del archivo.
+
+## 1b. Exportado hecho fuera de Lumik
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Fotógrafo
+    participant T as Tablet
+    participant W as device_watch / scan
+    participant IP as IndexProject
+    participant AD as AlbumDetail
+
+    U->>T: revela DSCF0042.RAF y deja DSCF0042.jpg en _exported/
+    U->>W: conecta el disco
+    W->>IP: reindexar los proyectos abiertos
+    IP->>IP: firma de _exported/ distinta a la guardada<br/>(aunque la generación sea la misma)
+    IP->>IP: liga DSCF0042.jpg a su foto por nombre
+    IP-->>AD: search-index-updated
+    AD-->>U: el elemento pasa a final
+    Note over IP: al abrir el proyecto, sync_exported<br/>guarda el mismo enlace en project.db
+```
 
 ## 2. Abrir y mostrar en carpeta
 

@@ -38,9 +38,9 @@ search_export(export_id PK, project_id FK search_project ON DELETE CASCADE,
 
 ### D2. Indexar `_exported/`
 
-`IndexProject` lista `_exported/` con un método nuevo del puerto `FileStore` (`list_files`, que devuelve nombre, tamaño y fecha de modificación). Liga cada archivo a la foto cuyo `jpg_path` lo nombra y saca la miniatura de la edición con `ImageProcessor::index_thumbnail`, conservando la anterior si `signature` no cambió. Corre cuando cambia la generación del proyecto, igual que las fotos.
+`IndexProject` lista `_exported/` con un método nuevo del puerto `FileStore` (`list_files`, que devuelve nombre, tamaño y fecha de modificación). Liga cada archivo a la foto cuyo `jpg_path` lo nombra o, si no hay enlace, por nombre con la misma regla que `SyncExported` (stem en minúsculas, gana el último), y saca la miniatura de la edición con `ImageProcessor::index_thumbnail`, conservando la anterior si `signature` no cambió.
 
-Una exportación hecha con el proyecto cerrado aparece al abrirlo: `sync_exported` liga el archivo, esa escritura sube la generación y el proyecto se reindexa.
+Corre cuando cambia la generación del proyecto o la firma de `_exported/` (nombres, tamaños y fechas, guardada en `search_project.exports_signature`). Así, una exportación hecha con el disco fuera de Lumik (en una tablet) se ve al conectarlo, sin escribir en el disco: el escaneo pide reindexar, la firma cambió y el elemento pasa a final. Al abrir el proyecto, `sync_exported` guarda el mismo enlace en `project.db`. El hilo del índice avisa con el evento `search-index-updated` y el detalle del álbum se recarga.
 
 ### D3. Mejor versión al leer el álbum
 
@@ -76,5 +76,5 @@ Un disco desconectado no hace que un elemento "ya no esté": el índice conserva
 - [En el visor de un conjunto no se toma el candado de vista de cada proyecto] → Cada escritura (calificar, aprobar, rotar) toma su sesión y falla con `project_locked` si el proyecto es de otra instalación.
 
 - [Un exportado renombrado cambia de id] → El elemento pasa a "ya no está" y se reemplaza con "Reemplazar por…". Ligar por contenido queda para después.
-- [Exportar con el proyecto cerrado no se refleja hasta abrirlo] → Documentado. Una revisión de `_exported/` al escanear discos podría agregarse si molesta.
+- [Listar `_exported/` en cada escaneo] → Es un `read_dir` por proyecto abierto; la miniatura solo se calcula para archivos nuevos o cambiados.
 - [La miniatura de un exportado se calcula del JPG completo (varios MB)] → Solo cuando el archivo cambia (`signature`), en segundo plano.

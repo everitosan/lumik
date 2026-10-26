@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Button, Icon, Input, Modal, PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT, Select, photoFormat, type ColorLabel } from '@lumik/ui';
 import * as api from '../../lib/api';
 import { useDevicesKey } from '../../lib/hooks';
@@ -133,6 +134,21 @@ export function AlbumDetail({ albumId, onBack }: Props) {
     setViewing(null);
     load();
   }, [devicesKey, load]);
+
+  // Al reindexar un proyecto (p. ej. al conectar su disco con exportados nuevos):
+  // un elemento puede pasar a final. El visor sigue abierto.
+  useEffect(() => {
+    let unlisten: UnlistenFn | undefined;
+    let active = true;
+    listen('search-index-updated', () => load()).then((fn) => {
+      if (active) unlisten = fn;
+      else fn();
+    });
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, [load]);
 
   // ── Grid virtualizado ─────────────────────────────────────────────────────
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);

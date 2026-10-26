@@ -34,6 +34,10 @@ Un álbum SHALL aceptar originales y archivos de `_exported/`. Un elemento que e
 - **WHEN** una foto se agregó al álbum antes de editarla y después aparece su JPG en `_exported/`
 - **THEN** el álbum la muestra con la edición y la cuenta como final
 
+#### Scenario: Exportado hecho fuera de Lumik
+- **WHEN** con el disco fuera del equipo se deja en `_exported/` el JPG de una foto del álbum (por ejemplo desde una tablet) y luego se conecta el disco, sin abrir el proyecto
+- **THEN** el álbum la muestra como final en cuanto se reindexa el proyecto, sin tener que volver a abrir el álbum
+
 ### Requirement: Reemplazar y quitar
 El fotógrafo SHALL poder quitar un elemento del álbum y reemplazarlo por otra foto o por un exportado del mismo proyecto. Ninguna de las dos acciones SHALL tocar archivos.
 

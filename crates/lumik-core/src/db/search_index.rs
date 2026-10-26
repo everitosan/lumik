@@ -20,6 +20,8 @@ pub struct SearchProjectRow {
     pub name_norm: String,
     pub text_norm: String,
     pub generation: i64,
+    /// Firma de `_exported/` (nombres, tamaños y fechas) al indexar.
+    pub exports_signature: String,
 }
 
 /// Foto tal como queda en el índice.
@@ -71,6 +73,18 @@ pub struct IndexedPhotoCache {
 }
 
 impl GlobalDatabase {
+    /// Generación y firma de `_exported/` con las que se indexó el proyecto.
+    pub fn indexed_state(&self, project_id: &str) -> DbResult<Option<(i64, String)>> {
+        let conn = self.conn();
+        Ok(conn
+            .query_row(
+                "SELECT indexed_generation, exports_signature FROM search_project WHERE project_id = ?1",
+                [project_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?)
+    }
+
     /// Generación con la que se indexó el proyecto, o `None` si no está.
     pub fn indexed_generation(&self, project_id: &str) -> DbResult<Option<i64>> {
         let conn = self.conn();
@@ -124,8 +138,9 @@ impl GlobalDatabase {
         let now = chrono::Utc::now().to_rfc3339();
         tx.execute(
             "INSERT INTO search_project (project_id, name, description, session_date, created_at, archived,
-                                         device_uuid, device_name, name_norm, text_norm, indexed_generation, indexed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                                         device_uuid, device_name, name_norm, text_norm, indexed_generation, indexed_at,
+                                         exports_signature)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
              ON CONFLICT(project_id) DO UPDATE SET
                 name = excluded.name, description = excluded.description,
                 session_date = excluded.session_date, created_at = excluded.created_at,
@@ -133,7 +148,7 @@ impl GlobalDatabase {
                 device_uuid = COALESCE(excluded.device_uuid, search_project.device_uuid),
                 device_name = COALESCE(excluded.device_name, search_project.device_name),
                 name_norm = excluded.name_norm, text_norm = excluded.text_norm, indexed_generation = excluded.indexed_generation,
-                indexed_at = excluded.indexed_at",
+                indexed_at = excluded.indexed_at, exports_signature = excluded.exports_signature",
             params![
                 project.project_id,
                 project.name,
@@ -147,6 +162,7 @@ impl GlobalDatabase {
                 project.text_norm,
                 project.generation,
                 now,
+                project.exports_signature,
             ],
         )?;
         // Borra también su search_media (ON DELETE CASCADE).
@@ -410,6 +426,7 @@ mod tests {
             name_norm: crate::domain::search::normalize(name),
             text_norm: crate::domain::search::normalize(name),
             generation: 0,
+            exports_signature: String::new(),
         }
     }
 

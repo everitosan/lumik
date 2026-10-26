@@ -127,9 +127,12 @@ pub fn request_index_of_open_projects(state: &AppState) {
     }
 }
 
-/// Hilo que atiende la cola de reindexado mientras viva la app.
-pub fn spawn_index_worker(state: AppState) {
+/// Hilo que atiende la cola de reindexado mientras viva la app. Cada proyecto
+/// reindexado se avisa con `"search-index-updated"` (su id), para que un álbum
+/// abierto muestre lo que cambió, como un exportado que pasa a final.
+pub fn spawn_index_worker(state: AppState, app: tauri::AppHandle) {
     use crate::application::use_cases::index_project::{IndexProject, SeenOn};
+    use tauri::Emitter;
     std::thread::Builder::new()
         .name("search-index".into())
         .spawn(move || loop {
@@ -147,7 +150,8 @@ pub fn spawn_index_worker(state: AppState) {
                     .execute(&db, seen_on, false)
                 {
                     Ok(crate::application::use_cases::index_project::IndexOutcome::Indexed { photos }) => {
-                        log::info!("search index: {} ({} fotos) en {} ms", project_id, photos, started.elapsed().as_millis())
+                        log::info!("search index: {} ({} fotos) en {} ms", project_id, photos, started.elapsed().as_millis());
+                        let _ = app.emit("search-index-updated", &project_id);
                     }
                     Ok(_) => {}
                     Err(e) => log::warn!("search index: {} falló: {}", project_id, e),

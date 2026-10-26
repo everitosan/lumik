@@ -26,6 +26,22 @@ pub struct SyncExportedResult {
     pub unmatched: Vec<String>,
 }
 
+/// Regla de emparejamiento: *stem* en minúsculas → id de la foto. Si hay stems
+/// duplicados, gana el último. La usan `SyncExported` (que guarda el enlace en
+/// `project.db`) y el índice de búsqueda (que lo calcula al conectar el disco).
+pub fn photos_by_stem(photos: &[PhotoStem]) -> HashMap<String, &str> {
+    photos.iter().map(|p| (p.stem.to_lowercase(), p.id.as_str())).collect()
+}
+
+/// *Stem* de un nombre de archivo o ruta: basename sin extensión.
+pub fn stem_of_path(path: &str) -> String {
+    let name = path.replace('\\', "/").rsplit('/').next().unwrap_or(path).to_string();
+    match name.rsplit_once('.') {
+        Some((stem, _)) => stem.to_string(),
+        None => name,
+    }
+}
+
 pub struct SyncExported<'a> {
     pub repo: &'a dyn PhotoRepository,
 }
@@ -36,11 +52,7 @@ impl<'a> SyncExported<'a> {
         photos: &[PhotoStem],
         exported: &[ExportedFile],
     ) -> Result<SyncExportedResult, String> {
-        // stem (minúsculas) → photo_id. Si hay stems duplicados, gana el último.
-        let by_stem: HashMap<String, &str> = photos
-            .iter()
-            .map(|p| (p.stem.to_lowercase(), p.id.as_str()))
-            .collect();
+        let by_stem = photos_by_stem(photos);
 
         let mut result = SyncExportedResult::default();
         for f in exported {

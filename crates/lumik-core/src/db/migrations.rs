@@ -204,6 +204,11 @@ pub(super) fn reset_old_search_index(conn: &Connection) -> DbResult<()> {
     if has_column(conn, "search_project", "project_id") && !has_column(conn, "search_export", "export_id") {
         conn.execute("UPDATE search_project SET indexed_generation = -1", [])?;
     }
+    // Firma de `_exported/`: para notar exportados nuevos aunque la generación
+    // del proyecto no cambie (se exportó con el disco fuera de Lumik).
+    if has_column(conn, "search_project", "project_id") && !has_column(conn, "search_project", "exports_signature") {
+        conn.execute("ALTER TABLE search_project ADD COLUMN exports_signature TEXT NOT NULL DEFAULT ''", [])?;
+    }
     Ok(())
 }
 

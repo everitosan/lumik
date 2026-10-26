@@ -1,11 +1,13 @@
 //! Caso de uso: llevar un proyecto al índice de búsqueda (spec `photo-search`).
 //!
 //! Lee el proyecto y sus fotos fuera de la papelera de su `project.db`, arma las
-//! filas del índice y las escribe en la base global en una transacción. Si la
-//! generación del proyecto no cambió desde la última vez, no hace nada. La
-//! miniatura y el vector de una foto se conservan mientras no cambie su rotación.
+//! filas del índice y las escribe en la base global en una transacción. Si no
+//! cambiaron ni la generación del proyecto ni `_exported/` desde la última vez,
+//! no hace nada. La miniatura y el vector de una foto se conservan mientras no
+//! cambie su rotación.
 
-use crate::application::ports::{FileStore, ImageProcessor};
+use crate::application::ports::{DirFile, FileStore, ImageProcessor};
+use crate::application::use_cases::sync_exported::{photos_by_stem, stem_of_path, PhotoStem};
 use crate::db::models::Photo;
 use crate::db::search_index::{IndexedPhotoCache, SearchExportRow, SearchPhotoRow, SearchProjectRow};
 use crate::domain::exported::{exported_id, is_exported_image};
@@ -22,7 +24,7 @@ pub struct SeenOn<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IndexOutcome {
-    /// La generación es la misma: el índice ya estaba al día.
+    /// Ni la generación ni `_exported/` cambiaron: el índice ya estaba al día.
     UpToDate,
     Indexed { photos: usize },
 }
@@ -34,12 +36,27 @@ pub struct IndexProject<'a> {
 }
 
 impl IndexProject<'_> {
-    /// Indexa `project`; con `force` aunque la generación no haya cambiado.
+    /// Indexa `project`; con `force` aunque nada haya cambiado.
+    ///
+    /// `_exported/` se revisa aparte de la generación: un exportado hecho con el
+    /// disco fuera de Lumik (en una tablet, por ejemplo) no la sube.
     pub fn execute(&self, project: &ProjectDatabase, seen_on: Option<SeenOn>, force: bool) -> Result<IndexOutcome, String> {
         let generation = project.generation().map_err(|e| e.to_string())?;
         let id = &project.project_id;
-        if !force && self.global.indexed_generation(id).map_err(|e| e.to_string())? == Some(generation) {
-            return Ok(IndexOutcome::UpToDate);
+        let exported_dir = project.project_dir.join("_exported");
+        let exported: Vec<DirFile> = self
+            .files
+            .list_files(&exported_dir)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .filter(|f| is_exported_image(&f.name))
+            .collect();
+        let exports_signature = signature_of(&exported);
+        if !force {
+            let indexed = self.global.indexed_state(id).map_err(|e| e.to_string())?;
+            if indexed == Some((generation, exports_signature.clone())) {
+                return Ok(IndexOutcome::UpToDate);
+            }
         }
         let Some(info) = project.get_project().map_err(|e| e.to_string())? else {
             // Proyecto marcado como eliminado: fuera del índice.
@@ -64,7 +81,7 @@ impl IndexProject<'_> {
             })
             .collect();
 
-        let exports = self.export_rows(project, &photos)?;
+        let exports = self.export_rows(project, &photos, exported)?;
 
         let project_row = SearchProjectRow {
             project_id: id.clone(),
@@ -78,25 +95,30 @@ impl IndexProject<'_> {
             device_uuid: seen_on.map(|d| d.uuid.to_string()),
             device_name: seen_on.map(|d| d.name.to_string()),
             generation,
+            exports_signature,
         };
         self.global.write_project_index(&project_row, &rows, &exports).map_err(|e| e.to_string())?;
         Ok(IndexOutcome::Indexed { photos: rows.len() })
     }
 
-    /// Exportados de `_exported/`, ligados a su foto por nombre, con la
-    /// miniatura de la edición (la anterior si el archivo no cambió).
-    fn export_rows(&self, project: &ProjectDatabase, photos: &[Photo]) -> Result<Vec<SearchExportRow>, String> {
+    /// Exportados de `_exported/`, ligados a su foto, con la miniatura de la
+    /// edición (la anterior si el archivo no cambió).
+    ///
+    /// Se liga por `jpg_path` y, si no, por nombre con la misma regla que
+    /// `SyncExported`, que guarda ese mismo enlace cuando se abre el proyecto.
+    fn export_rows(&self, project: &ProjectDatabase, photos: &[Photo], files: Vec<DirFile>) -> Result<Vec<SearchExportRow>, String> {
         let dir = project.project_dir.join("_exported");
-        let files = self.files.list_files(&dir).map_err(|e| e.to_string())?;
         let cache = self.global.indexed_export_cache(&project.project_id).map_err(|e| e.to_string())?;
         // `jpg_path` = `_exported/{archivo}` de la foto a la que se ligó.
         let linked: HashMap<String, String> = photos
             .iter()
             .filter_map(|p| p.jpg_path.as_deref().map(|j| (file_name(j), p.id.clone())))
             .collect();
+        let stems: Vec<PhotoStem> =
+            photos.iter().map(|p| PhotoStem { id: p.id.clone(), stem: stem_of_path(&p.dng_path) }).collect();
+        let by_stem = photos_by_stem(&stems);
         Ok(files
             .into_iter()
-            .filter(|f| is_exported_image(&f.name))
             .map(|f| {
                 let export_id = exported_id(&project.project_id, &f.name);
                 let signature = format!("{}:{}", f.size, f.modified);
@@ -104,10 +126,21 @@ impl IndexProject<'_> {
                     Some((sig, Some(thumb))) if *sig == signature => Some(thumb.clone()),
                     _ => self.images.index_thumbnail(&dir.join(&f.name)),
                 };
-                SearchExportRow { export_id, photo_id: linked.get(&f.name).cloned(), file_name: f.name, signature, thumb }
+                let photo_id = linked
+                    .get(&f.name)
+                    .cloned()
+                    .or_else(|| by_stem.get(&stem_of_path(&f.name).to_lowercase()).map(|id| id.to_string()));
+                SearchExportRow { export_id, photo_id, file_name: f.name, signature, thumb }
             })
             .collect())
     }
+}
+
+/// Firma de `_exported/`: nombre, tamaño y fecha de cada archivo, en orden.
+fn signature_of(files: &[DirFile]) -> String {
+    let mut parts: Vec<String> = files.iter().map(|f| format!("{}:{}:{}", f.name, f.size, f.modified)).collect();
+    parts.sort();
+    parts.join("/")
 }
 
 /// Fecha de captura comparable como texto: `AAAA-MM-DD HH:MM:SS` (EXIF usa `:`
@@ -405,6 +438,23 @@ mod tests {
 
         f.global.remove_project_index("p1").unwrap();
         assert!(exports(&f, "p1").is_empty());
+    }
+
+    #[test]
+    fn export_made_outside_lumik_is_seen_without_a_new_generation() {
+        let f = Fixture::new("exports-outside");
+        let images = CountingImages::default();
+        let (db, ids) = f.project("p1", "Boda", &[("_media/DSCF0042.RAF", "2025:01:01 00:00:00", None)]);
+        let uc = IndexProject { global: &f.global, images: &images, files: &f.files };
+        uc.execute(&db, None, false).unwrap();
+        assert_eq!(uc.execute(&db, None, false).unwrap(), IndexOutcome::UpToDate);
+
+        // Con el disco fuera, la tablet deja la edición en `_exported/`: la
+        // generación no cambia, pero el índice se rehace y la liga por nombre.
+        *f.files.0.lock().unwrap() = vec![("dscf0042.jpg".into(), 100, 1)];
+        assert_eq!(uc.execute(&db, None, false).unwrap(), IndexOutcome::Indexed { photos: 1 });
+        assert_eq!(exports(&f, "p1"), [("dscf0042.jpg".to_string(), Some(ids[0].clone()))]);
+        assert_eq!(uc.execute(&db, None, false).unwrap(), IndexOutcome::UpToDate);
     }
 
     #[test]

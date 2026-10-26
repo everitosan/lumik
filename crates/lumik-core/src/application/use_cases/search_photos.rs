@@ -55,6 +55,7 @@ mod tests {
                 name_norm: name.to_lowercase(),
                 text_norm: name.to_lowercase(),
                 generation: 0,
+                exports_signature: String::new(),
             };
             let photo = SearchPhotoRow {
                 photo_id: format!("{pid}-1"),

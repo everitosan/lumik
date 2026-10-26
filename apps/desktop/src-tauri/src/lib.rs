@@ -137,8 +137,9 @@ pub fn run() {
     };
 
     // Índice de búsqueda (spec photo-search): al día con los proyectos abiertos.
-    commands::spawn_index_worker(state.clone());
+    // El hilo arranca en `setup`, que es donde hay con quién avisar a la vista.
     commands::request_index_of_open_projects(&state);
+    let index_state = state.clone();
 
     info!("Starting Tauri application...");
 
@@ -153,6 +154,7 @@ pub fn run() {
             // "devices-changed" on mount/unmount so the UI updates without
             // busy-polling. Android falls back to frontend polling.
             device_watch::start(app.handle().clone());
+            commands::spawn_index_worker(index_state, app.handle().clone());
             Ok(())
         })
         // Puntos de entrada (comandos Tauri) agrupados por flujo. Los flujos de

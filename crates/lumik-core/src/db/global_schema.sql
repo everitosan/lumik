@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS search_project (
     name_norm           TEXT NOT NULL DEFAULT '',
     text_norm           TEXT NOT NULL DEFAULT '', -- nombre + descripción
     indexed_generation  INTEGER NOT NULL DEFAULT -1,
+    exports_signature   TEXT NOT NULL DEFAULT '', -- firma de _exported/ al indexar
     indexed_at          TEXT NOT NULL
 );
 

@@ -11,7 +11,7 @@ use crate::application::error::{AppError, AppResult};
 use crate::application::ports::{AuthTokens, CatalogPhoto, CatalogProject};
 use crate::application::use_cases::ensure_catalog_synced::{EnsureCatalogSynced, SyncOutcome};
 use crate::application::use_cases::sync_exported::{
-    ExportedFile, PhotoStem, SyncExported, SyncExportedResult,
+    stem_of_path, ExportedFile, PhotoStem, SyncExported, SyncExportedResult,
 };
 use crate::domain::paths::path_to_slash;
 use crate::db::models::Photo;
@@ -468,13 +468,7 @@ pub async fn sync_exported(
 
     let photo_stems: Vec<PhotoStem> = photos
         .iter()
-        .map(|p| PhotoStem {
-            id: p.id.clone(),
-            stem: basename(&p.dng_path)
-                .rsplit_once('.')
-                .map(|(s, _)| s.to_string())
-                .unwrap_or_else(|| basename(&p.dng_path)),
-        })
+        .map(|p| PhotoStem { id: p.id.clone(), stem: stem_of_path(&p.dng_path) })
         .collect();
 
     let uc = SyncExported {

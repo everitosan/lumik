@@ -102,6 +102,7 @@ mod tests {
             name_norm: id.into(),
             text_norm: id.into(),
             generation: 0,
+            exports_signature: String::new(),
         }
     }
 
