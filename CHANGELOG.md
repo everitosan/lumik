@@ -5,6 +5,26 @@ Todos los cambios notables de Lumik se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.2.0-beta.2] — pendiente (en pruebas)
+
+Álbumes para curar fotos de varios proyectos y discos.
+
+### Añadido
+- **Álbumes**: una sección nueva junta fotos de cualquier proyecto y disco,
+  originales o archivos de `_exported/`, para armar una convocatoria o un
+  portafolio. Se agregan desde el visor (botón o tecla `A`), desde el menú de
+  una foto o con "Agregar todas" en los resultados de una búsqueda. Cada
+  elemento muestra su mejor versión: una foto agregada antes de editarla pasa
+  sola a "final" cuando aparece su JPG en `_exported/`, aunque la hayas
+  exportado con el disco en otro equipo o en una tablet. El álbum se ve sin
+  los discos conectados y te dice cuáles faltan; cada elemento se puede abrir,
+  mostrar en carpeta, reemplazar por otra versión o quitar.
+
+### Cambiado
+- Una foto abierta desde la búsqueda o desde un álbum se ve encima de esa
+  lista: las flechas pasan al siguiente resultado o elemento aunque sea de otro
+  proyecto, y las estrellas o colores que cambies se ven al instante al volver.
+
 ## [0.2.0-beta.1] — pendiente (en pruebas)
 
 Primera beta de la serie 0.2: buscar fotos en todos los proyectos y preparar
