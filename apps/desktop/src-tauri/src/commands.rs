@@ -370,6 +370,9 @@ pub use search::*;
 mod content_model;
 pub use content_model::*;
 
+mod analysis;
+pub use analysis::*;
+
 mod albums;
 pub use albums::*;
 

@@ -137,6 +137,30 @@ export type ContentModelState =
 /** Cuándo se calculan los vectores de las fotos de un proyecto (semantic-search). */
 export type AnalysisMode = 'on_import' | 'on_demand';
 
+/** Análisis de un proyecto, para su menú. */
+export interface ProjectAnalysis {
+  mode: AnalysisMode;
+  /** Fotos sin vector del modelo */
+  pending: number;
+  status: 'idle' | 'queued' | 'running';
+}
+
+export interface AnalysisQueueState {
+  current: string | null;
+  queued: string[];
+}
+
+/** Evento `analysis-progress`. */
+export interface AnalysisEvent {
+  project_id: string;
+  status: 'running' | 'done' | 'cancelled' | 'locked' | 'no_model' | 'failed';
+  done: number;
+  total: number;
+  analyzed: number;
+  failed: number;
+  error: string | null;
+}
+
 /**
  * "Al aprobar, entregar directamente": nada, el JPG de los pares RAW+JPG, o
  * todo JPG de cámara (pares y JPG sueltos). Cada proyecto guarda el suyo.

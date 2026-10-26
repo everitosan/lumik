@@ -28,6 +28,10 @@ import type {
   ProjectAccess,
   SearchQuery,
   ContentModelState,
+  AnalysisMode,
+  ProjectAnalysis,
+  AnalysisQueueState,
+  AnalysisEvent,
   SearchResult,
   AlbumOrder,
   AlbumSummary,
@@ -641,6 +645,31 @@ export async function deleteContentModel(): Promise<void> {
 
 export function onContentModelState(handler: (state: ContentModelState) => void): Promise<() => void> {
   return listen<ContentModelState>('content-model-state', (e) => handler(e.payload));
+}
+
+export async function getProjectAnalysis(projectId: string): Promise<ProjectAnalysis> {
+  return invoke('get_project_analysis', { projectId });
+}
+
+export async function setProjectAnalysisMode(projectId: string, mode: AnalysisMode): Promise<void> {
+  return invoke('set_project_analysis_mode', { projectId, mode });
+}
+
+/** "Analizar fotos": encola el proyecto. Falla con `no_model` si el modelo no está instalado. */
+export async function analyzeProject(projectId: string): Promise<void> {
+  return invoke('analyze_project', { projectId });
+}
+
+export async function stopProjectAnalysis(projectId: string): Promise<void> {
+  return invoke('stop_project_analysis', { projectId });
+}
+
+export async function getAnalysisQueue(): Promise<AnalysisQueueState> {
+  return invoke('get_analysis_queue');
+}
+
+export function onAnalysisProgress(handler: (event: AnalysisEvent) => void): Promise<() => void> {
+  return listen<AnalysisEvent>('analysis-progress', (e) => handler(e.payload));
 }
 
 // ============================================================================

@@ -20,7 +20,7 @@
 
 - [x] 4.1 Descarga del modelo: comandos de estado, descargar (progreso, cancelar, verificación del hash, descompresión) y borrar; `LUMIK_MODEL_URL` (`https://` o `file://`) para probar con un paquete local antes de publicarlo. Verificar con tests de infraestructura con un servidor local, un hash erróneo, un paquete incompleto y una cancelación, y uno `--ignored` con el zip real.
 - [ ] 4.2 *(Código hecho: `AnalysisQueue` en el núcleo con tests, hilo `content-analysis` en el desktop, evento `analysis-progress`, cancelación al expulsar y análisis al terminar una importación; falta verlo en `dev`.)* Cola de análisis con su hilo, evento `analysis-progress`, cancelación al expulsar y análisis al terminar una importación en proyectos `on_import`. Verificar con `cargo test` y en `dev`.
-- [ ] 4.3 Comandos del proyecto: leer y cambiar el modo, analizar, pendientes y detener. Verificar con la compilación y en `dev`.
+- [ ] 4.3 *(Código hecho: `get_project_analysis` (modo, pendientes y si está en espera o en curso), `set_project_analysis_mode`, `analyze_project` (falla con `no_model` sin modelo), `stop_project_analysis` y `get_analysis_queue`, con sus funciones en `api.ts`; falta verlo en `dev`.)* Comandos del proyecto: leer y cambiar el modo, analizar, pendientes y detener. Verificar con la compilación y en `dev`.
 
 ## 5. Desktop: interfaz
 
