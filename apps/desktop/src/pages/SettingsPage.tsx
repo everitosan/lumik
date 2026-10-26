@@ -14,6 +14,7 @@ import {
 } from '../lib/api';
 import type { PhotographerMetadata, AppSettings, Keybinding, DeliveryMode } from '../lib/types';
 import { BackupAccountSection } from './BackupAccountSection';
+import { AiSettingsSection } from './AiSettingsSection';
 import { DeliveryModeSelect } from '../components/DeliveryModeSelect';
 
 const containerStyles: React.CSSProperties = {
@@ -270,7 +271,7 @@ function KeybindingRow({
   );
 }
 
-export type SettingsTab = 'import' | 'shortcuts' | 'appearance' | 'backup';
+export type SettingsTab = 'import' | 'shortcuts' | 'appearance' | 'ai' | 'backup';
 
 interface SettingsPageProps {
   /** Pestaña con la que se abre (p. ej. 'backup' desde el aviso sin sesión). */
@@ -353,14 +354,16 @@ export function SettingsPage({ initialTab = 'import' }: SettingsPageProps) {
           copyright: copyright || undefined,
           contact_url: creatorUrl || undefined,
         }),
-        updateAppSettings({
-          embed_metadata_on_import: embedMetadata,
-          rename_on_import: renameOnImport,
-          finder_tags_sidecar: finderTags,
-          default_delivery_mode: defaultDelivery,
-          // Lo edita la pestaña Búsqueda: aquí se conserva.
-          default_analysis_mode: appSettings?.default_analysis_mode ?? 'on_demand',
-        }),
+        // El modo de análisis lo edita la pestaña Búsqueda: se conserva el guardado.
+        getAppSettings().then((current) =>
+          updateAppSettings({
+            ...current,
+            embed_metadata_on_import: embedMetadata,
+            rename_on_import: renameOnImport,
+            finder_tags_sidecar: finderTags,
+            default_delivery_mode: defaultDelivery,
+          }),
+        ),
       ]);
 
       setMetadata(updatedMetadata);
@@ -405,6 +408,7 @@ export function SettingsPage({ initialTab = 'import' }: SettingsPageProps) {
     { id: 'import', label: t('settings.tabs.import') },
     { id: 'shortcuts', label: t('settings.tabs.shortcuts') },
     { id: 'appearance', label: t('settings.tabs.appearance') },
+    { id: 'ai', label: t('settings.tabs.ai') },
     { id: 'backup', label: t('settings.tabs.backup') },
   ];
 
@@ -626,6 +630,8 @@ export function SettingsPage({ initialTab = 'import' }: SettingsPageProps) {
           <InstallNameField />
         </section>
       )}
+
+      {activeTab === 'ai' && <AiSettingsSection />}
 
       {activeTab === 'backup' && <BackupAccountSection />}
     </div>

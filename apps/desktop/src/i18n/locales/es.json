@@ -235,6 +235,13 @@
         "failed_other": "No se pudieron cambiar {{count}} fotos: {{reason}}",
         "close": "Cerrar"
       }
+    },
+    "analysis": {
+      "label": "Analizar fotos",
+      "modes": {
+        "on_demand": "Bajo demanda",
+        "on_import": "Al importar"
+      }
     }
   },
   "projectLock": {
@@ -283,6 +290,7 @@
       "import": "Importar",
       "shortcuts": "Shortcuts",
       "appearance": "Apariencia",
+      "ai": "IA",
       "backup": "Respaldo"
     },
     "appearance": {
@@ -354,6 +362,27 @@
       "copyright": "Ej. © 2024 Tu Nombre. Todos los derechos reservados.",
       "website": "https://tusitio.com",
       "creditTemplate": "{Descripción del proyecto}@{Año}"
+    },
+    "contentSearch": {
+      "title": "Búsqueda por contenido",
+      "description": "Encuentra fotos por lo que muestran, describiéndolas en español o en inglés (por ejemplo, \"novia en la playa\"), aunque no tengan tags. Necesita un modelo que se descarga una vez.",
+      "notInstalled": "El modelo no está instalado. Pesa {{size}} MB.",
+      "download": "Descargar modelo",
+      "retry": "Reintentar descarga",
+      "downloading": "Descargando… {{done}} de {{total}} MB",
+      "cancel": "Cancelar",
+      "installed": "Modelo instalado ({{size}} MB). Las búsquedas con texto también buscan por contenido en las fotos analizadas.",
+      "delete": "Borrar modelo",
+      "deleteTitle": "Borrar el modelo",
+      "deleteBody": "La búsqueda por contenido y el análisis de fotos se desactivan en este equipo. Los análisis ya hechos se conservan en los discos y vuelven a servir si descargas el modelo otra vez.",
+      "privacy": "Todo ocurre en este equipo: ni tus fotos ni lo que buscas salen de él. Solo se usa internet para descargar el modelo.",
+      "modeLabel": "Analizar las fotos de los proyectos nuevos",
+      "modeHint": "Cada proyecto puede cambiarlo desde su menú.",
+      "errors": {
+        "network": "No se pudo descargar el modelo. Revisa tu conexión e inténtalo de nuevo.",
+        "corrupt": "El archivo descargado no es el esperado y se descartó. Inténtalo de nuevo.",
+        "io": "No se pudo guardar el modelo en este equipo."
+      }
     }
   },
   "about": {

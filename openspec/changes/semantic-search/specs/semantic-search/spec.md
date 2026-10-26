@@ -13,7 +13,7 @@ La búsqueda por contenido SHALL depender de un modelo que no viene con la insta
 - **THEN** la búsqueda funciona solo con tags, nombres y datos del proyecto, y no hay opción para analizar fotos en los proyectos
 
 #### Scenario: Descargar el modelo
-- **WHEN** el fotógrafo pulsa "Descargar" en Ajustes → Búsqueda y la descarga termina
+- **WHEN** el fotógrafo pulsa "Descargar" en Ajustes → IA y la descarga termina
 - **THEN** Ajustes muestra el modelo como instalado y se activan la búsqueda por contenido y el análisis de fotos
 
 #### Scenario: Descarga interrumpida
@@ -46,7 +46,7 @@ El vector de cada foto SHALL guardarse en el proyecto, en su disco, junto con el
 - **THEN** este equipo no analiza sus fotos, pero sí usa los vectores que ya tiene
 
 ### Requirement: Cuándo se analizan las fotos
-Cada proyecto SHALL tener un modo de análisis: al importar o bajo demanda. Con "al importar", las fotos nuevas SHALL analizarse en segundo plano al terminar cada importación. Con "bajo demanda", SHALL analizarse solo cuando el fotógrafo pulse "Analizar fotos" en el proyecto. Los proyectos nuevos SHALL tomar el modo que indique Ajustes → Búsqueda.
+Cada proyecto SHALL tener un modo de análisis: al importar o bajo demanda. Con "al importar", las fotos nuevas SHALL analizarse en segundo plano al terminar cada importación. Con "bajo demanda", SHALL analizarse solo cuando el fotógrafo pulse "Analizar fotos" en el proyecto. Los proyectos nuevos SHALL tomar el modo que indique Ajustes → IA.
 
 #### Scenario: Al importar
 - **WHEN** un proyecto está en "al importar" e importa 300 fotos
@@ -57,7 +57,7 @@ Cada proyecto SHALL tener un modo de análisis: al importar o bajo demanda. Con 
 - **THEN** no se analizan hasta que el fotógrafo pulsa "Analizar fotos", que procesa solo las que faltan
 
 #### Scenario: Modo de los proyectos nuevos
-- **WHEN** Ajustes → Búsqueda indica "al importar" y el fotógrafo crea un proyecto
+- **WHEN** Ajustes → IA indica "al importar" y el fotógrafo crea un proyecto
 - **THEN** el proyecto queda en "al importar" y puede cambiarse a "bajo demanda"
 
 ### Requirement: Progreso del análisis

@@ -24,7 +24,7 @@
 
 ## 5. Desktop: interfaz
 
-- [ ] 5.1 Pestaña Ajustes → Búsqueda (estado del modelo, descargar, cancelar, borrar, modo de los proyectos nuevos). Verificar en `dev` los escenarios de "Modelo opcional" y "Borrar el modelo".
+- [ ] 5.1 *(Código hecho: `AiSettingsSection` a dos columnas que pasan a una en pantallas angostas, con estado, progreso, cancelar, borrar con confirmación y errores traducidos; el modo de los proyectos nuevos (`AnalysisModeSelect`, que reusará el proyecto) solo aparece con el modelo instalado; textos `es`/`en`; falta verlo en `dev`.)* Pestaña Ajustes → IA (estado del modelo, descargar, cancelar, borrar, modo de los proyectos nuevos). Verificar en `dev` los escenarios de "Modelo opcional" y "Borrar el modelo".
 - [ ] 5.2 En el proyecto: modo de análisis y "Analizar fotos (N pendientes)" en su menú; tarjeta de progreso en la barra lateral con "Detener". Verificar en `dev` los escenarios de "Cuándo se analizan las fotos" y "Progreso del análisis".
 - [ ] 5.3 Resultados: orden por parecido y aviso "N fotos sin analizar" con "Analizar". Verificar en `dev`.
 - [ ] 5.4 About con el motor, `tokenizers` y los dos modelos; textos `es`/`en`. Verificar con `tsc` y `jq empty` de los JSON.

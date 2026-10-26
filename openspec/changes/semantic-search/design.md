@@ -100,7 +100,7 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 
 ### D8. Interfaz
 
-- Ajustes → Búsqueda: estado del modelo (no instalado con su tamaño y "Descargar", descargando con progreso y "Cancelar", instalado con "Borrar") y el modo de análisis para proyectos nuevos, desactivado sin modelo.
+- Ajustes → IA (`AiSettingsSection`), pestaña pensada para agrupar las funciones con modelos que lleguen después. El título de la búsqueda por contenido va arriba; debajo, dos columnas que pasan a una en pantallas angostas (`grid` con `auto-fit`): la explicación y la nota de privacidad, y el bloque del modelo (no instalado con su tamaño y "Descargar", descargando con progreso y "Cancelar", instalado con "Borrar"). Abajo, el modo de análisis de los proyectos nuevos, que solo aparece con el modelo instalado.
 - Proyecto: en su menú, el modo de análisis y "Analizar fotos (N pendientes)". Sin modelo, no aparecen.
 - Resultados: el aviso "N fotos sin analizar" con "Analizar", solo en búsquedas con texto libre y modelo instalado.
 - About: rawler, exiftool, Tauri, React y rusqlite, más el motor elegido, `tokenizers`, CLIP ViT-B/32 (MIT) y clip-ViT-B-32-multilingual-v1 (Apache-2.0), estos dos con la nota "si se descarga".

@@ -235,6 +235,13 @@
         "failed_other": "{{count}} photos could not be changed: {{reason}}",
         "close": "Close"
       }
+    },
+    "analysis": {
+      "label": "Analyze photos",
+      "modes": {
+        "on_demand": "On demand",
+        "on_import": "When importing"
+      }
     }
   },
   "projectLock": {
@@ -283,6 +290,7 @@
       "import": "Import",
       "shortcuts": "Shortcuts",
       "appearance": "Appearance",
+      "ai": "AI",
       "backup": "Backup"
     },
     "appearance": {
@@ -354,6 +362,27 @@
       "copyright": "e.g. © 2024 Your Name. All rights reserved.",
       "website": "https://yourwebsite.com",
       "creditTemplate": "{Project description}@{Year}"
+    },
+    "contentSearch": {
+      "title": "Content search",
+      "description": "Find photos by what they show, describing them in English or Spanish (for example, \"bride on the beach\"), even without tags. It needs a model that is downloaded once.",
+      "notInstalled": "The model is not installed. It is {{size}} MB.",
+      "download": "Download model",
+      "retry": "Retry download",
+      "downloading": "Downloading… {{done}} of {{total}} MB",
+      "cancel": "Cancel",
+      "installed": "Model installed ({{size}} MB). Text searches also search by content in analyzed photos.",
+      "delete": "Delete model",
+      "deleteTitle": "Delete the model",
+      "deleteBody": "Content search and photo analysis are turned off on this computer. Analyses already done stay on the drives and work again if you download the model again.",
+      "privacy": "Everything happens on this computer: neither your photos nor what you search leave it. The internet is only used to download the model.",
+      "modeLabel": "Analyze photos of new projects",
+      "modeHint": "Each project can change it from its menu.",
+      "errors": {
+        "network": "The model could not be downloaded. Check your connection and try again.",
+        "corrupt": "The downloaded file is not the expected one and was discarded. Try again.",
+        "io": "The model could not be saved on this computer."
+      }
     }
   },
   "about": {
