@@ -91,10 +91,10 @@ Enter o el panel avanzado cambian el grid por los resultados de fotos (`PhotoSea
 El panel de búsqueda avanzada no tiene lógica propia: al abrirse pide `parse_search_query` del
 cuadro, y al buscar pide `format_search_query` para escribir los operadores en el idioma de la app.
 
-Abrir un resultado con su disco conectado lleva al proyecto en esa foto (si los filtros guardados del
-proyecto la esconden, se quitan en memoria). Cerrar ese visor (Esc o "Volver") regresa a los resultados, con la
-misma consulta y en la misma posición: la búsqueda queda guardada en `App` (`SearchSnapshot`). Sin
-disco, se muestra la miniatura y qué disco conectar.
+Abrir un resultado con su disco conectado muestra el visor encima de los resultados
+(`CollectionViewer`): las flechas recorren los resultados con disco conectado, aunque crucen
+proyectos, y Esc vuelve a los resultados en la misma posición. Sin disco, se muestra la miniatura y
+qué disco conectar.
 
 El texto libre busca hoy por coincidencia. Con `semantic-search` pasará a ordenar por parecido entre
 las candidatas que dejen los operadores, usando la columna `embedding` que ya existe.

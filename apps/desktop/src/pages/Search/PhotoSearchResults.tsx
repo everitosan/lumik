@@ -4,6 +4,8 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { Button, Icon, Modal, PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT, photoFormat, type ColorLabel } from '@lumik/ui';
 import * as api from '../../lib/api';
 import type { SearchHit, SearchResult } from '../../lib/types';
+import { AddToAlbumDialog, type AlbumTarget } from '../Albums/AddToAlbumDialog';
+import { CollectionViewer, type PhotoEdits } from '../Collection/CollectionViewer';
 
 const CARD_MIN_WIDTH = 200;
 const COL_GAP = 16;
@@ -44,7 +46,7 @@ function groupByProject(hits: SearchHit[]): Map<string, SearchHit[]> {
   return groups;
 }
 
-function SearchCard({ hit, cache, onOpen }: { hit: SearchHit; cache: Map<string, string>; onOpen: () => void }) {
+function SearchCard({ hit, cache, onOpen, onAddToAlbum }: { hit: SearchHit; cache: Map<string, string>; onOpen: () => void; onAddToAlbum: () => void }) {
   const [url, setUrl] = useState<string | null>(cache.get(hit.photo_id) ?? null);
   useEffect(() => {
     if (url) return;
@@ -68,19 +70,24 @@ function SearchCard({ hit, cache, onOpen }: { hit: SearchHit; cache: Map<string,
         colorLabels={hit.colors.filter((c) => c >= 1 && c <= 5) as ColorLabel[]}
         format={hit.is_pair ? 'RAW+JPG' : photoFormat(hit.file_name)}
         onClick={onOpen}
+        onAddToAlbum={onAddToAlbum}
       />
     </div>
   );
 }
 
 interface Props {
+  /** Consulta de los resultados (para agregarlos todos a un álbum). */
+  query: string;
   result: SearchResult | null;
   searching: boolean;
   error: string | null;
-  /** Posición a la que volver (al regresar del visor). */
+  /** Posición a la que volver (al regresar de otra sección). */
   initialScrollTop: number;
-  /** Se llama justo antes de abrir una foto, con la posición actual. */
-  onOpenPhoto: (projectId: string, photoId: string, scrollTop: number) => void;
+  /** Guarda la posición actual (para volver igual desde otra sección). */
+  onScrollSave?: (scrollTop: number) => void;
+  /** El visor se abre o se cierra (el dashboard pausa sus atajos mientras está abierto). */
+  onViewerChange?: (open: boolean) => void;
   /** Vuelve al grid de proyectos. */
   onClose: () => void;
 }
@@ -90,9 +97,29 @@ interface Props {
  * proyecto y virtualizados. Una foto cuyo disco no está conectado muestra un
  * aviso con su miniatura y el disco que hay que conectar.
  */
-export function PhotoSearchResults({ result, searching, error, initialScrollTop, onOpenPhoto, onClose }: Props) {
+export function PhotoSearchResults({ query, result, searching, error, initialScrollTop, onScrollSave, onViewerChange, onClose }: Props) {
   const { t } = useTranslation();
   const [offline, setOffline] = useState<SearchHit | null>(null);
+  const [albumTarget, setAlbumTarget] = useState<AlbumTarget | null>(null);
+  // Foto abierta en el visor; las flechas recorren los resultados con disco conectado.
+  const [viewing, setViewing] = useState<string | null>(null);
+  // Cambios hechos en el visor, sobre lo que trajo la búsqueda.
+  const [edits, setEdits] = useState<Record<string, PhotoEdits>>({});
+  const viewerRefs = useMemo(
+    () => (result?.hits ?? []).filter((h) => h.connected).map((h) => ({ projectId: h.project_id, photoId: h.photo_id })),
+    [result],
+  );
+  const setViewer = (photoId: string | null) => {
+    setViewing(photoId);
+    onViewerChange?.(photoId !== null);
+  };
+  // Los resultados se refrescaron (cambiaron los discos): el visor se cierra.
+  const shownResult = useRef(result);
+  useEffect(() => {
+    if (shownResult.current === result) return;
+    shownResult.current = result;
+    if (viewing) setViewer(null);
+  }, [result]); // eslint-disable-line react-hooks/exhaustive-deps
   const thumbCache = useRef(new Map<string, string>());
 
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -107,7 +134,11 @@ export function PhotoSearchResults({ result, searching, error, initialScrollTop,
   const cardWidth = width > 0 ? (width - (cols - 1) * COL_GAP) / cols : CARD_MIN_WIDTH;
   const rowHeight = cardWidth * 0.75 + CARD_H + ROW_GAP;
 
-  const groups = useMemo(() => groupByProject(result?.hits ?? []), [result]);
+  const hits = useMemo(
+    () => (result?.hits ?? []).map((h) => (edits[h.photo_id] ? { ...h, ...edits[h.photo_id] } : h)),
+    [result, edits],
+  );
+  const groups = useMemo(() => groupByProject(hits), [hits]);
   const rows = useMemo((): Row[] => {
     const out: Row[] = [];
     for (const hits of groups.values()) {
@@ -133,8 +164,11 @@ export function PhotoSearchResults({ result, searching, error, initialScrollTop,
     scrollEl.scrollTop = initialScrollTop;
   }, [scrollEl, rows.length, initialScrollTop]);
 
-  const openHit = (hit: SearchHit) =>
-    hit.connected ? onOpenPhoto(hit.project_id, hit.photo_id, scrollEl?.scrollTop ?? 0) : setOffline(hit);
+  const openHit = (hit: SearchHit) => {
+    if (!hit.connected) return setOffline(hit);
+    onScrollSave?.(scrollEl?.scrollTop ?? 0);
+    setViewer(hit.photo_id);
+  };
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -146,6 +180,11 @@ export function PhotoSearchResults({ result, searching, error, initialScrollTop,
           </span>
         )}
         {searching && <span>{t('common.loading')}</span>}
+        {result && result.hits.length > 0 && (
+          <Button variant="ghost" size="sm" leftIcon={<Icon name="album" size="sm" />} onClick={() => setAlbumTarget({ query, count: result.hits.length })}>
+            {t('albums.add.allResults')}
+          </Button>
+        )}
         <Button variant="ghost" size="sm" leftIcon={<Icon name="x" size="sm" />} onClick={onClose}>
           {t('search.backToProjects')}
         </Button>
@@ -179,7 +218,13 @@ export function PhotoSearchResults({ result, searching, error, initialScrollTop,
               return (
                 <div key={v.key} style={{ ...base, display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: `${COL_GAP}px`, paddingBottom: `${ROW_GAP}px` }}>
                   {row.hits.map((hit) => (
-                    <SearchCard key={hit.photo_id} hit={hit} cache={thumbCache.current} onOpen={() => openHit(hit)} />
+                    <SearchCard
+                      key={hit.photo_id}
+                      hit={hit}
+                      cache={thumbCache.current}
+                      onOpen={() => openHit(hit)}
+                      onAddToAlbum={() => setAlbumTarget({ items: [{ kind: 'photo', project_id: hit.project_id, ref_id: hit.photo_id, file_name: hit.file_name, project_name: hit.project_name }] })}
+                    />
                   ))}
                 </div>
               );
@@ -187,6 +232,16 @@ export function PhotoSearchResults({ result, searching, error, initialScrollTop,
           </div>
         )}
       </div>
+
+      <AddToAlbumDialog target={albumTarget} onClose={() => setAlbumTarget(null)} />
+      {viewing && (
+        <CollectionViewer
+          refs={viewerRefs}
+          startPhotoId={viewing}
+          onClose={() => setViewer(null)}
+          onPhotoEdited={(photoId, change) => setEdits((all) => ({ ...all, [photoId]: { ...all[photoId], ...change } }))}
+        />
+      )}
 
       <Modal title={t('search.offlineTitle')} open={offline !== null} onClose={() => setOffline(null)} closable style={{ width: '440px' }}>
         {offline && (

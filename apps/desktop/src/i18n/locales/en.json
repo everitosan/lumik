@@ -340,7 +340,8 @@
         "projects.new_project": "Create new project",
         "projects.focus_search": "Focus search bar",
         "project.back": "Back to projects list",
-        "project.import": "Go to import"
+        "project.import": "Go to import",
+        "photo_detail.add_to_album": "Add to an album"
       }
     },
     "errors": {
@@ -366,6 +367,7 @@
   "navigation": {
     "management": "Management",
     "projects": "Projects",
+    "albums": "Albums",
     "settings": "Settings",
     "about": "About",
     "storage": "Storage",
@@ -523,6 +525,76 @@
     },
     "enterHint": "Press Enter to search the photos of all your projects",
     "backToProjects": "Back to projects"
+  },
+  "albums": {
+    "title": "Albums",
+    "new": "New album",
+    "nameLabel": "Album name",
+    "rename": "Rename",
+    "cancel": "Cancel",
+    "delete": "Delete album",
+    "deleteTitle": "Delete album",
+    "deleteMessage": "The album \"{{name}}\" will be deleted. The photos stay in their projects, unchanged.",
+    "empty": "You have no albums yet.",
+    "emptyHint": "An album gathers photos from several projects and drives, for example for a call for entries. Add them from the viewer (A key), from a photo's menu or with all the results of a search.",
+    "emptyAlbum": "This album is empty. Add photos from the viewer (A key), from a photo's menu or from search results.",
+    "photos_one": "1 photo",
+    "photos_other": "{{count}} photos",
+    "finals_one": "1 final",
+    "finals_other": "{{count}} finals",
+    "unedited_one": "1 unedited",
+    "unedited_other": "{{count}} unedited",
+    "gone_one": "1 no longer there",
+    "gone_other": "{{count}} no longer there",
+    "missingDisks_one": "1 drive is missing to open everything:",
+    "missingDisks_other": "{{count}} drives are missing to open everything:",
+    "unknownDisk": "unknown drive",
+    "connectDisk": "This photo is on the drive \"{{device}}\". Connect it to open the photo.",
+    "connectDiskUnknown": "This photo is on a drive that is not connected. Connect it to open the photo.",
+    "noticeTitle": "Can't open it",
+    "order": {
+      "added": "Order: added",
+      "captured": "Order: capture date"
+    },
+    "status": {
+      "final": "Final",
+      "unedited": "Unedited",
+      "missing": "No longer there"
+    },
+    "item": {
+      "replace": "Replace with…",
+      "remove": "Remove from album",
+      "gone": "This photo is no longer in its project (it was moved to the trash or the project was deleted). You can remove or replace it.",
+      "exportOnly": "This exported file is not linked to a photo of the project, so it does not open in the viewer. Use \"Show in folder\"."
+    },
+    "replace": {
+      "title": "Replace with…",
+      "exports": "Exported",
+      "photos": "Project photos"
+    },
+    "add": {
+      "button": "Add to an album (A)",
+      "title_one": "Add 1 photo to an album",
+      "title_other": "Add {{count}} photos to an album",
+      "none": "No albums yet: create one below.",
+      "newLabel": "New album",
+      "newPlaceholder": "Call for entries 2026",
+      "create": "Create and add",
+      "done_one": "1 photo was added to \"{{album}}\".",
+      "done_other": "{{count}} photos were added to \"{{album}}\".",
+      "doneSomeThere_one": "1 photo was added to \"{{album}}\"; {{there}} were already there.",
+      "doneSomeThere_other": "{{count}} photos were added to \"{{album}}\"; {{there}} were already there.",
+      "ok": "Got it",
+      "allResults": "Add all to an album"
+    },
+    "createdOn": "Created on {{date}}",
+    "info": {
+      "button": "Album info",
+      "disks": "Drives",
+      "noDisks": "No photo of the album is on a drive.",
+      "connected": "connected",
+      "notConnected": "not connected"
+    }
   },
   "photo": {
     "colors": {

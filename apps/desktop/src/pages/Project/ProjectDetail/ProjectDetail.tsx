@@ -13,16 +13,13 @@ import { TrashPhotoModal } from './TrashPhotoModal';
 import { ImportPage } from '../../ImportPage';
 import { PhotoDetail } from '../PhotoDetail';
 import { ProjectLockBanner } from '../../../components/ProjectLockNotice';
+import { AddToAlbumDialog, type AlbumTarget } from '../../Albums/AddToAlbumDialog';
 
 export interface ProjectDetailProps {
   projectId: string;
   projectName: string;
   deviceUuid: string;
   coverPhotoPath: string | null;
-  /** Foto que se abre en el visor al entrar (al venir de la búsqueda). */
-  initialPhotoId?: string | null;
-  /** Al cerrar el visor de esa foto se vuelve aquí (a la búsqueda) en lugar de al grid. */
-  onCloseInitialPhoto?: () => void;
   onBack?: () => void;
   onCoverPhotoChange?: (photoId: string | null) => void;
 }
@@ -76,9 +73,10 @@ interface LazyPhotoCardProps {
   onRevealInFolder?: () => void;
   onTrash?: () => void;
   onRestore?: () => void;
+  onAddToAlbum?: () => void;
 }
 
-function LazyPhotoCard({ projectId, photo, hasThumbnail, cache, onClick, onRevealInFolder, onTrash, onRestore }: LazyPhotoCardProps) {
+function LazyPhotoCard({ projectId, photo, hasThumbnail, cache, onClick, onRevealInFolder, onTrash, onRestore, onAddToAlbum }: LazyPhotoCardProps) {
   const cached = cache.current.get(photo.id) ?? null;
   const [url, setUrl] = useState<string | null>(cached);
 
@@ -104,6 +102,7 @@ function LazyPhotoCard({ projectId, photo, hasThumbnail, cache, onClick, onRevea
       colorLabels={parseColorLabels(photo.color_label)}
       format={photoFormat(photo.dng_path, photo.camera_jpg_path)}
       onClick={onClick}
+      onAddToAlbum={onAddToAlbum}
       onRevealInFolder={onRevealInFolder}
       onTrash={onTrash}
       onRestore={onRestore}
@@ -152,7 +151,7 @@ const feedbackStyles: CSSProperties = {
   color: 'var(--lumik-on-surface-variant, #c2c6d7)',
 };
 
-export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPath, initialPhotoId, onCloseInitialPhoto, onBack, onCoverPhotoChange }: ProjectDetailProps) {
+export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPath, onBack, onCoverPhotoChange }: ProjectDetailProps) {
   const { t, i18n } = useTranslation();
 
   // Al abrir el proyecto: (1) asegura que exista en el catálogo (Fase 5) y
@@ -207,6 +206,8 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
   const [viewMode, setViewMode] = useState<'grid' | 'by-date'>('by-date');
   const [showImport, setShowImport] = useState(false);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  // Fotos por agregar a un álbum (spec photo-albums), desde el menú de la tarjeta.
+  const [albumTarget, setAlbumTarget] = useState<AlbumTarget | null>(null);
   const [showCulledOnly, setShowCulledOnly] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [minStars, setMinStars] = useState<number | null>(null);
@@ -318,7 +319,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
   // Grid-level keyboard shortcuts (only active when grid is visible)
   useEffect(() => {
-    if (selectedPhotoId !== null || showImport) return;
+    if (selectedPhotoId !== null || showImport || albumTarget !== null) return;
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (matchesKey(e, kb['project.show_culled'])) {
@@ -340,7 +341,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [selectedPhotoId, showImport, kb, onBack, projectId, sidebarOpen]);
+  }, [selectedPhotoId, showImport, albumTarget, kb, onBack, projectId, sidebarOpen]);
 
   const photosState = useProjectPhotos(projectId);
   const { data: photos, refetch: refetchPhotos } = photosState;
@@ -489,22 +490,6 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
     return tags;
   }, [photosWithOverrides]);
 
-  // Al venir de la búsqueda se abre esa foto. Si los filtros guardados del
-  // proyecto la esconden, se quitan (solo en memoria) para que se vea.
-  const openedInitialPhoto = useRef(false);
-  useEffect(() => {
-    if (!initialPhotoId || openedInitialPhoto.current || !activePhotos) return;
-    if (!activePhotos.some((p) => p.id === initialPhotoId)) return;
-    openedInitialPhoto.current = true;
-    if (!sortedPhotos.some((p) => p.id === initialPhotoId)) {
-      setShowCulledOnly(false);
-      setMinStars(null);
-      setSelectedTags(new Set());
-      setSelectedColors(new Set());
-    }
-    setSelectedPhotoId(initialPhotoId);
-  }, [initialPhotoId, activePhotos, sortedPhotos]);
-
   const selectedPhotoIndex = useMemo(
     () => (selectedPhotoId ? sortedPhotos.findIndex((p) => p.id === selectedPhotoId) : -1),
     [selectedPhotoId, sortedPhotos],
@@ -615,7 +600,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         coverPhotoPath={coverPhotoPath}
         sidebarOpen={sidebarOpen}
         onSidebarToggle={handleSidebarToggle}
-        onClose={() => (onCloseInitialPhoto ? onCloseInitialPhoto() : setSelectedPhotoId(null))}
+        onClose={() => setSelectedPhotoId(null)}
         onNavigate={(idx) => setSelectedPhotoId(sortedPhotos[idx].id)}
         onThumbnailChanged={(photoIds) => {
             for (const id of photoIds) thumbnailCache.current.delete(id);
@@ -712,6 +697,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
                         onRevealInFolder={canRevealInFolder ? () => handleRevealInFolder(photo.id) : undefined}
                         onTrash={showTrash || readOnly ? undefined : () => { setTrashError(null); setPendingTrash(photo); }}
                         onRestore={showTrash && !readOnly ? () => handleRestore(photo.id) : undefined}
+                        onAddToAlbum={showTrash ? undefined : () => setAlbumTarget({ items: [{ kind: 'photo', project_id: projectId, ref_id: photo.id, file_name: fileNameOf(photo.dng_path), project_name: projectName }] })}
                       />
                     );
                   })}
@@ -740,6 +726,8 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         showTrash={showTrash}
         onShowTrashChange={setShowTrash}
       />
+
+      <AddToAlbumDialog target={albumTarget} onClose={() => setAlbumTarget(null)} />
 
       <TrashPhotoModal
         open={pendingTrash !== null}

@@ -24,7 +24,7 @@ use std::sync::{Arc, Mutex};
 use tauri::State;
 
 /// Extensiones consideradas "exportados" al escanear `_exported/`.
-const EXPORTED_EXTS: &[&str] = &["jpg", "jpeg", "png", "tif", "tiff", "webp"];
+use crate::domain::exported::{exported_id, EXPORTED_EXTS};
 
 // Claves en la tabla `settings` de la BD global.
 const K_SERVER_URL: &str = "backup.server_url";
@@ -511,12 +511,6 @@ pub struct ExportedBackupItem {
     pub in_progress: bool,
 }
 
-/// Id determinista para un archivo exportado (no depende del RAW: robusto ante
-/// exports renombrados). Ver docs/backup-plan.md Fase 7.
-fn exported_id(project_id: &str, filename: &str) -> String {
-    let name = format!("{project_id}/{filename}");
-    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, name.as_bytes()).to_string()
-}
 
 /// Escanea `_exported/` y devuelve sus imágenes (id determinista + nombre).
 fn scan_exported(project_dir: &std::path::Path, project_id: &str) -> Vec<(String, String)> {

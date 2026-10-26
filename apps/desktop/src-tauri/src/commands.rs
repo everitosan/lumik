@@ -143,7 +143,7 @@ pub fn spawn_index_worker(state: AppState) {
                     .map(|d| d.name);
                 let seen_on = device_name.as_deref().map(|name| SeenOn { uuid: &db.device_uuid, name });
                 let started = std::time::Instant::now();
-                match (IndexProject { global: &state.global_db, images: state.image_processor.as_ref() })
+                match (IndexProject { global: &state.global_db, images: state.image_processor.as_ref(), files: state.file_store.as_ref() })
                     .execute(&db, seen_on, false)
                 {
                     Ok(crate::application::use_cases::index_project::IndexOutcome::Indexed { photos }) => {
@@ -280,6 +280,9 @@ pub use settings::*;
 
 mod search;
 pub use search::*;
+
+mod albums;
+pub use albums::*;
 
 mod backup;
 pub use backup::*;

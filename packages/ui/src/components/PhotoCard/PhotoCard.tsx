@@ -20,9 +20,13 @@ export interface PhotoCardProps {
   /** Each handler, when provided, adds its item to the 3-dot menu in the header.
    *  Omit one to hide that option (e.g. onRevealInFolder on Android). If none are
    *  provided the menu button is hidden entirely. */
+  /** Agregar la foto a un álbum (spec photo-albums). */
+  onAddToAlbum?: () => void;
   onRevealInFolder?: () => void;
   onTrash?: () => void;
   onRestore?: () => void;
+  /** Opciones propias de quien usa la tarjeta (p. ej. reemplazar o quitar de un álbum), al final del menú. */
+  extraMenuItems?: CardMenuItem[];
   className?: string;
   style?: CSSProperties;
 }
@@ -246,9 +250,11 @@ export function PhotoCard({
   format,
   onClick,
   onStarClick,
+  onAddToAlbum,
   onRevealInFolder,
   onTrash,
   onRestore,
+  extraMenuItems,
   className,
   style,
 }: PhotoCardProps) {
@@ -259,6 +265,9 @@ export function PhotoCard({
     : { date: '—', time: '—' };
 
   const menuItems: CardMenuItem[] = [];
+  if (onAddToAlbum) {
+    menuItems.push({ icon: 'album', label: t('components.photoCard.menu.addToAlbum'), onSelect: onAddToAlbum });
+  }
   if (onRevealInFolder) {
     menuItems.push({ icon: 'folder-open', label: t('components.photoCard.menu.revealInFolder'), onSelect: onRevealInFolder });
   }
@@ -268,6 +277,7 @@ export function PhotoCard({
   if (onTrash) {
     menuItems.push({ icon: 'trash', label: t('components.photoCard.menu.trash'), onSelect: onTrash, danger: true });
   }
+  if (extraMenuItems) menuItems.push(...extraMenuItems);
 
   return (
     <div

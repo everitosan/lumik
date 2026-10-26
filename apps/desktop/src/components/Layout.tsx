@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Sidebar } from './Sidebar';
 import { usePlatform } from '../lib/hooks';
 
-export type Section = 'projects' | 'settings' | 'about';
+export type Section = 'projects' | 'albums' | 'settings' | 'about';
 
 interface LayoutProps {
   children: ReactNode | ((section: Section) => ReactNode);

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Layout, type Section } from './components';
-import { Projects, SettingsPage, ProjectDetail, AboutPage, type SettingsTab } from './pages';
-import { getProjectsDashboard } from './lib/api';
+import { Projects, SettingsPage, ProjectDetail, AboutPage, AlbumsPage, AlbumDetail, type SettingsTab } from './pages';
 import { useConnectedDevices } from './lib/hooks';
 import { BackupProvider } from './lib/BackupContext';
 import { BackupSessionProvider } from './lib/BackupSessionContext';
@@ -12,8 +11,8 @@ import type { ProjectDashboard, SearchSnapshot } from './lib/types';
 function App() {
   const [activeSection, setActiveSection] = useState<Section>('projects');
   const [selectedProject, setSelectedProject] = useState<ProjectDashboard | null>(null);
-  // Foto con la que se abre el proyecto (al venir de la búsqueda).
-  const [initialPhotoId, setInitialPhotoId] = useState<string | null>(null);
+  // Álbum abierto en la sección Álbumes.
+  const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
   // Búsqueda guardada: al cerrar una foto abierta desde ella se vuelve igual.
   const [searchSnapshot, setSearchSnapshot] = useState<SearchSnapshot | null>(null);
   // Pestaña con la que se abre Ajustes; solo se fija al saltar a una concreta.
@@ -25,38 +24,14 @@ function App() {
   useEffect(() => {
     if (!selectedProject || !devices) return;
     const stillConnected = devices.some((d) => d.uuid === selectedProject.device_uuid);
-    if (!stillConnected) {
-      setSelectedProject(null);
-      setInitialPhotoId(null);
-    }
+    if (!stillConnected) setSelectedProject(null);
   }, [devices, selectedProject]);
 
   const handleSectionChange = (section: Section) => {
     setActiveSection(section);
     setSelectedProject(null);
-    setInitialPhotoId(null);
+    setSelectedAlbumId(null);
     setSettingsTab(undefined);
-  };
-
-  // Desde el dashboard el proyecto se abre en su grid, sin volver a la búsqueda.
-  const openFromDashboard = (project: ProjectDashboard) => {
-    setInitialPhotoId(null);
-    setSelectedProject(project);
-  };
-
-  const backToSearch = () => {
-    setSelectedProject(null);
-    setInitialPhotoId(null);
-    setActiveSection('projects');
-  };
-
-  // Desde la búsqueda: abre el proyecto en esa foto (su disco está conectado).
-  const openSearchResult = async (projectId: string, photoId: string) => {
-    const project = (await getProjectsDashboard()).find((p) => p.id === projectId);
-    if (!project) return;
-    setActiveSection('projects');
-    setInitialPhotoId(photoId);
-    setSelectedProject(project);
   };
 
   const openSettings = (tab: SettingsTab) => {
@@ -73,9 +48,7 @@ function App() {
           projectName={selectedProject.name}
           deviceUuid={selectedProject.device_uuid}
           coverPhotoPath={selectedProject.cover_photo_path}
-          initialPhotoId={initialPhotoId}
-          onCloseInitialPhoto={initialPhotoId ? backToSearch : undefined}
-          onBack={() => { setSelectedProject(null); setInitialPhotoId(null); }}
+          onBack={() => setSelectedProject(null)}
           onCoverPhotoChange={(photoId) =>
             setSelectedProject((p) => p ? { ...p, cover_photo_path: photoId ? `.thumbs/${photoId}.jpg` : null } : p)
           }
@@ -85,13 +58,19 @@ function App() {
 
     switch (section) {
       case 'projects':
-        return <Projects onProjectClick={openFromDashboard} photoSearch={searchSnapshot} onPhotoSearch={setSearchSnapshot} onOpenPhoto={openSearchResult} />;
+        return <Projects onProjectClick={setSelectedProject} photoSearch={searchSnapshot} onPhotoSearch={setSearchSnapshot} />;
+      case 'albums':
+        return selectedAlbumId ? (
+          <AlbumDetail key={selectedAlbumId} albumId={selectedAlbumId} onBack={() => setSelectedAlbumId(null)} />
+        ) : (
+          <AlbumsPage onOpenAlbum={setSelectedAlbumId} />
+        );
       case 'settings':
         return <SettingsPage initialTab={settingsTab} />;
       case 'about':
         return <AboutPage />;
       default:
-        return <Projects onProjectClick={openFromDashboard} photoSearch={searchSnapshot} onPhotoSearch={setSearchSnapshot} onOpenPhoto={openSearchResult} />;
+        return <Projects onProjectClick={setSelectedProject} photoSearch={searchSnapshot} onPhotoSearch={setSearchSnapshot} />;
     }
   };
 

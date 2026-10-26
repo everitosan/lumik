@@ -28,6 +28,12 @@ import type {
   ProjectAccess,
   SearchQuery,
   SearchResult,
+  AlbumOrder,
+  AlbumSummary,
+  AlbumThumbKey,
+  AlbumView,
+  NewAlbumItem,
+  ReplaceCandidate,
 } from './types';
 
 // ============================================================================
@@ -611,4 +617,66 @@ export async function parseSearchQuery(query: string): Promise<SearchQuery> {
 /** Escribe lo elegido en el panel como operadores, en el idioma de la app. */
 export async function formatSearchQuery(query: SearchQuery, lang: 'es' | 'en'): Promise<string> {
   return invoke('format_search_query', { query, lang });
+}
+
+// ============================================================================
+// ÁLBUMES (spec photo-albums)
+// ============================================================================
+
+export async function listAlbums(): Promise<AlbumSummary[]> {
+  return invoke('list_albums');
+}
+
+export async function createAlbum(name: string): Promise<AlbumSummary> {
+  return invoke('create_album', { name });
+}
+
+export async function renameAlbum(albumId: string, name: string): Promise<void> {
+  return invoke('rename_album', { albumId, name });
+}
+
+export async function deleteAlbum(albumId: string): Promise<void> {
+  return invoke('delete_album', { albumId });
+}
+
+/** Agrega fotos o exportados; devuelve cuántos entraron (los repetidos no). */
+export async function addToAlbum(albumId: string, items: NewAlbumItem[]): Promise<number> {
+  return invoke('add_to_album', { albumId, items });
+}
+
+/** Agrega todas las fotos que encuentra una búsqueda. */
+export async function addSearchToAlbum(albumId: string, query: string): Promise<number> {
+  return invoke('add_search_to_album', { albumId, query });
+}
+
+export async function removeAlbumItem(itemId: string): Promise<void> {
+  return invoke('remove_album_item', { itemId });
+}
+
+export async function replaceAlbumItem(itemId: string, withItem: NewAlbumItem): Promise<void> {
+  return invoke('replace_album_item', { itemId, with: withItem });
+}
+
+export async function getAlbum(albumId: string, order: AlbumOrder): Promise<AlbumView | null> {
+  return invoke('get_album', { albumId, order });
+}
+
+export async function getReplaceCandidates(projectId: string): Promise<ReplaceCandidate[]> {
+  return invoke('get_replace_candidates', { projectId });
+}
+
+/** Miniatura de un elemento (data URL), aunque su disco no esté conectado. */
+export async function getAlbumThumbnail(key: AlbumThumbKey): Promise<string | null> {
+  return invoke('get_album_thumbnail', { key });
+}
+
+/** Muestra en la carpeta el archivo de un elemento. Sin su disco, falla con `disk_missing:<disco>`. */
+export async function revealAlbumItem(itemId: string): Promise<void> {
+  return invoke('reveal_album_item', { itemId });
+}
+
+/** Nombre del disco que falta, si `err` es el error de `revealAlbumItem` sin disco. */
+export function missingDiskOf(err: unknown): string | null {
+  const text = typeof err === 'string' ? err : err instanceof Error ? err.message : '';
+  return text.startsWith('disk_missing:') ? text.slice('disk_missing:'.length) : null;
 }

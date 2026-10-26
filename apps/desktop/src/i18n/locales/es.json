@@ -340,7 +340,8 @@
         "projects.new_project": "Crear nuevo proyecto",
         "projects.focus_search": "Enfocar barra de búsqueda",
         "project.back": "Volver a la lista de proyectos",
-        "project.import": "Ir a importación"
+        "project.import": "Ir a importación",
+        "photo_detail.add_to_album": "Agregar a un álbum"
       }
     },
     "errors": {
@@ -366,6 +367,7 @@
   "navigation": {
     "management": "Gestión",
     "projects": "Proyectos",
+    "albums": "Álbumes",
     "settings": "Configuración",
     "about": "Acerca de",
     "storage": "Almacenamiento",
@@ -523,6 +525,76 @@
     },
     "enterHint": "Enter para buscar en las fotos de todos tus proyectos",
     "backToProjects": "Volver a proyectos"
+  },
+  "albums": {
+    "title": "Álbumes",
+    "new": "Nuevo álbum",
+    "nameLabel": "Nombre del álbum",
+    "rename": "Cambiar el nombre",
+    "cancel": "Cancelar",
+    "delete": "Borrar álbum",
+    "deleteTitle": "Borrar álbum",
+    "deleteMessage": "Se borrará el álbum «{{name}}». Las fotos siguen en sus proyectos sin cambios.",
+    "empty": "Todavía no tienes álbumes.",
+    "emptyHint": "Un álbum junta fotos de varios proyectos y discos, por ejemplo para una convocatoria. Agrégalas desde el visor (tecla A), desde el menú de una foto o con todos los resultados de una búsqueda.",
+    "emptyAlbum": "Este álbum está vacío. Agrega fotos desde el visor (tecla A), desde el menú de una foto o desde los resultados de una búsqueda.",
+    "photos_one": "1 foto",
+    "photos_other": "{{count}} fotos",
+    "finals_one": "1 final",
+    "finals_other": "{{count}} finales",
+    "unedited_one": "1 sin editar",
+    "unedited_other": "{{count}} sin editar",
+    "gone_one": "1 ya no está",
+    "gone_other": "{{count}} ya no están",
+    "missingDisks_one": "Falta 1 disco para abrir todo:",
+    "missingDisks_other": "Faltan {{count}} discos para abrir todo:",
+    "unknownDisk": "disco desconocido",
+    "connectDisk": "Esta foto está en el disco «{{device}}». Conéctalo para abrirla.",
+    "connectDiskUnknown": "Esta foto está en un disco que no está conectado. Conéctalo para abrirla.",
+    "noticeTitle": "No se puede abrir",
+    "order": {
+      "added": "Orden: agregadas",
+      "captured": "Orden: fecha de captura"
+    },
+    "status": {
+      "final": "Final",
+      "unedited": "Sin editar",
+      "missing": "Ya no está"
+    },
+    "item": {
+      "replace": "Reemplazar por…",
+      "remove": "Quitar del álbum",
+      "gone": "Esta foto ya no está en su proyecto (se mandó a la papelera o se eliminó el proyecto). Puedes quitarla o reemplazarla.",
+      "exportOnly": "Este archivo exportado no está ligado a una foto del proyecto, así que no se abre en el visor. Usa «Mostrar en carpeta»."
+    },
+    "replace": {
+      "title": "Reemplazar por…",
+      "exports": "Exportados",
+      "photos": "Fotos del proyecto"
+    },
+    "add": {
+      "button": "Agregar a un álbum (A)",
+      "title_one": "Agregar 1 foto a un álbum",
+      "title_other": "Agregar {{count}} fotos a un álbum",
+      "none": "Todavía no hay álbumes: crea uno abajo.",
+      "newLabel": "Nuevo álbum",
+      "newPlaceholder": "Convocatoria México 2026",
+      "create": "Crear y agregar",
+      "done_one": "Se agregó 1 foto a «{{album}}».",
+      "done_other": "Se agregaron {{count}} fotos a «{{album}}».",
+      "doneSomeThere_one": "Se agregó 1 foto a «{{album}}»; {{there}} ya estaban.",
+      "doneSomeThere_other": "Se agregaron {{count}} fotos a «{{album}}»; {{there}} ya estaban.",
+      "ok": "Entendido",
+      "allResults": "Agregar todas a un álbum"
+    },
+    "createdOn": "Creado el {{date}}",
+    "info": {
+      "button": "Información del álbum",
+      "disks": "Discos",
+      "noDisks": "Ninguna foto del álbum está en un disco.",
+      "connected": "conectado",
+      "notConnected": "no conectado"
+    }
   },
   "photo": {
     "colors": {

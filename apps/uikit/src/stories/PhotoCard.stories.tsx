@@ -120,6 +120,25 @@ export const WithMenu: Story = {
   decorators: [(Story) => <div style={{ width: 220 }}><Story /></div>],
 };
 
+/** En un álbum: agregar a otro álbum, mostrar en carpeta y opciones propias (reemplazar, quitar). */
+export const InAlbum: Story = {
+  args: {
+    filename: 'IMG_0047.jpg',
+    thumbnailUrl:
+      'https://images.unsplash.com/photo-1519741497674-611481863552?w=400&h=300&fit=crop',
+    stars: 4,
+    captureDate: '2024-03-15T10:42:33',
+    onClick: () => console.log('[PhotoCard] open viewer'),
+    onAddToAlbum: () => console.log('[PhotoCard] add to album'),
+    onRevealInFolder: () => console.log('[PhotoCard] reveal in folder'),
+    extraMenuItems: [
+      { icon: 'edit', label: 'Reemplazar por…', onSelect: () => console.log('[PhotoCard] replace') },
+      { icon: 'x', label: 'Quitar del álbum', onSelect: () => console.log('[PhotoCard] remove'), danger: true },
+    ],
+  },
+  decorators: [(Story) => <div style={{ width: 220 }}><Story /></div>],
+};
+
 /** Vista de papelera: el menú ofrece Restaurar en lugar de Mover a la papelera. */
 export const InTrash: Story = {
   args: {

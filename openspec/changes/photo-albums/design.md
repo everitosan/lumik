@@ -57,7 +57,7 @@ Un disco desconectado no hace que un elemento "ya no esté": el índice conserva
 
 ### D4. Abrir y mostrar en carpeta
 
-- Abrir usa el mismo camino que la búsqueda: `App` abre el proyecto en esa foto y, al cerrar el visor, vuelve a lo que la abrió (búsqueda o álbum).
+- Abrir muestra el visor encima del álbum o de los resultados (`CollectionViewer`), sin entrar al proyecto: recibe la lista de fotos que se pueden abrir en el orden en que se ven, carga cada una de su proyecto y las flechas recorren esa lista aunque crucen proyectos. Como la vista de abajo no se desmonta, cerrar vuelve a la misma posición. Se descartó abrir el proyecto en esa foto (lo que hacía la búsqueda): las flechas recorrían el proyecto y no el conjunto.
 - Mostrar en carpeta: comando `reveal_album_item`. Con el proyecto abierto, para un final revela `_exported/{archivo}`; para un sin editar delega en `reveal_photo` (original, o el JPG de cámara de un par). Sin proyecto abierto devuelve el disco que hay que conectar.
 
 ### D5. Agregar a un álbum
@@ -72,6 +72,8 @@ Un disco desconectado no hace que un elemento "ya no esté": el índice conserva
 - "Reemplazar por…": modal con las fotos y los exportados del mismo proyecto que hay en el índice. Conserva la fecha en que se agregó, así el elemento no cambia de lugar.
 
 ## Risks / Trade-offs
+
+- [En el visor de un conjunto no se toma el candado de vista de cada proyecto] → Cada escritura (calificar, aprobar, rotar) toma su sesión y falla con `project_locked` si el proyecto es de otra instalación.
 
 - [Un exportado renombrado cambia de id] → El elemento pasa a "ya no está" y se reemplaza con "Reemplazar por…". Ligar por contenido queda para después.
 - [Exportar con el proyecto cerrado no se refleja hasta abrirlo] → Documentado. Una revisión de `_exported/` al escanear discos podría agregarse si molesta.

@@ -117,6 +117,16 @@ export function useConnectedDevices(pollIntervalOverride?: number) {
 // PROJECT HOOKS
 // ============================================================================
 
+/**
+ * Cambia cada vez que se conecta o se desconecta un disco (`null` hasta el
+ * primer escaneo). Para refrescar vistas que dependen de qué discos están,
+ * como un álbum o los resultados de búsqueda.
+ */
+export function useDevicesKey(): string | null {
+  const { data } = useConnectedDevices();
+  return useMemo(() => (data ? data.map((d) => d.uuid).sort().join(',') : null), [data]);
+}
+
 export function useProjectsDashboard() {
   const [state, setState] = useState<AsyncState<ProjectDashboard[]>>({
     data: null,
@@ -442,6 +452,7 @@ const DEFAULT_KEYBINDINGS: KeybindingMap = {
   'photo_detail.stars_5':      '5',
   'photo_detail.add_tag':      't',
   'photo_detail.toggle_raw':   's',
+  'photo_detail.add_to_album': 'a',
   'projects.new_project':      'n',
   'projects.focus_search':     's',
   'project.show_culled':       'Ctrl+c',

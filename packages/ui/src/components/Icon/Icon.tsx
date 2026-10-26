@@ -17,6 +17,7 @@ import {
   Folder,
   FolderOpen,
   Image,
+  Images,
   Import,
   Info,
   LayoutGrid,
@@ -71,6 +72,7 @@ export type IconName =
   | 'sort'
   | 'archive'
   | 'lock'
+  | 'album'
   | 'archive-restore';
 
 
@@ -138,6 +140,7 @@ const icons: Record<IconName, IconComponent> = {
   sort: ArrowUpDown,
   archive: Archive,
   lock: Lock,
+  album: Images,
   'archive-restore': ArchiveRestore,
 };
 

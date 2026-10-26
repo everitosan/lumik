@@ -42,11 +42,15 @@ El fotógrafo SHALL poder quitar un elemento del álbum y reemplazarlo por otra 
 - **THEN** el álbum muestra `IMG_1-bn.jpg` en lugar del elemento anterior
 
 ### Requirement: Álbum con discos desconectados
-Un álbum SHALL verse completo con miniaturas aunque los discos de sus fotos no estén conectados, y SHALL avisar qué discos faltan y cuántas fotos hay en cada uno.
+Un álbum SHALL verse completo con miniaturas aunque los discos de sus fotos no estén conectados, y SHALL avisar qué discos faltan y cuántas fotos hay en cada uno. Al conectar o expulsar un disco con el álbum abierto, el álbum SHALL actualizarse sin recargar la vista.
 
 #### Scenario: Dos discos faltantes
 - **WHEN** el fotógrafo abre un álbum con 15 fotos en "WD 4TB" y 4 en "SSD Viajes", ninguno conectado
 - **THEN** ve todas las miniaturas y el aviso de que faltan esos dos discos, con 15 y 4 fotos
+
+#### Scenario: Expulsar un disco con el álbum abierto
+- **WHEN** el fotógrafo expulsa el disco de algunas fotos del álbum que está viendo
+- **THEN** esas fotos pasan a no conectadas y el aviso de discos faltantes lo incluye, sin recargar la vista
 
 ### Requirement: Fotos que ya no existen
 Si la foto de un elemento se manda a la papelera o su proyecto se elimina, el elemento SHALL quedarse en el álbum con su nombre y una marca de que ya no está en su proyecto, hasta que el fotógrafo lo quite.
@@ -55,13 +59,20 @@ Si la foto de un elemento se manda a la papelera o su proyecto se elimina, el el
 - **WHEN** el fotógrafo manda a la papelera una foto que estaba en un álbum
 - **THEN** el álbum conserva el elemento con su nombre y la marca "ya no está en su proyecto"
 
-### Requirement: Abrir y mostrar en carpeta
-Con el disco conectado, abrir un elemento SHALL mostrarlo en el visor de su proyecto, y cerrar el visor SHALL volver al álbum. "Mostrar en carpeta" SHALL abrir el explorador con el archivo seleccionado: el exportado si el elemento es final; si no, el original, o el JPG de cámara de un par. Sin el disco, SHALL indicar qué disco conectar.
+### Requirement: Abrir un elemento
+Con el disco conectado, abrir un elemento SHALL mostrarlo en el visor, encima del álbum. Las flechas SHALL recorrer los elementos del álbum en el orden en que se ven, aunque sean de proyectos distintos, saltando los que no se pueden abrir. Cerrar el visor SHALL volver al álbum en la misma posición. Sin el disco, SHALL indicar qué disco conectar.
 
-#### Scenario: Mostrar en carpeta un final
-- **WHEN** el fotógrafo elige "Mostrar en carpeta" en un elemento final
-- **THEN** se abre el explorador en `_exported/` con ese JPG seleccionado
+#### Scenario: Siguiente elemento del álbum
+- **WHEN** el fotógrafo ve en el visor un elemento y pulsa la flecha derecha
+- **THEN** ve el siguiente elemento del álbum que se puede abrir, aunque sea de otro proyecto
 
 #### Scenario: Volver al álbum
 - **WHEN** el fotógrafo abre un elemento en el visor y lo cierra con Esc
 - **THEN** vuelve al álbum
+
+### Requirement: Mostrar en carpeta
+"Mostrar en carpeta" SHALL abrir el explorador con el archivo del elemento seleccionado: el exportado si el elemento es final; si no, el original, o el JPG de cámara de un par. Sin el disco, SHALL indicar qué disco conectar.
+
+#### Scenario: Mostrar en carpeta un final
+- **WHEN** el fotógrafo elige "Mostrar en carpeta" en un elemento final
+- **THEN** se abre el explorador en `_exported/` con ese JPG seleccionado

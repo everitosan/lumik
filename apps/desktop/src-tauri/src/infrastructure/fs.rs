@@ -1,6 +1,6 @@
 //! Implementación real de `FileStore` sobre `std::fs`.
 
-use crate::application::ports::{FileStore, Fingerprint};
+use crate::application::ports::{DirFile, FileStore, Fingerprint};
 use sha2::{Digest, Sha256};
 use std::io::Read;
 use std::path::Path;
@@ -48,11 +48,48 @@ impl FileStore for StdFileStore {
         }
         Ok(Fingerprint { size, sha256: format!("{:x}", hasher.finalize()) })
     }
+
+    fn list_files(&self, dir: &Path) -> std::io::Result<Vec<DirFile>> {
+        if !dir.is_dir() {
+            return Ok(Vec::new());
+        }
+        let mut files = Vec::new();
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let meta = entry.metadata()?;
+            if !meta.is_file() {
+                continue;
+            }
+            let modified = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            files.push(DirFile { name: entry.file_name().to_string_lossy().into_owned(), size: meta.len(), modified });
+        }
+        files.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(files)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn list_files_skips_folders_and_missing_dirs() {
+        let dir = std::env::temp_dir().join(format!("lumik_list_{}", uuid::Uuid::new_v4().as_simple()));
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("b.jpg"), b"12345").unwrap();
+        std::fs::write(dir.join("a.jpg"), b"1").unwrap();
+        let files = StdFileStore.list_files(&dir).unwrap();
+        let names: Vec<(&str, u64)> = files.iter().map(|f| (f.name.as_str(), f.size)).collect();
+        assert_eq!(names, [("a.jpg", 1), ("b.jpg", 5)]);
+        assert!(files[0].modified > 0);
+        assert!(StdFileStore.list_files(&dir.join("no-existe")).unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn fingerprint_is_size_and_sha256() {

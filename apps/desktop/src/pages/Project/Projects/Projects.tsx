@@ -296,16 +296,16 @@ interface ProjectsProps {
   /** Búsqueda de fotos en curso (vive en App para volver a ella desde el visor). */
   photoSearch?: SearchSnapshot | null;
   onPhotoSearch?: (search: SearchSnapshot | null) => void;
-  /** Abre una foto encontrada (su disco está conectado). */
-  onOpenPhoto?: (projectId: string, photoId: string) => void;
 }
 
-export function Projects({ onProjectClick, photoSearch = null, onPhotoSearch, onOpenPhoto }: ProjectsProps) {
+export function Projects({ onProjectClick, photoSearch = null, onPhotoSearch }: ProjectsProps) {
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState(photoSearch?.query ?? '');
   // Búsqueda de fotos (spec photo-search): Enter, operadores o el panel avanzado.
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  // Visor de resultados abierto: sus teclas no son del dashboard.
+  const [viewerOpen, setViewerOpen] = useState(false);
   const photoMode = photoSearch !== null || searching || searchError !== null;
 
   const runPhotoSearch = async (query: string) => {
@@ -350,7 +350,7 @@ export function Projects({ onProjectClick, photoSearch = null, onPhotoSearch, on
   const { showArchived, setShowArchived } = useDashboardShowArchived();
 
   useEffect(() => {
-    if (showCreateModal) return;
+    if (showCreateModal || viewerOpen) return;
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (matchesKey(e, kb['projects.new_project'])) {
@@ -364,11 +364,25 @@ export function Projects({ onProjectClick, photoSearch = null, onPhotoSearch, on
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [showCreateModal, kb]);
+  }, [showCreateModal, viewerOpen, kb]);
 
   const { data: projects, loading, error, refetch } = useProjectsDashboard();
   const { data: photographer } = useActivePhotographer();
   const { data: devices } = useConnectedDevices();
+
+  // Al conectar o expulsar un disco, la búsqueda abierta se repite en silencio
+  // para que cada resultado sepa si su disco está (se conserva la posición).
+  const devicesKey = useMemo(() => (devices ? devices.map((d) => d.uuid).sort().join(',') : null), [devices]);
+  const lastDevicesKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (devicesKey === null) return;
+    const changed = lastDevicesKey.current !== null && lastDevicesKey.current !== devicesKey;
+    lastDevicesKey.current = devicesKey;
+    if (!changed || !photoSearch) return;
+    searchPhotos(photoSearch.query)
+      .then((result) => onPhotoSearch?.({ ...photoSearch, result }))
+      .catch(() => undefined);
+  }, [devicesKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const coverThumbnails = useCoverThumbnails(projects);
 
   // Refetch projects whenever the set of connected device UUIDs changes — a
@@ -562,14 +576,13 @@ export function Projects({ onProjectClick, photoSearch = null, onPhotoSearch, on
         {photoMode ? (
           <PhotoSearchResults
             key={photoSearch?.query ?? ''}
+            query={photoSearch?.query ?? searchQuery}
             result={photoSearch?.result ?? null}
             searching={searching}
             error={searchError}
             initialScrollTop={photoSearch?.scrollTop ?? 0}
-            onOpenPhoto={(projectId, photoId, scrollTop) => {
-              if (photoSearch) onPhotoSearch?.({ ...photoSearch, scrollTop });
-              onOpenPhoto?.(projectId, photoId);
-            }}
+            onScrollSave={(scrollTop) => { if (photoSearch) onPhotoSearch?.({ ...photoSearch, scrollTop }); }}
+            onViewerChange={setViewerOpen}
             onClose={() => { setSearchQuery(''); closePhotoSearch(); }}
           />
         ) : (

@@ -33,6 +33,8 @@ src/
     SettingsPage.tsx                # Tabs: Importación, Atajos, Apariencia, Respaldo (`initialTab` para abrir una concreta)
     BackupAccountSection.tsx        # Tab Respaldo: URL del server, login/registro o email + cerrar sesión
     AboutPage.tsx
+    Albums/                         # Álbumes: AlbumsPage, AlbumDetail, AddToAlbumDialog, ReplaceDialog
+    Collection/                     # CollectionViewer: visor encima de la búsqueda o de un álbum que recorre ese conjunto
     Search/                         # Búsqueda de fotos en el buscador del dashboard: SearchBox (filtra proyectos al escribir;
                                     #   Enter o el panel avanzado buscan fotos), PhotoSearchResults, AdvancedSearchPanel
     Project/
@@ -83,6 +85,7 @@ crates/lumik-core/src/              # núcleo compartido (desktop y tablet)
     delivery.rs                     #   DeliveryMode (nada / pares / todo JPG de cámara), delivery_for
     lock.rs                         #   candado del proyecto (.lumik-lock): ProjectLock, LockState
     search.rs                       #   SearchQuery: operadores de búsqueda y texto libre (ida y vuelta)
+    exported.rs                     #   exported_id (uuid5) y extensiones de _exported/
     device.rs                       #   DetectedDevice
     project.rs                      #   ProjectFolder (slug/date_parts/path), compare_dashboard
     error.rs                        #   DomainError
@@ -101,6 +104,7 @@ crates/lumik-core/src/              # núcleo compartido (desktop y tablet)
   db/                               # persistencia SQLite (GlobalDatabase / ProjectDatabase)
     mod.rs, models.rs, queries.rs (photo_from_row), migrations.rs, persistence.rs (PhotoRepository), *_schema.sql
     search_index.rs                 #   índice de búsqueda en lumik.db: escritura por proyecto y consulta
+    albums.rs                       #   álbumes: operaciones y mejor versión de cada elemento
 
 src-tauri/src/                      # shell del desktop
   main.rs                           # entry point → lumik_lib::run()
@@ -364,6 +368,7 @@ Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`
 Ajustes: `get_app_settings`, `update_app_settings`, `get_install_name`, `set_install_name`, `get_dashboard_sort`, `update_dashboard_sort`, `get_dashboard_show_archived`, `set_dashboard_show_archived`, `get_sidebar_sections`, `set_sidebar_section_collapsed`
 Búsqueda: `search_photos`, `get_search_thumbnail`, `get_search_index_count`, `parse_search_query`, `format_search_query`
+Álbumes: `list_albums`, `create_album`, `rename_album`, `delete_album`, `add_to_album`, `add_search_to_album`, `remove_album_item`, `replace_album_item`, `get_album`, `get_replace_candidates`, `get_album_thumbnail`, `reveal_album_item`
 Keybindings: `get_keybindings`, `update_keybinding`
 Import: `start_import`, `analyze_import_selection`, `retry_import_register`
 Respaldo — cuenta: `get_backup_server_url`, `set_backup_server_url`, `backup_register`, `backup_login`, `backup_logout`, `get_backup_session`

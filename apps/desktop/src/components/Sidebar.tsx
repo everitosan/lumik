@@ -193,6 +193,12 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
           onClick={() => onSectionChange('projects')}
         />
         <SectionButton
+          icon="album"
+          label={t('navigation.albums')}
+          active={activeSection === 'albums'}
+          onClick={() => onSectionChange('albums')}
+        />
+        <SectionButton
           icon="settings"
           label={t('navigation.settings')}
           active={activeSection === 'settings'}

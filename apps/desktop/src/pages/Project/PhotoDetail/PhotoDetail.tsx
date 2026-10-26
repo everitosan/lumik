@@ -7,6 +7,7 @@ import { usePhotoPreview, useContextKeybindings, matchesKey, usePlatform } from 
 import * as api from '../../../lib/api';
 import { PhotoViewer, type PhotoViewerHandle, type HistogramBins } from './PhotoViewer';
 import { PhotoSidebar, type TagManagerHandle } from './PhotoSidebar';
+import { AddToAlbumDialog, type AlbumTarget } from '../../Albums/AddToAlbumDialog';
 
 export interface PhotoDetailProps {
   photo: Photo;
@@ -112,6 +113,14 @@ export function PhotoDetail({
   const [localColorLabels, setLocalColorLabels] = useState<ColorLabel[]>(() => parseColorLabels(photo.color_label));
   const [localTags, setLocalTags] = useState<string[]>(() => parseTags(photo.tags));
   const [localCulled, setLocalCulled] = useState(photo.culled);
+  const [albumTarget, setAlbumTarget] = useState<AlbumTarget | null>(null);
+  const openAddToAlbum = useCallback(
+    () =>
+      setAlbumTarget({
+        items: [{ kind: 'photo', project_id: photo.project_id, ref_id: photo.id, file_name: basename(photo.dng_path), project_name: projectName }],
+      }),
+    [photo.project_id, photo.id, photo.dng_path, projectName],
+  );
 
   // Sync panel state when the project preference is loaded from DB
   useEffect(() => {
@@ -255,6 +264,8 @@ export function PhotoDetail({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // Con el diálogo de álbum abierto, las teclas son suyas (Esc lo cierra).
+      if (albumTarget) return;
       if (matchesKey(e, kb['photo_detail.close']))         { onClose(); return; }
       if (matchesKey(e, kb['photo_detail.prev']))          { goPrev(); return; }
       if (matchesKey(e, kb['photo_detail.next']))          { goNext(); return; }
@@ -266,6 +277,7 @@ export function PhotoDetail({
       if (matchesKey(e, kb['photo_detail.cull']))          { handleCulledChange(!localCulled); return; }
       if (matchesKey(e, kb['photo_detail.add_tag']))       { e.preventDefault(); if (!readOnly) tagManagerRef.current?.startAdding(); return; }
       if (matchesKey(e, kb['photo_detail.toggle_raw']))    { if (format === 'RAW+JPG') setShowRaw((v) => !v); return; }
+      if (matchesKey(e, kb['photo_detail.add_to_album']))  { e.preventDefault(); openAddToAlbum(); return; }
       if (matchesKey(e, kb['photo_detail.stars_0']))       { handleStarsChange(0); return; }
       if (matchesKey(e, kb['photo_detail.stars_1']))       { handleStarsChange(1); return; }
       if (matchesKey(e, kb['photo_detail.stars_2']))       { handleStarsChange(2); return; }
@@ -275,7 +287,7 @@ export function PhotoDetail({
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [kb, onClose, goPrev, goNext, localCulled, handleCulledChange, localColorLabels, localTags, format, readOnly]);
+  }, [kb, onClose, goPrev, goNext, localCulled, handleCulledChange, localColorLabels, localTags, format, readOnly, albumTarget, openAddToAlbum]);
 
   return (
     <div style={rootStyle}>
@@ -318,6 +330,20 @@ export function PhotoDetail({
           <Icon name={isCover ? 'star-filled' : 'star'} size={18} />
         </button>
         )}
+        <button
+          onClick={openAddToAlbum}
+          title={t('albums.add.button')}
+          aria-label={t('albums.add.button')}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: '32px', height: '32px', padding: 0, flexShrink: 0,
+            background: 'transparent', border: 'none',
+            borderRadius: 'var(--lumik-radius, 4px)', cursor: 'pointer',
+            color: 'var(--lumik-outline, #8c90a0)',
+          }}
+        >
+          <Icon name="album" size={18} />
+        </button>
         <span style={{ fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)', fontSize: '12px', color: 'var(--lumik-outline, #8c90a0)', flexShrink: 0 }}>
           {currentIndex + 1} / {photos.length}
         </span>
@@ -407,6 +433,7 @@ export function PhotoDetail({
           />
         )}
       </div>
+      <AddToAlbumDialog target={albumTarget} onClose={() => setAlbumTarget(null)} />
     </div>
   );
 }

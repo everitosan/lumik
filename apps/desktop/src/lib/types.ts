@@ -444,3 +444,69 @@ export interface SearchSnapshot {
   result: SearchResult | null;
   scrollTop: number;
 }
+
+// ============================================================================
+// ÁLBUMES (spec photo-albums)
+// ============================================================================
+
+export type AlbumItemKind = 'photo' | 'export';
+export type AlbumItemStatus = 'final' | 'unedited' | 'missing';
+export type AlbumOrder = 'added' | 'captured';
+
+/** De dónde sale la miniatura de un elemento en el índice. */
+export type AlbumThumbKey = { kind: 'photo' | 'export'; id: string };
+
+/** Un elemento por agregar a un álbum (o con qué reemplazar otro). */
+export interface NewAlbumItem {
+  kind: AlbumItemKind;
+  project_id: string;
+  ref_id: string;
+  file_name: string;
+  project_name: string;
+}
+
+export interface AlbumSummary {
+  id: string;
+  name: string;
+  created_at: string;
+  items: number;
+  finals: number;
+  cover: AlbumThumbKey | null;
+}
+
+export interface AlbumEntry {
+  item_id: string;
+  kind: AlbumItemKind;
+  project_id: string;
+  ref_id: string;
+  status: AlbumItemStatus;
+  file_name: string;
+  project_name: string;
+  device_name: string | null;
+  capture_date: string | null;
+  stars: number;
+  colors: number[];
+  culled: boolean;
+  is_pair: boolean;
+  /** Foto que se abre en el visor (un exportado suelto no tiene). */
+  photo_id: string | null;
+  thumb: AlbumThumbKey | null;
+  added_at: string;
+  connected: boolean;
+}
+
+export interface AlbumView {
+  id: string;
+  name: string;
+  entries: AlbumEntry[];
+  finals: number;
+  unedited: number;
+  missing: number;
+  missing_disks: { device_name: string | null; photos: number }[];
+}
+
+export interface ReplaceCandidate {
+  item: NewAlbumItem;
+  capture_date: string | null;
+  thumb: AlbumThumbKey;
+}

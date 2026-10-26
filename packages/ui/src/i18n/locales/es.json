@@ -35,6 +35,7 @@
     "photoCard": {
       "menu": {
         "label": "Opciones de la foto",
+        "addToAlbum": "Agregar a álbum",
         "revealInFolder": "Mostrar en carpeta",
         "trash": "Mover a la papelera",
         "restore": "Restaurar"
