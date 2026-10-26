@@ -18,7 +18,7 @@
 
 ## 4. Desktop: modelo y análisis
 
-- [ ] 4.1 Descarga del modelo: comandos de estado, descargar (progreso, cancelar, verificación del hash, descompresión) y borrar. Verificar con tests de infraestructura con un servidor local y un hash erróneo.
+- [x] 4.1 Descarga del modelo: comandos de estado, descargar (progreso, cancelar, verificación del hash, descompresión) y borrar; `LUMIK_MODEL_URL` (`https://` o `file://`) para probar con un paquete local antes de publicarlo. Verificar con tests de infraestructura con un servidor local, un hash erróneo, un paquete incompleto y una cancelación, y uno `--ignored` con el zip real.
 - [ ] 4.2 Cola de análisis con su hilo, evento `analysis-progress`, cancelación al expulsar y análisis al terminar una importación en proyectos `on_import`. Verificar con `cargo test` y en `dev`.
 - [ ] 4.3 Comandos del proyecto: leer y cambiar el modo, analizar, pendientes y detener. Verificar con la compilación y en `dev`.
 

@@ -125,6 +125,15 @@ export interface AppSettings {
   default_analysis_mode: AnalysisMode;
 }
 
+/**
+ * Estado del modelo de búsqueda por contenido en este equipo (semantic-search).
+ * `error` es `código:detalle` de la última descarga fallida (`network`, `corrupt`, `io`).
+ */
+export type ContentModelState =
+  | { state: 'not_installed'; size: number; error: string | null }
+  | { state: 'downloading'; downloaded: number; total: number }
+  | { state: 'installed'; size: number };
+
 /** Cuándo se calculan los vectores de las fotos de un proyecto (semantic-search). */
 export type AnalysisMode = 'on_import' | 'on_demand';
 

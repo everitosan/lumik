@@ -54,6 +54,8 @@ sha2 = "0.10"
 gethostname = "0.5"
 
 # Cliente HTTP para el server de respaldo (Fase 4). rustls para evitar OpenSSL.
+# Paquete del modelo de búsqueda por contenido (semantic-search)
+zip = { version = "2", default-features = false, features = ["deflate"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
 
 [target.'cfg(target_os = "android")'.dependencies]

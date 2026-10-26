@@ -41,6 +41,8 @@ pub struct AppState {
     pub sessions: Arc<ProjectSessions>,
     /// Proyectos por reindexar en la búsqueda (spec `photo-search`).
     pub index_queue: Arc<IndexQueue>,
+    /// Modelo de búsqueda por contenido de este equipo (spec `semantic-search`).
+    pub content_model: Arc<crate::infrastructure::content_model::ContentModel>,
 }
 
 impl AppState {
@@ -284,6 +286,9 @@ pub use settings::*;
 
 mod search;
 pub use search::*;
+
+mod content_model;
+pub use content_model::*;
 
 mod albums;
 pub use albums::*;

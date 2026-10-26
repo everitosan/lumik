@@ -41,6 +41,8 @@ pub fn run() {
 
     let db_path = infrastructure::app_data::default_global_db_path().expect("Failed to get database path");
     debug!("Global database path: {:?}", db_path);
+    // Los modelos van junto a lumik.db, en la carpeta de datos de la app.
+    let models_dir = db_path.parent().map(|d| d.join("models")).unwrap_or_else(|| "models".into());
 
     let global_db = match GlobalDatabase::new(db_path) {
         Ok(db) => {
@@ -134,6 +136,10 @@ pub fn run() {
         uploading: Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
         sessions,
         index_queue: Arc::new(application::index_queue::IndexQueue::new()),
+        content_model: Arc::new(infrastructure::content_model::ContentModel::new(
+            domain::embedding::CLIP_MULTILINGUAL,
+            models_dir,
+        )),
     };
 
     // Índice de búsqueda (spec photo-search): al día con los proyectos abiertos.
@@ -192,6 +198,10 @@ pub fn run() {
             commands::get_search_index_count,
             commands::parse_search_query,
             commands::format_search_query,
+            commands::get_content_model_state,
+            commands::download_content_model,
+            commands::cancel_content_model_download,
+            commands::delete_content_model,
             commands::list_albums,
             commands::create_album,
             commands::rename_album,

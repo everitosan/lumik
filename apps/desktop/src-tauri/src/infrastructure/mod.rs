@@ -7,6 +7,7 @@ pub mod app_data;
 pub mod backup_auth;
 pub mod backup_client;
 pub mod catalog;
+pub mod content_model;
 pub mod devices;
 #[cfg(target_os = "macos")]
 pub mod disk_arbitration;

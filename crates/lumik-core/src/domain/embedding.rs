@@ -33,6 +33,28 @@ impl AnalysisMode {
     }
 }
 
+/// Paquete del modelo publicado: de dónde se descarga y cómo se verifica.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ModelPackage {
+    /// Id del modelo (`manifest.json`), que se guarda con cada vector.
+    pub id: &'static str,
+    pub url: &'static str,
+    /// Tamaño del zip en bytes.
+    pub size: u64,
+    /// SHA-256 del zip, en hex.
+    pub sha256: &'static str,
+}
+
+/// El modelo de búsqueda por contenido: CLIP ViT-B/32 con el codificador de
+/// texto multilingüe, armado por `tools/models/build_clip_multilingual.py` y
+/// publicado en el release `model-clip-multilingual-v1` del repo.
+pub const CLIP_MULTILINGUAL: ModelPackage = ModelPackage {
+    id: "clip-multilingual-v1",
+    url: "https://github.com/everitosan/lumik/releases/download/model-clip-multilingual-v1/lumik-model-clip-multilingual-v1.zip",
+    size: 234_138_836,
+    sha256: "41f471b7108ac953b25a9917050c8ce862c7857a243cbc93209af997bb2d6877",
+};
+
 /// Vector → bytes para la BD: `f32` little-endian, 4 bytes por valor.
 pub fn vector_to_bytes(v: &[f32]) -> Vec<u8> {
     v.iter().flat_map(|x| x.to_le_bytes()).collect()

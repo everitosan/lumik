@@ -34,6 +34,8 @@
 - Un script en `tools/models/` (Python, solo para quien publica) convierte, cuantiza y empaqueta, y escribe el sha256. Lo que se publica sale de ese script.
 - La app trae escritos la URL, el tamaño y el sha256. Descarga a un archivo temporal en la carpeta de datos (`{app_data}/models/`), por bloques, con progreso y cancelación, verifica el hash, descomprime en `{app_data}/models/clip-multilingual-v1/` y solo entonces lo da por instalado. Si el hash no coincide, borra el archivo.
 - Borrar el modelo borra esa carpeta. Los vectores no se tocan.
+- En el desktop lo hace `infrastructure::content_model` (`ModelStore` instala y borra; `ContentModel` lleva el estado de la descarga y carga el modelo la primera vez que se usa, con hasta 4 hilos). La URL, el tamaño y el sha256 viven en el núcleo (`domain::embedding::CLIP_MULTILINGUAL`). Con `LUMIK_MODEL_URL` se descarga de otra URL, `https://` o `file://`, para probar un paquete armado en local antes de publicarlo.
+- Comandos: `get_content_model_state`, `download_content_model` (en segundo plano), `cancel_content_model_download` y `delete_content_model`. El progreso, como mucho cada 100 ms, y cada cambio de estado llegan con el evento `content-model-state`. Los errores viajan como `código:detalle` (`network`, `corrupt`, `io`) para que la vista los traduzca.
 
 ### D3. Vectores en `project.db`
 

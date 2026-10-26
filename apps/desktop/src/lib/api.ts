@@ -27,6 +27,7 @@ import type {
   BackupSession,
   ProjectAccess,
   SearchQuery,
+  ContentModelState,
   SearchResult,
   AlbumOrder,
   AlbumSummary,
@@ -617,6 +618,29 @@ export async function parseSearchQuery(query: string): Promise<SearchQuery> {
 /** Escribe lo elegido en el panel como operadores, en el idioma de la app. */
 export async function formatSearchQuery(query: SearchQuery, lang: 'es' | 'en'): Promise<string> {
   return invoke('format_search_query', { query, lang });
+}
+
+// ── Modelo de búsqueda por contenido (semantic-search) ──────────────────────
+
+export async function getContentModelState(): Promise<ContentModelState> {
+  return invoke('get_content_model_state');
+}
+
+/** Empieza la descarga; el progreso y el resultado llegan con `onContentModelState`. */
+export async function downloadContentModel(): Promise<void> {
+  return invoke('download_content_model');
+}
+
+export async function cancelContentModelDownload(): Promise<void> {
+  return invoke('cancel_content_model_download');
+}
+
+export async function deleteContentModel(): Promise<void> {
+  return invoke('delete_content_model');
+}
+
+export function onContentModelState(handler: (state: ContentModelState) => void): Promise<() => void> {
+  return listen<ContentModelState>('content-model-state', (e) => handler(e.payload));
 }
 
 // ============================================================================
