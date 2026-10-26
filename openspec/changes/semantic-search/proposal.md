@@ -7,7 +7,7 @@ La búsqueda de hoy solo encuentra lo que el fotógrafo escribió: tags, nombres
 ## What Changes
 
 - Búsqueda por contenido: el texto libre también encuentra fotos cuyo contenido se parece a lo escrito, en español o inglés, con un modelo de imagen y texto que corre en el equipo. Nada sale del equipo.
-- Función opcional: Lumik se instala igual que hoy. En Ajustes → Búsqueda se descarga el modelo (unos 220 MB, verificado); hasta entonces no hay búsqueda por contenido ni análisis de fotos. Se puede borrar y vuelve a como estaba.
+- Función opcional: Lumik se instala igual que hoy. En Ajustes → Búsqueda se descarga el modelo (unos 235 MB, verificado); hasta entonces no hay búsqueda por contenido ni análisis de fotos. Se puede borrar y vuelve a como estaba.
 - Vectores de las fotos guardados en el disco, en el `project.db`, con el modelo que los generó: se calculan una vez y viajan con el proyecto a cualquier equipo o tablet. El índice de búsqueda los copia.
 - Cada proyecto elige cuándo se analizan sus fotos: al importar o bajo demanda ("Analizar fotos"). Los proyectos nuevos toman el modo que diga Ajustes.
 - El modelo se publica como asset de un release propio en GitHub, ya convertido y cuantizado, con sus licencias.

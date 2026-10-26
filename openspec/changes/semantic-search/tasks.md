@@ -2,7 +2,7 @@
 
 ## 1. Modelo e inferencia (núcleo)
 
-- [ ] 1.1 Spike del motor: script en `tools/models/` que exporta los dos codificadores a ONNX, cuantiza a int8 y empaqueta el zip con `manifest.json`, licencias y sha256; probar `ort` y `tract` con ese paquete (compilación para `aarch64-linux-android` y tiempo por foto en el escritorio) y elegir según D5. Verificar con una nota en design.md con los números y el motor elegido.
+- [x] 1.1 Spike del motor: script en `tools/models/` que exporta los dos codificadores a ONNX, cuantiza a int8 y empaqueta el zip con `manifest.json`, licencias y sha256; probar `ort` y `tract` con ese paquete (compilación para `aarch64-linux-android` y tiempo por foto en el escritorio) y elegir según D5. Verificar con una nota en design.md con los números y el motor elegido.
 - [ ] 1.2 Puerto `EmbeddingModel` y su adaptador (carga del paquete, preprocesado de la imagen, tokenizer). Verificar con tests: vectores de 512 normalizados, una foto de playa más parecida a "playa" y a "beach" que a "nieve", y error claro con un paquete incompleto.
 - [ ] 1.3 Publicar el release `model-clip-multilingual-v1` con el zip y escribir en el núcleo la URL, el tamaño y el sha256. Verificar descargando el asset y comprobando el hash.
 

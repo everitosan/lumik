@@ -25,7 +25,7 @@
 ### D1. Modelo: CLIP ViT-B/32 con codificador de texto multilingüe
 
 - Imagen: el codificador de CLIP ViT-B/32 (OpenAI, MIT). Texto: `sentence-transformers/clip-ViT-B-32-multilingual-v1` (Apache-2.0), un codificador destilado para que su vector caiga en el mismo espacio que el de la imagen en más de 50 idiomas, español entre ellos. Vectores de 512 dimensiones.
-- Los dos se exportan a ONNX y se cuantizan a int8: unos 220 MB en total.
+- Los dos se exportan a ONNX y se cuantizan a int8 (pesos de `MatMul`, `Gemm` y `Gather`; la convolución del parche queda en float porque ONNX Runtime no tiene `ConvInteger` en CPU): 234 MB en total.
 - Alternativa: SigLIP 2 base multilingüe, de mejor calidad pero con unos 400 MB y su tokenizer de 256 000 tokens. Queda como reemplazo si la calidad no alcanza: cada vector guarda su modelo (D3), así que cambiar de modelo marca todo como pendiente sin mezclar espacios.
 
 ### D2. Paquete del modelo y descarga
@@ -56,8 +56,25 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 ### D5. Inferencia en el núcleo
 
 - Un puerto `EmbeddingModel` en `application/ports.rs` con `embed_image(&Path) -> Vec<f32>` y `embed_text(&str) -> Vec<f32>`. Lo implementa un adaptador en el núcleo, sin `cfg(target_os)`.
-- Motor: se decide en la tarea 1.1 entre `ort` (ONNX Runtime, el más rápido y probado; trae una biblioteca nativa por plataforma) y `tract` (Rust puro, compila igual en todas las plataformas, más lento). Criterio: que compile para Android (aarch64) y que analizar una foto de 480 px en el escritorio tome menos de 100 ms. Si los dos cumplen, gana `tract` por simplicidad de compilación. `candle` no carga ONNX, así que obligaría a reescribir el modelo.
-- Tokenizer: `tokenizers` de Hugging Face con el `tokenizer.json` del paquete.
+- Motor: **`ort` 2.0** (ONNX Runtime 1.31, MIT / Apache-2.0), elegido en el spike (abajo) frente a `tract`. `ort` enlaza ONNX Runtime de forma estática con los binarios precompilados que descarga al compilar, así que la app no carga bibliotecas aparte. `candle` no carga ONNX, así que obligaría a reescribir el modelo.
+- Tokenizer: `tokenizers` 0.22 de Hugging Face sin features por defecto y con `fancy-regex` (Rust puro, sin `onig` ni C++), con el `tokenizer.json` del paquete.
+
+**Resultado del spike (tarea 1.1).** Linux x86_64 de 16 hilos, paquete de `tools/models/build_clip_multilingual.py`, cinco fotos de COCO (dormitorio, niños con trofeo de tenis, béisbol, calle con coches, gatos en un sillón) contra doce frases en español e inglés:
+
+| | carga | foto (inferencia) | frase |
+|---|---|---|---|
+| `ort`, int8, todos los hilos | 0.6 s | 17 ms | 4 ms |
+| `ort`, int8, 4 hilos | | 21 ms | 4 ms |
+| `ort`, int8, 1 hilo | | 57 ms | 5 ms |
+| `ort`, float32 | 1.7 s | 31 ms | 11 ms |
+| `tract`, float32 (1 hilo) | 1.6 s | 142 ms | 17 ms |
+| `tract`, int8 | no terminó de cargar en 10 min | | |
+
+- Las cinco fotos aciertan su frase en los dos idiomas, con los dos motores y en float e int8. La frase en español y la inglesa quedan a menos de 0.03 de parecido entre sí. El int8 conserva el vector del float (coseno 0.984 en imagen y 0.996 en texto).
+- Preprocesar la foto (decodificar el JPEG de 480 px, redimensionar y normalizar) toma 8 ms.
+- `ort` compila para `aarch64-linux-android` sin cambios (NDK r26, API 24): ejecutable de 37 MB con ONNX Runtime dentro. En el escritorio suma unos 30 MB al binario.
+- `tract` queda descartado: no cumple los 100 ms por foto y con el modelo int8 no carga, así que habría que publicar el float32 (890 MB).
+- Falta medir en un Android real (el emulador `Pixel_Tablet` es x86_64) y comprobar los binarios de `ort` para iOS. Eso queda para las pruebas en tablets.
 - Preprocesado de la imagen: decodifica `.thumbs/{id}.jpg`, la redimensiona a 224 px por el lado corto con recorte central y normaliza con la media y desviación de CLIP (del `manifest.json`).
 
 ### D6. Analizar fotos
@@ -84,7 +101,8 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 ## Risks / Trade-offs
 
 - [La calidad en español puede quedar por debajo de la del inglés] → Se prueba con fotos reales en los dos idiomas (6.2). Si no alcanza, el reemplazo es SigLIP 2 (D1), sin cambiar el resto.
-- [Analizar es lento en Android y tablets] → Es opcional y bajo demanda por defecto. Los vectores calculados en el escritorio viajan en el disco.
+- [Analizar es lento en Android y tablets] → Es opcional y bajo demanda por defecto. Los vectores calculados en el escritorio viajan en el disco. Con un hilo, el escritorio tarda 57 ms por foto; un teléfono puede tardar varias veces eso.
+- [`ort` descarga ONNX Runtime precompilado al compilar] → El CI necesita red al compilar, como con las demás dependencias. Si algún día molesta, `ort` acepta una ruta local a la biblioteca.
 - [El umbral fijo deja pasar fotos que no tienen que ver o se pierde algunas que sí] → Se ajusta en la prueba y los resultados van ordenados por parecido, así que lo dudoso queda al final.
 - [`project.db` crece unos 2 MB por cada 1 000 fotos] → Aceptado. `f16` lo reduciría a la mitad si molesta.
 - [Un release de GitHub puede borrarse por error] → La app verifica el hash, y el script reproduce el paquete.
