@@ -181,6 +181,20 @@ impl SearchQuery {
         q
     }
 
+    /// El texto libre de `input` tal como se escribió (con mayúsculas y
+    /// acentos), sin los operadores: lo que se le da al modelo de búsqueda por
+    /// contenido, que entiende mejor el texto sin normalizar.
+    pub fn free_text(input: &str) -> String {
+        let mut scratch = SearchQuery::default();
+        tokenize(input)
+            .into_iter()
+            .filter(|token| !scratch.apply_operator(token))
+            .map(|token| unquote(&token).trim().to_string())
+            .filter(|word| !word.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
     /// Aplica `token` si es un operador válido; `false` si no lo es.
     fn apply_operator(&mut self, token: &str) -> bool {
         let lower = token.to_lowercase();
@@ -363,6 +377,13 @@ mod tests {
         let q = SearchQuery::parse("Niños  \"en la PLAYA\" Atardecer");
         assert_eq!(q.text, ["ninos", "en la playa", "atardecer"]);
         assert_eq!(normalize("  Ñandú Ópera "), "nandu opera");
+    }
+
+    #[test]
+    fn free_text_keeps_what_was_written() {
+        assert_eq!(SearchQuery::free_text("Novia en la playa estrellas>=4 en:2025"), "Novia en la playa");
+        assert_eq!(SearchQuery::free_text(r#"tag:boda "dos gatos" sillón"#), "dos gatos sillón");
+        assert_eq!(SearchQuery::free_text("tag:boda"), "");
     }
 
     #[test]

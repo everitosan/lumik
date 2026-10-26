@@ -124,7 +124,8 @@ CREATE TABLE IF NOT EXISTS search_photo (
     camera          TEXT,
     camera_norm     TEXT NOT NULL DEFAULT '',
     lens            TEXT,
-    lens_norm       TEXT NOT NULL DEFAULT ''
+    lens_norm       TEXT NOT NULL DEFAULT '',
+    embedding_model TEXT                        -- modelo del vector en search_media (semantic-search)
 );
 
 -- Miniatura y vector de cada foto, aparte de search_photo para que las
@@ -134,8 +135,7 @@ CREATE TABLE IF NOT EXISTS search_media (
     photo_id        TEXT PRIMARY KEY REFERENCES search_photo(photo_id) ON DELETE CASCADE,
     rotation        INTEGER NOT NULL DEFAULT 0, -- con la que se hizo `thumb`
     thumb           BLOB,                       -- JPEG de 128 px para resultados sin disco
-    embedding       BLOB,                       -- vector de la foto (semantic-search), copiado de project.db
-    embedding_model TEXT                        -- modelo que generó `embedding`
+    embedding       BLOB                        -- vector de la foto (semantic-search), copiado de project.db
 );
 
 -- Archivos de _exported/ de cada proyecto (finales), con su foto si están

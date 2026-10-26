@@ -1,34 +1,72 @@
 //! Caso de uso: buscar fotos en el índice (spec `photo-search`) y marcar cuáles
 //! se pueden abrir ya, porque el disco de su proyecto está conectado.
+//!
+//! Con el modelo de búsqueda por contenido (spec `semantic-search`), el texto
+//! libre trae además las fotos analizadas que se le parecen: van después de las
+//! que coinciden por palabras, de más a menos parecidas, y pasan los mismos
+//! operadores. El resultado dice cuántas fotos quedan sin analizar.
 
-use crate::db::search_index::SearchHit;
+use crate::application::ports::EmbeddingModel;
+use crate::db::search_index::{SearchHit, UnanalyzedProject};
 use crate::db::GlobalDatabase;
 use crate::domain::search::SearchQuery;
+use std::collections::HashSet;
 
 /// Resultados mostrados de una vez; si hay más, se avisa.
 pub const SEARCH_LIMIT: usize = 5_000;
+
+/// Fotos que trae la búsqueda por contenido, como máximo.
+pub const CONTENT_LIMIT: usize = 300;
+
+/// Parecido mínimo (coseno) para que una foto salga por contenido. Con el
+/// modelo del spike, una foto y su descripción quedan en 0.26–0.33 y una
+/// descripción ajena en 0.17–0.23; se ajusta con fotos reales (tarea 6.2).
+pub const CONTENT_MIN_SIMILARITY: f32 = 0.24;
+
+/// Candidatos por parecido antes de aplicar los operadores.
+const CONTENT_CANDIDATES: usize = 3_000;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct SearchResult {
     pub hits: Vec<SearchHit>,
     /// Había más resultados que `SEARCH_LIMIT`.
     pub truncated: bool,
+    /// Proyectos con fotos sin analizar entre las que pasan los operadores;
+    /// vacío si no se buscó por contenido.
+    pub unanalyzed: Vec<UnanalyzedProject>,
 }
 
 pub struct SearchPhotos<'a> {
     pub global: &'a GlobalDatabase,
     /// ¿El proyecto está abierto (su disco conectado)?
     pub is_open: &'a dyn Fn(&str) -> bool,
+    /// Modelo de búsqueda por contenido, si está instalado.
+    pub model: Option<&'a dyn EmbeddingModel>,
 }
 
 impl SearchPhotos<'_> {
     pub fn execute(&self, query: &str) -> Result<SearchResult, String> {
         let q = SearchQuery::parse(query);
         let (mut hits, truncated) = self.global.search_photos(&q, SEARCH_LIMIT).map_err(|e| e.to_string())?;
+        let mut unanalyzed = Vec::new();
+        if let (Some(model), false) = (self.model, q.text.is_empty()) {
+            let vector = model.embed_text(&SearchQuery::free_text(query))?;
+            let seen: HashSet<&str> = hits.iter().map(|h| h.photo_id.as_str()).collect();
+            let candidates: Vec<(String, f32)> = self
+                .global
+                .nearest_photos(model.id(), &vector, CONTENT_MIN_SIMILARITY, CONTENT_CANDIDATES)
+                .map_err(|e| e.to_string())?
+                .into_iter()
+                .filter(|(id, _)| !seen.contains(id.as_str()))
+                .collect();
+            let by_content = self.global.content_hits(&q, &candidates, CONTENT_LIMIT).map_err(|e| e.to_string())?;
+            hits.extend(by_content);
+            unanalyzed = self.global.unanalyzed_photos(&q, model.id()).map_err(|e| e.to_string())?;
+        }
         for hit in &mut hits {
             hit.connected = (self.is_open)(&hit.project_id);
         }
-        Ok(SearchResult { hits, truncated })
+        Ok(SearchResult { hits, truncated, unanalyzed })
     }
 }
 
@@ -81,11 +119,198 @@ mod tests {
             global.write_project_index(&project, &[photo], &[]).unwrap();
         }
         let is_open = |id: &str| id == "open";
-        let result = SearchPhotos { global: &global, is_open: &is_open }.execute("tag:calle").unwrap();
+        let result = SearchPhotos { global: &global, is_open: &is_open, model: None }.execute("tag:calle").unwrap();
         let connected: Vec<(String, bool)> = result.hits.iter().map(|h| (h.project_id.clone(), h.connected)).collect();
         assert!(connected.contains(&("open".to_string(), true)));
         assert!(connected.contains(&("away".to_string(), false)));
         assert!(!result.truncated);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    use crate::domain::embedding::{normalize, vector_to_bytes};
+    use std::path::Path;
+
+    /// Modelo falso: cualquier texto es el vector (1, 0).
+    struct TextModel;
+
+    impl EmbeddingModel for TextModel {
+        fn id(&self) -> &str {
+            "m1"
+        }
+        fn embed_image(&self, _: &Path) -> Result<Vec<f32>, String> {
+            Err("no se usa".into())
+        }
+        fn embed_text(&self, _: &str) -> Result<Vec<f32>, String> {
+            Ok(vec![1.0, 0.0])
+        }
+    }
+
+    fn project(id: &str) -> SearchProjectRow {
+        SearchProjectRow {
+            project_id: id.into(),
+            name: id.into(),
+            description: None,
+            session_date: None,
+            created_at: "2025-01-01".into(),
+            archived: false,
+            device_uuid: None,
+            device_name: None,
+            name_norm: id.into(),
+            text_norm: id.into(),
+            generation: 0,
+            exports_signature: String::new(),
+        }
+    }
+
+    /// Foto con fecha, estrellas, tags y, si se da, su vector del modelo `m1`.
+    fn photo(id: &str, date: &str, stars: i32, tags: &str, vector: Option<[f32; 2]>) -> SearchPhotoRow {
+        let vector = vector.map(|v| {
+            let mut v = v.to_vec();
+            normalize(&mut v);
+            vector_to_bytes(&v)
+        });
+        SearchPhotoRow {
+            photo_id: id.into(),
+            file_name: format!("{id}.RAF"),
+            capture_date: Some(date.into()),
+            stars,
+            colors: ",".into(),
+            tags: Some(tags.into()),
+            tags_norm: format!(",{tags},"),
+            text_norm: format!("{tags} {id}.raf"),
+            culled: false,
+            delivered: false,
+            is_pair: false,
+            camera: None,
+            camera_norm: String::new(),
+            lens: None,
+            lens_norm: String::new(),
+            rotation: 0,
+            thumb: None,
+            embedding_model: vector.as_ref().map(|_| "m1".to_string()),
+            embedding: vector,
+        }
+    }
+
+    fn content_index(tag: &str) -> (std::path::PathBuf, GlobalDatabase) {
+        let dir = std::env::temp_dir().join(format!("lumik_content_{tag}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let global = GlobalDatabase::new(dir.join("lumik.db")).unwrap();
+        global
+            .write_project_index(
+                &project("p1"),
+                &[
+                    photo("palabra", "2025-01-05 00:00:00", 0, "playa", None),
+                    photo("igual", "2025-01-01 00:00:00", 5, "", Some([1.0, 0.0])),
+                    photo("cerca", "2025-01-02 00:00:00", 1, "", Some([0.8, 0.6])),
+                    photo("lejos", "2025-01-03 00:00:00", 5, "", Some([0.0, 1.0])),
+                    photo("ambas", "2025-01-04 00:00:00", 0, "playa", Some([1.0, 0.0])),
+                    photo("otro-modelo", "2025-01-04 00:00:00", 0, "", None),
+                ],
+                &[],
+            )
+            .unwrap();
+        (dir, global)
+    }
+
+    #[test]
+    fn content_results_come_after_word_matches_by_similarity() {
+        let (dir, global) = content_index("order");
+        let is_open = |_: &str| true;
+        let search = SearchPhotos { global: &global, is_open: &is_open, model: Some(&TextModel) };
+        let result = search.execute("playa").unwrap();
+        let ids: Vec<(&str, Option<f32>)> =
+            result.hits.iter().map(|h| (h.photo_id.as_str(), h.similarity.map(|s| (s * 10.0).round() / 10.0))).collect();
+        assert_eq!(
+            ids,
+            [("palabra", None), ("ambas", None), ("igual", Some(1.0)), ("cerca", Some(0.8))],
+            "primero por palabras (por fecha), sin repetir, y luego por parecido; lo lejano no sale"
+        );
+        assert_eq!(result.unanalyzed, [UnanalyzedProject { project_id: "p1".into(), count: 2 }]);
+
+        // Los operadores filtran también lo que sale por contenido.
+        let ids: Vec<String> = search.execute("playa estrellas>=3").unwrap().hits.into_iter().map(|h| h.photo_id).collect();
+        assert_eq!(ids, ["igual"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn without_model_or_free_text_there_is_no_content_search() {
+        let (dir, global) = content_index("plain");
+        let is_open = |_: &str| true;
+        let without = SearchPhotos { global: &global, is_open: &is_open, model: None }.execute("playa").unwrap();
+        assert_eq!(without.hits.len(), 2);
+        assert!(without.unanalyzed.is_empty());
+        let only_operators =
+            SearchPhotos { global: &global, is_open: &is_open, model: Some(&TextModel) }.execute("estrellas=5").unwrap();
+        assert_eq!(only_operators.hits.len(), 2, "sin texto libre no se busca por contenido");
+        assert!(only_operators.unanalyzed.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn vectors_are_reloaded_when_the_index_changes() {
+        let (dir, global) = content_index("reload");
+        let is_open = |_: &str| true;
+        let search = SearchPhotos { global: &global, is_open: &is_open, model: Some(&TextModel) };
+        assert!(search.execute("algo").unwrap().hits.iter().any(|h| h.photo_id == "igual"));
+        global.write_project_index(&project("p1"), &[photo("nueva", "2025-02-01 00:00:00", 0, "", Some([1.0, 0.1]))], &[]).unwrap();
+        let ids: Vec<String> = search.execute("algo").unwrap().hits.into_iter().map(|h| h.photo_id).collect();
+        assert_eq!(ids, ["nueva"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 70 000 vectores de 512: `cargo test --release -p lumik-core content_search_speed -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn content_search_speed() {
+        let dir = std::env::temp_dir().join(format!("lumik_content_speed_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let global = GlobalDatabase::new(dir.join("lumik.db")).unwrap();
+        let mut seed = 7u64;
+        let mut random = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % 2000) as f32 / 1000.0 - 1.0
+        };
+        for p in 0..70 {
+            let photos: Vec<SearchPhotoRow> = (0..1000)
+                .map(|i| {
+                    let mut v: Vec<f32> = (0..512).map(|_| random()).collect();
+                    normalize(&mut v);
+                    let mut row = photo(&format!("p{p}-{i}"), "2025-01-01 00:00:00", i % 6, "", None);
+                    row.embedding = Some(vector_to_bytes(&v));
+                    row.embedding_model = Some("m1".into());
+                    row.thumb = Some(vec![0u8; 4000]);
+                    row
+                })
+                .collect();
+            global.write_project_index(&project(&format!("p{p}")), &photos, &[]).unwrap();
+        }
+        let mut query: Vec<f32> = (0..512).map(|_| random()).collect();
+        normalize(&mut query);
+        let q = SearchQuery::parse("algo estrellas>=3");
+
+        let t = std::time::Instant::now();
+        global.nearest_photos("m1", &query, -1.0, CONTENT_CANDIDATES).unwrap();
+        let load = t.elapsed();
+        let t = std::time::Instant::now();
+        let candidates = global.nearest_photos("m1", &query, -1.0, CONTENT_CANDIDATES).unwrap();
+        let scan = t.elapsed();
+        let t = std::time::Instant::now();
+        let hits = global.content_hits(&q, &candidates, CONTENT_LIMIT).unwrap();
+        let filter = t.elapsed();
+        let t = std::time::Instant::now();
+        global.unanalyzed_photos(&q, "m1").unwrap();
+        let unanalyzed = t.elapsed();
+        println!(
+            "70 000 vectores: carga {:?}, recorrido {:?}, filtros {:?} ({} resultados), sin analizar {:?}",
+            load, scan, filter, hits.len(), unanalyzed
+        );
+        if !cfg!(debug_assertions) {
+            assert!(scan + filter < std::time::Duration::from_millis(30));
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

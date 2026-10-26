@@ -39,6 +39,10 @@ pub type DbResult<T> = Result<T, DbError>;
 
 pub struct GlobalDatabase {
     conn: Mutex<Connection>,
+    /// Sube con cada cambio del índice de búsqueda: invalida `vectors`.
+    index_version: std::sync::atomic::AtomicU64,
+    /// Vectores del índice en memoria para la búsqueda por contenido.
+    vectors: Mutex<Option<search_index::VectorCache>>,
 }
 
 impl GlobalDatabase {
@@ -52,6 +56,8 @@ impl GlobalDatabase {
         conn.execute_batch(schema::GLOBAL_SCHEMA)?;
         Ok(Self {
             conn: Mutex::new(conn),
+            index_version: Default::default(),
+            vectors: Mutex::new(None),
         })
     }
 

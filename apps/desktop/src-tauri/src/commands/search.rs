@@ -12,7 +12,8 @@ pub async fn search_photos(state: State<'_, AppState>, query: String) -> AppResu
         let registry = state.registry.clone();
         let is_open = move |id: &str| registry.contains(id);
         let started = std::time::Instant::now();
-        let result = SearchPhotos { global: &state.global_db, is_open: &is_open }.execute(&query)?;
+        // El modelo de búsqueda por contenido se conecta en la tarea 4.1 de semantic-search.
+        let result = SearchPhotos { global: &state.global_db, is_open: &is_open, model: None }.execute(&query)?;
         log::debug!("search_photos: {:?} → {} en {} ms", query, result.hits.len(), started.elapsed().as_millis());
         Ok(result)
     })

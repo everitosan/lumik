@@ -478,8 +478,12 @@ mod tests {
 
         let conn = f.global.conn();
         let row = |id: &str| -> (Option<Vec<u8>>, Option<String>) {
-            conn.query_row("SELECT embedding, embedding_model FROM search_media WHERE photo_id = ?1", [id], |r| Ok((r.get(0)?, r.get(1)?)))
-                .unwrap()
+            conn.query_row(
+                "SELECT m.embedding, p.embedding_model FROM search_media m JOIN search_photo p USING (photo_id) WHERE photo_id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap()
         };
         assert_eq!(row(&ids[0]), (Some(vector_to_bytes(&[0.6, 0.8])), Some("m1".to_string())));
         assert_eq!(row(&ids[1]), (None, None), "la otra sigue sin analizar");

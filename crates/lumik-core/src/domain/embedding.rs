@@ -55,9 +55,20 @@ pub fn normalize(v: &mut [f32]) {
     }
 }
 
-/// Producto punto de dos vectores normalizados: su coseno.
+/// Producto punto de dos vectores normalizados: su coseno. Ocho acumuladores
+/// independientes para que el compilador lo vectorice (la búsqueda recorre
+/// todas las fotos del índice).
 pub fn similarity(a: &[f32], b: &[f32]) -> f32 {
-    a.iter().zip(b).map(|(x, y)| x * y).sum()
+    let mut acc = [0f32; 8];
+    let (a8, a_rest) = a.as_chunks::<8>();
+    let (b8, b_rest) = b.as_chunks::<8>();
+    for (x, y) in a8.iter().zip(b8) {
+        for i in 0..8 {
+            acc[i] += x[i] * y[i];
+        }
+    }
+    let rest: f32 = a_rest.iter().zip(b_rest).map(|(x, y)| x * y).sum();
+    acc.iter().sum::<f32>() + rest
 }
 
 #[cfg(test)]
@@ -88,6 +99,9 @@ mod tests {
         normalize(&mut v);
         assert!((similarity(&v, &v) - 1.0).abs() < 1e-6);
         assert!((v[0] - 0.6).abs() < 1e-6);
+        // Más largo que un bloque de 8 y con resto.
+        let a: Vec<f32> = (0..19).map(|i| i as f32).collect();
+        assert_eq!(similarity(&a, &a), (0..19).map(|i| (i * i) as f32).sum::<f32>());
         let mut zero = vec![0.0, 0.0];
         normalize(&mut zero);
         assert_eq!(zero, [0.0, 0.0]);

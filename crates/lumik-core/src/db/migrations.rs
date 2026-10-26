@@ -225,8 +225,9 @@ pub(super) fn reset_old_search_index(conn: &Connection) -> DbResult<()> {
     }
     // Vectores de contenido (spec semantic-search): los proyectos se reindexan
     // para copiar los que ya tengan en su disco.
-    if has_column(conn, "search_media", "photo_id") && !has_column(conn, "search_media", "embedding_model") {
-        conn.execute("ALTER TABLE search_media ADD COLUMN embedding_model TEXT", [])?;
+    // El modelo va en search_photo (filas chicas) para filtrar sin leer blobs.
+    if has_column(conn, "search_photo", "photo_id") && !has_column(conn, "search_photo", "embedding_model") {
+        conn.execute("ALTER TABLE search_photo ADD COLUMN embedding_model TEXT", [])?;
         if has_column(conn, "search_project", "project_id") {
             conn.execute("UPDATE search_project SET indexed_generation = -1", [])?;
         }

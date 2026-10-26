@@ -51,7 +51,7 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 
 ### D4. Copia al índice
 
-`IndexProject` lee `photo_embedding` y llena `search_media.embedding` y una columna nueva `search_media.embedding_model`. Lo hace aunque el equipo no tenga el modelo: así, al descargarlo, la búsqueda funciona de inmediato. La migración del índice agrega `embedding_model` y fuerza un reindexado (`indexed_generation = -1`).
+`IndexProject` lee `photo_embedding` y llena `search_media.embedding` y una columna nueva `search_photo.embedding_model`. Lo hace aunque el equipo no tenga el modelo: así, al descargarlo, la búsqueda funciona de inmediato. El modelo va en `search_photo` (filas chicas) para contar las fotos sin analizar sin leer blobs. La migración del índice agrega `embedding_model` y fuerza un reindexado (`indexed_generation = -1`).
 
 ### D5. Inferencia en el núcleo
 
@@ -85,11 +85,14 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 
 ### D7. Búsqueda
 
-- Si el modelo está instalado y la consulta tiene texto libre, `search_photos` calcula el vector del texto (unos milisegundos) y, además de lo de siempre, recorre los vectores de `search_media` del modelo instalado que pasan los operadores (el SQL de siempre sin la condición de texto), calcula el producto punto y se queda con los que superan un umbral, hasta 300.
-- Resultado: primero las fotos que coinciden por palabras y luego las que se parecen, de más a menos parecidas. Los grupos siguen el orden de su primera foto.
-- El umbral es una constante del núcleo, que se ajusta con fotos reales en la prueba manual (tarea 6.2).
-- Costo: recorrer 70 000 vectores de 512 dimensiones son unas 36 millones de multiplicaciones, menos de 30 ms. Se leen solo `photo_id, embedding` de las filas que pasan los filtros.
-- Los resultados indican cuántas fotos de los proyectos buscados faltan por analizar (sin vector del modelo instalado), para el aviso.
+- Si el modelo está instalado y la consulta tiene texto libre, `SearchPhotos` calcula el vector del texto tal como se escribió (`SearchQuery::free_text`, con acentos y mayúsculas, sin los operadores) y, además de lo de siempre:
+  1. `nearest_photos`: recorre en memoria los vectores del modelo instalado y se queda con los que llegan al umbral, hasta 3 000 candidatos, de más a menos parecidos.
+  2. `content_hits`: de esos candidatos, los que pasan los operadores (el SQL de siempre sin la condición de texto, más `photo_id IN json_each(?)`), hasta 300, sin repetir los que ya salieron por palabras.
+- Los vectores se cargan en memoria (`VectorCache`, contiguos) la primera vez que se busca por contenido y se recargan cuando cambia el índice (`index_version`, que sube tras escribir o quitar un proyecto). Leerlos de `search_media` en cada búsqueda obligaría a leer también las miniaturas, que van antes en la fila.
+- Resultado: primero las fotos que coinciden por palabras y luego las que se parecen, de más a menos parecidas, con su parecido (`similarity`). Los grupos siguen el orden de su primera foto.
+- El umbral (`CONTENT_MIN_SIMILARITY`, 0.24) es una constante del núcleo, que se ajusta con fotos reales en la prueba manual (tarea 6.2).
+- Costo medido con 70 000 vectores de 512 (release): recorrido 9 ms, filtros 9 ms, conteo de sin analizar 9 ms. Cargar los vectores tras un cambio del índice toma unos 320 ms, una vez. En memoria son 2 KB por foto (140 MB con 70 000).
+- Los resultados indican, por proyecto, cuántas fotos que pasan los operadores faltan por analizar (sin vector del modelo instalado), para el aviso.
 
 ### D8. Interfaz
 
@@ -104,7 +107,8 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 - [Analizar es lento en Android y tablets] → Es opcional y bajo demanda por defecto. Los vectores calculados en el escritorio viajan en el disco. Con un hilo, el escritorio tarda 57 ms por foto; un teléfono puede tardar varias veces eso.
 - [`ort` descarga ONNX Runtime precompilado al compilar] → El CI necesita red al compilar, como con las demás dependencias. Si algún día molesta, `ort` acepta una ruta local a la biblioteca.
 - [El umbral fijo deja pasar fotos que no tienen que ver o se pierde algunas que sí] → Se ajusta en la prueba y los resultados van ordenados por parecido, así que lo dudoso queda al final.
-- [`project.db` crece unos 2 MB por cada 1 000 fotos] → Aceptado. `f16` lo reduciría a la mitad si molesta.
+- [`project.db` crece unos 2 MB por cada 1 000 fotos, y la caché en memoria igual] → Aceptado. `f16` lo reduciría a la mitad si molesta.
+- [Tras cada cambio del índice (calificar una foto, por ejemplo) la siguiente búsqueda por contenido recarga todos los vectores] → 320 ms con 70 000 fotos, solo en esa búsqueda. Si molesta, la recarga puede hacerse por proyecto.
 - [Un release de GitHub puede borrarse por error] → La app verifica el hash, y el script reproduce el paquete.
 
 ## Migration Plan

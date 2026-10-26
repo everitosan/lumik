@@ -435,12 +435,16 @@ export interface SearchHit {
   is_pair: boolean;
   /** El disco del proyecto está conectado: se puede abrir */
   connected: boolean;
+  /** Parecido con el texto buscado, si salió por contenido (semantic-search) */
+  similarity?: number;
 }
 
 export interface SearchResult {
   hits: SearchHit[];
   /** Había más resultados que los mostrados */
   truncated: boolean;
+  /** Proyectos con fotos sin analizar entre las buscadas (solo al buscar por contenido) */
+  unanalyzed: { project_id: string; count: number }[];
 }
 
 /** Búsqueda de fotos en curso en el dashboard: se conserva al abrir una foto y volver. */

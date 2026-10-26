@@ -14,7 +14,7 @@
 
 ## 3. Búsqueda (núcleo)
 
-- [ ] 3.1 `search_photos` con texto libre y modelo: candidatos que pasan los operadores, producto punto, umbral, hasta 300, orden (primero por palabras y luego por parecido) y conteo de fotos sin analizar. Verificar con tests con vectores fijos y una medición con 70 000 vectores simulados (< 30 ms).
+- [x] 3.1 `search_photos` con texto libre y modelo: candidatos que pasan los operadores, producto punto, umbral, hasta 300, orden (primero por palabras y luego por parecido) y conteo de fotos sin analizar. Verificar con tests con vectores fijos y una medición con 70 000 vectores simulados (< 30 ms).
 
 ## 4. Desktop: modelo y análisis
 

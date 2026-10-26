@@ -172,11 +172,11 @@ impl GlobalDatabase {
             let mut insert = tx.prepare(
                 "INSERT INTO search_photo (photo_id, project_id, file_name, capture_date, stars, colors, tags,
                                            tags_norm, text_norm, culled, delivered, is_pair, camera, camera_norm,
-                                           lens, lens_norm)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                                           lens, lens_norm, embedding_model)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
             )?;
             let mut insert_media = tx.prepare(
-                "INSERT INTO search_media (photo_id, rotation, thumb, embedding, embedding_model) VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO search_media (photo_id, rotation, thumb, embedding) VALUES (?1, ?2, ?3, ?4)",
             )?;
             for p in photos {
                 insert.execute(params![
@@ -196,8 +196,9 @@ impl GlobalDatabase {
                     p.camera_norm,
                     p.lens,
                     p.lens_norm,
+                    p.embedding_model,
                 ])?;
-                insert_media.execute(params![p.photo_id, p.rotation, p.thumb, p.embedding, p.embedding_model])?;
+                insert_media.execute(params![p.photo_id, p.rotation, p.thumb, p.embedding])?;
             }
         }
         tx.execute("DELETE FROM search_export WHERE project_id = ?1", [&project.project_id])?;
@@ -211,6 +212,7 @@ impl GlobalDatabase {
             }
         }
         tx.commit()?;
+        self.index_changed();
         Ok(())
     }
 
@@ -221,6 +223,7 @@ impl GlobalDatabase {
         conn.execute("DELETE FROM search_photo WHERE project_id = ?1", [project_id])?;
         conn.execute("DELETE FROM search_export WHERE project_id = ?1", [project_id])?;
         conn.execute("DELETE FROM search_project WHERE project_id = ?1", [project_id])?;
+        self.index_changed();
         Ok(())
     }
 
@@ -250,6 +253,51 @@ pub struct SearchHit {
     pub is_pair: bool,
     /// El disco del proyecto está conectado (lo llena `SearchPhotos`).
     pub connected: bool,
+    /// Parecido con el texto buscado, si salió por contenido.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub similarity: Option<f32>,
+}
+
+/// Vectores de un modelo cargados del índice, contiguos para recorrerlos rápido.
+pub struct VectorCache {
+    version: u64,
+    model: String,
+    dim: usize,
+    ids: Vec<String>,
+    data: Vec<f32>,
+}
+
+/// Fotos por analizar de un proyecto, entre las que pasan los filtros.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct UnanalyzedProject {
+    pub project_id: String,
+    pub count: usize,
+}
+
+/// Columnas de un resultado (ver `hit_from_row`).
+const HIT_SELECT: &str = "SELECT p.photo_id, p.project_id, pr.name, pr.session_date, pr.device_name, p.file_name,
+        p.capture_date, p.stars, p.colors, p.tags, p.culled, p.delivered, p.is_pair
+ FROM search_photo p JOIN search_project pr ON pr.project_id = p.project_id";
+
+fn hit_from_row(r: &rusqlite::Row) -> rusqlite::Result<SearchHit> {
+    let colors: String = r.get(8)?;
+    Ok(SearchHit {
+        photo_id: r.get(0)?,
+        project_id: r.get(1)?,
+        project_name: r.get(2)?,
+        project_date: r.get(3)?,
+        device_name: r.get(4)?,
+        file_name: r.get(5)?,
+        capture_date: r.get(6)?,
+        stars: r.get(7)?,
+        colors: colors.split(',').filter_map(|c| c.parse().ok()).collect(),
+        tags: r.get(9)?,
+        culled: r.get::<_, i32>(10)? != 0,
+        delivered: r.get::<_, i32>(11)? != 0,
+        is_pair: r.get::<_, i32>(12)? != 0,
+        connected: false,
+        similarity: None,
+    })
 }
 
 /// Escapa `%`, `_` y `\` para usar `value` dentro de un `LIKE … ESCAPE '\'`.
@@ -257,8 +305,9 @@ fn like_escape(value: &str) -> String {
     value.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
 }
 
-/// Condiciones SQL y sus parámetros para una consulta.
-fn where_clause(q: &crate::domain::search::SearchQuery) -> (String, Vec<String>) {
+/// Condiciones SQL y sus parámetros para una consulta; con `with_text` en
+/// falso, sin las del texto libre (la búsqueda por contenido lo usa aparte).
+fn where_clause(q: &crate::domain::search::SearchQuery, with_text: bool) -> (String, Vec<String>) {
     use crate::domain::search::{normalize, Period, StarsFilter};
     let mut conds: Vec<String> = Vec::new();
     let mut args: Vec<String> = Vec::new();
@@ -319,7 +368,7 @@ fn where_clause(q: &crate::domain::search::SearchQuery) -> (String, Vec<String>)
     if q.pair {
         conds.push("p.is_pair = 1".into());
     }
-    for w in &q.text {
+    for w in q.text.iter().filter(|_| with_text) {
         let a = arg(format!("%{}%", like_escape(&normalize(w))));
         conds.push(format!("(p.text_norm LIKE {a} ESCAPE '\\' OR pr.text_norm LIKE {a} ESCAPE '\\')"));
     }
@@ -338,11 +387,9 @@ impl GlobalDatabase {
         if q.is_empty() {
             return Ok((Vec::new(), false));
         }
-        let (where_sql, args) = where_clause(q);
+        let (where_sql, args) = where_clause(q, true);
         let sql = format!(
-            "SELECT p.photo_id, p.project_id, pr.name, pr.session_date, pr.device_name, p.file_name,
-                    p.capture_date, p.stars, p.colors, p.tags, p.culled, p.delivered, p.is_pair
-             FROM search_photo p JOIN search_project pr ON pr.project_id = p.project_id
+            "{HIT_SELECT}
              WHERE {where_sql}
              ORDER BY p.capture_date IS NULL, p.capture_date DESC, p.file_name
              LIMIT {}",
@@ -351,29 +398,117 @@ impl GlobalDatabase {
         let conn = self.conn();
         let mut stmt = conn.prepare(&sql)?;
         let mut hits = stmt
-            .query_map(rusqlite::params_from_iter(args.iter()), |r| {
-                let colors: String = r.get(8)?;
-                Ok(SearchHit {
-                    photo_id: r.get(0)?,
-                    project_id: r.get(1)?,
-                    project_name: r.get(2)?,
-                    project_date: r.get(3)?,
-                    device_name: r.get(4)?,
-                    file_name: r.get(5)?,
-                    capture_date: r.get(6)?,
-                    stars: r.get(7)?,
-                    colors: colors.split(',').filter_map(|c| c.parse().ok()).collect(),
-                    tags: r.get(9)?,
-                    culled: r.get::<_, i32>(10)? != 0,
-                    delivered: r.get::<_, i32>(11)? != 0,
-                    is_pair: r.get::<_, i32>(12)? != 0,
-                    connected: false,
-                })
-            })?
+            .query_map(rusqlite::params_from_iter(args.iter()), hit_from_row)?
             .collect::<Result<Vec<_>, _>>()?;
         let truncated = hits.len() > limit;
         hits.truncate(limit);
         Ok((hits, truncated))
+    }
+
+    /// Avisa que el índice cambió: la próxima búsqueda por contenido recarga los vectores.
+    fn index_changed(&self) {
+        self.index_version.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Las fotos del índice cuyo vector de `model` más se parece a `query` (normalizado):
+    /// las que llegan a `min`, de más a menos parecidas, hasta `max`.
+    pub fn nearest_photos(&self, model: &str, query: &[f32], min: f32, max: usize) -> DbResult<Vec<(String, f32)>> {
+        let version = self.index_version.load(std::sync::atomic::Ordering::SeqCst);
+        let mut cache = self.vectors.lock().unwrap();
+        if !matches!(&*cache, Some(c) if c.version == version && c.model == model) {
+            *cache = Some(self.load_vectors(model, version)?);
+        }
+        let cache = cache.as_ref().unwrap();
+        if cache.dim != query.len() {
+            return Ok(Vec::new());
+        }
+        let mut scored: Vec<(usize, f32)> = cache
+            .data
+            .chunks_exact(cache.dim)
+            .map(|v| crate::domain::embedding::similarity(v, query))
+            .enumerate()
+            .filter(|(_, s)| *s >= min)
+            .collect();
+        // Solo se ordenan los `max` mejores.
+        if scored.len() > max {
+            scored.select_nth_unstable_by(max, |a, b| b.1.total_cmp(&a.1));
+            scored.truncate(max);
+        }
+        scored.sort_by(|a, b| b.1.total_cmp(&a.1));
+        Ok(scored.into_iter().map(|(i, s)| (cache.ids[i].clone(), s)).collect())
+    }
+
+    fn load_vectors(&self, model: &str, version: u64) -> DbResult<VectorCache> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT p.photo_id, m.embedding FROM search_photo p JOIN search_media m ON m.photo_id = p.photo_id
+             WHERE p.embedding_model = ?1 AND m.embedding IS NOT NULL",
+        )?;
+        let mut cache = VectorCache { version, model: model.to_string(), dim: 0, ids: Vec::new(), data: Vec::new() };
+        let rows = stmt.query_map([model], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?)))?;
+        for row in rows {
+            let (id, bytes) = row?;
+            let Some(v) = crate::domain::embedding::vector_from_bytes(&bytes) else { continue };
+            if cache.dim == 0 {
+                cache.dim = v.len();
+            }
+            if v.len() == cache.dim && cache.dim > 0 {
+                cache.ids.push(id);
+                cache.data.extend_from_slice(&v);
+            }
+        }
+        Ok(cache)
+    }
+
+    /// De `candidates` (id y parecido, en orden), las fotos que pasan los
+    /// filtros de `q` sin contar su texto libre, en el mismo orden y hasta `limit`.
+    pub fn content_hits(
+        &self,
+        q: &crate::domain::search::SearchQuery,
+        candidates: &[(String, f32)],
+        limit: usize,
+    ) -> DbResult<Vec<SearchHit>> {
+        if candidates.is_empty() {
+            return Ok(Vec::new());
+        }
+        let (where_sql, mut args) = where_clause(q, false);
+        let ids: Vec<&str> = candidates.iter().map(|(id, _)| id.as_str()).collect();
+        args.push(serde_json::to_string(&ids).unwrap_or_default());
+        let sql = format!(
+            "{HIT_SELECT}
+             WHERE ({where_sql}) AND p.photo_id IN (SELECT value FROM json_each(?{}))",
+            args.len()
+        );
+        let conn = self.conn();
+        let mut stmt = conn.prepare(&sql)?;
+        let mut found: HashMap<String, SearchHit> = stmt
+            .query_map(rusqlite::params_from_iter(args.iter()), hit_from_row)?
+            .map(|h| h.map(|h| (h.photo_id.clone(), h)))
+            .collect::<Result<_, _>>()?;
+        Ok(candidates
+            .iter()
+            .filter_map(|(id, score)| found.remove(id).map(|h| SearchHit { similarity: Some(*score), ..h }))
+            .take(limit)
+            .collect())
+    }
+
+    /// Por proyecto, cuántas fotos que pasan los filtros de `q` (sin su texto
+    /// libre) no tienen vector de `model`.
+    pub fn unanalyzed_photos(&self, q: &crate::domain::search::SearchQuery, model: &str) -> DbResult<Vec<UnanalyzedProject>> {
+        let (where_sql, mut args) = where_clause(q, false);
+        args.push(model.to_string());
+        let sql = format!(
+            "SELECT p.project_id, COUNT(*) FROM search_photo p JOIN search_project pr ON pr.project_id = p.project_id
+             WHERE ({where_sql}) AND (p.embedding_model IS NULL OR p.embedding_model != ?{})
+             GROUP BY p.project_id ORDER BY COUNT(*) DESC",
+            args.len()
+        );
+        let conn = self.conn();
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(args.iter()), |r| {
+            Ok(UnanalyzedProject { project_id: r.get(0)?, count: r.get::<_, i64>(1)? as usize })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     /// Miniatura del índice de una foto.
