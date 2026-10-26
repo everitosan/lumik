@@ -76,7 +76,7 @@ mod tests {
                 thumb: None,
                 embedding: None,
             };
-            global.write_project_index(&project, &[photo]).unwrap();
+            global.write_project_index(&project, &[photo], &[]).unwrap();
         }
         let is_open = |id: &str| id == "open";
         let result = SearchPhotos { global: &global, is_open: &is_open }.execute("tag:calle").unwrap();

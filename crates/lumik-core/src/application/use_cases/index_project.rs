@@ -5,9 +5,11 @@
 //! generación del proyecto no cambió desde la última vez, no hace nada. La
 //! miniatura y el vector de una foto se conservan mientras no cambie su rotación.
 
-use crate::application::ports::ImageProcessor;
+use crate::application::ports::{FileStore, ImageProcessor};
 use crate::db::models::Photo;
-use crate::db::search_index::{IndexedPhotoCache, SearchPhotoRow, SearchProjectRow};
+use crate::db::search_index::{IndexedPhotoCache, SearchExportRow, SearchPhotoRow, SearchProjectRow};
+use crate::domain::exported::{exported_id, is_exported_image};
+use std::collections::HashMap;
 use crate::db::{GlobalDatabase, ProjectDatabase};
 use crate::domain::search::normalize;
 
@@ -28,6 +30,7 @@ pub enum IndexOutcome {
 pub struct IndexProject<'a> {
     pub global: &'a GlobalDatabase,
     pub images: &'a dyn ImageProcessor,
+    pub files: &'a dyn FileStore,
 }
 
 impl IndexProject<'_> {
@@ -61,6 +64,8 @@ impl IndexProject<'_> {
             })
             .collect();
 
+        let exports = self.export_rows(project, &photos)?;
+
         let project_row = SearchProjectRow {
             project_id: id.clone(),
             name_norm: normalize(&info.name),
@@ -74,8 +79,34 @@ impl IndexProject<'_> {
             device_name: seen_on.map(|d| d.name.to_string()),
             generation,
         };
-        self.global.write_project_index(&project_row, &rows).map_err(|e| e.to_string())?;
+        self.global.write_project_index(&project_row, &rows, &exports).map_err(|e| e.to_string())?;
         Ok(IndexOutcome::Indexed { photos: rows.len() })
+    }
+
+    /// Exportados de `_exported/`, ligados a su foto por nombre, con la
+    /// miniatura de la edición (la anterior si el archivo no cambió).
+    fn export_rows(&self, project: &ProjectDatabase, photos: &[Photo]) -> Result<Vec<SearchExportRow>, String> {
+        let dir = project.project_dir.join("_exported");
+        let files = self.files.list_files(&dir).map_err(|e| e.to_string())?;
+        let cache = self.global.indexed_export_cache(&project.project_id).map_err(|e| e.to_string())?;
+        // `jpg_path` = `_exported/{archivo}` de la foto a la que se ligó.
+        let linked: HashMap<String, String> = photos
+            .iter()
+            .filter_map(|p| p.jpg_path.as_deref().map(|j| (file_name(j), p.id.clone())))
+            .collect();
+        Ok(files
+            .into_iter()
+            .filter(|f| is_exported_image(&f.name))
+            .map(|f| {
+                let export_id = exported_id(&project.project_id, &f.name);
+                let signature = format!("{}:{}", f.size, f.modified);
+                let thumb = match cache.get(&export_id) {
+                    Some((sig, Some(thumb))) if *sig == signature => Some(thumb.clone()),
+                    _ => self.images.index_thumbnail(&dir.join(&f.name)),
+                };
+                SearchExportRow { export_id, photo_id: linked.get(&f.name).cloned(), file_name: f.name, signature, thumb }
+            })
+            .collect())
     }
 }
 
@@ -157,9 +188,36 @@ mod tests {
         }
     }
 
+    /// `_exported/` en memoria: (nombre, tamaño, fecha).
+    #[derive(Default)]
+    struct MemDir(std::sync::Mutex<Vec<(String, u64, u64)>>);
+
+    impl FileStore for MemDir {
+        fn create_dir_all(&self, _: &Path) -> std::io::Result<()> {
+            Ok(())
+        }
+        fn rename(&self, _: &Path, _: &Path) -> std::io::Result<()> {
+            Ok(())
+        }
+        fn exists(&self, _: &Path) -> bool {
+            false
+        }
+        fn list_files(&self, dir: &Path) -> std::io::Result<Vec<crate::application::ports::DirFile>> {
+            assert!(dir.ends_with("_exported"));
+            Ok(self
+                .0
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|(name, size, modified)| crate::application::ports::DirFile { name: name.clone(), size: *size, modified: *modified })
+                .collect())
+        }
+    }
+
     struct Fixture {
         dir: PathBuf,
         global: GlobalDatabase,
+        files: MemDir,
     }
 
     impl Fixture {
@@ -167,7 +225,7 @@ mod tests {
             let dir = std::env::temp_dir().join(format!("lumik_index_{tag}_{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             let global = GlobalDatabase::new(dir.join("lumik.db")).unwrap();
-            Self { dir, global }
+            Self { dir, global, files: MemDir::default() }
         }
 
         fn project(&self, id: &str, name: &str, photos: &[(&str, &str, Option<&str>)]) -> (ProjectDatabase, Vec<String>) {
@@ -225,7 +283,7 @@ mod tests {
         let (db, ids) = f.project("p1", "Boda Martínez", &[("_media/DSCF0001.RAF", "2025:06:15 14:30:22", Some("X-T5"))]);
         db.update_photo_rating(&ids[0], 4, Some("1,3"), Some("Calle,Niños")).unwrap();
 
-        let uc = IndexProject { global: &f.global, images: &images };
+        let uc = IndexProject { global: &f.global, images: &images, files: &f.files };
         let out = uc.execute(&db, Some(SeenOn { uuid: "u1", name: "Samsung T7" }), false).unwrap();
         assert_eq!(out, IndexOutcome::Indexed { photos: 1 });
 
@@ -254,7 +312,7 @@ mod tests {
             "Boda",
             &[("_media/A.RAF", "2025:06:15 10:00:00", None), ("_media/B.RAF", "2025:06:15 11:00:00", None)],
         );
-        let uc = IndexProject { global: &f.global, images: &images };
+        let uc = IndexProject { global: &f.global, images: &images, files: &f.files };
         uc.execute(&db, None, false).unwrap();
         assert_eq!(f.photo_count("p1"), 2);
 
@@ -275,7 +333,7 @@ mod tests {
         let images = CountingImages::default();
         let (a, _) = f.project("pa", "A", &[("_media/A.RAF", "2025:01:01 00:00:00", None)]);
         let (b, _) = f.project("pb", "B", &[("_media/B.RAF", "2025:01:01 00:00:00", None)]);
-        let uc = IndexProject { global: &f.global, images: &images };
+        let uc = IndexProject { global: &f.global, images: &images, files: &f.files };
         uc.execute(&a, None, false).unwrap();
         uc.execute(&b, None, false).unwrap();
 
@@ -294,7 +352,7 @@ mod tests {
         let f = Fixture::new("thumbs");
         let images = CountingImages::default();
         let (db, ids) = f.project("p1", "Boda", &[("_media/A.RAF", "2025:01:01 00:00:00", None)]);
-        let uc = IndexProject { global: &f.global, images: &images };
+        let uc = IndexProject { global: &f.global, images: &images, files: &f.files };
         uc.execute(&db, None, false).unwrap();
         assert_eq!(images.0.load(Ordering::SeqCst), 1);
 
@@ -305,6 +363,48 @@ mod tests {
         uc.execute(&db, None, true).unwrap();
         assert_eq!(images.0.load(Ordering::SeqCst), 2, "rotada: se rehace");
         assert_eq!(f.column::<Vec<u8>>(&ids[0], "thumb"), b"mini");
+    }
+
+    fn exports(f: &Fixture, project_id: &str) -> Vec<(String, Option<String>)> {
+        let conn = f.global.conn();
+        let mut stmt = conn
+            .prepare("SELECT file_name, photo_id FROM search_export WHERE project_id = ?1 ORDER BY file_name")
+            .unwrap();
+        stmt.query_map([project_id], |r| Ok((r.get(0)?, r.get(1)?))).unwrap().map(Result::unwrap).collect()
+    }
+
+    #[test]
+    fn exported_files_are_linked_cached_and_dropped() {
+        let f = Fixture::new("exports");
+        let images = CountingImages::default();
+        let (db, ids) = f.project("p1", "Boda", &[("_media/IMG_1.RAF", "2025:01:01 00:00:00", None)]);
+        db.set_photo_exported(&ids[0], "_exported/IMG_1.jpg").unwrap();
+        *f.files.0.lock().unwrap() = vec![
+            ("IMG_1.jpg".into(), 100, 1),
+            ("IMG_1-bn.jpg".into(), 90, 1),
+            ("notas.txt".into(), 5, 1),
+        ];
+        let uc = IndexProject { global: &f.global, images: &images, files: &f.files };
+        uc.execute(&db, None, true).unwrap();
+        assert_eq!(
+            exports(&f, "p1"),
+            [("IMG_1-bn.jpg".to_string(), None), ("IMG_1.jpg".to_string(), Some(ids[0].clone()))],
+            "el ligado tiene su foto, el suelto no, y lo que no es imagen no entra"
+        );
+        let after_first = images.0.load(Ordering::SeqCst);
+
+        // Sin cambios: se reutilizan las miniaturas de los dos exportados.
+        uc.execute(&db, None, true).unwrap();
+        assert_eq!(images.0.load(Ordering::SeqCst), after_first);
+
+        // IMG_1.jpg cambia (se volvió a exportar) y la variante se borra.
+        *f.files.0.lock().unwrap() = vec![("IMG_1.jpg".into(), 120, 2)];
+        uc.execute(&db, None, true).unwrap();
+        assert_eq!(images.0.load(Ordering::SeqCst), after_first + 1, "solo se rehace la del archivo cambiado");
+        assert_eq!(exports(&f, "p1"), [("IMG_1.jpg".to_string(), Some(ids[0].clone()))]);
+
+        f.global.remove_project_index("p1").unwrap();
+        assert!(exports(&f, "p1").is_empty());
     }
 
     #[test]

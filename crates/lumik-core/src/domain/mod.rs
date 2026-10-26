@@ -6,6 +6,7 @@
 pub mod delivery;
 pub mod device;
 pub mod error;
+pub mod exported;
 pub mod lock;
 pub mod pairs;
 pub mod paths;

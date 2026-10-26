@@ -136,5 +136,51 @@ CREATE TABLE IF NOT EXISTS search_media (
     embedding       BLOB                        -- vector de la foto (semantic-search); NULL por ahora
 );
 
+-- Archivos de _exported/ de cada proyecto (finales), con su foto si están
+-- ligados por nombre. export_id = uuid5(project_id/nombre), el mismo del
+-- respaldo y del portal. signature = "tamaño:fecha" para rehacer la miniatura
+-- solo si el archivo cambió.
+CREATE TABLE IF NOT EXISTS search_export (
+    export_id       TEXT PRIMARY KEY,
+    project_id      TEXT NOT NULL REFERENCES search_project(project_id) ON DELETE CASCADE,
+    file_name       TEXT NOT NULL,
+    photo_id        TEXT,
+    signature       TEXT NOT NULL,
+    thumb           BLOB
+);
+
+CREATE INDEX IF NOT EXISTS idx_search_export_project ON search_export(project_id);
+CREATE INDEX IF NOT EXISTS idx_search_export_photo ON search_export(photo_id);
+
 CREATE INDEX IF NOT EXISTS idx_search_photo_project ON search_photo(project_id);
 CREATE INDEX IF NOT EXISTS idx_search_photo_date ON search_photo(capture_date);
+
+
+-- ============================================================================
+-- ALBUMS (spec photo-albums)
+-- Álbumes de curación del equipo con fotos de varios proyectos y discos. Un
+-- elemento referencia una foto (kind 'photo', ref_id = photo.id) o un archivo
+-- de _exported/ (kind 'export', ref_id = export_id). file_name y project_name
+-- son copias para mostrar el elemento si su foto ya no existe.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS album (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS album_item (
+    id           TEXT PRIMARY KEY,
+    album_id     TEXT NOT NULL REFERENCES album(id) ON DELETE CASCADE,
+    kind         TEXT NOT NULL CHECK(kind IN ('photo', 'export')),
+    project_id   TEXT NOT NULL,
+    ref_id       TEXT NOT NULL,
+    file_name    TEXT NOT NULL,
+    project_name TEXT NOT NULL,
+    added_at     TEXT NOT NULL,
+    UNIQUE(album_id, kind, ref_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_album_item_album ON album_item(album_id);

@@ -47,6 +47,21 @@ pub struct SearchPhotoRow {
     pub embedding: Option<Vec<u8>>,
 }
 
+/// Archivo de `_exported/` tal como queda en el índice.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchExportRow {
+    pub export_id: String,
+    pub file_name: String,
+    /// Foto a la que está ligado por nombre (`photo.jpg_path`), si alguna.
+    pub photo_id: Option<String>,
+    /// `tamaño:fecha` del archivo, para saber si cambió.
+    pub signature: String,
+    pub thumb: Option<Vec<u8>>,
+}
+
+/// Firma y miniatura ya indexadas de un exportado.
+pub type ExportCache = (String, Option<Vec<u8>>);
+
 /// Lo que ya hay en el índice de una foto y se puede conservar al reindexar.
 #[derive(Debug, Clone, Default)]
 pub struct IndexedPhotoCache {
@@ -87,8 +102,23 @@ impl GlobalDatabase {
         Ok(rows)
     }
 
-    /// Reemplaza el proyecto y todas sus fotos en el índice.
-    pub fn write_project_index(&self, project: &SearchProjectRow, photos: &[SearchPhotoRow]) -> DbResult<()> {
+    /// Firma y miniatura ya indexadas de los exportados del proyecto.
+    pub fn indexed_export_cache(&self, project_id: &str) -> DbResult<HashMap<String, ExportCache>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT export_id, signature, thumb FROM search_export WHERE project_id = ?1")?;
+        let rows = stmt
+            .query_map([project_id], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get(2)?))))?
+            .collect::<Result<HashMap<_, _>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Reemplaza el proyecto, sus fotos y sus exportados en el índice.
+    pub fn write_project_index(
+        &self,
+        project: &SearchProjectRow,
+        photos: &[SearchPhotoRow],
+        exports: &[SearchExportRow],
+    ) -> DbResult<()> {
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         let now = chrono::Utc::now().to_rfc3339();
@@ -153,6 +183,16 @@ impl GlobalDatabase {
                 insert_media.execute(params![p.photo_id, p.rotation, p.thumb, p.embedding])?;
             }
         }
+        tx.execute("DELETE FROM search_export WHERE project_id = ?1", [&project.project_id])?;
+        {
+            let mut insert = tx.prepare(
+                "INSERT INTO search_export (export_id, project_id, file_name, photo_id, signature, thumb)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )?;
+            for e in exports {
+                insert.execute(params![e.export_id, project.project_id, e.file_name, e.photo_id, e.signature, e.thumb])?;
+            }
+        }
         tx.commit()?;
         Ok(())
     }
@@ -162,6 +202,7 @@ impl GlobalDatabase {
         let conn = self.conn();
         // search_media se va por ON DELETE CASCADE.
         conn.execute("DELETE FROM search_photo WHERE project_id = ?1", [project_id])?;
+        conn.execute("DELETE FROM search_export WHERE project_id = ?1", [project_id])?;
         conn.execute("DELETE FROM search_project WHERE project_id = ?1", [project_id])?;
         Ok(())
     }
@@ -237,7 +278,7 @@ fn where_clause(q: &crate::domain::search::SearchQuery) -> (String, Vec<String>)
     if let Some(period) = q.period {
         let (from, to) = match period {
             Period::Year { year } => (format!("{year}-01-01"), format!("{}-01-01", year + 1)),
-            Period::Month { year, month } if month == 12 => (format!("{year}-12-01"), format!("{}-01-01", year + 1)),
+            Period::Month { year, month: 12 } => (format!("{year}-12-01"), format!("{}-01-01", year + 1)),
             Period::Month { year, month } => (format!("{year}-{month:02}-01"), format!("{year}-{:02}-01", month + 1)),
         };
         conds.push(format!("p.capture_date >= {} AND p.capture_date < {}", arg(from), arg(to)));
@@ -391,10 +432,10 @@ mod tests {
         boda.delivered = true;
         boda.is_pair = true;
         let old = photo("vieja", "2024-12-31 23:00:00");
-        global.write_project_index(&project("p1", "Boda Martínez", false), &[calle, boda, old]).unwrap();
+        global.write_project_index(&project("p1", "Boda Martínez", false), &[calle, boda, old], &[]).unwrap();
         let mut archived = photo("archivada", "2025-07-01 00:00:00");
         archived.tags_norm = ",calle,".into();
-        global.write_project_index(&project("p2", "Viejo", true), &[archived]).unwrap();
+        global.write_project_index(&project("p2", "Viejo", true), &[archived], &[]).unwrap();
         (dir, global)
     }
 

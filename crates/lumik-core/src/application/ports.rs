@@ -361,6 +361,20 @@ pub trait FileStore: Send + Sync {
     fn fingerprint(&self, _path: &Path) -> std::io::Result<Fingerprint> {
         Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "fingerprint"))
     }
+
+    /// Archivos (no carpetas) de `dir`; una carpeta que no existe da lista vacía.
+    fn list_files(&self, _dir: &Path) -> std::io::Result<Vec<DirFile>> {
+        Ok(Vec::new())
+    }
+}
+
+/// Un archivo de una carpeta, con lo necesario para saber si cambió.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirFile {
+    pub name: String,
+    pub size: u64,
+    /// Segundos desde la época Unix (0 si el sistema no la da).
+    pub modified: u64,
 }
 
 /// Tamaño y SHA-256 (hex) de un archivo.

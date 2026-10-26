@@ -199,6 +199,11 @@ pub(super) fn reset_old_search_index(conn: &Connection) -> DbResult<()> {
     if has_column(conn, "search_photo", "thumb") {
         conn.execute_batch("DROP TABLE search_photo; DROP TABLE IF EXISTS search_project;")?;
     }
+    // Índice anterior a `search_export` (spec photo-albums): sus proyectos se
+    // reindexan para llevar también sus exportados.
+    if has_column(conn, "search_project", "project_id") && !has_column(conn, "search_export", "export_id") {
+        conn.execute("UPDATE search_project SET indexed_generation = -1", [])?;
+    }
     Ok(())
 }
 

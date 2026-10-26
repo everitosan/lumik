@@ -1,3 +1,4 @@
+pub mod albums;
 mod migrations;
 pub mod models;
 mod persistence;
@@ -301,7 +302,30 @@ mod tests {
         }
         assert!(conn.prepare("SELECT tags_norm, text_norm FROM search_photo").is_ok());
         assert!(conn.prepare("SELECT rotation, thumb, embedding FROM search_media").is_ok());
+        assert!(conn.prepare("SELECT export_id, photo_id, signature, thumb FROM search_export").is_ok());
         drop(conn);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn index_without_exports_is_reindexed() {
+        let dir = std::env::temp_dir().join(format!("lumik_search_exports_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("lumik.db");
+        let global = GlobalDatabase::new(path.clone()).unwrap();
+        global.conn().execute_batch(
+            "INSERT INTO search_project (project_id, name, created_at, indexed_generation, indexed_at)
+             VALUES ('p1', 'Boda', '2025', 7, '2025');
+             DROP TABLE search_export;",
+        ).unwrap();
+        drop(global);
+        let global = GlobalDatabase::new(path).unwrap();
+        assert_eq!(global.indexed_generation("p1").unwrap(), Some(-1));
+        // Ya con search_export: abrir otra vez no fuerza nada.
+        global.conn().execute("UPDATE search_project SET indexed_generation = 3", []).unwrap();
+        drop(global);
+        let global = GlobalDatabase::new(dir.join("lumik.db")).unwrap();
+        assert_eq!(global.indexed_generation("p1").unwrap(), Some(3));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -386,6 +386,7 @@ impl GlobalDatabase {
             ("photo_detail.stars_5",      "5",          "5 estrellas"),
             ("photo_detail.add_tag",      "t",          "Agregar etiqueta"),
             ("photo_detail.toggle_raw",   "s",          "Ver el RAW o el JPG de un par"),
+            ("photo_detail.add_to_album", "a",          "Agregar a un álbum"),
             ("project.show_culled",        "Ctrl+c",     "Mostrar solo fotos aprobadas"),
             ("projects.new_project",        "n",          "Crear nuevo proyecto"),
             ("projects.focus_search",       "s",          "Enfocar barra de búsqueda"),
