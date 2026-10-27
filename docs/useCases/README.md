@@ -19,6 +19,7 @@ precedidos de una **vista general** que cabe en una pantalla. Cada sección se p
 | [Rotación](flujo-rotacion.md) | Rotación optimista en canvas, regeneración de miniatura, escritura EXIF/XMP | 3 |
 | [Álbumes](flujo-albumes.md) | Agrupar fotos de varios proyectos y discos, mejor versión de cada elemento, discos faltantes, abrir y mostrar en carpeta | 3 |
 | [Búsqueda de fotos](flujo-busqueda-fotos.md) | Índice en `lumik.db`, operadores y panel avanzado, resultados con discos desconectados | 2 |
+| [Búsqueda por contenido](flujo-busqueda-contenido.md) | Descarga del modelo, cola de análisis por proyecto, búsqueda por parecido y aviso de fotos sin analizar | 3 |
 | [Candado del proyecto](flujo-candado-proyecto.md) | Uso exclusivo entre dispositivos: `.lumik-lock`, solo lectura, tomar el control, expulsión | 3 |
 
 ## WIP — respaldo en la nube (SaaS)

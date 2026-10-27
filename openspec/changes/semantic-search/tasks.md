@@ -31,5 +31,5 @@
 
 ## 6. Documentación y verificación
 
-- [ ] 6.1 Diagrama en `docs/useCases/` (descarga del modelo, análisis, búsqueda) y comandos en `apps/desktop/CLAUDE.md`. Verificar que el Mermaid parsea.
+- [x] 6.1 *(Hecho: `docs/useCases/flujo-busqueda-contenido.md` con vista general y tres sub-diagramas (descarga del modelo, análisis, búsqueda), enlazado desde el README y la búsqueda de fotos; módulos, flujos y comandos en `apps/desktop/CLAUDE.md`; diagramas revisados en el preview de VSCode.)* Diagrama en `docs/useCases/` (descarga del modelo, análisis, búsqueda) y comandos en `apps/desktop/CLAUDE.md`. Verificar que el Mermaid parsea.
 - [ ] 6.2 Prueba en `dev` con fotos reales: buscar 10 conceptos en español y en inglés, ajustar el umbral, analizar en un equipo y buscar en otro con el mismo disco, y buscar sin red. Correr los tests del núcleo y del desktop y `openspec validate semantic-search --strict`.

@@ -85,6 +85,7 @@ crates/lumik-core/src/              # núcleo compartido (desktop y tablet)
     delivery.rs                     #   DeliveryMode (nada / pares / todo JPG de cámara), delivery_for
     lock.rs                         #   candado del proyecto (.lumik-lock): ProjectLock, LockState
     search.rs                       #   SearchQuery: operadores de búsqueda y texto libre (ida y vuelta)
+    embedding.rs                    #   paquete del modelo de búsqueda por contenido (CLIP_MULTILINGUAL), AnalysisMode, vector ↔ bytes
     exported.rs                     #   exported_id (uuid5) y extensiones de _exported/
     device.rs                       #   DetectedDevice
     project.rs                      #   ProjectFolder (slug/date_parts/path), compare_dashboard
@@ -96,10 +97,13 @@ crates/lumik-core/src/              # núcleo compartido (desktop y tablet)
     registry.rs                     #   ProjectRegistry (proyectos abiertos, ejecting, rotation-gen)
     project_session.rs              #   ProjectSessions: sesiones por proyecto y su candado
     index_queue.rs                  #   IndexQueue: proyectos por reindexar en la búsqueda (debounce)
+    analysis_queue.rs               #   AnalysisQueue: proyectos por analizar (uno a la vez), cancelación, fotos fallidas
     use_cases/                      #   cull_photo, trash_photo, rate_photo, rotate_photo, import_photos,
-                                    #   eject_device, ensure_catalog_synced, sync_exported, change_delivery_mode
+                                    #   eject_device, ensure_catalog_synced, sync_exported, change_delivery_mode,
+                                    #   index_project, search_photos, analyze_project
                                     #   (con tests de fakes)
 
+  embedding.rs                      # ClipModel (feature `embeddings`): ONNX con `ort`, tokenizer, preprocesado
   import/                           # pipeline genérico (staging, mover, pares, nombres libres), converter, xmp, progress
   db/                               # persistencia SQLite (GlobalDatabase / ProjectDatabase)
     mod.rs, models.rs, queries.rs (photo_from_row), migrations.rs, persistence.rs (PhotoRepository), *_schema.sql
@@ -119,10 +123,12 @@ src-tauri/src/                      # shell del desktop
     devices.rs, finder_tags.rs, folder.rs, fs.rs, progress.rs, import_pipeline.rs
     backup_auth.rs, catalog.rs, backup_client.rs   # clientes HTTP del server de respaldo
     disk_arbitration.rs             #   FFI mínimo de DiskArbitration (solo macOS): watcher y expulsión
+    content_model.rs                #   ContentModel: descarga verificada (sha256), instalación en {datos}/models/, borrado y carga
 
   commands.rs                       # AppState (+ write_session) + refresh_open_projects + declaración de submódulos
   commands/                         # comandos Tauri (adaptadores delgados) por dominio
-    device.rs, project.rs, photo.rs, settings.rs, import_cmd.rs, backup.rs
+    device.rs, project.rs, photo.rs, settings.rs, import_cmd.rs, backup.rs,
+    search.rs, albums.rs, content_model.rs, analysis.rs
 
   devices.rs                        # scan_mounted_devices() por plataforma (sysinfo / /proc); UUID en macOS
                                     #   vía diskutil (por punto de montaje o, si falla, por disco BSD); read_only
@@ -352,6 +358,8 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 | Papelera / restaurar foto | `trash_photo`, `restore_photo` | `TrashPhoto` / `RestorePhoto` (con rollback) |
 | Rating de estrellas      | `save_photo_rating`    | `RatePhoto`                  |
 | Rotación de imagen       | `save_photo_rotation`  | `RotatePhoto`                |
+| Búsqueda de fotos        | `search_photos`        | `SearchPhotos` (+ `IndexProject` en el hilo `search-index`) |
+| Búsqueda por contenido   | `download_content_model`, `analyze_project` (hilo `content-analysis`) | `AnalyzeProject`, `SearchPhotos` |
 | Sync catálogo (wip)      | `ensure_project_synced`| `EnsureCatalogSynced`        |
 | Enlazar `_exported` ↔ fotos (wip) | `sync_exported`   | `SyncExported`               |
 | Respaldar `_exported` (wip) | `prepare_backup` → `backup_exported_file` → `finalize_backup` | — (lógica en `commands/backup.rs`) |
@@ -368,6 +376,8 @@ Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`
 Ajustes: `get_app_settings`, `update_app_settings`, `get_install_name`, `set_install_name`, `get_dashboard_sort`, `update_dashboard_sort`, `get_dashboard_show_archived`, `set_dashboard_show_archived`, `get_sidebar_sections`, `set_sidebar_section_collapsed`
 Búsqueda: `search_photos`, `get_search_thumbnail`, `get_search_index_count`, `parse_search_query`, `format_search_query`
+Búsqueda por contenido — modelo: `get_content_model_state`, `download_content_model`, `cancel_content_model_download`, `delete_content_model` (evento `content-model-state`)
+Búsqueda por contenido — análisis: `get_project_analysis`, `set_project_analysis_mode`, `analyze_project`, `stop_project_analysis`, `get_analysis_queue` (evento `analysis-progress`)
 Álbumes: `list_albums`, `create_album`, `rename_album`, `delete_album`, `add_to_album`, `add_search_to_album`, `remove_album_item`, `replace_album_item`, `get_album`, `get_replace_candidates`, `get_album_thumbnail`, `reveal_album_item`
 Keybindings: `get_keybindings`, `update_keybinding`
 Import: `start_import`, `analyze_import_selection`, `retry_import_register`

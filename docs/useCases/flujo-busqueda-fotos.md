@@ -96,8 +96,8 @@ Abrir un resultado con su disco conectado muestra el visor encima de los resulta
 proyectos, y Esc vuelve a los resultados en la misma posición. Sin disco, se muestra la miniatura y
 qué disco conectar.
 
-El texto libre busca hoy por coincidencia. Con `semantic-search` pasará a ordenar por parecido entre
-las candidatas que dejen los operadores, usando la columna `embedding` que ya existe.
+El texto libre busca por coincidencia. Con el modelo de búsqueda por contenido instalado trae además
+las fotos que se le parecen, después de las de palabras: ver [Búsqueda por contenido](flujo-busqueda-contenido.md).
 
 ## Código
 
