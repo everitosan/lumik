@@ -116,6 +116,12 @@ const licenses = [
   { name: 'Tauri',    license: 'MIT / Apache-2.0',  url: 'https://tauri.app' },
   { name: 'React',    license: 'MIT',               url: 'https://react.dev' },
   { name: 'rusqlite', license: 'MIT',               url: 'https://github.com/rusqlite/rusqlite' },
+  { name: 'ort',      license: 'MIT / Apache-2.0',  url: 'https://github.com/pykeio/ort' },
+  { name: 'ONNX Runtime', license: 'MIT',           url: 'https://onnxruntime.ai' },
+  { name: 'tokenizers', license: 'Apache-2.0',      url: 'https://github.com/huggingface/tokenizers' },
+  // Modelos de la búsqueda por contenido: solo vienen con la app si se descargan.
+  { name: 'CLIP ViT-B/32', license: 'MIT', url: 'https://github.com/openai/CLIP', downloaded: true },
+  { name: 'clip-ViT-B-32-multilingual-v1', license: 'Apache-2.0', url: 'https://huggingface.co/sentence-transformers/clip-ViT-B-32-multilingual-v1', downloaded: true },
 ];
 
 export function AboutPage() {
@@ -158,10 +164,10 @@ export function AboutPage() {
             <span>{t('about.openSourceLicenses')}</span>
             <Icon name={licensesOpen ? 'chevron-down' : 'chevron-right'} size="sm" />
           </div>
-          {licensesOpen && licenses.map(({ name, license, url }) => (
+          {licensesOpen && licenses.map(({ name, license, url, downloaded }) => (
             <div key={name} style={licenseRowStyles}>
               <a href={url} target="_blank" rel="noreferrer" style={linkStyles}>{name}</a>
-              <span style={licenseBadgeStyles}>{license}</span>
+              <span style={licenseBadgeStyles}>{downloaded ? `${license} · ${t('about.ifDownloaded')}` : license}</span>
             </div>
           ))}
         </div>

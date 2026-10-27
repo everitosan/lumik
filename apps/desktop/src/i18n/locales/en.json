@@ -398,7 +398,8 @@
     "description": "Professional RAW photo importer and culling tool. Import your shoots, organize them by session, and filter which photos are worth editing — all offline, directly from your external drives.",
     "credits": "Credits",
     "copyright": "© 2026 Everardo Sánchez Hernández. All rights reserved.",
-    "openSourceLicenses": "Open Source Licenses"
+    "openSourceLicenses": "Open Source Licenses",
+    "ifDownloaded": "if downloaded"
   },
   "navigation": {
     "management": "Management",

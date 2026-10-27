@@ -105,7 +105,7 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
 - Proyecto: el modo de análisis va en "Editar proyecto", junto a la entrega al aprobar, donde ya viven los ajustes de cada proyecto. "Analizar N fotos" es un botón de la barra superior del proyecto, junto a Respaldar; mientras se analiza muestra "Analizando 120/300" y al pulsarlo se detiene, y con todo analizado no aparece. Sin modelo, no aparece ninguno de los dos.
 - Barra lateral: sección "Análisis", como la de Respaldos, mientras haya proyectos en espera, en curso o terminados sin quitar. Cada tarjeta muestra el avance con "Detener", o cómo terminó (listo, detenido, abierto en otro dispositivo, error) con una × para quitarla. El backend avisa también cuando un proyecto entra a la cola (`queued`) y cuando empieza (`running`), para que aparezca de inmediato.
 - Resultados: el aviso "N fotos sin analizar" con "Analizar", solo en búsquedas con texto libre y modelo instalado.
-- About: rawler, exiftool, Tauri, React y rusqlite, más el motor elegido, `tokenizers`, CLIP ViT-B/32 (MIT) y clip-ViT-B-32-multilingual-v1 (Apache-2.0), estos dos con la nota "si se descarga".
+- About: rawler, exiftool, Tauri, React y rusqlite, más `ort` y ONNX Runtime (MIT), `tokenizers` (Apache-2.0), CLIP ViT-B/32 (MIT) y clip-ViT-B-32-multilingual-v1 (Apache-2.0), estos dos con la nota "si se descarga".
 
 ## Risks / Trade-offs
 

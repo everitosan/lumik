@@ -398,7 +398,8 @@
     "description": "Herramienta profesional para importar y hacer culling de fotos RAW. Importa tus sesiones, organízalas por fecha y filtra qué fotos vale la pena editar — todo sin conexión, directamente desde tus discos externos.",
     "credits": "Créditos",
     "copyright": "© 2026 Everardo Sánchez Hernández. Todos los derechos reservados.",
-    "openSourceLicenses": "Licencias de código abierto"
+    "openSourceLicenses": "Licencias de código abierto",
+    "ifDownloaded": "si se descarga"
   },
   "navigation": {
     "management": "Gestión",
