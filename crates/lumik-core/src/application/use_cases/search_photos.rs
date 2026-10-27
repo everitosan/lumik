@@ -19,10 +19,11 @@ pub const SEARCH_LIMIT: usize = 5_000;
 /// Fotos que trae la búsqueda por contenido, como máximo.
 pub const CONTENT_LIMIT: usize = 300;
 
-/// Parecido mínimo (coseno) para que una foto salga por contenido. Con el
-/// modelo del spike, una foto y su descripción quedan en 0.26–0.33 y una
-/// descripción ajena en 0.17–0.23; se ajusta con fotos reales (tarea 6.2).
-pub const CONTENT_MIN_SIMILARITY: f32 = 0.24;
+/// Parecido mínimo (coseno) para que una foto salga por contenido. Con fotos
+/// reales (tarea 6.2: "bicicleta", "camioneta roja", "red truck") lo que deja de
+/// tener sentido empieza entre 0.251 y 0.253 y lo bueno llega a 0.253–0.256, en
+/// español y en inglés. Se prefiere que sobre alguna al final a perder una buena.
+pub const CONTENT_MIN_SIMILARITY: f32 = 0.2525;
 
 /// Candidatos por parecido antes de aplicar los operadores.
 const CONTENT_CANDIDATES: usize = 3_000;
@@ -63,6 +64,9 @@ impl SearchPhotos<'_> {
                 .filter(|(id, _)| !seen.contains(id.as_str()))
                 .collect();
             let by_content = self.global.content_hits(&q, &candidates, CONTENT_LIMIT).map_err(|e| e.to_string())?;
+            if cfg!(debug_assertions) && log::log_enabled!(log::Level::Debug) {
+                self.log_similarities(&q, model, &vector, &seen, &by_content);
+            }
             hits.extend(by_content);
             unanalyzed = self.global.unanalyzed_photos(&q, model.id(), self.failed).map_err(|e| e.to_string())?;
             for project in &mut unanalyzed {
@@ -73,6 +77,63 @@ impl SearchPhotos<'_> {
             hit.connected = (self.is_open)(&hit.project_id);
         }
         Ok(SearchResult { hits, truncated, unanalyzed })
+    }
+
+    /// Para ajustar `CONTENT_MIN_SIMILARITY` (solo en desarrollo): el parecido
+    /// de las fotos que salieron por contenido y de las que quedaron justo por
+    /// debajo del umbral, con su archivo y proyecto, y cuánto destaca cada una
+    /// (z) frente al parecido de todas las fotos analizadas con esta búsqueda.
+    fn log_similarities(
+        &self,
+        q: &SearchQuery,
+        model: &dyn EmbeddingModel,
+        vector: &[f32],
+        seen: &HashSet<&str>,
+        shown: &[SearchHit],
+    ) {
+        const TOP: usize = 30;
+        const TAIL: usize = 10;
+        const BELOW: usize = 15;
+        const MARGIN: f32 = 0.05;
+        let all: Vec<f32> = self
+            .global
+            .nearest_photos(model.id(), vector, -1.0, usize::MAX)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(_, s)| s)
+            .collect();
+        let n = all.len().max(1) as f32;
+        let mean = all.iter().sum::<f32>() / n;
+        let std = (all.iter().map(|s| (s - mean).powi(2)).sum::<f32>() / n).sqrt().max(f32::EPSILON);
+        let line = |h: &SearchHit| {
+            let s = h.similarity.unwrap_or(0.0);
+            format!("\n  {:.4}  z {:>5.2}  {} · {}", s, (s - mean) / std, h.file_name, h.project_name)
+        };
+        let mut out = format!(
+            "parecido de {:?} (umbral {CONTENT_MIN_SIMILARITY}): {} por contenido · {} fotos, media {:.4}, desviación {:.4}, máx {:.4}",
+            q.text,
+            shown.len(),
+            all.len(),
+            mean,
+            std,
+            all.first().copied().unwrap_or(0.0)
+        );
+        out.extend(shown.iter().take(TOP).map(line));
+        if shown.len() > TOP + TAIL {
+            out.push_str(&format!("\n  … {} más …", shown.len() - TOP - TAIL));
+        }
+        out.extend(shown.iter().skip(TOP.max(shown.len().saturating_sub(TAIL))).map(line));
+        let below: Vec<(String, f32)> = self
+            .global
+            .nearest_photos(model.id(), vector, CONTENT_MIN_SIMILARITY - MARGIN, CONTENT_CANDIDATES)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(id, s)| *s < CONTENT_MIN_SIMILARITY && !seen.contains(id.as_str()))
+            .collect();
+        let below = self.global.content_hits(q, &below, BELOW).unwrap_or_default();
+        out.push_str(&format!("\n  -- debajo del umbral (hasta {:.2}) --", CONTENT_MIN_SIMILARITY - MARGIN));
+        out.extend(below.iter().map(line));
+        log::debug!("{out}");
     }
 }
 

@@ -122,7 +122,7 @@ flowchart TB
     C["Por palabras<br/>como siempre, por fecha"]
     D{"¿modelo instalado<br/>y texto libre?"}
     E["embed_text('playa')"]
-    F["nearest_photos<br/>producto punto con los vectores de lumik.db<br/>(en caché, se recargan si cambia el índice)<br/>parecido ≥ 0.24, hasta 3000"]
+    F["nearest_photos<br/>producto punto con los vectores de lumik.db<br/>(en caché, se recargan si cambia el índice)<br/>parecido ≥ 0.2525, hasta 3000"]
     G["content_hits<br/>las que pasan los operadores<br/>sin repetir las de palabras, hasta 300"]
     H["unanalyzed_photos<br/>por proyecto: pasan los operadores, sin vector<br/>sin las que fallaron · connected"]
     I["Resultados<br/>primero palabras, luego de más a menos parecidas"]

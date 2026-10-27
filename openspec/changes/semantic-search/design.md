@@ -95,7 +95,7 @@ project_settings.analysis_mode TEXT NOT NULL DEFAULT 'on_demand'
   2. `content_hits`: de esos candidatos, los que pasan los operadores (el SQL de siempre sin la condición de texto, más `photo_id IN json_each(?)`), hasta 300, sin repetir los que ya salieron por palabras.
 - Los vectores se cargan en memoria (`VectorCache`, contiguos) la primera vez que se busca por contenido y se recargan cuando cambia el índice (`index_version`, que sube tras escribir o quitar un proyecto). Leerlos de `search_media` en cada búsqueda obligaría a leer también las miniaturas, que van antes en la fila.
 - Resultado: primero las fotos que coinciden por palabras y luego las que se parecen, de más a menos parecidas, con su parecido (`similarity`). Los grupos siguen el orden de su primera foto.
-- El umbral (`CONTENT_MIN_SIMILARITY`, 0.24) es una constante del núcleo, que se ajusta con fotos reales en la prueba manual (tarea 6.2).
+- El umbral (`CONTENT_MIN_SIMILARITY`, 0.2525) es una constante del núcleo, ajustada con fotos reales en la prueba manual (tarea 6.2): lo que deja de tener sentido empieza entre 0.251 y 0.253, en español y en inglés.
 - Costo medido con 70 000 vectores de 512 (release): recorrido 9 ms, filtros 9 ms, conteo de sin analizar 9 ms. Cargar los vectores tras un cambio del índice toma unos 320 ms, una vez. En memoria son 2 KB por foto (140 MB con 70 000).
 - Los resultados indican, por proyecto, cuántas fotos que pasan los operadores faltan por analizar (sin vector del modelo instalado), para el aviso.
 
