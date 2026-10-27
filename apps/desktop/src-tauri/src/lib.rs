@@ -35,6 +35,14 @@ fn get_system_username() -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // En `dev` con Wayland, el renderizado DMA-BUF de WebKitGTK pinta las
+    // miniaturas en negro (visto con NVIDIA + AMD); el build se ve bien. Antes
+    // de arrancar GTK y sin pisar lo que haya definido el usuario.
+    #[cfg(all(target_os = "linux", debug_assertions))]
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() && std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
 
     info!("Lumik starting...");
