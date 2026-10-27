@@ -272,6 +272,8 @@ pub struct VectorCache {
 pub struct UnanalyzedProject {
     pub project_id: String,
     pub count: usize,
+    /// ¿Su disco está conectado? Solo esos se pueden analizar.
+    pub connected: bool,
 }
 
 /// Columnas de un resultado (ver `hit_from_row`).
@@ -493,20 +495,28 @@ impl GlobalDatabase {
     }
 
     /// Por proyecto, cuántas fotos que pasan los filtros de `q` (sin su texto
-    /// libre) no tienen vector de `model`.
-    pub fn unanalyzed_photos(&self, q: &crate::domain::search::SearchQuery, model: &str) -> DbResult<Vec<UnanalyzedProject>> {
+    /// libre) no tienen vector de `model`, sin contar las de `skip`.
+    pub fn unanalyzed_photos(
+        &self,
+        q: &crate::domain::search::SearchQuery,
+        model: &str,
+        skip: &[String],
+    ) -> DbResult<Vec<UnanalyzedProject>> {
         let (where_sql, mut args) = where_clause(q, false);
         args.push(model.to_string());
+        args.push(serde_json::to_string(skip).unwrap_or_default());
         let sql = format!(
             "SELECT p.project_id, COUNT(*) FROM search_photo p JOIN search_project pr ON pr.project_id = p.project_id
              WHERE ({where_sql}) AND (p.embedding_model IS NULL OR p.embedding_model != ?{})
+               AND p.photo_id NOT IN (SELECT value FROM json_each(?{}))
              GROUP BY p.project_id ORDER BY COUNT(*) DESC",
+            args.len() - 1,
             args.len()
         );
         let conn = self.conn();
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(rusqlite::params_from_iter(args.iter()), |r| {
-            Ok(UnanalyzedProject { project_id: r.get(0)?, count: r.get::<_, i64>(1)? as usize })
+            Ok(UnanalyzedProject { project_id: r.get(0)?, count: r.get::<_, i64>(1)? as usize, connected: false })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
     }

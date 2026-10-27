@@ -124,6 +124,11 @@ impl AnalysisQueue {
         self.inner.lock().unwrap().failed.get(project_id).cloned().unwrap_or_default()
     }
 
+    /// Fotos de todos los proyectos que fallaron en esta sesión.
+    pub fn all_failed(&self) -> Vec<String> {
+        self.inner.lock().unwrap().failed.values().flatten().cloned().collect()
+    }
+
     pub fn state(&self) -> AnalysisQueueState {
         let inner = self.inner.lock().unwrap();
         AnalysisQueueState {
@@ -172,6 +177,8 @@ mod tests {
         q.record_failed("a", vec![], true);
         assert!(q.failed("a").is_empty());
         assert!(q.failed("b").is_empty());
+        q.record_failed("b", vec!["f3".into()], true);
+        assert_eq!(q.all_failed(), ["f3"]);
     }
 
     #[test]

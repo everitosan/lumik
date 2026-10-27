@@ -35,7 +35,11 @@ type Row =
   | { type: 'group'; hit: SearchHit; count: number }
   | { type: 'photos'; hits: SearchHit[] };
 
-/** Agrupa por proyecto, conservando el orden (de la foto más reciente a la más antigua). */
+/**
+ * Agrupa por proyecto, conservando el orden del núcleo: de la foto más reciente
+ * a la más antigua y, al buscar por contenido, después las que se parecen, de
+ * más a menos. Cada grupo queda donde salió su primera foto.
+ */
 function groupByProject(hits: SearchHit[]): Map<string, SearchHit[]> {
   const groups = new Map<string, SearchHit[]>();
   for (const h of hits) {
@@ -72,6 +76,44 @@ function SearchCard({ hit, cache, onOpen, onAddToAlbum }: { hit: SearchHit; cach
         onClick={onOpen}
         onAddToAlbum={onAddToAlbum}
       />
+    </div>
+  );
+}
+
+/**
+ * Aviso de los resultados por contenido (spec `semantic-search`): cuántas fotos
+ * buscadas faltan por analizar y "Analizar", que pone en la cola los proyectos
+ * con el disco conectado. El avance se ve en la barra lateral.
+ */
+function UnanalyzedNotice({ projects }: { projects: SearchResult['unanalyzed'] }) {
+  const { t } = useTranslation();
+  const [requested, setRequested] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const total = projects.reduce((n, p) => n + p.count, 0);
+  const connected = projects.filter((p) => p.connected);
+  const away = total - connected.reduce((n, p) => n + p.count, 0);
+  if (total === 0) return null;
+  const analyze = async () => {
+    setError(null);
+    try {
+      for (const p of connected) await api.analyzeProject(p.project_id);
+      setRequested(true);
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 12px', padding: '8px 12px', marginBottom: '8px', borderRadius: '6px', background: 'var(--lumik-surface-container, #201f1f)', fontFamily: 'var(--lumik-font-primary, Inter)', fontSize: '13px', color: 'var(--lumik-on-surface-variant, #c2c6d7)' }}>
+      <Icon name="search" size="sm" aria-hidden="true" />
+      <span>
+        {t('search.unanalyzed.count', { count: total })}
+        {away > 0 && ` · ${t('search.unanalyzed.away', { count: away })}`}
+        {requested && ` · ${t('search.unanalyzed.requested')}`}
+        {error && ` · ${t('search.unanalyzed.error', { error })}`}
+      </span>
+      {connected.length > 0 && !requested && (
+        <Button variant="ghost" size="sm" onClick={analyze}>{t('search.unanalyzed.analyze')}</Button>
+      )}
     </div>
   );
 }
@@ -189,6 +231,8 @@ export function PhotoSearchResults({ query, result, searching, error, initialScr
           {t('search.backToProjects')}
         </Button>
       </div>
+
+      {result && <UnanalyzedNotice key={query} projects={result.unanalyzed} />}
 
       <div ref={setScrollEl} style={{ flex: 1, overflowY: 'auto', paddingRight: '8px' }}>
         {error && <div style={feedbackStyles}>{t('search.error', { error })}</div>}

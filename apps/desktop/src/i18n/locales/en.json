@@ -577,7 +577,16 @@
       "search": "Search"
     },
     "enterHint": "Press Enter to search the photos of all your projects",
-    "backToProjects": "Back to projects"
+    "backToProjects": "Back to projects",
+    "unanalyzed": {
+      "count_one": "{{count}} photo not analyzed yet can't be found by its content",
+      "count_other": "{{count}} photos not analyzed yet can't be found by their content",
+      "away_one": "{{count}} on disconnected drives",
+      "away_other": "{{count}} on disconnected drives",
+      "analyze": "Analyze",
+      "requested": "analyzing in the background; search again when it's done",
+      "error": "couldn't analyze: {{error}}"
+    }
   },
   "albums": {
     "title": "Albums",

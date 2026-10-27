@@ -577,7 +577,16 @@
       "search": "Buscar"
     },
     "enterHint": "Enter para buscar en las fotos de todos tus proyectos",
-    "backToProjects": "Volver a proyectos"
+    "backToProjects": "Volver a proyectos",
+    "unanalyzed": {
+      "count_one": "{{count}} foto sin analizar no sale por lo que muestra",
+      "count_other": "{{count}} fotos sin analizar no salen por lo que muestran",
+      "away_one": "{{count}} en discos no conectados",
+      "away_other": "{{count}} en discos no conectados",
+      "analyze": "Analizar",
+      "requested": "analizando en segundo plano; vuelve a buscar al terminar",
+      "error": "no se pudo analizar: {{error}}"
+    }
   },
   "albums": {
     "title": "Álbumes",

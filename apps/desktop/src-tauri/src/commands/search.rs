@@ -13,7 +13,9 @@ pub async fn search_photos(state: State<'_, AppState>, query: String) -> AppResu
         let is_open = move |id: &str| registry.contains(id);
         let started = std::time::Instant::now();
         let model = state.content_model.model();
-        let result = SearchPhotos { global: &state.global_db, is_open: &is_open, model: model.as_deref() }.execute(&query)?;
+        let failed = state.analysis_queue.all_failed();
+        let result = SearchPhotos { global: &state.global_db, is_open: &is_open, model: model.as_deref(), failed: &failed }
+            .execute(&query)?;
         log::debug!("search_photos: {:?} → {} en {} ms", query, result.hits.len(), started.elapsed().as_millis());
         Ok(result)
     })

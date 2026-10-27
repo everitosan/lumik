@@ -4,7 +4,8 @@
 //! Con el modelo de búsqueda por contenido (spec `semantic-search`), el texto
 //! libre trae además las fotos analizadas que se le parecen: van después de las
 //! que coinciden por palabras, de más a menos parecidas, y pasan los mismos
-//! operadores. El resultado dice cuántas fotos quedan sin analizar.
+//! operadores. El resultado dice cuántas fotos quedan sin analizar, por
+//! proyecto y si su disco está conectado.
 
 use crate::application::ports::EmbeddingModel;
 use crate::db::search_index::{SearchHit, UnanalyzedProject};
@@ -42,6 +43,8 @@ pub struct SearchPhotos<'a> {
     pub is_open: &'a dyn Fn(&str) -> bool,
     /// Modelo de búsqueda por contenido, si está instalado.
     pub model: Option<&'a dyn EmbeddingModel>,
+    /// Fotos que ya fallaron al analizarse: no cuentan como sin analizar.
+    pub failed: &'a [String],
 }
 
 impl SearchPhotos<'_> {
@@ -61,7 +64,10 @@ impl SearchPhotos<'_> {
                 .collect();
             let by_content = self.global.content_hits(&q, &candidates, CONTENT_LIMIT).map_err(|e| e.to_string())?;
             hits.extend(by_content);
-            unanalyzed = self.global.unanalyzed_photos(&q, model.id()).map_err(|e| e.to_string())?;
+            unanalyzed = self.global.unanalyzed_photos(&q, model.id(), self.failed).map_err(|e| e.to_string())?;
+            for project in &mut unanalyzed {
+                project.connected = (self.is_open)(&project.project_id);
+            }
         }
         for hit in &mut hits {
             hit.connected = (self.is_open)(&hit.project_id);
@@ -119,7 +125,7 @@ mod tests {
             global.write_project_index(&project, &[photo], &[]).unwrap();
         }
         let is_open = |id: &str| id == "open";
-        let result = SearchPhotos { global: &global, is_open: &is_open, model: None }.execute("tag:calle").unwrap();
+        let result = SearchPhotos { global: &global, is_open: &is_open, model: None, failed: &[] }.execute("tag:calle").unwrap();
         let connected: Vec<(String, bool)> = result.hits.iter().map(|h| (h.project_id.clone(), h.connected)).collect();
         assert!(connected.contains(&("open".to_string(), true)));
         assert!(connected.contains(&("away".to_string(), false)));
@@ -217,7 +223,7 @@ mod tests {
     fn content_results_come_after_word_matches_by_similarity() {
         let (dir, global) = content_index("order");
         let is_open = |_: &str| true;
-        let search = SearchPhotos { global: &global, is_open: &is_open, model: Some(&TextModel) };
+        let search = SearchPhotos { global: &global, is_open: &is_open, model: Some(&TextModel), failed: &[] };
         let result = search.execute("playa").unwrap();
         let ids: Vec<(&str, Option<f32>)> =
             result.hits.iter().map(|h| (h.photo_id.as_str(), h.similarity.map(|s| (s * 10.0).round() / 10.0))).collect();
@@ -226,7 +232,10 @@ mod tests {
             [("palabra", None), ("ambas", None), ("igual", Some(1.0)), ("cerca", Some(0.8))],
             "primero por palabras (por fecha), sin repetir, y luego por parecido; lo lejano no sale"
         );
-        assert_eq!(result.unanalyzed, [UnanalyzedProject { project_id: "p1".into(), count: 2 }]);
+        assert_eq!(result.unanalyzed, [UnanalyzedProject { project_id: "p1".into(), count: 2, connected: true }]);
+        let failed = ["palabra".to_string()];
+        let skipping = SearchPhotos { failed: &failed, ..search };
+        assert_eq!(skipping.execute("playa").unwrap().unanalyzed[0].count, 1, "las que fallaron no cuentan");
 
         // Los operadores filtran también lo que sale por contenido.
         let ids: Vec<String> = search.execute("playa estrellas>=3").unwrap().hits.into_iter().map(|h| h.photo_id).collect();
@@ -238,11 +247,11 @@ mod tests {
     fn without_model_or_free_text_there_is_no_content_search() {
         let (dir, global) = content_index("plain");
         let is_open = |_: &str| true;
-        let without = SearchPhotos { global: &global, is_open: &is_open, model: None }.execute("playa").unwrap();
+        let without = SearchPhotos { global: &global, is_open: &is_open, model: None, failed: &[] }.execute("playa").unwrap();
         assert_eq!(without.hits.len(), 2);
         assert!(without.unanalyzed.is_empty());
         let only_operators =
-            SearchPhotos { global: &global, is_open: &is_open, model: Some(&TextModel) }.execute("estrellas=5").unwrap();
+            SearchPhotos { global: &global, is_open: &is_open, model: Some(&TextModel), failed: &[] }.execute("estrellas=5").unwrap();
         assert_eq!(only_operators.hits.len(), 2, "sin texto libre no se busca por contenido");
         assert!(only_operators.unanalyzed.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
@@ -252,7 +261,7 @@ mod tests {
     fn vectors_are_reloaded_when_the_index_changes() {
         let (dir, global) = content_index("reload");
         let is_open = |_: &str| true;
-        let search = SearchPhotos { global: &global, is_open: &is_open, model: Some(&TextModel) };
+        let search = SearchPhotos { global: &global, is_open: &is_open, model: Some(&TextModel), failed: &[] };
         assert!(search.execute("algo").unwrap().hits.iter().any(|h| h.photo_id == "igual"));
         global.write_project_index(&project("p1"), &[photo("nueva", "2025-02-01 00:00:00", 0, "", Some([1.0, 0.1]))], &[]).unwrap();
         let ids: Vec<String> = search.execute("algo").unwrap().hits.into_iter().map(|h| h.photo_id).collect();
@@ -302,7 +311,7 @@ mod tests {
         let hits = global.content_hits(&q, &candidates, CONTENT_LIMIT).unwrap();
         let filter = t.elapsed();
         let t = std::time::Instant::now();
-        global.unanalyzed_photos(&q, "m1").unwrap();
+        global.unanalyzed_photos(&q, "m1", &[]).unwrap();
         let unanalyzed = t.elapsed();
         println!(
             "70 000 vectores: carga {:?}, recorrido {:?}, filtros {:?} ({} resultados), sin analizar {:?}",
