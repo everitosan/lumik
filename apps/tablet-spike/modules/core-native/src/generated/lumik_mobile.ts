@@ -6,7 +6,7 @@
 import nativeModule from "./lumik_mobile-ffi";
 import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDroppedCallback, type UniffiForeignFutureDroppedCallbackStruct, type UniffiVTableCallbackInterfaceLumikMobileCopyListener, type UniffiVTableCallbackInterfaceLumikMobileHistogramListener, type UniffiVTableCallbackInterfaceLumikMobileImportListener,
 } from "./lumik_mobile-ffi";
-import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, type UniffiReferenceHolder, type UniffiRustCallStatus, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterFloat64, FfiConverterInt32, FfiConverterObject, FfiConverterObjectWithCallbacks, FfiConverterOptional, FfiConverterUInt32, FfiConverterUInt64, FfiConverterUInt8, RustBuffer, UniffiAbstractObject, UniffiError, UniffiInternalError, UniffiResult, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiTraitInterfaceCall, uniffiTypeNameSymbol, variantOrdinalSymbol,
+import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, type UniffiReferenceHolder, type UniffiRustCallStatus, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterBool, FfiConverterFloat64, FfiConverterInt32, FfiConverterObject, FfiConverterObjectWithCallbacks, FfiConverterOptional, FfiConverterUInt32, FfiConverterUInt64, FfiConverterUInt8, RustBuffer, UniffiAbstractObject, UniffiError, UniffiInternalError, UniffiResult, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiTraitInterfaceCall, uniffiTypeNameSymbol, variantOrdinalSymbol,
 } from "@ubjs/core";
 const uniffiCaller = new UniffiRustCaller(() => ({ code: 0 }));
 
@@ -133,11 +133,46 @@ export function setStars(projectDir: string, photoId: string, stars: number): vo
 
 /**
  * Copia `src_fd` en `dst_fd` en otro hilo y cierra los dos. Vuelve de inmediato.
+ *
+ * Con `pipelined`, un hilo lee y otro escribe a la vez, con unos bloques en
+ * cola entre los dos: la tarjeta no espera a que el disco termine cada bloque
+ * y la copia se acerca a la velocidad del más lento de los dos, en lugar de
+ * quedar por debajo de ambos (leer y escribir por turnos).
  */
-export function startFdCopy(srcFd: number, dstFd: number, listener: CopyListener): void {uniffiCaller.rustCall(
+export function startFdCopy(srcFd: number, dstFd: number, pipelined: boolean, listener: CopyListener): void {uniffiCaller.rustCall(
             /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_start_fd_copy(
         FfiConverterInt32.lower(srcFd, nativeModule().rustbuffer_alloc),
         FfiConverterInt32.lower(dstFd, nativeModule().rustbuffer_alloc),
+        FfiConverterBool.lower(pipelined, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeCopyListener.lower(listener, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Diagnóstico de velocidad: lee `src_fd` completo sin escribirlo (cuánto da
+ * la tarjeta por sí sola). Vuelve de inmediato; el resultado llega a `listener`.
+ */
+export function startFdRead(srcFd: number, listener: CopyListener): void {uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_start_fd_read(
+        FfiConverterInt32.lower(srcFd, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeCopyListener.lower(listener, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Diagnóstico de velocidad: escribe `bytes` generados en memoria en `dst_fd`
+ * (cuánto da el disco por sí solo), con el mismo `sync_all` final que la copia.
+ */
+export function startFdWrite(dstFd: number, bytes: bigint, listener: CopyListener): void {uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_start_fd_write(
+        FfiConverterInt32.lower(dstFd, nativeModule().rustbuffer_alloc),
+        FfiConverterUInt64.lower(bytes, nativeModule().rustbuffer_alloc),
         FfiConverterTypeCopyListener.lower(listener, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
@@ -1615,8 +1650,14 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_set_stars() !== 23964) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_set_stars");
     }
-    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_fd_copy() !== 6413) {
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_fd_copy() !== 32202) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_fd_copy");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_fd_read() !== 60462) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_fd_read");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_fd_write() !== 4377) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_fd_write");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_histogram() !== 37103) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_histogram");

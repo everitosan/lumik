@@ -82,7 +82,9 @@ interface NativeModuleInterface {
     ubrn_uniffi_lumik_mobile_fn_func_prepare_grid(thumbs: Uint8Array, previews: Uint8Array, outDir: Uint8Array, count: number, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_reset_dir(path: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_set_stars(projectDir: Uint8Array, photoId: Uint8Array, stars: number, uniffi_out_err: UniffiRustCallStatus): void;
-    ubrn_uniffi_lumik_mobile_fn_func_start_fd_copy(srcFd: number, dstFd: number, listener: bigint, uniffi_out_err: UniffiRustCallStatus): void;
+    ubrn_uniffi_lumik_mobile_fn_func_start_fd_copy(srcFd: number, dstFd: number, pipelined: number, listener: bigint, uniffi_out_err: UniffiRustCallStatus): void;
+    ubrn_uniffi_lumik_mobile_fn_func_start_fd_read(srcFd: number, listener: bigint, uniffi_out_err: UniffiRustCallStatus): void;
+    ubrn_uniffi_lumik_mobile_fn_func_start_fd_write(dstFd: number, bytes: bigint, listener: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_start_histogram(path: Uint8Array, listener: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_start_progress_burst(count: number, intervalUs: bigint, listener: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_start_test_import(sourceDir: Uint8Array, projectDir: Uint8Array, listener: bigint, uniffi_out_err: UniffiRustCallStatus): void;
@@ -102,6 +104,8 @@ interface NativeModuleInterface {
     ubrn_uniffi_lumik_mobile_checksum_func_reset_dir(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_set_stars(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_start_fd_copy(): number;
+    ubrn_uniffi_lumik_mobile_checksum_func_start_fd_read(): number;
+    ubrn_uniffi_lumik_mobile_checksum_func_start_fd_write(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_start_histogram(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_start_progress_burst(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_start_test_import(): number;

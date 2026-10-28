@@ -10,7 +10,10 @@ import {
   resetDir,
   setStars,
   startFdCopy,
+  startFdRead,
+  startFdWrite,
   vacuumInto,
+  type CopyListener,
   type CopyResult,
 } from '@lumik/core-native';
 import { useCallback, useEffect, useState } from 'react';
@@ -22,8 +25,14 @@ import type { SafEntry } from '../modules/saf/src/LumikSaf.types';
 const MIRROR_DIR = '/data/user/0/com.lumik.tabletspike/files/mirror';
 const BINARY = 'application/octet-stream';
 const TMP_NAME = 'project.db.lumik-tmp';
-// Lo de la tarjeta va a una carpeta aparte para no mezclarlo con `_media/`.
+// Lo de la tarjeta va a una carpeta aparte para no mezclarlo con `_media/`:
+// dentro del proyecto abierto o, sin proyecto, en la carpeta elegida del disco.
 const IMPORT_DIR = '_spike_import';
+const LOOSE_IMPORT_DIR = '_lumik_spike_import';
+// Como el desktop (`discover_projects_on_device`): bajo `lumik/`, hasta 4
+// niveles, y sin bajar más al encontrar un `project.db`.
+const MAX_DEPTH = 4;
+const WRITE_TEST_BYTES = 1_000_000_000;
 const MEDIA = /\.(raf|cr2|cr3|nef|arw|dng|orf|rw2|jpe?g|heic|mov|mp4)$/i;
 
 type Project = { name: string; uri: string; files: SafEntry[] };
@@ -41,6 +50,8 @@ export default function SafScreen() {
   // Mientras algo corre, los botones se deshabilitan: sin esto se tocaban
   // varias veces porque no se veía que la acción había empezado.
   const [busy, setBusy] = useState<string | null>(null);
+  // Leer y escribir a la vez (un hilo cada uno) o por turnos, para comparar.
+  const [pipelined, setPipelined] = useState(true);
 
   const note = useCallback((text: string, error = false) => {
     const at = new Date().toTimeString().slice(0, 8);
@@ -61,28 +72,19 @@ export default function SafScreen() {
     [note],
   );
 
-  // Proyectos = carpetas de la raíz del disco que tienen `project.db`.
+  // Proyectos = carpetas con `project.db`, buscadas como el desktop.
   const scan = useCallback(
     (tree: string) =>
       run('Buscar proyectos', async () => {
         const started = Date.now();
         const root = Saf.rootDocument(tree);
+        const top = await Saf.listChildren(root);
+        const lumik = top.find((e) => e.isDirectory && e.name === 'lumik');
         const found: Project[] = [];
-        for (const dir of (await Saf.listChildren(root)).filter((e) => e.isDirectory)) {
-          let files = await Saf.listChildren(dir.uri);
-          // Una devolución interrumpida entre borrar el original y renombrar
-          // deja solo el temporal: se termina aquí.
-          const tmp = files.find((f) => f.name === TMP_NAME);
-          if (tmp && !files.some((f) => f.name === 'project.db')) {
-            Saf.rename(tmp.uri, 'project.db');
-            note(`${dir.name}: devolución interrumpida recuperada`);
-            files = await Saf.listChildren(dir.uri);
-          }
-          if (files.some((f) => f.name === 'project.db')) found.push({ name: dir.name, uri: dir.uri, files });
-        }
+        await findProjects(lumik ? lumik.uri : root, '', 0, found, note);
         found.sort((a, b) => a.name.localeCompare(b.name));
         setProjects(found);
-        note(`${found.length} proyectos en ${Date.now() - started} ms`);
+        note(`${found.length} proyectos${lumik ? ' en lumik/' : ''} en ${Date.now() - started} ms`);
       }),
     [note, run],
   );
@@ -159,16 +161,18 @@ export default function SafScreen() {
 
   const copyCard = () =>
     run('Copiar', async () => {
-      if (!card || !project) return;
-      const existing = project.files.find((f) => f.name === IMPORT_DIR && f.isDirectory);
-      const dest = existing?.uri ?? Saf.createDirectory(project.uri, IMPORT_DIR);
+      if (!card || !disk) return;
+      const parent = project ? project.uri : Saf.rootDocument(disk);
+      const name = project ? IMPORT_DIR : LOOSE_IMPORT_DIR;
+      const existing = (await Saf.listChildren(parent)).find((f) => f.name === name && f.isDirectory);
+      const dest = existing?.uri ?? Saf.createDirectory(parent, name);
       const totalBytes = sum(card.files);
       const state = { done: 0, total: card.files.length, bytes: 0, totalBytes, startedAt: Date.now() };
       setCopy({ ...state });
       for (const file of card.files) {
         const dst = Saf.createFile(dest, file.name, BINARY);
         const before = state.bytes;
-        const result = await fdCopy(Saf.openFd(file.uri, 'r'), Saf.openFd(dst, 'w'), (b) => {
+        const result = await fdCopy(Saf.openFd(file.uri, 'r'), Saf.openFd(dst, 'w'), pipelined, (b) => {
           state.bytes = before + b;
           setCopy({ ...state });
         });
@@ -177,7 +181,35 @@ export default function SafScreen() {
         setCopy({ ...state });
       }
       const secs = (Date.now() - state.startedAt) / 1000;
-      note(`Copiados ${state.done} archivos, ${gb(state.bytes)} en ${secs.toFixed(1)} s (${mbps(state.bytes, secs)})`);
+      const mode = pipelined ? 'en paralelo' : 'por turnos';
+      note(`Copiados ${state.done} archivos ${mode}, ${gb(state.bytes)} en ${secs.toFixed(1)} s (${mbps(state.bytes, secs)})`);
+    });
+
+  // Diagnóstico: la tarjeta y el disco por separado, para saber cuál limita
+  // la copia (o si el límite es usarlos a la vez por el hub).
+  const measureRead = () =>
+    run('Medir lectura', async () => {
+      if (!card) return;
+      const started = Date.now();
+      let bytes = 0;
+      for (const file of card.files) {
+        const r = await fdTask((l) => startFdRead(Saf.openFd(file.uri, 'r'), l));
+        bytes += Number(r.bytes);
+      }
+      const secs = (Date.now() - started) / 1000;
+      note(`Lectura de la tarjeta: ${gb(bytes)} en ${secs.toFixed(1)} s (${mbps(bytes, secs)})`);
+    });
+
+  const measureWrite = () =>
+    run('Medir escritura', async () => {
+      if (!disk) return;
+      const parent = project ? project.uri : Saf.rootDocument(disk);
+      const file = Saf.createFile(parent, '_lumik_prueba_escritura.bin', BINARY);
+      const started = Date.now();
+      const r = await fdTask((l) => startFdWrite(Saf.openFd(file, 'w'), BigInt(WRITE_TEST_BYTES), l));
+      const secs = (Date.now() - started) / 1000;
+      Saf.delete(file);
+      note(`Escritura en el disco: ${gb(Number(r.bytes))} en ${secs.toFixed(1)} s (${mbps(Number(r.bytes), secs)})`);
     });
 
   const secs = copy ? (Date.now() - copy.startedAt) / 1000 : 0;
@@ -186,13 +218,32 @@ export default function SafScreen() {
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       {busy && <Text style={styles.busy}>{busy}…</Text>}
       <Section title="1. Disco">
-        <Text style={styles.text}>
-          Permisos guardados: {trees.length ? trees.map((t) => decodeURIComponent(t.split('/tree/')[1] ?? t)).join(' · ') : 'ninguno'}
-        </Text>
+        {/* Cada permiso guardado se puede usar como disco sin volver al selector. */}
+        <Text style={styles.text}>Permisos guardados{trees.length ? ' (toca uno para usarlo como disco):' : ': ninguno'}</Text>
+        <View style={styles.chips}>
+          {trees.map((t) => (
+            <Pressable
+              key={t}
+              style={({ pressed }) => [styles.chip, t === disk && styles.chipOn, pressed && styles.buttonPressed]}
+              onPress={() => {
+                setProject(null);
+                setMirror(null);
+                setDisk(t);
+              }}
+              disabled={!!busy}
+            >
+              <Text style={[styles.chipText, t === disk && styles.chipTextOn]}>{treeLabel(t)}</Text>
+            </Pressable>
+          ))}
+        </View>
         <Button label={disk ? 'Elegir otra carpeta del disco' : 'Elegir la carpeta del disco'} onPress={pickDisk} disabled={!!busy} />
         {projects && (
           <View style={styles.list}>
-            <Text style={styles.warn}>Usa un proyecto de prueba: devolver reescribe su project.db.</Text>
+            <Text style={styles.warn}>
+              {projects.length
+                ? 'Si usas un proyecto real, respalda antes su project.db: devolver lo reescribe.'
+                : 'No hay proyectos aquí (se buscan como en el desktop: dentro de lumik/, hasta 4 niveles). La tarjeta se puede copiar igual.'}
+            </Text>
             {projects.map((p) => (
               <Pressable
                 key={p.uri}
@@ -217,15 +268,23 @@ export default function SafScreen() {
         </Section>
       )}
 
-      {project && (
-        <Section title="3. Tarjeta → proyecto">
+      {disk && (
+        <Section title={project ? '3. Tarjeta → proyecto' : '3. Tarjeta → disco'}>
+          <Button label="Medir escritura en el disco (1 GB)" onPress={measureWrite} disabled={!!busy} />
           <Button label={card ? 'Elegir otra carpeta de la tarjeta' : 'Elegir la carpeta de la tarjeta (DCIM)'} onPress={pickCard} disabled={!!busy} />
           {card && (
             <>
               <Text style={styles.text}>
-                {card.files.length} archivos · {gb(sum(card.files))} → {project.name}/{IMPORT_DIR}
+                {card.files.length} archivos · {gb(sum(card.files))} → {project ? `${project.name}/${IMPORT_DIR}` : LOOSE_IMPORT_DIR}
               </Text>
-              <Button label="Copiar" onPress={copyCard} disabled={!!busy} />
+              <Pressable style={styles.toggle} onPress={() => setPipelined((p) => !p)} disabled={!!busy}>
+                <View style={[styles.check, pipelined && styles.checkOn]} />
+                <Text style={styles.text}>Leer y escribir en paralelo</Text>
+              </Pressable>
+              <View style={styles.row}>
+                <Button label="Copiar" onPress={copyCard} disabled={!!busy} />
+                <Button label="Medir lectura de la tarjeta" onPress={measureRead} disabled={!!busy} />
+              </View>
             </>
           )}
           {copy && (
@@ -252,6 +311,32 @@ export default function SafScreen() {
   );
 }
 
+async function findProjects(
+  dirUri: string,
+  path: string,
+  depth: number,
+  out: Project[],
+  note: (text: string) => void,
+): Promise<void> {
+  if (depth > MAX_DEPTH) return;
+  let files = await Saf.listChildren(dirUri);
+  // Una devolución interrumpida entre borrar el original y renombrar deja
+  // solo el temporal: se termina aquí.
+  const tmp = files.find((f) => f.name === TMP_NAME);
+  if (tmp && !files.some((f) => f.name === 'project.db')) {
+    Saf.rename(tmp.uri, 'project.db');
+    note(`${path || 'raíz'}: devolución interrumpida recuperada`);
+    files = await Saf.listChildren(dirUri);
+  }
+  if (files.some((f) => f.name === 'project.db')) {
+    out.push({ name: path || 'raíz', uri: dirUri, files });
+    return;
+  }
+  for (const dir of files.filter((f) => f.isDirectory && !f.name.startsWith('.'))) {
+    await findProjects(dir.uri, path ? `${path}/${dir.name}` : dir.name, depth + 1, out, note);
+  }
+}
+
 // Fotos y videos de la tarjeta, recorriendo subcarpetas (DCIM/100_FUJI/…).
 async function listMedia(dirUri: string): Promise<SafEntry[]> {
   const out: SafEntry[] = [];
@@ -262,16 +347,24 @@ async function listMedia(dirUri: string): Promise<SafEntry[]> {
   return out;
 }
 
-function fdCopy(src: number, dst: number, onProgress: (bytes: number) => void): Promise<CopyResult> {
+function fdCopy(src: number, dst: number, pipelined: boolean, onProgress: (bytes: number) => void): Promise<CopyResult> {
+  return fdTask((l) => startFdCopy(src, dst, pipelined, l), onProgress);
+}
+
+// Una operación de Rust con `CopyListener`, como promesa.
+function fdTask(start: (listener: CopyListener) => void, onProgress?: (bytes: number) => void): Promise<CopyResult> {
   return new Promise((resolve, reject) =>
-    startFdCopy(src, dst, {
-      onProgress: (b) => onProgress(Number(b)),
+    start({
+      onProgress: (b) => onProgress?.(Number(b)),
       onDone: resolve,
       onError: (m) => reject(new Error(m)),
     }),
   );
 }
 
+// "content://…/tree/primary%3ALumikDisco" → "primary:LumikDisco"; un disco USB
+// aparece con el id de su volumen ("FB5F-B3EF:").
+const treeLabel = (tree: string) => decodeURIComponent(tree.split('/tree/')[1] ?? tree);
 const sum = (files: SafEntry[]) => files.reduce((s, f) => s + f.size, 0);
 const kb = (b: bigint | number) => `${(Number(b) / 1024).toFixed(0)} KB`;
 const gb = (b: number) => `${(b / 1e9).toFixed(2)} GB`;
@@ -306,6 +399,14 @@ const styles = StyleSheet.create({
   text: { color: '#ddd', fontSize: 15 },
   warn: { color: '#e9c349', fontSize: 14 },
   list: { gap: 6 },
+  toggle: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
+  check: { width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: '#9a9a9a' },
+  checkOn: { backgroundColor: '#e9c349', borderColor: '#e9c349' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 22, backgroundColor: '#262626' },
+  chipOn: { backgroundColor: '#e9e9e9' },
+  chipText: { color: '#ddd', fontSize: 14 },
+  chipTextOn: { color: '#131313', fontWeight: '600' },
   item: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 8, backgroundColor: '#262626' },
   itemOn: { backgroundColor: '#2563eb' },
   row: { flexDirection: 'row', gap: 12 },

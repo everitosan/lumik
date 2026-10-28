@@ -8,7 +8,7 @@ mod mirror;
 mod project;
 
 pub use histogram::{start_histogram, Histogram, HistogramListener};
-pub use mirror::{copy_fd_to_path, copy_path_to_fd, reset_dir, set_stars, start_fd_copy, vacuum_into, CopyListener, CopyResult, MirrorError};
+pub use mirror::{copy_fd_to_path, copy_path_to_fd, reset_dir, set_stars, start_fd_copy, start_fd_read, start_fd_write, vacuum_into, CopyListener, CopyResult, MirrorError};
 pub use project::{open_project, prepare_grid, PhotoInfo, ProjectError};
 
 use lumik_core::import::pipeline::{pipeline_passthrough, PipelineWorkspace, StageEvent};

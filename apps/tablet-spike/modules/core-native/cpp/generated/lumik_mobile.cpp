@@ -295,6 +295,18 @@ extern "C" {
     void uniffi_lumik_mobile_fn_func_start_fd_copy(
         int32_t src_fd, 
         int32_t dst_fd, 
+        int8_t pipelined, 
+        /*handle*/ uint64_t listener, 
+        RustCallStatus *uniffi_out_err
+    );
+    void uniffi_lumik_mobile_fn_func_start_fd_read(
+        int32_t src_fd, 
+        /*handle*/ uint64_t listener, 
+        RustCallStatus *uniffi_out_err
+    );
+    void uniffi_lumik_mobile_fn_func_start_fd_write(
+        int32_t dst_fd, 
+        uint64_t bytes, 
         /*handle*/ uint64_t listener, 
         RustCallStatus *uniffi_out_err
     );
@@ -526,6 +538,10 @@ extern "C" {
     uint16_t uniffi_lumik_mobile_checksum_func_set_stars(
     );
     uint16_t uniffi_lumik_mobile_checksum_func_start_fd_copy(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_start_fd_read(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_start_fd_write(
     );
     uint16_t uniffi_lumik_mobile_checksum_func_vacuum_into(
     );
@@ -3994,9 +4010,25 @@ NativeLumikMobile::NativeLumikMobile(
     props["ubrn_uniffi_lumik_mobile_fn_func_start_fd_copy"] = jsi::Function::createFromHostFunction(
         rt,
         jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_start_fd_copy"),
-        3,
+        4,
         [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_uniffi_lumik_mobile_fn_func_start_fd_copy(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_start_fd_read"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_start_fd_read"),
+        2,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_start_fd_read(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_start_fd_write"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_start_fd_write"),
+        3,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_start_fd_write(rt, thisVal, args, count);
         }
     );
     props["ubrn_uniffi_lumik_mobile_fn_func_vacuum_into"] = jsi::Function::createFromHostFunction(
@@ -4085,6 +4117,22 @@ NativeLumikMobile::NativeLumikMobile(
         0,
         [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_uniffi_lumik_mobile_checksum_func_start_fd_copy(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_start_fd_read"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_start_fd_read"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_start_fd_read(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_start_fd_write"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_start_fd_write"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_start_fd_write(rt, thisVal, args, count);
         }
     );
     props["ubrn_uniffi_lumik_mobile_checksum_func_vacuum_into"] = jsi::Function::createFromHostFunction(
@@ -4645,7 +4693,27 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_set_stars(jsi::Run
 }
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_start_fd_copy(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
-        uniffi_lumik_mobile_fn_func_start_fd_copy(uniffi_jsi::Bridging<int32_t>::fromJs(rt, callInvoker, args[0]), uniffi_jsi::Bridging<int32_t>::fromJs(rt, callInvoker, args[1]), uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker, args[2]), 
+        uniffi_lumik_mobile_fn_func_start_fd_copy(uniffi_jsi::Bridging<int32_t>::fromJs(rt, callInvoker, args[0]), uniffi_jsi::Bridging<int32_t>::fromJs(rt, callInvoker, args[1]), uniffi_jsi::Bridging<int8_t>::fromJs(rt, callInvoker, args[2]), uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker, args[3]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return jsi::Value::undefined();
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_start_fd_read(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        uniffi_lumik_mobile_fn_func_start_fd_read(uniffi_jsi::Bridging<int32_t>::fromJs(rt, callInvoker, args[0]), uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker, args[1]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return jsi::Value::undefined();
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_start_fd_write(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        uniffi_lumik_mobile_fn_func_start_fd_write(uniffi_jsi::Bridging<int32_t>::fromJs(rt, callInvoker, args[0]), uniffi_jsi::Bridging<uint64_t>::fromJs(rt, callInvoker, args[1]), uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker, args[2]), 
             &status
         );
         uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
@@ -4734,6 +4802,20 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_set_stars(js
 }
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_start_fd_copy(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         auto value = uniffi_lumik_mobile_checksum_func_start_fd_copy(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_start_fd_read(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_start_fd_read(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_start_fd_write(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_start_fd_write(
         );
 
         
