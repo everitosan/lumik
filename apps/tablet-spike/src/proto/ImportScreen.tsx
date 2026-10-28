@@ -1,9 +1,9 @@
-// Importar (D5, Android): pantalla completa paso a paso.
-//  1 de 3: a qué proyecto · 2 de 3: qué archivos · 3 de 3: importar.
+// Importar (D5, Android): pantalla completa paso a paso, desde un proyecto
+// (como en el desktop). 1 de 2: qué archivos · 2 de 2: importar.
 // Los archivos se eligen como en el wizard del desktop: selector del sistema
 // con selección múltiple, y una lista a la que se agregan y de la que se quitan.
-import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, BackHandler, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import Saf from '../../modules/saf/src/LumikSafModule';
 import type { SafEntry } from '../../modules/saf/src/LumikSaf.types';
@@ -11,10 +11,11 @@ import { importCard, type ImportProgress, type ImportReport, isImportable } from
 import { type DiskProject, ProjectSession } from './session';
 
 type Props = {
-  projects: DiskProject[];
+  project: DiskProject;
+  /** Nombre del proyecto para mostrar. */
+  title: string;
+  /** Volver al proyecto (cancelando, o al terminar para cullar lo nuevo). */
   onClose: () => void;
-  /** Al terminar: abrir el proyecto para cullar. */
-  onOpenProject: (project: DiskProject) => void;
 };
 
 const PHASES: Record<string, string> = {
@@ -26,8 +27,7 @@ const PHASES: Record<string, string> = {
   previews: 'Creando vistas previas',
 };
 
-export function ImportScreen({ projects, onClose, onOpenProject }: Props) {
-  const [project, setProject] = useState<DiskProject | null>(null);
+export function ImportScreen({ project, title, onClose }: Props) {
   const [card, setCard] = useState<SafEntry[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [ignored, setIgnored] = useState(0);
@@ -37,8 +37,19 @@ export function ImportScreen({ projects, onClose, onOpenProject }: Props) {
   const [busy, setBusy] = useState(false);
   const [startedAt, setStartedAt] = useState(0);
 
-  const step = !project ? 1 : !confirmed ? 2 : 3;
-  const running = busy && step === 3;
+  const step = !confirmed ? 1 : 2;
+  const running = busy && step === 2;
+
+  // Atrás: del resumen a la lista; de la lista, al proyecto. Mientras se importa, nada.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (running) return true;
+      if (confirmed && !report) setConfirmed(false);
+      else onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [running, confirmed, report, onClose]);
 
   const pickFiles = async () => {
     setError(null);
@@ -92,8 +103,8 @@ export function ImportScreen({ projects, onClose, onOpenProject }: Props) {
         <Pressable style={styles.back} onPress={onClose} disabled={running} hitSlop={8}>
           <Text style={styles.backText}>←</Text>
         </Pressable>
-        <Text style={styles.title}>Importar</Text>
-        <Text style={styles.step}>{report ? 'Listo' : `${step} de 3`}</Text>
+        <Text style={styles.title}>Importar a {title}</Text>
+        <Text style={styles.step}>{report ? 'Listo' : `${step} de 2`}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -101,18 +112,7 @@ export function ImportScreen({ projects, onClose, onOpenProject }: Props) {
 
         {step === 1 && (
           <>
-            <Text style={styles.h2}>¿A qué proyecto?</Text>
-            {projects.map((p) => (
-              <Pressable key={p.uri} style={({ pressed }) => [styles.item, pressed && styles.pressed]} onPress={() => setProject(p)}>
-                <Text style={styles.text}>{p.name}</Text>
-              </Pressable>
-            ))}
-          </>
-        )}
-
-        {step === 2 && (
-          <>
-            <Text style={styles.h2}>Origen → {project!.name}</Text>
+            <Text style={styles.h2}>Origen</Text>
             <Text style={styles.muted}>
               Elige las fotos de la tarjeta. En el explorador puedes marcar varias, o usar "Seleccionar todo" en una carpeta.
             </Text>
@@ -151,10 +151,10 @@ export function ImportScreen({ projects, onClose, onOpenProject }: Props) {
           </>
         )}
 
-        {step === 3 && !report && (
+        {step === 2 && !report && (
           <>
             <Text style={styles.h2}>
-              {card.length} archivos · {(bytes / 1e9).toFixed(2)} GB → {project!.name}
+              {card.length} archivos · {(bytes / 1e9).toFixed(2)} GB → {title}
             </Text>
             <Text style={styles.muted}>
               {raws} RAW · {card.length - raws} JPG. Los RAW+JPG de la misma toma se unen en una foto.
@@ -184,7 +184,7 @@ export function ImportScreen({ projects, onClose, onOpenProject }: Props) {
                 {e}
               </Text>
             ))}
-            <Button label="Abrir el proyecto" onPress={() => onOpenProject(project!)} />
+            <Button label="Ir al proyecto" onPress={onClose} primary />
           </>
         )}
       </ScrollView>

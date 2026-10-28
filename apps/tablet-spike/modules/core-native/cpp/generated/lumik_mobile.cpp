@@ -530,7 +530,7 @@ extern "C" {
         RustBuffer names, 
         RustCallStatus *uniffi_out_err
     );
-    RustBuffer uniffi_lumik_mobile_fn_func_project_cover(
+    RustBuffer uniffi_lumik_mobile_fn_func_project_summary(
         RustBuffer db_path, 
         RustCallStatus *uniffi_out_err
     );
@@ -602,6 +602,14 @@ extern "C" {
     void uniffi_lumik_mobile_fn_func_write_text(
         RustBuffer path, 
         RustBuffer text, 
+        RustCallStatus *uniffi_out_err
+    );
+    RustBuffer uniffi_lumik_mobile_fn_func_create_project_db(
+        RustBuffer work_dir, 
+        RustBuffer name, 
+        RustBuffer description, 
+        RustBuffer session_date, 
+        RustBuffer creator_id, 
         RustCallStatus *uniffi_out_err
     );
     RustBuffer uniffi_lumik_mobile_fn_func_open_project(
@@ -842,7 +850,7 @@ extern "C" {
     );
     uint16_t uniffi_lumik_mobile_checksum_func_missing_files(
     );
-    uint16_t uniffi_lumik_mobile_checksum_func_project_cover(
+    uint16_t uniffi_lumik_mobile_checksum_func_project_summary(
     );
     uint16_t uniffi_lumik_mobile_checksum_func_read_fd_string(
     );
@@ -869,6 +877,8 @@ extern "C" {
     uint16_t uniffi_lumik_mobile_checksum_func_write_fd_string(
     );
     uint16_t uniffi_lumik_mobile_checksum_func_write_text(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_create_project_db(
     );
     uint16_t uniffi_lumik_mobile_checksum_func_open_project(
     );
@@ -7073,12 +7083,12 @@ NativeLumikMobile::NativeLumikMobile(
             return this->cpp_uniffi_lumik_mobile_fn_func_missing_files(rt, thisVal, args, count);
         }
     );
-    props["ubrn_uniffi_lumik_mobile_fn_func_project_cover"] = jsi::Function::createFromHostFunction(
+    props["ubrn_uniffi_lumik_mobile_fn_func_project_summary"] = jsi::Function::createFromHostFunction(
         rt,
-        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_project_cover"),
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_project_summary"),
         1,
         [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
-            return this->cpp_uniffi_lumik_mobile_fn_func_project_cover(rt, thisVal, args, count);
+            return this->cpp_uniffi_lumik_mobile_fn_func_project_summary(rt, thisVal, args, count);
         }
     );
     props["ubrn_uniffi_lumik_mobile_fn_func_read_fd_string"] = jsi::Function::createFromHostFunction(
@@ -7183,6 +7193,14 @@ NativeLumikMobile::NativeLumikMobile(
         2,
         [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_uniffi_lumik_mobile_fn_func_write_text(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_create_project_db"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_create_project_db"),
+        5,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_create_project_db(rt, thisVal, args, count);
         }
     );
     props["ubrn_uniffi_lumik_mobile_fn_func_open_project"] = jsi::Function::createFromHostFunction(
@@ -7321,12 +7339,12 @@ NativeLumikMobile::NativeLumikMobile(
             return this->cpp_uniffi_lumik_mobile_checksum_func_missing_files(rt, thisVal, args, count);
         }
     );
-    props["ubrn_uniffi_lumik_mobile_checksum_func_project_cover"] = jsi::Function::createFromHostFunction(
+    props["ubrn_uniffi_lumik_mobile_checksum_func_project_summary"] = jsi::Function::createFromHostFunction(
         rt,
-        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_project_cover"),
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_project_summary"),
         0,
         [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
-            return this->cpp_uniffi_lumik_mobile_checksum_func_project_cover(rt, thisVal, args, count);
+            return this->cpp_uniffi_lumik_mobile_checksum_func_project_summary(rt, thisVal, args, count);
         }
     );
     props["ubrn_uniffi_lumik_mobile_checksum_func_read_fd_string"] = jsi::Function::createFromHostFunction(
@@ -7431,6 +7449,14 @@ NativeLumikMobile::NativeLumikMobile(
         0,
         [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_uniffi_lumik_mobile_checksum_func_write_text(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_create_project_db"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_create_project_db"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_create_project_db(rt, thisVal, args, count);
         }
     );
     props["ubrn_uniffi_lumik_mobile_checksum_func_open_project"] = jsi::Function::createFromHostFunction(
@@ -8454,9 +8480,9 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_missing_files(jsi:
         
         return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
 }
-jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_project_cover(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_project_summary(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
-        auto value = uniffi_lumik_mobile_fn_func_project_cover(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), 
+        auto value = uniffi_lumik_mobile_fn_func_project_summary(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), 
             &status
         );
         uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
@@ -8594,6 +8620,16 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_write_text(jsi::Ru
         
         return jsi::Value::undefined();
 }
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_create_project_db(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        auto value = uniffi_lumik_mobile_fn_func_create_project_db(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[2]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[3]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[4]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
+}
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_open_project(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
         auto value = uniffi_lumik_mobile_fn_func_open_project(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), 
@@ -8719,8 +8755,8 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_missing_file
         
         return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }
-jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_project_cover(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
-        auto value = uniffi_lumik_mobile_checksum_func_project_cover(
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_project_summary(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_project_summary(
         );
 
         
@@ -8812,6 +8848,13 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_write_fd_str
 }
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_write_text(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         auto value = uniffi_lumik_mobile_checksum_func_write_text(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_create_project_db(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_create_project_db(
         );
 
         

@@ -1,11 +1,14 @@
-// Experimento 3.1 del spike (Android, D5): inicio → importar la tarjeta a un
-// proyecto del disco → culling, con cada cambio guardado en el disco por SAF.
+// Experimento 3.1 del spike (Android, D5): inicio → proyecto del disco →
+// culling, e importar desde dentro del proyecto (como en el desktop), con cada
+// cambio guardado en el disco por SAF. El botón "atrás" de Android regresa:
+// del import al proyecto y del proyecto al inicio.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import Saf from '../../modules/saf/src/LumikSafModule';
 import { Culling, type CullingBackend, type CullItem } from '../CullingScreen';
-import { fetchCovers } from './covers';
+import { type CardInfo, fetchCovers } from './covers';
+import { createProject, type ProjectForm } from './createProject';
 import { HomeScreen } from './HomeScreen';
 import { readPrefs, savePrefs } from './prefs';
 import { ImportScreen } from './ImportScreen';
@@ -18,7 +21,7 @@ type Log = { at: string; text: string; error?: boolean };
 export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (clean: boolean) => void }) {
   const [trees, setTrees] = useState<string[]>(() => diskTrees(Saf.persistedTrees()));
   const [disk, setDiskState] = useState<string | null>(() => defaultDisk(diskTrees(Saf.persistedTrees())));
-  const [covers, setCovers] = useState<Set<string>>(new Set());
+  const [cards, setCards] = useState<Map<string, CardInfo>>(new Map());
   // El disco elegido se recuerda para la próxima vez.
   const setDisk = useCallback((tree: string | null) => {
     setDiskState(tree);
@@ -28,7 +31,8 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
   const [session, setSession] = useState<ProjectSession | null>(null);
   const [opening, setOpening] = useState<{ name: string; done: number; total: number } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [importing, setImporting] = useState(false);
+  // Proyecto al que se está importando.
+  const [importing, setImporting] = useState<DiskProject | null>(null);
   const [version, setVersion] = useState(0);
   const [log, setLog] = useState<Log[]>([]);
   const sessionRef = useRef<ProjectSession | null>(null);
@@ -59,8 +63,8 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     run('Buscando proyectos', async () => {
       const found = await discoverProjects(disk, note);
       setProjects(found);
-      // Las portadas llegan después, sin frenar la lista.
-      fetchCovers(found, (p) => setCovers((c) => new Set(c).add(p.uri)));
+      // Nombres y portadas llegan después, sin frenar la lista.
+      fetchCovers(found, (p, info) => setCards((c) => new Map(c).set(p.uri, info)));
     });
   }, [disk, note, run]);
 
@@ -80,11 +84,14 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
       setDisk(tree);
     });
 
+  const titleOf = (p: DiskProject) => cards.get(p.uri)?.title ?? p.name.split('/').pop() ?? p.name;
+
   const open = (project: DiskProject) =>
     run('Abriendo proyecto', async () => {
-      setOpening({ name: project.name, done: 0, total: 0 });
+      const name = titleOf(project);
+      setOpening({ name, done: 0, total: 0 });
       const s = await ProjectSession.open(project, () => setVersion((v) => v + 1), note);
-      await s.fetchThumbs((done, total) => setOpening({ name: project.name, done, total }));
+      await s.fetchThumbs((done, total) => setOpening({ name, done, total }));
       sessionRef.current = s;
       setSession(s);
       setOpening(null);
@@ -114,6 +121,28 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     open(project);
   };
 
+  // Importar desde el proyecto: se cierra la sesión (el import toma el candado
+  // por su cuenta) y al terminar se vuelve a abrir, con las fotos nuevas.
+  const startImport = () => {
+    if (!session) return;
+    const project = session.project;
+    close();
+    setImporting(project);
+  };
+
+  // Atrás (gesto o botón de Android): del proyecto al inicio. El import
+  // maneja el suyo; en el inicio, el sistema hace lo de siempre.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (sessionRef.current) {
+        close();
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  });
+
   // Lo que ve el culling: la vista previa si ya está en el caché, si no la miniatura.
   const photos: CullItem[] = useMemo(
     () =>
@@ -140,14 +169,15 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     [session],
   );
 
-  if (importing && projects) {
+  if (importing) {
+    const project = importing;
     return (
       <ImportScreen
-        projects={projects}
-        onClose={() => setImporting(false)}
-        onOpenProject={(p) => {
-          setImporting(false);
-          open(p);
+        project={project}
+        title={titleOf(project)}
+        onClose={() => {
+          setImporting(null);
+          open(project);
         }}
       />
     );
@@ -167,6 +197,23 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     );
   }
 
+  // Proyecto sin fotos (p. ej. recién creado): lo único que hay que hacer es importar.
+  if (session && photos.length === 0) {
+    const project = session.project;
+    return (
+      <View style={[styles.root, styles.center]}>
+        <Text style={styles.text}>{titleOf(project)}</Text>
+        <Text style={styles.muted}>Todavía no tiene fotos.</Text>
+        <Pressable style={({ pressed }) => [styles.importButton, pressed && { opacity: 0.7 }]} onPress={startImport}>
+          <Text style={styles.importButtonText}>Importar fotos</Text>
+        </Pressable>
+        <Pressable onPress={close} hitSlop={8}>
+          <Text style={styles.muted}>Volver a los proyectos</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   if (session && photos.length > 0) {
     const lock = session.readOnly;
     return (
@@ -176,6 +223,7 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
         onCleanChange={onCleanChange}
         backend={backend}
         onBack={close}
+        onImport={lock ? undefined : startImport}
         notice={
           lock
             ? {
@@ -203,8 +251,16 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
         onPickDisk={pickDisk}
         onSelectDisk={setDisk}
         onOpen={open}
-        onImport={() => setImporting(true)}
-        covers={covers}
+        cards={cards}
+        onCreate={async (form: ProjectForm) => {
+          if (!disk) return;
+          const dirUri = await createProject(disk, form);
+          note(`Proyecto creado: ${form.name}`);
+          const found = await discoverProjects(disk, note);
+          setProjects(found);
+          const created = found.find((p) => p.uri === dirUri);
+          if (created) open(created);
+        }}
       />
       {log.length > 0 && (
         <View style={styles.log} pointerEvents="none">
@@ -243,6 +299,8 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center', gap: 12 },
   text: { color: '#fff', fontSize: 18 },
   muted: { color: '#9a9a9a', fontSize: 15, fontVariant: ['tabular-nums'] },
+  importButton: { minHeight: 56, paddingHorizontal: 28, justifyContent: 'center', borderRadius: 16, backgroundColor: '#3b5bdb', marginTop: 8 },
+  importButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   log: { position: 'absolute', left: 112, bottom: 16, right: 180, gap: 2 },
   logText: { color: '#777', fontSize: 12 },
   logError: { color: '#f87171' },

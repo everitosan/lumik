@@ -91,11 +91,13 @@ type CullingProps = {
   backend?: CullingBackend;
   /** Volver al inicio (prototipo); sin él no hay botón. */
   onBack?: () => void;
+  /** Importar al proyecto (como en el desktop, desde dentro); sin él no hay botón. */
+  onImport?: () => void;
   /** Aviso fijo arriba (p. ej. proyecto en solo lectura) con una acción. */
   notice?: { text: string; detail?: string; warn?: boolean; actionLabel: string; onAction: () => void };
 };
 
-export function Culling({ photos, onCleanChange, backend, onBack, notice }: CullingProps) {
+export function Culling({ photos, onCleanChange, backend, onBack, onImport, notice }: CullingProps) {
   const count = photos.length;
   const [index, setIndex] = useState(0);
   const [marks, setMarks] = useState<Marks>(() => ({
@@ -256,7 +258,11 @@ export function Culling({ photos, onCleanChange, backend, onBack, notice }: Cull
 
         <View style={styles.topBar} pointerEvents="box-none">
           <View style={styles.topLeft}>
-            {onBack && <RoundToggle label="‹" on={false} onPress={onBack} />}
+            {onBack && (
+              <Pressable style={({ pressed }) => [styles.navPill, pressed && styles.navPillPressed]} onPress={onBack} hitSlop={8}>
+                <Text style={styles.navPillText}>‹ Proyectos</Text>
+              </Pressable>
+            )}
             <Text style={styles.chip}>
               {index + 1} / {count}
             </Text>
@@ -269,6 +275,11 @@ export function Culling({ photos, onCleanChange, backend, onBack, notice }: Cull
             </Pressable>
           </View>
           <View style={styles.topRight}>
+            {onImport && (
+              <Pressable style={({ pressed }) => [styles.navPill, pressed && styles.navPillPressed]} onPress={onImport} hitSlop={8}>
+                <Text style={styles.navPillText}>Importar</Text>
+              </Pressable>
+            )}
             <RoundToggle label="?" on={guideStep !== null} onPress={() => setGuideStep(guideStep === null ? 0 : null)} />
             <RoundToggle label="i" on={showInfo} onPress={() => setShowInfo((v) => !v)} italic />
           </View>
@@ -455,6 +466,9 @@ const styles = StyleSheet.create({
   topRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   chip: { color: '#ddd', fontSize: 15, backgroundColor: 'rgba(19,19,19,0.7)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   badge: { color: '#131313', backgroundColor: '#e9c349', fontWeight: '700', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  navPill: { minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 22, backgroundColor: 'rgba(19,19,19,0.8)' },
+  navPillPressed: { opacity: 0.7 },
+  navPillText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(19,19,19,0.7)' },
   roundOn: { backgroundColor: '#e9e9e9' },
   roundText: { color: '#fff', fontSize: 20, fontWeight: '700' },

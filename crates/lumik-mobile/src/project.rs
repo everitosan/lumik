@@ -104,3 +104,63 @@ pub fn prepare_grid(thumbs: Vec<String>, previews: Vec<String>, out_dir: String,
     }
     Ok(())
 }
+
+#[derive(uniffi::Record)]
+pub struct NewProject {
+    pub id: String,
+    /// Carpeta del proyecto relativa a la raíz del disco:
+    /// `lumik/{año}/{mes}/{día}_{nombre}`, como el desktop.
+    pub dir: String,
+}
+
+/// Crea el `project.db` de un proyecto nuevo en `work_dir` (sandbox), como
+/// `create_project` del desktop: id nuevo, carpeta por la fecha de la sesión
+/// (o la de hoy) y la entrega y el análisis de fábrica (la tablet aún no
+/// tiene ajustes globales). La app sube la base y crea las carpetas en el disco.
+#[uniffi::export]
+pub fn create_project_db(
+    work_dir: String,
+    name: String,
+    description: Option<String>,
+    session_date: Option<String>,
+    creator_id: String,
+) -> Result<NewProject, ProjectError> {
+    use lumik_core::domain::project::ProjectFolder;
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err(ProjectError::Files("el proyecto necesita un nombre".into()));
+    }
+    let session_date = session_date.filter(|d| ProjectFolder::date_parts(d).is_some());
+    let (year, month, day) = session_date
+        .as_deref()
+        .and_then(ProjectFolder::date_parts)
+        .unwrap_or_else(|| ProjectFolder::date_parts(&chrono::Utc::now().format("%Y-%m-%d").to_string()).expect("hoy es una fecha"));
+    let dir = ProjectFolder::path(Path::new(""), &year, &month, &day, &name).to_string_lossy().replace('\\', "/");
+
+    let work = PathBuf::from(&work_dir);
+    std::fs::create_dir_all(&work).map_err(|e| ProjectError::Files(e.to_string()))?;
+    let _ = std::fs::remove_file(work.join("project.db"));
+    let id = uuid::Uuid::new_v4().to_string();
+    let db = ProjectDatabase::create(work.join("project.db"), &id, &name, &creator_id, description.as_deref(), session_date.as_deref(), "", work.clone())
+        .map_err(|e| ProjectError::Open(e.to_string()))?;
+    let defaults = lumik_core::db::models::AppSettings::default();
+    db.set_delivery_mode(defaults.default_delivery_mode).map_err(|e| ProjectError::Open(e.to_string()))?;
+    db.set_analysis_mode(defaults.default_analysis_mode).map_err(|e| ProjectError::Open(e.to_string()))?;
+    Ok(NewProject { id, dir })
+}
+
+#[cfg(test)]
+mod create_tests {
+    use super::*;
+
+    #[test]
+    fn creates_a_project_like_the_desktop() {
+        let work = tempfile::tempdir().unwrap();
+        let p = create_project_db(work.path().display().to_string(), " Boda Ana ".into(), None, Some("2026-10-24".into()), "tablet".into()).unwrap();
+        assert_eq!(p.dir, "lumik/2026/10/24_Boda Ana");
+        let photos = open_project(work.path().display().to_string()).unwrap();
+        assert!(photos.is_empty());
+        let db = ProjectDatabase::open(work.path().join("project.db"), "", work.path().to_path_buf()).unwrap();
+        assert_eq!(db.get_project().unwrap().unwrap().name, "Boda Ana");
+    }
+}

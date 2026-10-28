@@ -84,6 +84,33 @@ export function copyPathToFd(path: string, dstFd: number): CopyResult /*throws*/
     }
 
 /**
+ * Crea el `project.db` de un proyecto nuevo en `work_dir` (sandbox), como
+ * `create_project` del desktop: id nuevo, carpeta por la fecha de la sesión
+ * (o la de hoy) y la entrega y el análisis de fábrica (la tablet aún no
+ * tiene ajustes globales). La app sube la base y crea las carpetas en el disco.
+ */
+export function createProjectDb(workDir: string, name: string, description: string | undefined, sessionDate: string | undefined, creatorId: string): NewProject /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeProjectError.lift.bind(FfiConverterTypeProjectError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_create_project_db(
+        FfiConverterString.lower(workDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(name, nativeModule().rustbuffer_alloc),
+        FfiConverterOptionalString.lower(description, nativeModule().rustbuffer_alloc),
+        FfiConverterOptionalString.lower(sessionDate, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(creatorId, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterTypeNewProject.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * Aprueba o quita la aprobación con el `CullPhoto` del desktop: mueve los
  * archivos en el disco (por `disk`) y guarda en la copia de trabajo.
  */
@@ -259,21 +286,20 @@ export function prepareGrid(thumbs: Array<string>, previews: Array<string>, outD
     }
 
 /**
- * Portada elegida en el desktop (`.thumbs/{id}.jpg`, relativa al proyecto), de
- * una copia de su `project.db`. Se lee sin migrar: una base vieja sin la
- * columna da `None`.
+ * Nombre y portada de un proyecto, de una copia de su `project.db`. Se lee
+ * sin migrar: en una base vieja sin la columna de portada, `cover` es `None`.
  */
-export function projectCover(dbPath: string): string | undefined {
+export function projectSummary(dbPath: string): ProjectSummary {
     const __rb: Uint8Array = uniffiCaller.rustCall(
             /*caller:*/ (callStatus) => {
-                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_project_cover(
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_project_summary(
         FfiConverterString.lower(dbPath, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
     );
     try {
-        return FfiConverterOptionalString.lift(__rb);
+        return FfiConverterTypeProjectSummary.lift(__rb);
     } finally {
         nativeModule().rustbuffer_free(__rb);
     }
@@ -1256,6 +1282,53 @@ const FfiConverterTypeLockView = (() => {
     return new FFIConverter();
 })();
 
+export type NewProject = {
+    id: string,
+    /**
+     * Carpeta del proyecto relativa a la raíz del disco:
+     * `lumik/{año}/{mes}/{día}_{nombre}`, como el desktop.
+     */
+    dir: string
+}
+
+/**
+ * Generated factory for {@link NewProject} record objects.
+ */
+export const NewProject = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<NewProject, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<NewProject>,
+    });
+})();
+
+const FfiConverterTypeNewProject = (() => {
+    type TypeName = NewProject;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                id: FfiConverterString.readFromCursor(c), 
+                dir: FfiConverterString.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.id, c);
+            FfiConverterString.writeIntoCursor(value.dir, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.id) +
+             FfiConverterString.allocationSize(value.dir);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
 /**
  * Una foto con lo que el visor necesita: rutas, rotación y los datos de
  * captura que el desktop muestra en la barra lateral.
@@ -1380,6 +1453,52 @@ const FfiConverterTypePhotoInfo = (() => {
              FfiConverterOptionalInt32.allocationSize(value.width) +
              FfiConverterOptionalInt32.allocationSize(value.height) +
              FfiConverterInt32.allocationSize(value.stars);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
+export type ProjectSummary = {
+    name?: string,
+    /**
+     * Portada elegida en el desktop (`.thumbs/{id}.jpg`, relativa al proyecto).
+     */
+    cover?: string
+}
+
+/**
+ * Generated factory for {@link ProjectSummary} record objects.
+ */
+export const ProjectSummary = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<ProjectSummary, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<ProjectSummary>,
+    });
+})();
+
+const FfiConverterTypeProjectSummary = (() => {
+    type TypeName = ProjectSummary;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                name: FfiConverterOptionalString.readFromCursor(c), 
+                cover: FfiConverterOptionalString.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterOptionalString.writeIntoCursor(value.name, c);
+            FfiConverterOptionalString.writeIntoCursor(value.cover, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterOptionalString.allocationSize(value.name) +
+             FfiConverterOptionalString.allocationSize(value.cover);
             
         }
     };
@@ -3383,6 +3502,9 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_copy_path_to_fd() !== 18206) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_copy_path_to_fd");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_create_project_db() !== 42030) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_create_project_db");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_cull_photo() !== 37748) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_cull_photo");
     }
@@ -3410,8 +3532,8 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_prepare_grid() !== 8517) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_prepare_grid");
     }
-    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_project_cover() !== 61460) {
-        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_project_cover");
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_project_summary() !== 15426) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_project_summary");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_rate_photo() !== 8190) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_rate_photo");
@@ -3556,7 +3678,9 @@ export default Object.freeze({
     FfiConverterTypeInstallInfo,
     FfiConverterTypeLockView,
     FfiConverterTypeMirrorError,
+    FfiConverterTypeNewProject,
     FfiConverterTypePhotoInfo,
     FfiConverterTypeProjectError,
+    FfiConverterTypeProjectSummary,
   }
 });
