@@ -6,9 +6,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import BridgeScreen from './src/BridgeScreen';
 import CullingScreen from './src/CullingScreen';
+import SafScreen from './src/SafScreen';
 
 const TABS = [
   { key: 'culling', label: '2.4 Grid y visor' },
+  { key: 'saf', label: '2.5 Disco (SAF)' },
   { key: 'bridge', label: '2.1 Puente' },
 ] as const;
 
@@ -30,7 +32,9 @@ export default function App() {
           ))}
         </View>
       )}
-      {tab === 'culling' ? <CullingScreen onCleanChange={setClean} /> : <BridgeScreen />}
+      {tab === 'culling' && <CullingScreen onCleanChange={setClean} />}
+      {tab === 'saf' && <SafScreen />}
+      {tab === 'bridge' && <BridgeScreen />}
       <StatusBar style="light" hidden={tab === 'culling' && clean} />
     </GestureHandlerRootView>
   );

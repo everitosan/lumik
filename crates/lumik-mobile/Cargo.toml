@@ -18,6 +18,8 @@ log = "0.4"
 # Histograma de la vista previa (mismo decodificador que el núcleo con `embeddings`).
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 thiserror = "1"
+# `VACUUM INTO` sobre la copia de trabajo, sin las migraciones de `ProjectDatabase::open`.
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 [dev-dependencies]
 tempfile = "3"

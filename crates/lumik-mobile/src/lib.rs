@@ -1,12 +1,14 @@
 //! Puente de `lumik-core` hacia la app de tablet (React Native) con uniffi.
 //! Spike: solo lo necesario para los experimentos 2.1 (import de prueba con
-//! progreso por callback desde un hilo de Rust) y 2.4 (proyecto real con sus
-//! datos de captura e histograma).
+//! progreso por callback desde un hilo de Rust), 2.4 (proyecto real con sus
+//! datos de captura e histograma) y 2.5 (copias por fd y `project.db` espejado).
 
 mod histogram;
+mod mirror;
 mod project;
 
 pub use histogram::{start_histogram, Histogram, HistogramListener};
+pub use mirror::{copy_fd_to_path, copy_path_to_fd, reset_dir, set_stars, start_fd_copy, vacuum_into, CopyListener, CopyResult, MirrorError};
 pub use project::{open_project, prepare_grid, PhotoInfo, ProjectError};
 
 use lumik_core::import::pipeline::{pipeline_passthrough, PipelineWorkspace, StageEvent};
