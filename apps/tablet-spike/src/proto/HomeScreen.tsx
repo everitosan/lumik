@@ -1,10 +1,12 @@
-// Inicio del prototipo (D5, Android): rail de navegación con Proyectos y
-// Discos (como "Almacenamiento" en la barra del desktop). Importar no va aquí:
+// Inicio del prototipo (D5, Android): rail de navegación con Proyectos (los de
+// todos los discos conectados, como el dashboard del desktop) y Discos (como
+// "Almacenamiento" en la barra del desktop). Importar no va aquí:
 // como en el desktop, se importa desde dentro de un proyecto.
 import { Image } from 'expo-image';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import type { SafVolume } from '../../modules/saf/src/LumikSafModule';
 import { type CardInfo, coverPath } from './covers';
 import { type ProjectForm, today } from './createProject';
 import type { DiskProject } from './session';
@@ -13,11 +15,19 @@ type Section = 'projects' | 'disks';
 
 type Props = {
   trees: string[];
-  disk: string | null;
   projects: DiskProject[] | null;
   busy: string | null;
+  /** Nombre del disco de un permiso. */
+  labelOf: (tree: string) => string;
+  /** Discos conectados sin acceso: se ofrece darlo en un toque. */
+  pendingVolumes: SafVolume[];
+  onGrant: (uuid: string) => void;
+  /** Discos expulsados desde la app, que ya se pueden desconectar. */
+  ejected: string[];
+  onEject: (tree: string) => void;
+  onUnEject: (tree: string) => void;
+  onStorageSettings: () => void;
   onPickDisk: () => void;
-  onSelectDisk: (tree: string) => void;
   onOpen: (project: DiskProject) => void;
   /** Nombre y portada de cada proyecto (por `uri`), cuando ya llegaron. */
   cards: Map<string, CardInfo>;
@@ -35,7 +45,8 @@ const RAIL: { key: Section | 'backup' | 'settings'; label: string; glyph: string
 // "content://…/tree/FB5F-B3EF%3A" → "FB5F-B3EF:"
 export const treeLabel = (tree: string) => decodeURIComponent(tree.split('/tree/')[1] ?? tree);
 
-export function HomeScreen({ trees, disk, projects, busy, onPickDisk, onSelectDisk, onOpen, cards, onCreate }: Props) {
+export function HomeScreen(props: Props) {
+  const { trees, projects, busy, labelOf, pendingVolumes, onGrant, onPickDisk, onOpen, cards, onCreate } = props;
   const [section, setSection] = useState<Section>('projects');
   const [creating, setCreating] = useState(false);
 
@@ -62,9 +73,18 @@ export function HomeScreen({ trees, disk, projects, busy, onPickDisk, onSelectDi
       </View>
 
       <View style={styles.main}>
+        {pendingVolumes.map((v) => (
+          <View key={v.uuid} style={styles.banner}>
+            <Text style={styles.bannerText}>⛁ {v.label} está conectado y Lumik aún no tiene acceso.</Text>
+            <Pressable style={({ pressed }) => [styles.bannerButton, pressed && styles.pressed]} onPress={() => onGrant(v.uuid)}>
+              <Text style={styles.bannerButtonText}>Dar acceso</Text>
+            </Pressable>
+          </View>
+        ))}
         {section === 'projects' ? (
           <Projects
-            disk={disk}
+            trees={trees}
+            labelOf={labelOf}
             projects={projects}
             busy={busy}
             cards={cards}
@@ -75,13 +95,14 @@ export function HomeScreen({ trees, disk, projects, busy, onPickDisk, onSelectDi
         ) : (
           <Disks
             trees={trees}
-            disk={disk}
+            projects={projects}
             busy={busy}
+            labelOf={labelOf}
+            ejected={props.ejected}
+            onEject={props.onEject}
+            onUnEject={props.onUnEject}
+            onStorageSettings={props.onStorageSettings}
             onPickDisk={onPickDisk}
-            onSelect={(t) => {
-              onSelectDisk(t);
-              setSection('projects');
-            }}
           />
         )}
         {creating && <NewProjectSheet trees={trees} onClose={() => setCreating(false)} onCreate={onCreate} />}
@@ -91,7 +112,8 @@ export function HomeScreen({ trees, disk, projects, busy, onPickDisk, onSelectDi
 }
 
 function Projects({
-  disk,
+  trees,
+  labelOf,
   projects,
   busy,
   cards,
@@ -99,7 +121,8 @@ function Projects({
   onNew,
   onChooseDisk,
 }: {
-  disk: string | null;
+  trees: string[];
+  labelOf: (tree: string) => string;
   projects: DiskProject[] | null;
   busy: string | null;
   cards: Map<string, CardInfo>;
@@ -107,9 +130,18 @@ function Projects({
   onNew: () => void;
   onChooseDisk: () => void;
 }) {
+  // Como el desktop: si el mismo proyecto (`project.id`) está en dos discos, se lista uno.
+  const seen = new Set<string>();
+  const unique = (projects ?? []).filter((p) => {
+    const id = cards.get(p.uri)?.id;
+    if (!id) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
   // Agrupados por año (la primera carpeta, en los discos de Lumik).
   const groups = new Map<string, DiskProject[]>();
-  for (const p of projects ?? []) {
+  for (const p of unique) {
     const year = p.name.split('/')[0];
     const group = p.name.includes('/') && /^\d{4}$/.test(year) ? year : '';
     groups.set(group, [...(groups.get(group) ?? []), p]);
@@ -125,13 +157,13 @@ function Projects({
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         {busy && <Text style={styles.busy}>{busy}…</Text>}
-        {!disk && (
+        {trees.length === 0 && (
           <Pressable onPress={onChooseDisk}>
-            <Text style={styles.empty}>Elige un disco en "Discos" para ver sus proyectos.</Text>
+            <Text style={styles.empty}>Agrega un disco en "Discos" para ver sus proyectos.</Text>
           </Pressable>
         )}
-        {disk && projects && projects.length === 0 && (
-          <Text style={styles.empty}>Este disco no tiene proyectos todavía. Crea uno con "+ Proyecto".</Text>
+        {trees.length > 0 && projects && projects.length === 0 && (
+          <Text style={styles.empty}>Los discos conectados no tienen proyectos todavía. Crea uno con "+ Proyecto".</Text>
         )}
         {[...groups.entries()].map(([group, list]) => (
           <View key={group} style={styles.group}>
@@ -157,6 +189,11 @@ function Projects({
                     <Text style={styles.cardName} numberOfLines={2}>
                       {title}
                     </Text>
+                    {trees.length > 1 && (
+                      <Text style={styles.cardDisk} numberOfLines={1}>
+                        ⛁ {labelOf(p.tree)}
+                      </Text>
+                    )}
                     {p.lock?.state === 'foreign' && (
                       <Text style={[styles.lockTag, p.lock.pending && styles.lockTagWarn]} numberOfLines={1}>
                         En {p.lock.installName}
@@ -176,16 +213,24 @@ function Projects({
 
 function Disks({
   trees,
-  disk,
+  projects,
   busy,
+  labelOf,
+  ejected,
+  onEject,
+  onUnEject,
+  onStorageSettings,
   onPickDisk,
-  onSelect,
 }: {
   trees: string[];
-  disk: string | null;
+  projects: DiskProject[] | null;
   busy: string | null;
+  labelOf: (tree: string) => string;
+  ejected: string[];
+  onEject: (tree: string) => void;
+  onUnEject: (tree: string) => void;
+  onStorageSettings: () => void;
   onPickDisk: () => void;
-  onSelect: (tree: string) => void;
 }) {
   return (
     <>
@@ -200,18 +245,38 @@ function Disks({
           <Text style={styles.empty}>Conecta el disco y toca "+ Agregar disco" para elegir su carpeta. Solo se pide una vez.</Text>
         )}
         {trees.map((t) => (
-          <Pressable
-            key={t}
-            style={({ pressed }) => [styles.diskRow, t === disk && styles.diskRowOn, pressed && styles.pressed]}
-            onPress={() => onSelect(t)}
-            disabled={!!busy}
-          >
+          <View key={t} style={styles.diskRow}>
             <Text style={styles.diskGlyph}>⛁</Text>
-            <Text style={styles.diskName}>{treeLabel(t)}</Text>
-            {t === disk && <Text style={styles.diskCurrent}>En uso</Text>}
-          </Pressable>
+            <Text style={styles.diskName}>{labelOf(t)}</Text>
+            {projects && (
+              <Text style={styles.diskCurrent}>
+                {projects.filter((p) => p.tree === t).length} proyectos
+              </Text>
+            )}
+            {/* La memoria interna no se expulsa. */}
+            {!treeLabel(t).startsWith('primary:') && (
+              <Pressable style={({ pressed }) => [styles.eject, pressed && styles.pressed]} onPress={() => onEject(t)} disabled={!!busy}>
+                <Text style={styles.ejectText}>⏏ Expulsar</Text>
+              </Pressable>
+            )}
+          </View>
         ))}
-        <Text style={styles.muted}>Solo aparecen los discos conectados.</Text>
+        {ejected.map((t) => (
+          <View key={t} style={[styles.diskRow, styles.diskRowEjected]}>
+            <Text style={styles.diskGlyph}>⏏</Text>
+            <View style={styles.diskEjectedText}>
+              <Text style={styles.diskName}>{labelOf(t)}</Text>
+              <Text style={styles.muted}>Expulsado: ya puedes desconectarlo.</Text>
+            </View>
+            <Pressable style={({ pressed }) => [styles.eject, pressed && styles.pressed]} onPress={onStorageSettings}>
+              <Text style={styles.ejectText}>Almacenamiento de Android</Text>
+            </Pressable>
+            <Pressable style={({ pressed }) => [styles.eject, pressed && styles.pressed]} onPress={() => onUnEject(t)}>
+              <Text style={styles.ejectText}>Volver a usar</Text>
+            </Pressable>
+          </View>
+        ))}
+        <Text style={styles.muted}>Solo aparecen los discos conectados. En "Proyectos" están los de todos.</Text>
       </ScrollView>
     </>
   );
@@ -346,10 +411,28 @@ const styles = StyleSheet.create({
   cover: { width: '100%', height: '100%' },
   cardInitial: { color: '#444', fontSize: 48, fontWeight: '700' },
   cardName: { color: '#fff', fontSize: 16 },
+  cardDisk: { color: '#9a9a9a', fontSize: 13 },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginHorizontal: 32,
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#1c2438',
+  },
+  bannerText: { color: '#c7d6ff', fontSize: 15, flex: 1 },
+  bannerButton: { minHeight: 44, paddingHorizontal: 18, justifyContent: 'center', borderRadius: 22, backgroundColor: '#3b5bdb' },
+  bannerButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  eject: { minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 22, backgroundColor: '#2a2a2a' },
+  ejectText: { color: '#ddd', fontSize: 14, fontWeight: '600' },
+  diskRowEjected: { opacity: 0.8 },
+  diskEjectedText: { flex: 1, gap: 2 },
   lockTag: { color: '#c7d6ff', fontSize: 13 },
   lockTagWarn: { color: '#e9c349' },
   diskRow: { flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 64, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#1f1f1f' },
-  diskRowOn: { borderWidth: 2, borderColor: '#3b5bdb' },
   diskGlyph: { color: '#9a9a9a', fontSize: 22 },
   diskName: { color: '#fff', fontSize: 17, flex: 1 },
   diskCurrent: { color: '#c7d6ff', fontSize: 14 },

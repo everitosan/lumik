@@ -5,16 +5,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, BackHandler, StyleSheet, Text, View } from 'react-native';
 
-import Saf from '../../modules/saf/src/LumikSafModule';
+import Saf, { type SafVolume } from '../../modules/saf/src/LumikSafModule';
 import { Culling, type CullingBackend, type CullItem } from '../CullingScreen';
 import { type CardInfo, fetchCovers } from './covers';
 import { createProject, type ProjectForm } from './createProject';
 import { HomeScreen } from './HomeScreen';
 import { ImportScreen } from './ImportScreen';
 import { lockMessage } from './lock';
-import { readPrefs, savePrefs } from './prefs';
 import { type Filters, NO_FILTERS, ProjectScreen, type ViewMode } from './ProjectScreen';
-import { discoverProjects } from './projects';
+import { discoverAll } from './projects';
 import type { ViewSettings } from '@lumik/core-native';
 import { type DiskProject, ProjectSession } from './session';
 
@@ -23,14 +22,15 @@ type Log = { at: string; text: string; error?: boolean };
 type ViewerState = { fromTrash: boolean; visible: number[]; position: number };
 
 export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (clean: boolean) => void }) {
+  // Discos conectados con permiso; el inicio lista los proyectos de todos, como el desktop.
   const [trees, setTrees] = useState<string[]>(() => diskTrees(Saf.persistedTrees()));
-  const [disk, setDiskState] = useState<string | null>(() => defaultDisk(diskTrees(Saf.persistedTrees())));
+  // Discos externos montados (para pedir acceso a los que no lo tienen y nombrarlos).
+  const [volumes, setVolumes] = useState<SafVolume[]>(() => Saf.volumes());
+  // Discos expulsados desde la app: no se listan hasta que se desconecten o se vuelvan a usar.
+  const [ejected, setEjected] = useState<string[]>([]);
+  const ejectedRef = useRef<string[]>([]);
+  ejectedRef.current = ejected;
   const [cards, setCards] = useState<Map<string, CardInfo>>(new Map());
-  // El disco elegido se recuerda para la próxima vez.
-  const setDisk = useCallback((tree: string | null) => {
-    setDiskState(tree);
-    if (tree) savePrefs({ disk: tree });
-  }, []);
   const [projects, setProjects] = useState<DiskProject[] | null>(null);
   const [session, setSession] = useState<ProjectSession | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
@@ -68,9 +68,9 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
   );
 
   const refreshProjects = useCallback(
-    (tree: string) =>
+    (list: string[]) =>
       run('Buscando proyectos', async () => {
-        const found = await discoverProjects(tree, note);
+        const found = await discoverAll(list, note);
         setProjects(found);
         // Nombres y portadas llegan después, sin frenar la lista.
         fetchCovers(found, (p, info) => setCards((c) => new Map(c).set(p.uri, info)));
@@ -79,26 +79,71 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
   );
 
   useEffect(() => {
-    if (!disk) return;
     setProjects(null);
-    refreshProjects(disk);
-  }, [disk, refreshProjects]);
+    refreshProjects(trees);
+  }, [trees, refreshProjects]);
 
-  // Al pasar a segundo plano, lo pendiente vuelve al disco (D2).
+  // Vuelve a mirar qué discos hay: al conectar o quitar uno y al volver a la
+  // app. Un disco que llega con la app abierta aparece solo, sin agregarlo otra vez.
+  const refreshDisks = useCallback(() => {
+    const mounted = Saf.volumes();
+    setVolumes(mounted);
+    // Un expulsado que ya se desconectó deja de estar apartado.
+    const still = ejectedRef.current.filter((t) => mounted.some((v) => v.uuid === volumeOf(t)));
+    if (still.length !== ejectedRef.current.length) setEjected(still);
+    const next = diskTrees(Saf.persistedTrees()).filter((t) => !still.includes(t));
+    setTrees((prev) => (prev.join('|') === next.join('|') ? prev : next));
+  }, []);
+
+  useEffect(() => {
+    const sub = Saf.addListener('onVolumesChanged', refreshDisks);
+    return () => sub.remove();
+  }, [refreshDisks]);
+
+  // Al pasar a segundo plano, lo pendiente vuelve al disco (D2); al volver, se miran los discos.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') sessionRef.current?.flush();
+      else refreshDisks();
     });
     return () => sub.remove();
-  }, []);
+  }, [refreshDisks]);
 
   const pickDisk = () =>
     run('Eligiendo disco', async () => {
       const tree = await Saf.pickDirectory();
       if (!tree) return;
       setTrees(diskTrees(Saf.persistedTrees()));
-      setDisk(tree);
     });
+
+  // Acceso en un toque a un disco conectado que aún no lo tiene.
+  const grantVolume = (uuid: string) =>
+    run('Dando acceso al disco', async () => {
+      await Saf.requestVolumeAccess(uuid);
+      refreshDisks();
+    });
+
+  // Expulsar (como el desktop): lo abierto en ese disco se cierra, lo pendiente
+  // vuelve a él y se suelta el candado. Android no deja a una app desmontarlo:
+  // queda apartado y se avisa que ya se puede desconectar.
+  const eject = (tree: string) => {
+    if (importing?.tree === tree) {
+      note('Hay un import en curso en ese disco: termina antes de expulsarlo', true);
+      return;
+    }
+    if (sessionRef.current?.project.tree === tree) close();
+    const next = [...ejectedRef.current, tree];
+    ejectedRef.current = next;
+    setEjected(next);
+    setTrees((prev) => prev.filter((t) => t !== tree));
+    note(`${diskLabel(tree, volumes)}: ya puedes desconectarlo`);
+  };
+
+  const unEject = (tree: string) => {
+    ejectedRef.current = ejectedRef.current.filter((t) => t !== tree);
+    setEjected(ejectedRef.current);
+    refreshDisks();
+  };
 
   const titleOf = (p: DiskProject) => cards.get(p.uri)?.title ?? p.name.split('/').pop() ?? p.name;
 
@@ -171,7 +216,7 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     setViewer(null);
     onCleanChange(false);
     // Las tarjetas muestran de nuevo quién tiene cada proyecto.
-    if (disk) refreshProjects(disk);
+    refreshProjects(trees);
   };
 
   // Tomar el control: el candado pasa a esta tablet y se vuelve a abrir desde
@@ -232,6 +277,8 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
         info: p.info,
         thumb: p.thumb,
         preview: p.previewReady ? `file://${p.previewPath}` : p.thumb,
+        // La miniatura ya viene girada (como en el desktop); la vista previa, no.
+        previewRotated: !p.previewReady,
         // Sin vista previa todavía: la miniatura, si ya está en el caché.
         histPath: p.previewReady ? p.previewPath : p.thumb.startsWith('file://') ? p.thumb.slice(7) : '',
       };
@@ -328,20 +375,23 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     <View style={styles.root}>
       <HomeScreen
         trees={trees}
-        disk={disk}
         projects={projects}
         busy={busy}
+        labelOf={(t) => diskLabel(t, volumes)}
+        pendingVolumes={volumes.filter((v) => !v.readOnly && !Saf.persistedTrees().some((t) => volumeOf(t) === v.uuid))}
+        onGrant={grantVolume}
+        ejected={ejected}
+        onEject={eject}
+        onUnEject={unEject}
+        onStorageSettings={() => Saf.openStorageSettings()}
         onPickDisk={pickDisk}
-        onSelectDisk={setDisk}
         onOpen={open}
         cards={cards}
         onCreate={async (form: ProjectForm) => {
           const dirUri = await createProject(form);
           note(`Proyecto creado: ${form.name}`);
-          // El inicio pasa al disco del proyecto nuevo y lo abre.
-          const target = form.disk!;
-          if (target !== disk) setDisk(target);
-          const found = await discoverProjects(target, note);
+          // Se vuelve a leer y se abre el proyecto nuevo.
+          const found = await discoverAll(trees, note);
           setProjects(found);
           const created = found.find((p) => p.uri === dirUri);
           if (created) open(created);
@@ -384,6 +434,17 @@ function toSettings(f: Filters, mode: ViewMode): ViewSettings {
   };
 }
 
+/** "content://…/tree/FB5F-B3EF%3Alumik" → "FB5F-B3EF" (el uuid del volumen). */
+const volumeOf = (tree: string) => decodeURIComponent(tree.split('/tree/')[1] ?? tree).split(':')[0];
+
+/** El nombre del disco que da Android ("Disco USB SanDisk") o, si no, su id. */
+function diskLabel(tree: string, volumes: SafVolume[]): string {
+  const id = decodeURIComponent(tree.split('/tree/')[1] ?? tree);
+  const volume = volumes.find((v) => v.uuid === volumeOf(tree));
+  if (id.startsWith('primary:')) return `Memoria interna · ${id.slice(8)}`;
+  return volume ? volume.label : id;
+}
+
 // Los permisos que sirven como disco: volumen conectado y que no sea una
 // carpeta de la tarjeta (DCIM y lo que cuelga de ella).
 function diskTrees(trees: string[]): string[] {
@@ -395,12 +456,6 @@ function diskTrees(trees: string[]): string[] {
       return false;
     }
   });
-}
-
-// El último disco elegido, si sigue conectado; si no, el primero.
-function defaultDisk(trees: string[]): string | null {
-  const last = readPrefs().disk;
-  return (last && trees.includes(last) ? last : trees[0]) ?? null;
 }
 
 const styles = StyleSheet.create({

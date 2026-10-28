@@ -37,6 +37,8 @@ export type CullItem = {
   thumb: string;
   /** Lo que muestra el visor (la vista previa, o la miniatura mientras llega). */
   preview: string;
+  /** `preview` ya trae la rotaci√≥n aplicada (la miniatura): el visor no la gira otra vez. */
+  previewRotated?: boolean;
   /** Archivo sin `file://` para el histograma. */
   histPath: string;
 };
@@ -121,7 +123,7 @@ export function Culling({ photos, onCleanChange, backend, onBack, backLabel = '‚
   const [bench, setBench] = useState<string | null>(null);
   const stripRef = useRef<FlashListRef<CullItem>>(null);
   const fps = useFps();
-  const items = useMemo(() => photos.map((p) => ({ uri: p.preview, rotation: p.info.rotation })), [photos]);
+  const items = useMemo(() => photos.map((p) => ({ uri: p.preview, rotation: p.previewRotated ? 0 : p.info.rotation })), [photos]);
 
   // El visor siempre tiene la vecina siguiente y la anterior en memoria.
   useEffect(() => {

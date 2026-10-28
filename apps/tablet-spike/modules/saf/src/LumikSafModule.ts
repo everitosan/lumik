@@ -3,7 +3,16 @@ import { NativeModule, requireNativeModule } from 'expo';
 
 import type { SafEntry } from './LumikSaf.types';
 
-declare class LumikSafModule extends NativeModule<{}> {
+/** Disco externo montado (USB o tarjeta). */
+export type SafVolume = { uuid: string; label: string; readOnly: boolean };
+
+declare class LumikSafModule extends NativeModule<{ onVolumesChanged: (e: { action: string }) => void }> {
+  /** Discos externos montados; la memoria interna no cuenta. */
+  volumes(): SafVolume[];
+  /** Selector de carpeta abierto en la raíz del disco `uuid`; null si se cancela. */
+  requestVolumeAccess(uuid: string): Promise<string | null>;
+  /** Pantalla de almacenamiento de Android (donde se expulsa un disco). */
+  openStorageSettings(): void;
   pickDirectory(): Promise<string | null>;
   /** Selector de archivos con selección múltiple; lista vacía si se cancela. */
   pickFiles(): Promise<SafEntry[]>;

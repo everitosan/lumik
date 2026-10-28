@@ -1,8 +1,15 @@
 package com.lumik.saf
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.os.storage.StorageManager
+import android.provider.Settings
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
 import android.provider.OpenableColumns
@@ -17,12 +24,91 @@ import expo.modules.kotlin.modules.ModuleDefinition
 class LumikSafModule : Module() {
   private var pendingPick: Promise? = null
   private var pendingFiles: Promise? = null
+  private var volumeReceiver: BroadcastReceiver? = null
 
   private val resolver
     get() = requireNotNull(appContext.reactContext).contentResolver
 
   override fun definition() = ModuleDefinition {
     Name("LumikSaf")
+
+    // Se conectó o se quitó un disco: la app vuelve a mirar cuáles hay.
+    Events("onVolumesChanged")
+
+    OnCreate {
+      val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+          sendEvent("onVolumesChanged", mapOf("action" to intent.action))
+        }
+      }
+      val filter = IntentFilter().apply {
+        addAction(Intent.ACTION_MEDIA_MOUNTED)
+        addAction(Intent.ACTION_MEDIA_UNMOUNTED)
+        addAction(Intent.ACTION_MEDIA_EJECT)
+        addAction(Intent.ACTION_MEDIA_REMOVED)
+        addAction(Intent.ACTION_MEDIA_BAD_REMOVAL)
+        addDataScheme("file")
+      }
+      requireNotNull(appContext.reactContext).registerReceiver(receiver, filter)
+      volumeReceiver = receiver
+    }
+
+    OnDestroy {
+      volumeReceiver?.let { appContext.reactContext?.unregisterReceiver(it) }
+      volumeReceiver = null
+    }
+
+    // Discos externos montados (USB, tarjeta): uuid, nombre y si son de solo
+    // lectura. La memoria interna no cuenta.
+    Function("volumes") {
+      val context = requireNotNull(appContext.reactContext)
+      val storage = context.getSystemService(StorageManager::class.java)
+      storage.storageVolumes
+        .filter { !it.isPrimary && it.uuid != null }
+        .filter { it.state == Environment.MEDIA_MOUNTED || it.state == Environment.MEDIA_MOUNTED_READ_ONLY }
+        .map {
+          mapOf(
+            "uuid" to it.uuid,
+            "label" to it.getDescription(context),
+            "readOnly" to (it.state == Environment.MEDIA_MOUNTED_READ_ONLY),
+          )
+        }
+    }
+
+    // Pide acceso a un disco en un toque: el selector abre ya en su raíz.
+    // Devuelve la URI del árbol o null si se cancela (el permiso se guarda).
+    AsyncFunction("requestVolumeAccess") { uuid: String, promise: Promise ->
+      if (pendingPick != null) {
+        promise.reject(CodedException("E_BUSY", "Ya hay un selector abierto", null))
+        return@AsyncFunction
+      }
+      val context = requireNotNull(appContext.reactContext)
+      val volume = context.getSystemService(StorageManager::class.java).storageVolumes.find { it.uuid == uuid }
+      if (volume == null) {
+        promise.reject(CodedException("E_NO_VOLUME", "El disco $uuid ya no está conectado", null))
+        return@AsyncFunction
+      }
+      val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        volume.createOpenDocumentTreeIntent()
+      } else {
+        Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+      }
+      intent.addFlags(
+        Intent.FLAG_GRANT_READ_URI_PERMISSION or
+          Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+          Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
+          Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
+      )
+      pendingPick = promise
+      appContext.throwingActivity.startActivityForResult(intent, PICK_TREE)
+    }
+
+    // Una app no puede desmontar un disco: se abre la pantalla de
+    // almacenamiento de Android, donde está "Expulsar".
+    Function("openStorageSettings") {
+      val intent = Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      requireNotNull(appContext.reactContext).startActivity(intent)
+    }
 
     // Abre el selector de carpetas del sistema. Devuelve la URI del árbol, o
     // null si se cancela, y guarda el permiso para que sobreviva al reinicio.

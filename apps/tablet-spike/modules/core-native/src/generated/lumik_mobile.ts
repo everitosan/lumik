@@ -323,7 +323,7 @@ export function prepareGrid(thumbs: Array<string>, previews: Array<string>, outD
     }
 
 /**
- * Nombre y portada de un proyecto, de una copia de su `project.db`. Se lee
+ * Id, nombre y portada de un proyecto, de una copia de su `project.db`. Se lee
  * sin migrar: en una base vieja sin la columna de portada, `cover` es `None`.
  */
 export function projectSummary(dbPath: string): ProjectSummary {
@@ -1557,6 +1557,10 @@ const FfiConverterTypePhotoInfo = (() => {
 })();
 
 export type ProjectSummary = {
+    /**
+     * `project.id`: identifica el proyecto en cualquier disco.
+     */
+    id?: string,
     name?: string,
     /**
      * Portada elegida en el desktop (`.thumbs/{id}.jpg`, relativa al proyecto).
@@ -1585,16 +1589,19 @@ const FfiConverterTypeProjectSummary = (() => {
     class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
         readFromCursor(c: Cursor): TypeName {
             return {
+                id: FfiConverterOptionalString.readFromCursor(c), 
                 name: FfiConverterOptionalString.readFromCursor(c), 
                 cover: FfiConverterOptionalString.readFromCursor(c)
             };
         }
         writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterOptionalString.writeIntoCursor(value.id, c);
             FfiConverterOptionalString.writeIntoCursor(value.name, c);
             FfiConverterOptionalString.writeIntoCursor(value.cover, c);
         }
         allocationSize(value: TypeName): number {
-            return FfiConverterOptionalString.allocationSize(value.name) +
+            return FfiConverterOptionalString.allocationSize(value.id) +
+             FfiConverterOptionalString.allocationSize(value.name) +
              FfiConverterOptionalString.allocationSize(value.cover);
             
         }
@@ -3710,7 +3717,7 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_prepare_grid() !== 8517) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_prepare_grid");
     }
-    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_project_summary() !== 15426) {
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_project_summary() !== 11451) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_project_summary");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_rate_photo() !== 8190) {

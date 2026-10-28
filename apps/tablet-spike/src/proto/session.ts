@@ -43,7 +43,13 @@ const GIVE_BACK_DEBOUNCE_MS = 3000;
 // fds abiertos a la vez al traer miniaturas.
 const THUMB_BATCH = 100;
 
-export type DiskProject = { name: string; uri: string; files: SafEntry[]; lock?: LockView };
+/** Un proyecto en un disco: `tree` es el permiso SAF del disco y `name`, su
+ *  carpeta relativa a `lumik/` (o a la raíz). */
+export type DiskProject = { tree: string; name: string; uri: string; files: SafEntry[]; lock?: LockView };
+
+/** Clave del proyecto en la sandbox (copia de trabajo, caché, portada): el
+ *  disco y la carpeta, para que dos discos con la misma ruta no choquen. */
+export const projectKey = (p: DiskProject) => safeName(`${decodeURIComponent(p.tree.split('/tree/')[1] ?? p.tree)}_${p.name}`);
 
 export type SessionPhoto = {
   info: PhotoInfo;
@@ -107,7 +113,7 @@ export class ProjectSession {
     log: (text: string, error?: boolean) => void,
   ): Promise<ProjectSession> {
     const started = Date.now();
-    const key = safeName(project.name);
+    const key = projectKey(project);
     const mirrorDir = `${FILES_DIR}/mirror/${key}`;
     resetDir(mirrorDir);
     const files = await Saf.listChildren(project.uri);

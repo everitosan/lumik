@@ -4,7 +4,7 @@ import { readText, writeText } from '@lumik/core-native';
 
 const PATH = '/data/user/0/com.lumik.tabletspike/files/prefs.json';
 
-type Prefs = { disk?: string; guideSeen?: boolean };
+type Prefs = { guideSeen?: boolean };
 
 export function readPrefs(): Prefs {
   try {

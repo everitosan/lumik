@@ -275,24 +275,27 @@ pub fn write_text(path: String, text: String) -> Result<(), MirrorError> {
 
 #[derive(uniffi::Record)]
 pub struct ProjectSummary {
+    /// `project.id`: identifica el proyecto en cualquier disco.
+    pub id: Option<String>,
     pub name: Option<String>,
     /// Portada elegida en el desktop (`.thumbs/{id}.jpg`, relativa al proyecto).
     pub cover: Option<String>,
 }
 
-/// Nombre y portada de un proyecto, de una copia de su `project.db`. Se lee
+/// Id, nombre y portada de un proyecto, de una copia de su `project.db`. Se lee
 /// sin migrar: en una base vieja sin la columna de portada, `cover` es `None`.
 #[uniffi::export]
 pub fn project_summary(db_path: String) -> ProjectSummary {
     let Ok(conn) = rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) else {
-        return ProjectSummary { name: None, cover: None };
+        return ProjectSummary { id: None, name: None, cover: None };
     };
+    let id = conn.query_row("SELECT id FROM project LIMIT 1", [], |r| r.get::<_, String>(0)).ok();
     let name = conn.query_row("SELECT name FROM project LIMIT 1", [], |r| r.get::<_, String>(0)).ok();
     let cover = conn
         .query_row("SELECT cover_photo_path FROM project LIMIT 1", [], |r| r.get::<_, Option<String>>(0))
         .ok()
         .flatten();
-    ProjectSummary { name, cover }
+    ProjectSummary { id, name, cover }
 }
 
 /// De `names`, los que no están en `dir` (lo que falta traer al caché).
