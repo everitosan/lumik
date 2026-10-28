@@ -21,6 +21,12 @@ pub struct PhotoInfo {
     pub id: String,
     /// Nombre del archivo en el proyecto (el RAW, o el JPG si la foto es solo JPG).
     pub file_name: String,
+    /// Ruta relativa al proyecto (`_media/…` o `_culled/…`).
+    pub dng_path: String,
+    /// Aprobada (en Lumik, aprobar es mover a `_culled/`).
+    pub culled: bool,
+    /// Etiquetas de color, formato del desktop: `"1,3,5"`.
+    pub color_label: Option<String>,
     pub thumb_path: String,
     pub preview_path: String,
     /// Grados: 0 / 90 / 180 / 270.
@@ -54,6 +60,9 @@ pub fn open_project(project_dir: String) -> Result<Vec<PhotoInfo>, ProjectError>
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| p.dng_path.clone()),
+            dng_path: p.dng_path.clone(),
+            culled: p.culled,
+            color_label: p.color_label.clone(),
             thumb_path: cache(".thumbs", &p.id),
             preview_path: cache(".previews", &p.id),
             id: p.id,

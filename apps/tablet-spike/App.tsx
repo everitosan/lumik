@@ -6,9 +6,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import BridgeScreen from './src/BridgeScreen';
 import CullingScreen from './src/CullingScreen';
+import PrototypeScreen from './src/proto/PrototypeScreen';
 import SafScreen from './src/SafScreen';
 
 const TABS = [
+  { key: 'proto', label: '3.1 Prototipo' },
   { key: 'culling', label: '2.4 Grid y visor' },
   { key: 'saf', label: '2.5 Disco (SAF)' },
   { key: 'bridge', label: '2.1 Puente' },
@@ -17,13 +19,13 @@ const TABS = [
 type Tab = (typeof TABS)[number]['key'];
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('culling');
+  const [tab, setTab] = useState<Tab>('proto');
   // El modo limpio del culling también oculta las pestañas y la barra de estado.
   const [clean, setClean] = useState(false);
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      {!(tab === 'culling' && clean) && (
+      {!clean && (
         <View style={styles.tabs}>
           {TABS.map((t) => (
             <Pressable key={t.key} style={[styles.tab, tab === t.key && styles.tabOn]} onPress={() => setTab(t.key)}>
@@ -32,10 +34,11 @@ export default function App() {
           ))}
         </View>
       )}
+      {tab === 'proto' && <PrototypeScreen onCleanChange={setClean} />}
       {tab === 'culling' && <CullingScreen onCleanChange={setClean} />}
       {tab === 'saf' && <SafScreen />}
       {tab === 'bridge' && <BridgeScreen />}
-      <StatusBar style="light" hidden={tab === 'culling' && clean} />
+      <StatusBar style="light" hidden={clean} />
     </GestureHandlerRootView>
   );
 }

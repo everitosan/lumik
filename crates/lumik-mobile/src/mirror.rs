@@ -7,6 +7,7 @@ use lumik_core::db::ProjectDatabase;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::os::fd::{FromRawFd, RawFd};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -189,6 +190,86 @@ impl Synced for File {
     fn sync(&mut self) -> std::io::Result<()> {
         self.sync_all()
     }
+}
+
+/// Copia cada fd de `fds` a `dir/<names[i]>` en un hilo (miniaturas del disco
+/// a la sandbox), avisando cada archivo terminado con `on_progress(i + 1)`.
+/// Cierra todos los fds; uno que falla se salta.
+#[uniffi::export]
+pub fn start_copy_to_dir(fds: Vec<i32>, names: Vec<String>, dir: String, listener: Arc<dyn CopyListener>) {
+    let files: Vec<File> = fds.into_iter().map(|fd| unsafe { File::from_raw_fd(fd as RawFd) }).collect();
+    std::thread::spawn(move || {
+        let started = Instant::now();
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            listener.on_error(e.to_string());
+            return;
+        }
+        let mut bytes = 0u64;
+        for (i, (src, name)) in files.into_iter().zip(names).enumerate() {
+            match File::create(Path::new(&dir).join(&name)).map_err(MirrorError::from).and_then(|dst| copy_files(src, dst, None)) {
+                Ok(r) => bytes += r.bytes,
+                Err(e) => log::warn!("No se pudo copiar {name}: {e}"),
+            }
+            listener.on_progress(i as u64 + 1);
+        }
+        listener.on_done(CopyResult { bytes, elapsed_ms: started.elapsed().as_millis() as u64 });
+    });
+}
+
+/// Copia `src_fd` a `path` en un hilo (una vista previa del disco a la sandbox).
+#[uniffi::export]
+pub fn start_fd_to_path(src_fd: i32, path: String, listener: Arc<dyn CopyListener>) {
+    let src = unsafe { File::from_raw_fd(src_fd as RawFd) };
+    std::thread::spawn(move || {
+        let result = (|| {
+            if let Some(dir) = Path::new(&path).parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            // A un temporal y luego el nombre final: quien lo muestre nunca ve un archivo a medias.
+            let tmp = format!("{path}.part");
+            let r = copy_files(src, File::create(&tmp)?, None)?;
+            std::fs::rename(&tmp, &path)?;
+            Ok::<_, MirrorError>(r)
+        })();
+        match result {
+            Ok(r) => listener.on_done(r),
+            Err(e) => listener.on_error(e.to_string()),
+        }
+    });
+}
+
+/// De `names`, los que no están en `dir` (lo que falta traer al caché).
+#[uniffi::export]
+pub fn missing_files(dir: String, names: Vec<String>) -> Vec<String> {
+    names.into_iter().filter(|n| !Path::new(&dir).join(n).exists()).collect()
+}
+
+/// Copia `src_fd` en `dst_fd` en este hilo y cierra los dos.
+#[uniffi::export]
+pub fn copy_fd_to_fd(src_fd: i32, dst_fd: i32) -> Result<CopyResult, MirrorError> {
+    let (src, dst) = unsafe { (File::from_raw_fd(src_fd as RawFd), File::from_raw_fd(dst_fd as RawFd)) };
+    copy_files(src, dst, None)
+}
+
+/// Tamaño y SHA-256 del contenido de `fd` (huella de una entrega); lo cierra.
+#[uniffi::export]
+pub fn fingerprint_fd(fd: i32) -> Result<crate::disk::DiskFingerprint, MirrorError> {
+    use sha2::{Digest, Sha256};
+    let mut file = unsafe { File::from_raw_fd(fd as RawFd) };
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; CHUNK];
+    let mut size = 0u64;
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+        size += n as u64;
+    }
+    // Mismo formato que el desktop (`infrastructure/fs.rs`).
+    let sha256 = format!("{:x}", hasher.finalize());
+    Ok(crate::disk::DiskFingerprint { size, sha256 })
 }
 
 /// Copia `src_fd` (del disco) a `path` (en la sandbox). Para archivos chicos

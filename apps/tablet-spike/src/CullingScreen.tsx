@@ -4,7 +4,9 @@
 // "Deshacer" en un snackbar. Estrellas (izquierda) y etiquetas de color
 // (derecha) van sobre la foto, justo encima de la tira; un toque en la foto
 // activa el modo limpio, que oculta la tira, las estrellas y las etiquetas.
-// Las fotos y sus datos de captura vienen de un `project.db` real.
+// Las fotos y sus datos de captura vienen de un `project.db` real: en modo
+// demo (2 000 en la sandbox, sin guardar) o de un proyecto del disco, que
+// guarda cada cambio por `CullingBackend`.
 import { FlashList, type FlashListRef, useBenchmark } from '@shopify/flash-list';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
@@ -13,9 +15,11 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { useFrameCallback, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import type { PhotoInfo } from '@lumik/core-native';
+
 import { GestureGuide } from './GestureGuide';
 import { PhotoInfoPanel } from './PhotoInfoPanel';
-import { loadPhotos, PHOTO_COUNT, type Photo } from './photos';
+import { loadPhotos } from './photos';
 import { Viewer } from './Viewer';
 
 const THUMB = 72;
@@ -25,18 +29,44 @@ const UNDO_MS = 4000;
 
 // `labels[i]`: etiquetas de color (1–5) de la foto i; puede tener varias.
 type Marks = { approved: boolean[]; rating: number[]; labels: number[][] };
-type Undo = { label: string; previous: Marks };
+type Undo = { label: string; previous: Marks; revert?: () => void };
+
+export type CullItem = {
+  info: PhotoInfo;
+  thumb: string;
+  /** Lo que muestra el visor (la vista previa, o la miniatura mientras llega). */
+  preview: string;
+  /** Archivo sin `file://` para el histograma. */
+  histPath: string;
+};
+
+/** Dónde se guarda cada cambio. Si un método lanza, el cambio no se aplica. */
+export type CullingBackend = {
+  rate(index: number, stars: number, labels: number[]): void;
+  approve(index: number, approved: boolean): void;
+  /** La foto actual cambió: momento de traer las vistas previas cercanas. */
+  onIndex?(index: number): void;
+};
+
+// "1,3,5" (formato del desktop) → [1, 3, 5]
+const parseLabels = (value?: string) =>
+  (value ?? '')
+    .split(',')
+    .map(Number)
+    .filter((n) => n >= 1 && n <= 5);
 
 // Abrir el proyecto y preparar las 2 000 fotos bloquea unos segundos la
 // primera vez: se hace tras el primer frame, con un aviso.
 export default function CullingScreen({ onCleanChange }: { onCleanChange: (clean: boolean) => void }) {
-  const [photos, setPhotos] = useState<Photo[] | null>(null);
+  const [photos, setPhotos] = useState<CullItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => {
       try {
-        setPhotos(loadPhotos());
+        setPhotos(
+          loadPhotos().map((p) => ({ info: p.info, thumb: p.thumb, preview: p.preview, histPath: p.previewPath })),
+        );
       } catch (e) {
         setError(String(e));
       }
@@ -54,28 +84,45 @@ export default function CullingScreen({ onCleanChange }: { onCleanChange: (clean
   return <Culling photos={photos} onCleanChange={onCleanChange} />;
 }
 
-function Culling({ photos, onCleanChange }: { photos: Photo[]; onCleanChange: (clean: boolean) => void }) {
+type CullingProps = {
+  photos: CullItem[];
+  onCleanChange: (clean: boolean) => void;
+  backend?: CullingBackend;
+  /** Volver al inicio (prototipo); sin él no hay botón. */
+  onBack?: () => void;
+};
+
+export function Culling({ photos, onCleanChange, backend, onBack }: CullingProps) {
+  const count = photos.length;
   const [index, setIndex] = useState(0);
   const [marks, setMarks] = useState<Marks>(() => ({
-    approved: Array(PHOTO_COUNT).fill(false),
+    approved: photos.map((p) => p.info.culled),
     rating: photos.map((p) => p.info.stars),
-    labels: photos.map(() => []),
+    labels: photos.map((p) => parseLabels(p.info.colorLabel)),
   }));
+  const [error, setError] = useState<string | null>(null);
   const [clean, setClean] = useState(false);
   const [showInfo, setShowInfo] = useState(true);
   // La guía se abre sola al entrar; el spike no recuerda si ya se vio.
   const [guideStep, setGuideStep] = useState<number | null>(0);
   const [undo, setUndo] = useState<Undo | null>(null);
   const [bench, setBench] = useState<string | null>(null);
-  const stripRef = useRef<FlashListRef<Photo>>(null);
+  const stripRef = useRef<FlashListRef<CullItem>>(null);
   const fps = useFps();
   const items = useMemo(() => photos.map((p) => ({ uri: p.preview, rotation: p.info.rotation })), [photos]);
 
   // El visor siempre tiene la vecina siguiente y la anterior en memoria.
   useEffect(() => {
-    const around = [index - 1, index + 1].filter((i) => i >= 0 && i < PHOTO_COUNT);
+    backend?.onIndex?.(index);
+    const around = [index - 1, index + 1].filter((i) => i >= 0 && i < count);
     Image.prefetch(around.map((i) => photos[i].preview), 'memory');
-  }, [index, photos]);
+  }, [index, photos, count, backend]);
+
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 6000);
+    return () => clearTimeout(t);
+  }, [error]);
 
   // La tira sigue a la foto actual, centrada.
   useEffect(() => {
@@ -90,14 +137,23 @@ function Culling({ photos, onCleanChange }: { photos: Photo[]; onCleanChange: (c
   }, [undo]);
 
   const step = useCallback(
-    (delta: 1 | -1) => setIndex((i) => Math.min(PHOTO_COUNT - 1, Math.max(0, i + delta))),
-    [],
+    (delta: 1 | -1) => setIndex((i) => Math.min(count - 1, Math.max(0, i + delta))),
+    [count],
   );
 
-  const change = useCallback((label: string, edit: (m: Marks) => Marks) => {
+  // Primero se guarda (`persist`); si falla, la marca no cambia. `revert`
+  // deshace lo guardado si se toca "Deshacer".
+  const change = useCallback((label: string, edit: (m: Marks) => Marks, persist?: () => void, revert?: () => void) => {
+    try {
+      persist?.();
+    } catch (e) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setError(String(e));
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setMarks((m) => {
-      setUndo({ label, previous: m });
+      setUndo({ label, previous: m, revert });
       return edit(m);
     });
   }, []);
@@ -105,46 +161,69 @@ function Culling({ photos, onCleanChange }: { photos: Photo[]; onCleanChange: (c
   const approve = useCallback(
     (approved: boolean) => {
       if (marks.approved[index] === approved) return;
-      change(approved ? 'Aprobada' : 'Aprobación quitada', (m) => {
-        const next = m.approved.slice();
-        next[index] = approved;
-        return { ...m, approved: next };
-      });
+      const i = index;
+      change(
+        approved ? 'Aprobada' : 'Aprobación quitada',
+        (m) => {
+          const next = m.approved.slice();
+          next[i] = approved;
+          return { ...m, approved: next };
+        },
+        backend && (() => backend.approve(i, approved)),
+        backend && (() => backend.approve(i, !approved)),
+      );
     },
-    [change, index, marks.approved],
+    [change, index, marks.approved, backend],
   );
 
   const toggleApprove = useCallback(() => approve(!marks.approved[index]), [approve, index, marks.approved]);
 
   const rate = useCallback(
     (stars: number) => {
-      const value = marks.rating[index] === stars ? 0 : stars;
-      change(value ? `${value} ${value === 1 ? 'estrella' : 'estrellas'}` : 'Sin estrellas', (m) => {
-        const next = m.rating.slice();
-        next[index] = value;
-        return { ...m, rating: next };
-      });
+      const i = index;
+      const before = marks.rating[i];
+      const labels = marks.labels[i];
+      const value = before === stars ? 0 : stars;
+      change(
+        value ? `${value} ${value === 1 ? 'estrella' : 'estrellas'}` : 'Sin estrellas',
+        (m) => {
+          const next = m.rating.slice();
+          next[i] = value;
+          return { ...m, rating: next };
+        },
+        backend && (() => backend.rate(i, value, labels)),
+        backend && (() => backend.rate(i, before, labels)),
+      );
     },
-    [change, index, marks.rating],
+    [change, index, marks.rating, marks.labels, backend],
   );
 
   const toggleLabel = useCallback(
     (label: number) => {
-      const has = marks.labels[index].includes(label);
-      change(has ? 'Etiqueta quitada' : 'Etiqueta puesta', (m) => {
-        const next = m.labels.slice();
-        next[index] = has ? next[index].filter((l) => l !== label) : [...next[index], label].sort();
-        return { ...m, labels: next };
-      });
+      const i = index;
+      const before = marks.labels[i];
+      const stars = marks.rating[i];
+      const has = before.includes(label);
+      const after = has ? before.filter((l) => l !== label) : [...before, label].sort();
+      change(
+        has ? 'Etiqueta quitada' : 'Etiqueta puesta',
+        (m) => {
+          const next = m.labels.slice();
+          next[i] = after;
+          return { ...m, labels: next };
+        },
+        backend && (() => backend.rate(i, stars, after)),
+        backend && (() => backend.rate(i, stars, before)),
+      );
     },
-    [change, index, marks.labels],
+    [change, index, marks.labels, marks.rating, backend],
   );
 
   const toggleClean = useCallback(() => setClean((c) => !c), []);
   useEffect(() => onCleanChange(clean), [clean, onCleanChange]);
 
   const { startBenchmark, isBenchmarkRunning } = useBenchmark(
-    stripRef as RefObject<FlashListRef<Photo>>,
+    stripRef as RefObject<FlashListRef<CullItem>>,
     (res) => setBench(res.js ? `tira: JS prom. ${res.js.averageFPS.toFixed(0)} · mín. ${res.js.minFPS.toFixed(0)}` : 'sin datos'),
     { startManually: true, repeatCount: 1 },
   );
@@ -165,13 +244,14 @@ function Culling({ photos, onCleanChange }: { photos: Photo[]; onCleanChange: (c
         />
 
         {showInfo && guideStep === null && (
-          <PhotoInfoPanel info={photos[index].info} previewPath={photos[index].previewPath} />
+          <PhotoInfoPanel info={photos[index].info} previewPath={photos[index].histPath} />
         )}
 
         <View style={styles.topBar} pointerEvents="box-none">
           <View style={styles.topLeft}>
+            {onBack && <RoundToggle label="‹" on={false} onPress={onBack} />}
             <Text style={styles.chip}>
-              {index + 1} / {PHOTO_COUNT}
+              {index + 1} / {count}
             </Text>
             {isApproved && <Text style={styles.badge}>Aprobada</Text>}
             <Pressable onPress={startBenchmark} disabled={isBenchmarkRunning} hitSlop={8}>
@@ -214,13 +294,26 @@ function Culling({ photos, onCleanChange }: { photos: Photo[]; onCleanChange: (c
             <Text style={styles.snackText}>{undo.label}</Text>
             <Pressable
               onPress={() => {
-                setMarks(undo.previous);
+                try {
+                  undo.revert?.();
+                  setMarks(undo.previous);
+                } catch (e) {
+                  setError(String(e));
+                }
                 setUndo(null);
               }}
               style={styles.snackAction}
             >
               <Text style={styles.snackActionText}>DESHACER</Text>
             </Pressable>
+          </View>
+        )}
+
+        {error && (
+          <View style={[styles.snackbar, styles.snackbarError, clean && styles.snackbarClean]}>
+            <Text style={styles.snackErrorText} numberOfLines={3}>
+              {error}
+            </Text>
           </View>
         )}
 
@@ -234,16 +327,17 @@ function Culling({ photos, onCleanChange }: { photos: Photo[]; onCleanChange: (c
             data={photos}
             horizontal
             extraData={{ index, marks }}
-            keyExtractor={(p) => String(p.id)}
+            keyExtractor={(p, i) => `${i}-${p.info.id}`}
             showsHorizontalScrollIndicator={false}
             initialScrollIndex={index}
-            renderItem={({ item }) => (
+            renderItem={({ item, index: i }) => (
               <Thumb
                 photo={item}
-                selected={item.id === index}
-                approved={marks.approved[item.id]}
-                rating={marks.rating[item.id]}
-                labels={marks.labels[item.id]}
+                index={i}
+                selected={i === index}
+                approved={marks.approved[i]}
+                rating={marks.rating[i]}
+                labels={marks.labels[i]}
                 onPress={setIndex}
               />
             )}
@@ -255,7 +349,8 @@ function Culling({ photos, onCleanChange }: { photos: Photo[]; onCleanChange: (c
 }
 
 type ThumbProps = {
-  photo: Photo;
+  photo: CullItem;
+  index: number;
   selected: boolean;
   approved: boolean;
   rating: number;
@@ -263,9 +358,9 @@ type ThumbProps = {
   onPress: (index: number) => void;
 };
 
-function Thumb({ photo, selected, approved, rating, labels, onPress }: ThumbProps) {
+function Thumb({ photo, index, selected, approved, rating, labels, onPress }: ThumbProps) {
   return (
-    <Pressable style={styles.cell} onPress={() => onPress(photo.id)}>
+    <Pressable style={styles.cell} onPress={() => onPress(index)}>
       <View style={[styles.thumbFrame, selected && styles.thumbSelected]}>
         <Image source={{ uri: photo.thumb }} recyclingKey={photo.thumb} style={styles.thumb} contentFit="cover" transition={0} />
         {approved && <Text style={styles.thumbApproved}>✓</Text>}
@@ -390,6 +485,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#e9e9e9',
   },
   snackbarClean: { bottom: 20 },
+  snackbarError: { backgroundColor: '#3a1414', paddingRight: 20 },
+  snackErrorText: { color: '#fca5a5', fontSize: 14, flexShrink: 1, paddingVertical: 10 },
   snackText: { color: '#131313', fontSize: 16 },
   snackAction: { minHeight: 52, paddingHorizontal: 20, justifyContent: 'center' },
   snackActionText: { color: '#2563eb', fontSize: 15, fontWeight: '700' },

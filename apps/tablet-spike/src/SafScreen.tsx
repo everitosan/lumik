@@ -20,6 +20,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import Saf from '../modules/saf/src/LumikSafModule';
+import { discoverProjects } from './proto/projects';
+import type { DiskProject } from './proto/session';
 import type { SafEntry } from '../modules/saf/src/LumikSaf.types';
 
 const MIRROR_DIR = '/data/user/0/com.lumik.tabletspike/files/mirror';
@@ -29,13 +31,10 @@ const TMP_NAME = 'project.db.lumik-tmp';
 // dentro del proyecto abierto o, sin proyecto, en la carpeta elegida del disco.
 const IMPORT_DIR = '_spike_import';
 const LOOSE_IMPORT_DIR = '_lumik_spike_import';
-// Como el desktop (`discover_projects_on_device`): bajo `lumik/`, hasta 4
-// niveles, y sin bajar más al encontrar un `project.db`.
-const MAX_DEPTH = 4;
 const WRITE_TEST_BYTES = 1_000_000_000;
 const MEDIA = /\.(raf|cr2|cr3|nef|arw|dng|orf|rw2|jpe?g|heic|mov|mp4)$/i;
 
-type Project = { name: string; uri: string; files: SafEntry[] };
+type Project = DiskProject;
 type Log = { at: string; text: string; error?: boolean };
 
 export default function SafScreen() {
@@ -77,14 +76,9 @@ export default function SafScreen() {
     (tree: string) =>
       run('Buscar proyectos', async () => {
         const started = Date.now();
-        const root = Saf.rootDocument(tree);
-        const top = await Saf.listChildren(root);
-        const lumik = top.find((e) => e.isDirectory && e.name === 'lumik');
-        const found: Project[] = [];
-        await findProjects(lumik ? lumik.uri : root, '', 0, found, note);
-        found.sort((a, b) => a.name.localeCompare(b.name));
+        const found = await discoverProjects(tree, note);
         setProjects(found);
-        note(`${found.length} proyectos${lumik ? ' en lumik/' : ''} en ${Date.now() - started} ms`);
+        note(`${found.length} proyectos en ${Date.now() - started} ms`);
       }),
     [note, run],
   );
@@ -309,32 +303,6 @@ export default function SafScreen() {
       </Section>
     </ScrollView>
   );
-}
-
-async function findProjects(
-  dirUri: string,
-  path: string,
-  depth: number,
-  out: Project[],
-  note: (text: string) => void,
-): Promise<void> {
-  if (depth > MAX_DEPTH) return;
-  let files = await Saf.listChildren(dirUri);
-  // Una devolución interrumpida entre borrar el original y renombrar deja
-  // solo el temporal: se termina aquí.
-  const tmp = files.find((f) => f.name === TMP_NAME);
-  if (tmp && !files.some((f) => f.name === 'project.db')) {
-    Saf.rename(tmp.uri, 'project.db');
-    note(`${path || 'raíz'}: devolución interrumpida recuperada`);
-    files = await Saf.listChildren(dirUri);
-  }
-  if (files.some((f) => f.name === 'project.db')) {
-    out.push({ name: path || 'raíz', uri: dirUri, files });
-    return;
-  }
-  for (const dir of files.filter((f) => f.isDirectory && !f.name.startsWith('.'))) {
-    await findProjects(dir.uri, path ? `${path}/${dir.name}` : dir.name, depth + 1, out, note);
-  }
 }
 
 // Fotos y videos de la tarjeta, recorriendo subcarpetas (DCIM/100_FUJI/…).

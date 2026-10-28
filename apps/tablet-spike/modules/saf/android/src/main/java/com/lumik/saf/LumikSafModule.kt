@@ -69,26 +69,20 @@ class LumikSafModule : Module() {
     }
 
     // Hijos de un documento-carpeta (URI de documento dentro del árbol).
-    AsyncFunction("listChildren") { documentUri: String ->
-      val doc = Uri.parse(documentUri)
-      val children = DocumentsContract.buildChildDocumentsUriUsingTree(doc, DocumentsContract.getDocumentId(doc))
-      val columns = arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE, Document.COLUMN_SIZE)
-      val out = mutableListOf<Map<String, Any?>>()
-      resolver.query(children, columns, null, null, null)?.use { c ->
-        while (c.moveToNext()) {
-          val id = c.getString(0)
-          val mime = c.getString(2)
-          out.add(
-            mapOf(
-              "uri" to DocumentsContract.buildDocumentUriUsingTree(doc, id).toString(),
-              "name" to c.getString(1),
-              "isDirectory" to (mime == Document.MIME_TYPE_DIR),
-              "size" to (if (c.isNull(3)) 0.0 else c.getLong(3).toDouble()),
-            )
-          )
-        }
+    AsyncFunction("listChildren") { documentUri: String -> children(documentUri) }
+
+    // Igual, sin promesa: para el `DiskFiles` de Rust, que es síncrono.
+    Function("listChildrenSync") { documentUri: String -> children(documentUri) }
+
+    // Documento en `rel` (`_media/x.raf`) bajo `baseUri`, exista o no.
+    Function("childUri") { baseUri: String, rel: String -> childUri(baseUri, rel) }
+
+    Function("exists") { uri: String ->
+      try {
+        resolver.query(Uri.parse(uri), arrayOf(Document.COLUMN_DOCUMENT_ID), null, null, null)?.use { it.count > 0 } ?: false
+      } catch (e: Exception) {
+        false
       }
-      out
     }
 
     Function("createFile") { parentUri: String, name: String, mime: String ->
@@ -114,9 +108,52 @@ class LumikSafModule : Module() {
         ?: throw CodedException("E_RENAME", "No se pudo renombrar a $name", null)
     }
 
+    // Mueve un documento a otra carpeta (mismo nombre). Devuelve su nueva URI.
+    Function("move") { uri: String, fromParentUri: String, toParentUri: String ->
+      DocumentsContract.moveDocument(resolver, Uri.parse(uri), Uri.parse(fromParentUri), Uri.parse(toParentUri))?.toString()
+        ?: throw CodedException("E_MOVE", "No se pudo mover $uri", null)
+    }
+
     Function("delete") { uri: String ->
       DocumentsContract.deleteDocument(resolver, Uri.parse(uri))
     }
+  }
+
+  // Con ExternalStorageProvider (memoria interna y discos USB) el id de
+  // documento es la ruta (`primary:Lumik/…`, `FB5F-B3EF:lumik/…`): la URI de
+  // un hijo se arma sin listar carpeta por carpeta.
+  private fun childUri(baseUri: String, rel: String): String {
+    val base = Uri.parse(baseUri)
+    val baseId = DocumentsContract.getDocumentId(base)
+    val clean = rel.trim('/')
+    val id = when {
+      clean.isEmpty() -> baseId
+      baseId.endsWith(":") -> "$baseId$clean"
+      else -> "$baseId/$clean"
+    }
+    return DocumentsContract.buildDocumentUriUsingTree(base, id).toString()
+  }
+
+  private fun children(documentUri: String): List<Map<String, Any?>> {
+    val doc = Uri.parse(documentUri)
+    val children = DocumentsContract.buildChildDocumentsUriUsingTree(doc, DocumentsContract.getDocumentId(doc))
+    val columns = arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE, Document.COLUMN_SIZE)
+    val out = mutableListOf<Map<String, Any?>>()
+    resolver.query(children, columns, null, null, null)?.use { c ->
+      while (c.moveToNext()) {
+        val id = c.getString(0)
+        val mime = c.getString(2)
+        out.add(
+          mapOf(
+            "uri" to DocumentsContract.buildDocumentUriUsingTree(doc, id).toString(),
+            "name" to c.getString(1),
+            "isDirectory" to (mime == Document.MIME_TYPE_DIR),
+            "size" to (if (c.isNull(3)) 0.0 else c.getLong(3).toDouble()),
+          )
+        )
+      }
+    }
+    return out
   }
 
   companion object {

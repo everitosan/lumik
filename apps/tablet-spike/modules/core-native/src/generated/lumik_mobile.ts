@@ -4,9 +4,9 @@
 /* eslint-disable */
 // @ts-nocheck
 import nativeModule from "./lumik_mobile-ffi";
-import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDroppedCallback, type UniffiForeignFutureDroppedCallbackStruct, type UniffiVTableCallbackInterfaceLumikMobileCopyListener, type UniffiVTableCallbackInterfaceLumikMobileHistogramListener, type UniffiVTableCallbackInterfaceLumikMobileImportListener,
+import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDroppedCallback, type UniffiForeignFutureDroppedCallbackStruct, type UniffiVTableCallbackInterfaceLumikMobileCopyListener, type UniffiVTableCallbackInterfaceLumikMobileDiskFiles, type UniffiVTableCallbackInterfaceLumikMobileHistogramListener, type UniffiVTableCallbackInterfaceLumikMobileImportListener,
 } from "./lumik_mobile-ffi";
-import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, type UniffiReferenceHolder, type UniffiRustCallStatus, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterBool, FfiConverterFloat64, FfiConverterInt32, FfiConverterObject, FfiConverterObjectWithCallbacks, FfiConverterOptional, FfiConverterUInt32, FfiConverterUInt64, FfiConverterUInt8, RustBuffer, UniffiAbstractObject, UniffiError, UniffiInternalError, UniffiResult, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiTraitInterfaceCall, uniffiTypeNameSymbol, variantOrdinalSymbol,
+import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, type UniffiReferenceHolder, type UniffiRustCallStatus, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterBool, FfiConverterFloat64, FfiConverterInt32, FfiConverterObject, FfiConverterObjectWithCallbacks, FfiConverterOptional, FfiConverterUInt32, FfiConverterUInt64, FfiConverterUInt8, RustBuffer, UniffiAbstractObject, UniffiError, UniffiInternalError, UniffiResult, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiTraitInterfaceCall, uniffiTraitInterfaceCallWithError, uniffiTypeNameSymbol, variantOrdinalSymbol,
 } from "@ubjs/core";
 const uniffiCaller = new UniffiRustCaller(() => ({ code: 0 }));
 
@@ -18,6 +18,27 @@ const uniffiIsDebug =
   false;
 
 // Public interface members begin here.
+
+/**
+ * Copia `src_fd` en `dst_fd` en este hilo y cierra los dos.
+ */
+export function copyFdToFd(srcFd: number, dstFd: number): CopyResult /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_copy_fd_to_fd(
+        FfiConverterInt32.lower(srcFd, nativeModule().rustbuffer_alloc),
+        FfiConverterInt32.lower(dstFd, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterTypeCopyResult.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
 
 /**
  * Copia `src_fd` (del disco) a `path` (en la sandbox). Para archivos chicos
@@ -63,6 +84,63 @@ export function copyPathToFd(path: string, dstFd: number): CopyResult /*throws*/
     }
 
 /**
+ * Aprueba o quita la aprobación con el `CullPhoto` del desktop: mueve los
+ * archivos en el disco (por `disk`) y guarda en la copia de trabajo.
+ */
+export function cullPhoto(mirrorDir: string, photoId: string, culled: boolean, disk: DiskFiles): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_cull_photo(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(photoId, nativeModule().rustbuffer_alloc),
+        FfiConverterBool.lower(culled, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeDiskFiles.lower(disk, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Tamaño y SHA-256 del contenido de `fd` (huella de una entrega); lo cierra.
+ */
+export function fingerprintFd(fd: number): DiskFingerprint /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_fingerprint_fd(
+        FfiConverterInt32.lower(fd, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterTypeDiskFingerprint.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
+ * De `names`, los que no están en `dir` (lo que falta traer al caché).
+ */
+export function missingFiles(dir: string, names: Array<string>): Array<string> {
+    const __rb: Uint8Array = uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_missing_files(
+        FfiConverterString.lower(dir, nativeModule().rustbuffer_alloc),
+        FfiConverterSequenceString.lower(names, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterSequenceString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * Fotos del proyecto en `project_dir` (sin la papelera), en el orden del
  * desktop: por fecha de captura.
  */
@@ -102,6 +180,23 @@ export function prepareGrid(thumbs: Array<string>, previews: Array<string>, outD
     }
 
 /**
+ * Estrellas y etiquetas de color (formato del desktop: `"1,3,5"`, o `None`)
+ * en la copia de trabajo, conservando los tags.
+ */
+export function ratePhoto(mirrorDir: string, photoId: string, stars: number, colorLabel: string | undefined): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_rate_photo(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(photoId, nativeModule().rustbuffer_alloc),
+        FfiConverterInt32.lower(stars, nativeModule().rustbuffer_alloc),
+        FfiConverterOptionalString.lower(colorLabel, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
  * Vacía la carpeta de la copia de trabajo: un `-wal` de una apertura anterior
  * se aplicaría sobre el `project.db` recién traído del disco.
  */
@@ -125,6 +220,23 @@ export function setStars(projectDir: string, photoId: string, stars: number): vo
         FfiConverterString.lower(projectDir, nativeModule().rustbuffer_alloc),
         FfiConverterString.lower(photoId, nativeModule().rustbuffer_alloc),
         FfiConverterInt32.lower(stars, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Copia cada fd de `fds` a `dir/<names[i]>` en un hilo (miniaturas del disco
+ * a la sandbox), avisando cada archivo terminado con `on_progress(i + 1)`.
+ * Cierra todos los fds; uno que falla se salta.
+ */
+export function startCopyToDir(fds: Array<number>, names: Array<string>, dir: string, listener: CopyListener): void {uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_start_copy_to_dir(
+        FfiConverterSequenceInt32.lower(fds, nativeModule().rustbuffer_alloc),
+        FfiConverterSequenceString.lower(names, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(dir, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeCopyListener.lower(listener, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
@@ -158,6 +270,20 @@ export function startFdCopy(srcFd: number, dstFd: number, pipelined: boolean, li
 export function startFdRead(srcFd: number, listener: CopyListener): void {uniffiCaller.rustCall(
             /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_start_fd_read(
         FfiConverterInt32.lower(srcFd, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeCopyListener.lower(listener, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Copia `src_fd` a `path` en un hilo (una vista previa del disco a la sandbox).
+ */
+export function startFdToPath(srcFd: number, path: string, listener: CopyListener): void {uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_start_fd_to_path(
+        FfiConverterInt32.lower(srcFd, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(path, nativeModule().rustbuffer_alloc),
         FfiConverterTypeCopyListener.lower(listener, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
@@ -283,6 +409,148 @@ const FfiConverterTypeCopyResult = (() => {
     return new FFIConverter();
 })();
 
+// Hermes (React Native ≥ 0.74) ships TextEncoder and encodeInto, but not
+// TextDecoder. For single-string decode (bytesToString), we polyfill via the
+// C++ string_from_buffer helper using a duck-typed object matching the
+// standard TextDecoder.decode signature. Once Hermes ships a real
+// TextDecoder, the `typeof` check will pick it up automatically.
+//
+// For array-of-strings decode (readStringFromBuffer), we keep a dedicated C++
+// helper: the polyfill path (new Uint8Array view + decode) measured ~40%
+// slower on getStringArray benchmarks than a direct (buf, offset, length)
+// call, due to the per-read view allocation and extra property lookups in
+// string_from_buffer.
+const stringConverter = (() => {
+    const encoder = new TextEncoder();
+    const decoder: { decode(input: UniffiByteArray): string } =
+        typeof TextDecoder !== "undefined"
+            ? new TextDecoder()
+            : {
+                  decode: (bytes: UniffiByteArray) =>
+                      nativeModule().ubrn_uniffi_internal_fn_func_ffi__string_from_buffer(
+                          bytes,
+                          undefined as any,
+                      ) as string,
+              };
+    return {
+        // Single-string lower() uses the C++ helper — TextEncoder.encode
+        // measured ~43% slower on takeString benchmarks.
+        stringToBytes: (s: string) =>
+            nativeModule().ubrn_uniffi_internal_fn_func_ffi__string_to_buffer(s, undefined as any),
+        bytesToString: (ab: UniffiByteArray) => decoder.decode(ab),
+        // Direct C++ call — bypasses uniffiCaller.rustCall() overhead.
+        // Matters for N-element arrays.
+        stringByteLength: (s: string) =>
+            nativeModule().ubrn_uniffi_internal_fn_func_ffi__string_to_byte_length(s, undefined as any) as number,
+        // Encode directly into the RustBuffer backing store via
+        // TextEncoder.encodeInto — zero intermediate allocation. Replaces
+        // the old C++ write_string_into_buffer helper.
+        writeStringIntoBuffer: (s: string, buf: any, offset: number): number => {
+            const view = new Uint8Array(
+                buf.arrayBuffer,
+                offset,
+                buf.arrayBuffer.byteLength - offset,
+            );
+            return encoder.encodeInto(s, view).written;
+        },
+        // Dedicated C++ helper — avoids per-read Uint8Array allocation and
+        // the double property-lookup in string_from_buffer.
+        readStringFromBuffer: (buf: any, offset: number, length: number): string =>
+            nativeModule().ubrn_uniffi_internal_fn_func_ffi__read_string_from_buffer(buf, offset, length) as string,
+    };
+})();
+const FfiConverterString = uniffiCreateFfiConverterString(stringConverter);
+
+export type DiskFile = {
+    name: string,
+    size: bigint,
+    modified: bigint
+}
+
+/**
+ * Generated factory for {@link DiskFile} record objects.
+ */
+export const DiskFile = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<DiskFile, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<DiskFile>,
+    });
+})();
+
+const FfiConverterTypeDiskFile = (() => {
+    type TypeName = DiskFile;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                name: FfiConverterString.readFromCursor(c), 
+                size: FfiConverterUInt64.readFromCursor(c), 
+                modified: FfiConverterUInt64.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.name, c);
+            FfiConverterUInt64.writeIntoCursor(value.size, c);
+            FfiConverterUInt64.writeIntoCursor(value.modified, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.name) +
+             FfiConverterUInt64.allocationSize(value.size) +
+             FfiConverterUInt64.allocationSize(value.modified);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
+export type DiskFingerprint = {
+    size: bigint,
+    sha256: string
+}
+
+/**
+ * Generated factory for {@link DiskFingerprint} record objects.
+ */
+export const DiskFingerprint = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<DiskFingerprint, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<DiskFingerprint>,
+    });
+})();
+
+const FfiConverterTypeDiskFingerprint = (() => {
+    type TypeName = DiskFingerprint;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                size: FfiConverterUInt64.readFromCursor(c), 
+                sha256: FfiConverterString.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterUInt64.writeIntoCursor(value.size, c);
+            FfiConverterString.writeIntoCursor(value.sha256, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterUInt64.allocationSize(value.size) +
+             FfiConverterString.allocationSize(value.sha256);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
 /**
  * Cuentas por nivel (0–255) de cada canal.
  */
@@ -336,58 +604,6 @@ const FfiConverterTypeHistogram = (() => {
     };
     return new FFIConverter();
 })();
-
-// Hermes (React Native ≥ 0.74) ships TextEncoder and encodeInto, but not
-// TextDecoder. For single-string decode (bytesToString), we polyfill via the
-// C++ string_from_buffer helper using a duck-typed object matching the
-// standard TextDecoder.decode signature. Once Hermes ships a real
-// TextDecoder, the `typeof` check will pick it up automatically.
-//
-// For array-of-strings decode (readStringFromBuffer), we keep a dedicated C++
-// helper: the polyfill path (new Uint8Array view + decode) measured ~40%
-// slower on getStringArray benchmarks than a direct (buf, offset, length)
-// call, due to the per-read view allocation and extra property lookups in
-// string_from_buffer.
-const stringConverter = (() => {
-    const encoder = new TextEncoder();
-    const decoder: { decode(input: UniffiByteArray): string } =
-        typeof TextDecoder !== "undefined"
-            ? new TextDecoder()
-            : {
-                  decode: (bytes: UniffiByteArray) =>
-                      nativeModule().ubrn_uniffi_internal_fn_func_ffi__string_from_buffer(
-                          bytes,
-                          undefined as any,
-                      ) as string,
-              };
-    return {
-        // Single-string lower() uses the C++ helper — TextEncoder.encode
-        // measured ~43% slower on takeString benchmarks.
-        stringToBytes: (s: string) =>
-            nativeModule().ubrn_uniffi_internal_fn_func_ffi__string_to_buffer(s, undefined as any),
-        bytesToString: (ab: UniffiByteArray) => decoder.decode(ab),
-        // Direct C++ call — bypasses uniffiCaller.rustCall() overhead.
-        // Matters for N-element arrays.
-        stringByteLength: (s: string) =>
-            nativeModule().ubrn_uniffi_internal_fn_func_ffi__string_to_byte_length(s, undefined as any) as number,
-        // Encode directly into the RustBuffer backing store via
-        // TextEncoder.encodeInto — zero intermediate allocation. Replaces
-        // the old C++ write_string_into_buffer helper.
-        writeStringIntoBuffer: (s: string, buf: any, offset: number): number => {
-            const view = new Uint8Array(
-                buf.arrayBuffer,
-                offset,
-                buf.arrayBuffer.byteLength - offset,
-            );
-            return encoder.encodeInto(s, view).written;
-        },
-        // Dedicated C++ helper — avoids per-read Uint8Array allocation and
-        // the double property-lookup in string_from_buffer.
-        readStringFromBuffer: (buf: any, offset: number, length: number): string =>
-            nativeModule().ubrn_uniffi_internal_fn_func_ffi__read_string_from_buffer(buf, offset, length) as string,
-    };
-})();
-const FfiConverterString = uniffiCreateFfiConverterString(stringConverter);
 
 /**
  * Avance del import, en la forma que necesita la UI.
@@ -515,6 +731,18 @@ export type PhotoInfo = {
      * Nombre del archivo en el proyecto (el RAW, o el JPG si la foto es solo JPG).
      */
     fileName: string,
+    /**
+     * Ruta relativa al proyecto (`_media/…` o `_culled/…`).
+     */
+    dngPath: string,
+    /**
+     * Aprobada (en Lumik, aprobar es mover a `_culled/`).
+     */
+    culled: boolean,
+    /**
+     * Etiquetas de color, formato del desktop: `"1,3,5"`.
+     */
+    colorLabel?: string,
     thumbPath: string,
     previewPath: string,
     /**
@@ -557,6 +785,9 @@ const FfiConverterTypePhotoInfo = (() => {
             return {
                 id: FfiConverterString.readFromCursor(c), 
                 fileName: FfiConverterString.readFromCursor(c), 
+                dngPath: FfiConverterString.readFromCursor(c), 
+                culled: FfiConverterBool.readFromCursor(c), 
+                colorLabel: FfiConverterOptionalString.readFromCursor(c), 
                 thumbPath: FfiConverterString.readFromCursor(c), 
                 previewPath: FfiConverterString.readFromCursor(c), 
                 rotation: FfiConverterInt32.readFromCursor(c), 
@@ -576,6 +807,9 @@ const FfiConverterTypePhotoInfo = (() => {
         writeIntoCursor(value: TypeName, c: Cursor): void {
             FfiConverterString.writeIntoCursor(value.id, c);
             FfiConverterString.writeIntoCursor(value.fileName, c);
+            FfiConverterString.writeIntoCursor(value.dngPath, c);
+            FfiConverterBool.writeIntoCursor(value.culled, c);
+            FfiConverterOptionalString.writeIntoCursor(value.colorLabel, c);
             FfiConverterString.writeIntoCursor(value.thumbPath, c);
             FfiConverterString.writeIntoCursor(value.previewPath, c);
             FfiConverterInt32.writeIntoCursor(value.rotation, c);
@@ -594,6 +828,9 @@ const FfiConverterTypePhotoInfo = (() => {
         allocationSize(value: TypeName): number {
             return FfiConverterString.allocationSize(value.id) +
              FfiConverterString.allocationSize(value.fileName) +
+             FfiConverterString.allocationSize(value.dngPath) +
+             FfiConverterBool.allocationSize(value.culled) +
+             FfiConverterOptionalString.allocationSize(value.colorLabel) +
              FfiConverterString.allocationSize(value.thumbPath) +
              FfiConverterString.allocationSize(value.previewPath) +
              FfiConverterInt32.allocationSize(value.rotation) +
@@ -611,6 +848,104 @@ const FfiConverterTypePhotoInfo = (() => {
             
         }
     };
+    return new FFIConverter();
+})();
+
+
+// Error type: DiskError
+export enum DiskError_Tags {
+    Failed = "Failed"
+}
+export const DiskError = (() => {
+
+    type Failed__interface = {
+        tag: DiskError_Tags.Failed;
+        inner: 
+Readonly<{message: string}>
+    };
+    class Failed_ extends UniffiError implements Failed__interface {
+        /**
+         * @private
+         * This field is private and should not be used, use `tag` instead.
+         */
+        readonly [uniffiTypeNameSymbol] = "DiskError";
+        readonly tag = DiskError_Tags.Failed;
+        readonly inner: 
+Readonly<{message: string}>;
+        constructor(
+inner: {message: string }) {
+            super("DiskError", "Failed");
+
+            this.inner = Object.freeze(inner);
+        }
+        static new(
+inner: {message: string }): Failed_ {
+            return new Failed_(inner);
+        }
+
+        static instanceOf(obj: any): obj is Failed_ {
+            return obj.tag === DiskError_Tags.Failed;
+        }
+        static hasInner(obj: any): obj is Failed_ {
+            return Failed_.instanceOf(obj);
+        }
+
+        static getInner(obj: Failed_): 
+Readonly<{message: string}> {
+            return obj.inner;
+        }
+
+    }
+
+    function instanceOf(obj: any): obj is DiskError {
+        return obj[uniffiTypeNameSymbol] === "DiskError";
+    }
+
+    return Object.freeze({
+        instanceOf,
+  Failed: Failed_
+    });
+
+})();
+export type DiskError = InstanceType<
+    typeof DiskError['Failed']
+>;
+
+// FfiConverter for enum DiskError
+const FfiConverterTypeDiskError = (() => {
+    type TypeName = DiskError;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            switch (c.readI32()) {
+                case 1: return new DiskError.Failed({message: FfiConverterString.readFromCursor(c) });
+                default: throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            switch (value.tag) {
+                case DiskError_Tags.Failed: {
+                    c.writeI32(1);
+                    const inner = value.inner;
+                    FfiConverterString.writeIntoCursor(inner.message, c);
+                    return;
+                }
+                default:
+                    // Throwing from here means that DiskError_Tags hasn't matched an ordinal.
+                    throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+        allocationSize(value: TypeName): number {
+            switch (value.tag) {
+                case DiskError_Tags.Failed: {
+                    const inner = value.inner;
+                    let size = 4;
+                    size += FfiConverterString.allocationSize(inner.message);
+                    return size;
+                }
+                default: throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+    }
     return new FFIConverter();
 })();
 
@@ -1223,6 +1558,429 @@ const uniffiCallbackInterfaceCopyListener: { vtable: any; register: () => void; 
     },
 };
 
+/**
+ * Operaciones sobre la carpeta del proyecto en el disco, con rutas relativas
+ * a ella (`_media/x.raf`). Las implementa la app con SAF.
+ */
+export interface DiskFiles {
+    
+    createDirAll(rel: string) /*throws*/: void;
+/**
+ * Mueve o renombra (puede cambiar de carpeta y de nombre a la vez).
+ */
+    rename(from: string, to: string) /*throws*/: void;
+    exists(rel: string): boolean;
+    copy(from: string, to: string) /*throws*/: void;
+    removeFile(rel: string) /*throws*/: void;
+    fingerprint(rel: string) /*throws*/: DiskFingerprint;
+    listFiles(rel: string) /*throws*/: Array<DiskFile>;
+}
+
+
+/**
+ * Operaciones sobre la carpeta del proyecto en el disco, con rutas relativas
+ * a ella (`_media/x.raf`). Las implementa la app con SAF.
+ */
+export class DiskFilesImpl extends UniffiAbstractObject implements DiskFiles {
+
+    readonly [uniffiTypeNameSymbol] = "DiskFilesImpl";
+    readonly [destructorGuardSymbol]: UniffiGcObject;
+    readonly [pointerLiteralSymbol]: UniffiHandle;
+    // No primary constructor declared for this class.
+private constructor(pointer: UniffiHandle) {
+    super();
+    this[pointerLiteralSymbol] = pointer;
+    this[destructorGuardSymbol] = uniffiTypeDiskFilesImplObjectFactory.bless(pointer);
+}
+
+    
+
+    
+    createDirAll(rel: string): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeDiskError.lift.bind(FfiConverterTypeDiskError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_method_diskfiles_create_dir_all(
+                uniffiTypeDiskFilesImplObjectFactory.clonePointer(this),
+        FfiConverterString.lower(rel, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+    
+/**
+ * Mueve o renombra (puede cambiar de carpeta y de nombre a la vez).
+ */
+    rename(from: string, to: string): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeDiskError.lift.bind(FfiConverterTypeDiskError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_method_diskfiles_rename(
+                uniffiTypeDiskFilesImplObjectFactory.clonePointer(this),
+        FfiConverterString.lower(from, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(to, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+    
+    exists(rel: string): boolean {
+    return FfiConverterBool.lift(uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_method_diskfiles_exists(
+                uniffiTypeDiskFilesImplObjectFactory.clonePointer(this),
+        FfiConverterString.lower(rel, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    ));
+    }
+    
+    copy(from: string, to: string): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeDiskError.lift.bind(FfiConverterTypeDiskError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_method_diskfiles_copy(
+                uniffiTypeDiskFilesImplObjectFactory.clonePointer(this),
+        FfiConverterString.lower(from, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(to, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+    
+    removeFile(rel: string): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeDiskError.lift.bind(FfiConverterTypeDiskError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_method_diskfiles_remove_file(
+                uniffiTypeDiskFilesImplObjectFactory.clonePointer(this),
+        FfiConverterString.lower(rel, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+    
+    fingerprint(rel: string): DiskFingerprint /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeDiskError.lift.bind(FfiConverterTypeDiskError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_method_diskfiles_fingerprint(
+                uniffiTypeDiskFilesImplObjectFactory.clonePointer(this),
+        FfiConverterString.lower(rel, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterTypeDiskFingerprint.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+    
+    listFiles(rel: string): Array<DiskFile> /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeDiskError.lift.bind(FfiConverterTypeDiskError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_method_diskfiles_list_files(
+                uniffiTypeDiskFilesImplObjectFactory.clonePointer(this),
+        FfiConverterString.lower(rel, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterSequenceTypeDiskFile.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+    
+
+    uniffiDestroy(): void {
+        const ptr = (this as any)[destructorGuardSymbol];
+        if (ptr !== undefined) {
+            const pointer = uniffiTypeDiskFilesImplObjectFactory.pointer(this);
+            uniffiTypeDiskFilesImplObjectFactory.freePointer(pointer);
+            uniffiTypeDiskFilesImplObjectFactory.unbless(ptr);
+            delete (this as any)[destructorGuardSymbol];
+        }
+    }
+
+    static instanceOf(obj_: any): obj_ is DiskFilesImpl {
+        return uniffiTypeDiskFilesImplObjectFactory.isConcreteType(obj_);
+    }
+
+    
+}
+
+const uniffiTypeDiskFilesImplObjectFactory: UniffiObjectFactory<DiskFiles> = (() => {
+    
+    return {
+    create(pointer: UniffiHandle): DiskFiles {
+        const instance = Object.create(DiskFilesImpl.prototype);
+        instance[pointerLiteralSymbol] = pointer;
+        instance[destructorGuardSymbol] = this.bless(pointer);
+        instance[uniffiTypeNameSymbol] = "DiskFilesImpl";
+        return instance;
+    },
+
+    
+    bless(p: UniffiHandle): UniffiGcObject {
+        return uniffiCaller.rustCall(
+            /*caller:*/ (status) =>
+                nativeModule().ubrn_uniffi_internal_fn_method_diskfiles_ffi__bless_pointer(p, status),
+            /*liftString:*/ FfiConverterString.lift
+        );
+    },
+
+    unbless(ptr_: UniffiGcObject) {
+        ptr_.markDestroyed();
+    },
+
+    pointer(obj_: DiskFiles): UniffiHandle {
+        if ((obj_ as any)[destructorGuardSymbol] === undefined) {
+            throw new UniffiInternalError.UnexpectedNullPointer();
+        }
+        return (obj_ as any)[pointerLiteralSymbol];
+    },
+
+    clonePointer(obj_: DiskFiles): UniffiHandle {
+        const pointer = this.pointer(obj_);
+        return uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => nativeModule().ubrn_uniffi_lumik_mobile_fn_clone_diskfiles(pointer, callStatus),
+            /*liftString:*/ FfiConverterString.lift
+        );
+    },
+
+    freePointer(pointer: UniffiHandle): void {
+        uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => nativeModule().ubrn_uniffi_lumik_mobile_fn_free_diskfiles(pointer, callStatus),
+            /*liftString:*/ FfiConverterString.lift
+        );
+    },
+
+    isConcreteType(obj_: any): obj_ is DiskFiles {
+        return obj_[destructorGuardSymbol] && obj_[uniffiTypeNameSymbol] === "DiskFilesImpl";
+    },
+}})();
+const FfiConverterTypeDiskFiles = new FfiConverterObjectWithCallbacks(uniffiTypeDiskFilesImplObjectFactory);
+
+// Add a vtable for the callbacks that go in DiskFiles.
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+const uniffiCallbackInterfaceDiskFiles: { vtable: any; register: () => void; } = {
+    // Create the VTable using a series of closures.
+    // ts automatically converts these into C callback functions.
+    vtable: {
+        create_dir_all: (
+            uniffiHandle: bigint,
+            rel: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : void => {
+                const jsCallback = FfiConverterTypeDiskFiles.lift(uniffiHandle);
+                return jsCallback.createDirAll(
+                    FfiConverterString.lift(rel)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<void>();
+            const uniffiHandleSuccess = (obj: any) => {};
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCallWithError(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*isErrorType:*/ DiskError.instanceOf,
+                /*lowerError:*/ FfiConverterTypeDiskError.lower.bind(FfiConverterTypeDiskError),
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            );
+            return uniffiResult;
+        },
+        rename: (
+            uniffiHandle: bigint,
+            from: Uint8Array,
+            to: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : void => {
+                const jsCallback = FfiConverterTypeDiskFiles.lift(uniffiHandle);
+                return jsCallback.rename(
+                    FfiConverterString.lift(from), 
+                    FfiConverterString.lift(to)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<void>();
+            const uniffiHandleSuccess = (obj: any) => {};
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCallWithError(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*isErrorType:*/ DiskError.instanceOf,
+                /*lowerError:*/ FfiConverterTypeDiskError.lower.bind(FfiConverterTypeDiskError),
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            );
+            return uniffiResult;
+        },
+        exists: (
+            uniffiHandle: bigint,
+            rel: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : boolean => {
+                const jsCallback = FfiConverterTypeDiskFiles.lift(uniffiHandle);
+                return jsCallback.exists(
+                    FfiConverterString.lift(rel)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<number>();
+            const uniffiHandleSuccess = (obj: any) => {
+                UniffiResult.writeSuccess(uniffiResult, FfiConverterBool.lower(obj, nativeModule().rustbuffer_alloc));
+            };
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCall(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            )
+            return uniffiResult;
+        },
+        copy: (
+            uniffiHandle: bigint,
+            from: Uint8Array,
+            to: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : void => {
+                const jsCallback = FfiConverterTypeDiskFiles.lift(uniffiHandle);
+                return jsCallback.copy(
+                    FfiConverterString.lift(from), 
+                    FfiConverterString.lift(to)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<void>();
+            const uniffiHandleSuccess = (obj: any) => {};
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCallWithError(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*isErrorType:*/ DiskError.instanceOf,
+                /*lowerError:*/ FfiConverterTypeDiskError.lower.bind(FfiConverterTypeDiskError),
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            );
+            return uniffiResult;
+        },
+        remove_file: (
+            uniffiHandle: bigint,
+            rel: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : void => {
+                const jsCallback = FfiConverterTypeDiskFiles.lift(uniffiHandle);
+                return jsCallback.removeFile(
+                    FfiConverterString.lift(rel)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<void>();
+            const uniffiHandleSuccess = (obj: any) => {};
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCallWithError(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*isErrorType:*/ DiskError.instanceOf,
+                /*lowerError:*/ FfiConverterTypeDiskError.lower.bind(FfiConverterTypeDiskError),
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            );
+            return uniffiResult;
+        },
+        fingerprint: (
+            uniffiHandle: bigint,
+            rel: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : DiskFingerprint => {
+                const jsCallback = FfiConverterTypeDiskFiles.lift(uniffiHandle);
+                return jsCallback.fingerprint(
+                    FfiConverterString.lift(rel)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<Uint8Array>();
+            const uniffiHandleSuccess = (obj: any) => {
+                UniffiResult.writeSuccess(uniffiResult, FfiConverterTypeDiskFingerprint.lower(obj, nativeModule().rustbuffer_alloc));
+            };
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCallWithError(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*isErrorType:*/ DiskError.instanceOf,
+                /*lowerError:*/ FfiConverterTypeDiskError.lower.bind(FfiConverterTypeDiskError),
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            );
+            return uniffiResult;
+        },
+        list_files: (
+            uniffiHandle: bigint,
+            rel: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : Array<DiskFile> => {
+                const jsCallback = FfiConverterTypeDiskFiles.lift(uniffiHandle);
+                return jsCallback.listFiles(
+                    FfiConverterString.lift(rel)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<Uint8Array>();
+            const uniffiHandleSuccess = (obj: any) => {
+                UniffiResult.writeSuccess(uniffiResult, FfiConverterSequenceTypeDiskFile.lower(obj, nativeModule().rustbuffer_alloc));
+            };
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCallWithError(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*isErrorType:*/ DiskError.instanceOf,
+                /*lowerError:*/ FfiConverterTypeDiskError.lower.bind(FfiConverterTypeDiskError),
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            );
+            return uniffiResult;
+        },
+        uniffi_free: (uniffiHandle: UniffiHandle): void => {
+            // this will throw a stale handle error if the handle isn't found.
+            FfiConverterTypeDiskFiles.drop(uniffiHandle);
+        },
+        uniffi_clone: (uniffiHandle: UniffiHandle): UniffiHandle => {
+            return FfiConverterTypeDiskFiles.clone(uniffiHandle);
+        }
+    },
+    register: () => {nativeModule().ubrn_uniffi_lumik_mobile_fn_init_callback_vtable_diskfiles(
+            uniffiCallbackInterfaceDiskFiles.vtable
+        );
+    },
+};
+
 export interface HistogramListener {
     
     onHistogram(histogram: Histogram): void;
@@ -1607,11 +2365,17 @@ const FfiConverterOptionalInt32 = new FfiConverterOptional(FfiConverterInt32);
 // FfiConverter for number | undefined
 const FfiConverterOptionalFloat64 = new FfiConverterOptional(FfiConverterFloat64);
 
-// FfiConverter for Array<PhotoInfo>
-const FfiConverterSequenceTypePhotoInfo = new FfiConverterArray(FfiConverterTypePhotoInfo);
+// FfiConverter for Array<DiskFile>
+const FfiConverterSequenceTypeDiskFile = new FfiConverterArray(FfiConverterTypeDiskFile);
 
 // FfiConverter for Array<string>
 const FfiConverterSequenceString = new FfiConverterArray(FfiConverterString);
+
+// FfiConverter for Array<PhotoInfo>
+const FfiConverterSequenceTypePhotoInfo = new FfiConverterArray(FfiConverterTypePhotoInfo);
+
+// FfiConverter for Array<number>
+const FfiConverterSequenceInt32 = new FfiConverterArray(FfiConverterInt32);
 
 
 /**
@@ -1632,11 +2396,23 @@ function uniffiEnsureInitialized() {
     if (bindingsContractVersion !== scaffoldingContractVersion) {
         throw new UniffiInternalError.ContractVersionMismatch(scaffoldingContractVersion, bindingsContractVersion);
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_copy_fd_to_fd() !== 63965) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_copy_fd_to_fd");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_copy_fd_to_path() !== 44549) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_copy_fd_to_path");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_copy_path_to_fd() !== 18206) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_copy_path_to_fd");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_cull_photo() !== 37748) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_cull_photo");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_fingerprint_fd() !== 49197) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_fingerprint_fd");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_missing_files() !== 38010) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_missing_files");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_open_project() !== 13630) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_open_project");
@@ -1644,17 +2420,26 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_prepare_grid() !== 8517) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_prepare_grid");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_rate_photo() !== 8190) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_rate_photo");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_reset_dir() !== 61925) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_reset_dir");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_set_stars() !== 23964) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_set_stars");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_copy_to_dir() !== 25065) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_copy_to_dir");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_fd_copy() !== 32202) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_fd_copy");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_fd_read() !== 60462) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_fd_read");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_fd_to_path() !== 16246) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_fd_to_path");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_fd_write() !== 4377) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_fd_write");
@@ -1680,6 +2465,27 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_copylistener_on_error() !== 3655) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_copylistener_on_error");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_diskfiles_create_dir_all() !== 60916) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_diskfiles_create_dir_all");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_diskfiles_rename() !== 62646) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_diskfiles_rename");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_diskfiles_exists() !== 35556) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_diskfiles_exists");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_diskfiles_copy() !== 12570) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_diskfiles_copy");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_diskfiles_remove_file() !== 646) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_diskfiles_remove_file");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_diskfiles_fingerprint() !== 64018) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_diskfiles_fingerprint");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_diskfiles_list_files() !== 38979) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_diskfiles_list_files");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_histogramlistener_on_histogram() !== 45180) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_histogramlistener_on_histogram");
     }
@@ -1694,6 +2500,7 @@ function uniffiEnsureInitialized() {
     }
 
     uniffiCallbackInterfaceCopyListener.register();
+    uniffiCallbackInterfaceDiskFiles.register();
     uniffiCallbackInterfaceHistogramListener.register();
     uniffiCallbackInterfaceImportListener.register();
     }
@@ -1703,6 +2510,10 @@ export default Object.freeze({
   converters: {
     FfiConverterTypeCopyListener,
     FfiConverterTypeCopyResult,
+    FfiConverterTypeDiskError,
+    FfiConverterTypeDiskFile,
+    FfiConverterTypeDiskFiles,
+    FfiConverterTypeDiskFingerprint,
     FfiConverterTypeHistogram,
     FfiConverterTypeHistogramListener,
     FfiConverterTypeImportListener,

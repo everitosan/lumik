@@ -15,7 +15,7 @@
 
 ## 3. Interacción táctil
 
-- [ ] 3.1 Prototipo navegable de inicio, importar y culling en las dos variantes (D4 y D5) con los principios de D3. Verificar con una sesión de culling real de 200 fotos en cada tablet y anotar fricciones.
+- [ ] 3.1 *(Android, etapa A (2026-10-28): pestaña "3.1 Prototipo" con inicio D5 (rail, discos con permiso guardado, proyectos del disco por año) y culling sobre un proyecto del disco por SAF en modo espejado: miniaturas al caché de la sandbox al abrir, vistas previas bajo demanda, estrellas y etiquetas en la copia de trabajo con devolución a los 3 s, y aprobar con el `CullPhoto` del núcleo sobre un `FileStore` hecho con SAF (`DiskFiles` en TS → Kotlin), devolviendo `project.db` en seguida. Probado con una copia completa de un proyecto real en el almacenamiento interno: el RAW se mueve entre `_media/` y `_culled/` y la base devuelta pasa `integrity_check`. Los `.raf.rrdata` junto al RAW no se mueven (igual que en el desktop). Falta la etapa B (importar) y la sesión de culling de 200 fotos.)* Prototipo navegable de inicio, importar y culling en las dos variantes (D4 y D5) con los principios de D3. Verificar con una sesión de culling real de 200 fotos en cada tablet y anotar fricciones.
 
 ## 4. Decisión
 

@@ -3,12 +3,14 @@
 //! progreso por callback desde un hilo de Rust), 2.4 (proyecto real con sus
 //! datos de captura e histograma) y 2.5 (copias por fd y `project.db` espejado).
 
+mod disk;
 mod histogram;
 mod mirror;
 mod project;
 
+pub use disk::{cull_photo, rate_photo, DiskError, DiskFile, DiskFiles, DiskFingerprint};
 pub use histogram::{start_histogram, Histogram, HistogramListener};
-pub use mirror::{copy_fd_to_path, copy_path_to_fd, reset_dir, set_stars, start_fd_copy, start_fd_read, start_fd_write, vacuum_into, CopyListener, CopyResult, MirrorError};
+pub use mirror::{missing_files, copy_fd_to_fd, copy_fd_to_path, copy_path_to_fd, fingerprint_fd, start_copy_to_dir, start_fd_to_path, reset_dir, set_stars, start_fd_copy, start_fd_read, start_fd_write, vacuum_into, CopyListener, CopyResult, MirrorError};
 pub use project::{open_project, prepare_grid, PhotoInfo, ProjectError};
 
 use lumik_core::import::pipeline::{pipeline_passthrough, PipelineWorkspace, StageEvent};
