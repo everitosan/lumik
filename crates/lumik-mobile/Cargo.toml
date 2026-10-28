@@ -1,0 +1,20 @@
+[package]
+name = "lumik-mobile"
+version = "0.0.0"
+description = "Puente uniffi de lumik-core para la app de tablet (spike)"
+edition = "2021"
+publish = false
+
+[lib]
+# staticlib para Android/iOS (ubrn la enlaza en el turbo module); lib para los tests.
+crate-type = ["lib", "staticlib"]
+name = "lumik_mobile"
+
+[dependencies]
+lumik-core = { path = "../lumik-core" }
+# Debe coincidir en minor con uniffi-bindgen-react-native (0.31.x).
+uniffi = "0.31"
+log = "0.4"
+
+[dev-dependencies]
+tempfile = "3"

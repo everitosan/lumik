@@ -1,0 +1,10 @@
+# uniffi-bindgen-react-native: genera el turbo module desde crates/lumik-mobile.
+rust:
+  directory: ../../../../crates/lumik-mobile
+  manifestPath: Cargo.toml
+android:
+  # Spike: solo la tablet de prueba (arm64).
+  targets:
+    - arm64-v8a
+  apiLevel: 24
+  useSharedLibrary: false
