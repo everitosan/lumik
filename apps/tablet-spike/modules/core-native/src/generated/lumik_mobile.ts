@@ -246,6 +246,26 @@ export function openProject(projectDir: string): Array<PhotoInfo> /*throws*/ {
     }
 
 /**
+ * Fotos en la papelera del proyecto (`_trash/`), en el mismo orden.
+ */
+export function openProjectTrash(projectDir: string): Array<PhotoInfo> /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeProjectError.lift.bind(FfiConverterTypeProjectError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_open_project_trash(
+        FfiConverterString.lower(projectDir, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterSequenceTypePhotoInfo.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * JSON del candado propio, con la generación de la copia de trabajo.
  */
 export function ownLockJson(install: InstallInfo, mirrorDir: string, pending: boolean): string /*throws*/ {
@@ -3532,6 +3552,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_open_project() !== 13630) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_open_project");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_open_project_trash() !== 50839) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_open_project_trash");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_own_lock_json() !== 15648) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_own_lock_json");

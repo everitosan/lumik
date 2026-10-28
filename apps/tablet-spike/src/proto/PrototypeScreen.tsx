@@ -18,8 +18,8 @@ import { discoverProjects } from './projects';
 import { type DiskProject, ProjectSession } from './session';
 
 type Log = { at: string; text: string; error?: boolean };
-/** Visor abierto: índices (en `session.photos`) que recorre y dónde empieza. */
-type ViewerState = { visible: number[]; position: number };
+/** Visor abierto: índices (en `session.photos` o en la papelera) que recorre y dónde empieza. */
+type ViewerState = { fromTrash: boolean; visible: number[]; position: number };
 
 export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (clean: boolean) => void }) {
   const [trees, setTrees] = useState<string[]>(() => diskTrees(Saf.persistedTrees()));
@@ -179,11 +179,17 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session, version],
   );
+  const trashGrid = useMemo(
+    () => (session?.trash ?? []).map((p) => ({ info: p.info, thumb: p.thumb })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session, version],
+  );
+  const viewerList = session && viewer ? (viewer.fromTrash ? session.trash : session.photos) : [];
 
   const items: CullItem[] = useMemo(() => {
     if (!session || !viewer) return [];
     return viewer.visible.map((i) => {
-      const p = session.photos[i];
+      const p = viewerList[i];
       return {
         info: p.info,
         thumb: p.thumb,
@@ -198,7 +204,8 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
   // El visor habla en posiciones de su lista; la sesión, en índices de todas.
   const backend: CullingBackend | undefined = useMemo(() => {
     if (!session || !viewer) return undefined;
-    const at = (j: number) => viewer.visible[j];
+    const list = viewer.fromTrash ? session.trash : session.photos;
+    const at = (j: number) => list[viewer.visible[j]];
     return {
       rate: (j, stars, labels) => session.rate(at(j), stars, labels),
       approve: (j, approved) => session.approve(at(j), approved),
@@ -263,9 +270,10 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
       <ProjectScreen
         title={titleOf(session.project)}
         photos={grid}
+        trash={trashGrid}
         filters={filters}
         onFilters={setFilters}
-        onOpenPhoto={(visible, position) => setViewer({ visible, position })}
+        onOpenPhoto={(fromTrash, visible, position) => setViewer({ fromTrash, visible, position })}
         onBack={close}
         onImport={lock ? undefined : startImport}
         fetching={fetching}

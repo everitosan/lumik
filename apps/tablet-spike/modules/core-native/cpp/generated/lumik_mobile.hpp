@@ -90,6 +90,7 @@ class NativeLumikMobile : public jsi::HostObject {
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_write_text(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_create_project_db(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_open_project(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_fn_func_open_project_trash(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_prepare_grid(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_start_progress_burst(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_start_test_import(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
@@ -122,6 +123,7 @@ class NativeLumikMobile : public jsi::HostObject {
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_write_text(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_create_project_db(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_open_project(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_checksum_func_open_project_trash(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_prepare_grid(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_method_importlistener_on_progress(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_method_importlistener_on_done(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);

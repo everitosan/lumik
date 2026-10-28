@@ -15,7 +15,7 @@ pub use import::{make_placeholders, start_card_import, CardFile, CardImportListe
 pub use lock::{install_identity, lock_view, own_lock_json, InstallInfo, LockView};
 pub use histogram::{start_histogram, Histogram, HistogramListener};
 pub use mirror::{project_summary, ProjectSummary, read_text, write_text, read_fd_string, write_fd_string, missing_files, start_path_to_fd, copy_fd_to_fd, copy_fd_to_path, copy_path_to_fd, fingerprint_fd, start_copy_to_dir, start_fd_to_path, reset_dir, set_stars, start_fd_copy, start_fd_read, start_fd_write, vacuum_into, CopyListener, CopyResult, MirrorError};
-pub use project::{create_project_db, open_project, prepare_grid, NewProject, PhotoInfo, ProjectError};
+pub use project::{create_project_db, open_project, open_project_trash, prepare_grid, NewProject, PhotoInfo, ProjectError};
 
 use lumik_core::import::pipeline::{pipeline_passthrough, PipelineWorkspace, StageEvent};
 use std::path::PathBuf;

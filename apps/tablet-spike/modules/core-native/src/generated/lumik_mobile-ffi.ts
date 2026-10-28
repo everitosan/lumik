@@ -96,6 +96,7 @@ interface NativeModuleInterface {
     ubrn_uniffi_lumik_mobile_fn_func_make_placeholders(dir: Uint8Array, names: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_missing_files(dir: Uint8Array, names: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     ubrn_uniffi_lumik_mobile_fn_func_open_project(projectDir: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
+    ubrn_uniffi_lumik_mobile_fn_func_open_project_trash(projectDir: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     ubrn_uniffi_lumik_mobile_fn_func_own_lock_json(install: Uint8Array, mirrorDir: Uint8Array, pending: number, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     ubrn_uniffi_lumik_mobile_fn_func_prepare_grid(thumbs: Uint8Array, previews: Uint8Array, outDir: Uint8Array, count: number, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_project_summary(dbPath: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
@@ -148,6 +149,7 @@ interface NativeModuleInterface {
     ubrn_uniffi_lumik_mobile_checksum_func_make_placeholders(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_missing_files(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_open_project(): number;
+    ubrn_uniffi_lumik_mobile_checksum_func_open_project_trash(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_own_lock_json(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_prepare_grid(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_project_summary(): number;

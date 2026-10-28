@@ -616,6 +616,10 @@ extern "C" {
         RustBuffer project_dir, 
         RustCallStatus *uniffi_out_err
     );
+    RustBuffer uniffi_lumik_mobile_fn_func_open_project_trash(
+        RustBuffer project_dir, 
+        RustCallStatus *uniffi_out_err
+    );
     void uniffi_lumik_mobile_fn_func_prepare_grid(
         RustBuffer thumbs, 
         RustBuffer previews, 
@@ -881,6 +885,8 @@ extern "C" {
     uint16_t uniffi_lumik_mobile_checksum_func_create_project_db(
     );
     uint16_t uniffi_lumik_mobile_checksum_func_open_project(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_open_project_trash(
     );
     uint16_t uniffi_lumik_mobile_checksum_func_prepare_grid(
     );
@@ -7211,6 +7217,14 @@ NativeLumikMobile::NativeLumikMobile(
             return this->cpp_uniffi_lumik_mobile_fn_func_open_project(rt, thisVal, args, count);
         }
     );
+    props["ubrn_uniffi_lumik_mobile_fn_func_open_project_trash"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_open_project_trash"),
+        1,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_open_project_trash(rt, thisVal, args, count);
+        }
+    );
     props["ubrn_uniffi_lumik_mobile_fn_func_prepare_grid"] = jsi::Function::createFromHostFunction(
         rt,
         jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_prepare_grid"),
@@ -7465,6 +7479,14 @@ NativeLumikMobile::NativeLumikMobile(
         0,
         [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_uniffi_lumik_mobile_checksum_func_open_project(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_open_project_trash"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_open_project_trash"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_open_project_trash(rt, thisVal, args, count);
         }
     );
     props["ubrn_uniffi_lumik_mobile_checksum_func_prepare_grid"] = jsi::Function::createFromHostFunction(
@@ -8640,6 +8662,16 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_open_project(jsi::
         
         return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
 }
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_open_project_trash(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        auto value = uniffi_lumik_mobile_fn_func_open_project_trash(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
+}
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_prepare_grid(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
         uniffi_lumik_mobile_fn_func_prepare_grid(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[2]), uniffi_jsi::Bridging<uint32_t>::fromJs(rt, callInvoker, args[3]), 
@@ -8862,6 +8894,13 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_create_proje
 }
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_open_project(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         auto value = uniffi_lumik_mobile_checksum_func_open_project(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_open_project_trash(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_open_project_trash(
         );
 
         

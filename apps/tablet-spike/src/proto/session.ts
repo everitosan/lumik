@@ -16,6 +16,7 @@ import {
   cullPhoto,
   missingFiles,
   openProject,
+  openProjectTrash,
   type PhotoInfo,
   ratePhoto,
   resetDir,
@@ -52,9 +53,11 @@ const safeName = (s: string) => s.replace(/[^\w.-]+/g, '_');
 
 export class ProjectSession {
   readonly photos: SessionPhoto[];
+  /** Fotos en la papelera (`_trash/`), para el filtro "Papelera". */
+  readonly trash: SessionPhoto[];
   private giveBackTimer: ReturnType<typeof setTimeout> | null = null;
   private dirty = false;
-  private fetching = new Set<number>();
+  private fetching = new Set<string>();
   /** Candado de otro dispositivo: no se escribe nada. */
   readOnly: LockView | null;
   private pendingInLock = false;
@@ -64,19 +67,27 @@ export class ProjectSession {
     readonly mirrorDir: string,
     readonly cacheDir: string,
     infos: PhotoInfo[],
+    trashed: PhotoInfo[],
     private readonly onChange: () => void,
     private readonly log: (text: string, error?: boolean) => void,
     lock: LockView,
   ) {
     this.readOnly = lock.state === 'foreign' ? lock : null;
-    // Lo que ya estaba en el caché de una apertura anterior.
+    this.photos = this.wrap(infos);
+    this.trash = this.wrap(trashed);
+  }
+
+  /** Con lo que ya estaba en el caché de una apertura anterior. */
+  private wrap(infos: PhotoInfo[]): SessionPhoto[] {
     const names = infos.map((i) => `${i.id}.jpg`);
-    const noThumb = new Set(missingFiles(`${cacheDir}/thumbs`, names));
-    const noPreview = new Set(missingFiles(`${cacheDir}/previews`, names));
-    this.photos = infos.map((info, i) => ({
+    const noThumb = new Set(missingFiles(`${this.cacheDir}/thumbs`, names));
+    const noPreview = new Set(missingFiles(`${this.cacheDir}/previews`, names));
+    return infos.map((info, i) => ({
       info,
-      thumb: noThumb.has(names[i]) ? Saf.childUri(project.uri, `.thumbs/${names[i]}`) : `file://${cacheDir}/thumbs/${names[i]}`,
-      previewPath: `${cacheDir}/previews/${names[i]}`,
+      thumb: noThumb.has(names[i])
+        ? Saf.childUri(this.project.uri, `.thumbs/${names[i]}`)
+        : `file://${this.cacheDir}/thumbs/${names[i]}`,
+      previewPath: `${this.cacheDir}/previews/${names[i]}`,
       previewReady: !noPreview.has(names[i]),
     }));
   }
@@ -97,17 +108,19 @@ export class ProjectSession {
       if (f) copyFdToPath(Saf.openFd(f.uri, 'r'), `${mirrorDir}/project.db${suffix}`);
     }
     const infos = openProject(mirrorDir);
+    const trashed = openProjectTrash(mirrorDir);
     const lock = readLock(project.uri);
     if (lock.state !== 'foreign') writeOwnLock(project.uri, mirrorDir, false);
     log(`${project.name}: ${infos.length} fotos (base en ${Date.now() - started} ms, candado ${lock.state})`);
-    return new ProjectSession({ ...project, files }, mirrorDir, `${FILES_DIR}/cache/${key}`, infos, onChange, log, lock);
+    return new ProjectSession({ ...project, files }, mirrorDir, `${FILES_DIR}/cache/${key}`, infos, trashed, onChange, log, lock);
   }
 
   /** Copia al caché las miniaturas que falten, avisando el avance. */
   async fetchThumbs(onProgress: (done: number, total: number) => void): Promise<void> {
     const started = Date.now();
     const dir = `${this.cacheDir}/thumbs`;
-    const wanted = this.photos.map((p) => `${p.info.id}.jpg`);
+    const all = [...this.photos, ...this.trash];
+    const wanted = all.map((p) => `${p.info.id}.jpg`);
     const missing = new Set(missingFiles(dir, wanted));
     if (!missing.size) return;
     const thumbsDir = this.project.files.find((f) => f.name === '.thumbs' && f.isDirectory);
@@ -116,7 +129,7 @@ export class ProjectSession {
       return;
     }
     const onDisk = (await Saf.listChildren(thumbsDir.uri)).filter((f) => missing.has(f.name));
-    const byName = new Map(this.photos.map((p) => [`${p.info.id}.jpg`, p]));
+    const byName = new Map(all.map((p) => [`${p.info.id}.jpg`, p]));
     let done = 0;
     for (let i = 0; i < onDisk.length; i += THUMB_BATCH) {
       const batch = onDisk.slice(i, i + THUMB_BATCH);
@@ -143,22 +156,22 @@ export class ProjectSession {
     this.log(`${onDisk.length} miniaturas al caché en ${((Date.now() - started) / 1000).toFixed(1)} s`);
   }
 
-  /** Trae del disco la vista previa de la foto `i` si aún no está. */
-  ensurePreview(i: number) {
-    const p = this.photos[i];
-    if (!p || p.previewReady || this.fetching.has(i)) return;
-    this.fetching.add(i);
+  /** Trae del disco la vista previa de `p` si aún no está. */
+  ensurePreview(p: SessionPhoto | undefined) {
+    if (!p || p.previewReady || this.fetching.has(p.info.id)) return;
+    const id = p.info.id;
+    this.fetching.add(id);
     const uri = Saf.childUri(this.project.uri, `.previews/${p.info.id}.jpg`);
     if (!Saf.exists(uri)) return; // Sin vista previa en el disco: se queda la miniatura.
     startFdToPath(Saf.openFd(uri, 'r'), p.previewPath, {
       onProgress: () => {},
       onDone: () => {
         p.previewReady = true;
-        this.fetching.delete(i);
+        this.fetching.delete(id);
         this.onChange();
       },
       onError: (m) => {
-        this.fetching.delete(i);
+        this.fetching.delete(id);
         this.log(`Vista previa de ${p.info.fileName}: ${m}`, true);
       },
     });
@@ -175,9 +188,8 @@ export class ProjectSession {
     }
   }
 
-  rate(i: number, stars: number, labels: number[]) {
+  rate(p: SessionPhoto, stars: number, labels: number[]) {
     if (this.readOnly) throw new Error(`Solo lectura: lo tiene ${this.readOnly.installName}`);
-    const p = this.photos[i];
     const colorLabel = labels.length ? labels.join(',') : undefined;
     ratePhoto(this.mirrorDir, p.info.id, stars, colorLabel);
     p.info = { ...p.info, stars, colorLabel };
@@ -192,8 +204,7 @@ export class ProjectSession {
   }
 
   /** Aprueba o quita la aprobación con el `CullPhoto` del núcleo, sobre el disco. */
-  approve(i: number, approved: boolean) {
-    const p = this.photos[i];
+  approve(p: SessionPhoto, approved: boolean) {
     const started = Date.now();
     this.ensureOwned();
     cullPhoto(this.mirrorDir, p.info.id, approved, safDiskFiles(this.project.uri));

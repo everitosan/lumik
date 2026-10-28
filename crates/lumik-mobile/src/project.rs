@@ -50,10 +50,21 @@ pub struct PhotoInfo {
 /// desktop: por fecha de captura.
 #[uniffi::export]
 pub fn open_project(project_dir: String) -> Result<Vec<PhotoInfo>, ProjectError> {
-    let dir = PathBuf::from(&project_dir);
+    photos_of(&project_dir, false)
+}
+
+/// Fotos en la papelera del proyecto (`_trash/`), en el mismo orden.
+#[uniffi::export]
+pub fn open_project_trash(project_dir: String) -> Result<Vec<PhotoInfo>, ProjectError> {
+    photos_of(&project_dir, true)
+}
+
+fn photos_of(project_dir: &str, trashed: bool) -> Result<Vec<PhotoInfo>, ProjectError> {
+    let dir = PathBuf::from(project_dir);
     let db = ProjectDatabase::open(dir.join("project.db"), "", dir.clone())
         .map_err(|e| ProjectError::Open(e.to_string()))?;
-    let photos = db.get_project_photos().map_err(|e| ProjectError::Read(e.to_string()))?;
+    let photos = if trashed { db.get_project_trashed_photos() } else { db.get_project_photos() }
+        .map_err(|e| ProjectError::Read(e.to_string()))?;
     let cache = |sub: &str, id: &str| dir.join(sub).join(format!("{id}.jpg")).display().to_string();
     Ok(photos
         .into_iter()
