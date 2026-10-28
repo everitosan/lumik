@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
+import android.provider.OpenableColumns
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
@@ -15,6 +16,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 // lee y escribe por fd (`openFd`), no por ruta.
 class LumikSafModule : Module() {
   private var pendingPick: Promise? = null
+  private var pendingFiles: Promise? = null
 
   private val resolver
     get() = requireNotNull(appContext.reactContext).contentResolver
@@ -39,7 +41,43 @@ class LumikSafModule : Module() {
       appContext.throwingActivity.startActivityForResult(intent, PICK_TREE)
     }
 
+    // Selector de archivos del sistema, con selección múltiple (como el wizard
+    // del desktop). Sin filtro de tipo: así Android abre el explorador completo
+    // y no el selector de fotos, que no muestra los RAW. Devuelve nombre y tamaño
+    // de cada uno; el permiso de lectura dura mientras viva la app.
+    AsyncFunction("pickFiles") { promise: Promise ->
+      if (pendingFiles != null) {
+        promise.reject(CodedException("E_BUSY", "Ya hay un selector abierto", null))
+        return@AsyncFunction
+      }
+      pendingFiles = promise
+      val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        .addCategory(Intent.CATEGORY_OPENABLE)
+        .setType("*/*")
+        .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      appContext.throwingActivity.startActivityForResult(intent, PICK_FILES)
+    }
+
     OnActivityResult { _, payload ->
+      if (payload.requestCode == PICK_FILES) {
+        val promise = pendingFiles ?: return@OnActivityResult
+        pendingFiles = null
+        val data = payload.data
+        if (payload.resultCode != Activity.RESULT_OK || data == null) {
+          promise.resolve(emptyList<Map<String, Any?>>())
+          return@OnActivityResult
+        }
+        val uris = mutableListOf<Uri>()
+        val clip = data.clipData
+        if (clip != null) {
+          for (i in 0 until clip.itemCount) uris.add(clip.getItemAt(i).uri)
+        } else {
+          data.data?.let { uris.add(it) }
+        }
+        promise.resolve(uris.map { describe(it) })
+        return@OnActivityResult
+      }
       if (payload.requestCode != PICK_TREE) return@OnActivityResult
       val promise = pendingPick ?: return@OnActivityResult
       pendingPick = null
@@ -134,6 +172,18 @@ class LumikSafModule : Module() {
     return DocumentsContract.buildDocumentUriUsingTree(base, id).toString()
   }
 
+  private fun describe(uri: Uri): Map<String, Any?> {
+    var name = uri.lastPathSegment ?: "archivo"
+    var size = 0.0
+    resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
+      if (c.moveToFirst()) {
+        if (!c.isNull(0)) name = c.getString(0)
+        if (!c.isNull(1)) size = c.getLong(1).toDouble()
+      }
+    }
+    return mapOf("uri" to uri.toString(), "name" to name, "isDirectory" to false, "size" to size)
+  }
+
   private fun children(documentUri: String): List<Map<String, Any?>> {
     val doc = Uri.parse(documentUri)
     val children = DocumentsContract.buildChildDocumentsUriUsingTree(doc, DocumentsContract.getDocumentId(doc))
@@ -158,5 +208,6 @@ class LumikSafModule : Module() {
 
   companion object {
     private const val PICK_TREE = 4271
+    private const val PICK_FILES = 4272
   }
 }

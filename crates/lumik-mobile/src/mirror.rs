@@ -244,6 +244,20 @@ pub fn missing_files(dir: String, names: Vec<String>) -> Vec<String> {
     names.into_iter().filter(|n| !Path::new(&dir).join(n).exists()).collect()
 }
 
+/// Copia `path` (sandbox) a `dst_fd` (disco) en otro hilo, leyendo y
+/// escribiendo a la vez; cierra el fd. Para subir lo importado.
+#[uniffi::export]
+pub fn start_path_to_fd(path: String, dst_fd: i32, listener: Arc<dyn CopyListener>) {
+    let dst = unsafe { File::from_raw_fd(dst_fd as RawFd) };
+    std::thread::spawn(move || {
+        let result = File::open(&path).map_err(MirrorError::from).and_then(|src| copy_pipelined(src, dst, listener.as_ref()));
+        match result {
+            Ok(r) => listener.on_done(r),
+            Err(e) => listener.on_error(e.to_string()),
+        }
+    });
+}
+
 /// Copia `src_fd` en `dst_fd` en este hilo y cierra los dos.
 #[uniffi::export]
 pub fn copy_fd_to_fd(src_fd: i32, dst_fd: i32) -> Result<CopyResult, MirrorError> {

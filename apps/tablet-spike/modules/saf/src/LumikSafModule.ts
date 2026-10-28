@@ -5,6 +5,8 @@ import type { SafEntry } from './LumikSaf.types';
 
 declare class LumikSafModule extends NativeModule<{}> {
   pickDirectory(): Promise<string | null>;
+  /** Selector de archivos con selección múltiple; lista vacía si se cancela. */
+  pickFiles(): Promise<SafEntry[]>;
   persistedTrees(): string[];
   rootDocument(treeUri: string): string;
   listChildren(documentUri: string): Promise<SafEntry[]>;

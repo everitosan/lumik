@@ -12,6 +12,7 @@ type Props = {
   onPickDisk: () => void;
   onSelectDisk: (tree: string) => void;
   onOpen: (project: DiskProject) => void;
+  onImport: () => void;
 };
 
 const RAIL = ['Proyectos', 'Discos', 'Respaldo', 'Ajustes'];
@@ -19,7 +20,7 @@ const RAIL = ['Proyectos', 'Discos', 'Respaldo', 'Ajustes'];
 // "content://…/tree/FB5F-B3EF%3A" → "FB5F-B3EF:"
 export const treeLabel = (tree: string) => decodeURIComponent(tree.split('/tree/')[1] ?? tree);
 
-export function HomeScreen({ trees, disk, projects, busy, onPickDisk, onSelectDisk, onOpen }: Props) {
+export function HomeScreen({ trees, disk, projects, busy, onPickDisk, onSelectDisk, onOpen, onImport }: Props) {
   // Agrupados por la carpeta de arriba (el año, en los discos de Lumik).
   const groups = new Map<string, DiskProject[]>();
   for (const p of projects ?? []) {
@@ -91,10 +92,13 @@ export function HomeScreen({ trees, disk, projects, busy, onPickDisk, onSelectDi
           ))}
         </ScrollView>
 
-        {/* Etapa B del prototipo: importar la tarjeta. */}
-        <View style={[styles.fab, styles.fabOff]}>
+        <Pressable
+          style={({ pressed }) => [styles.fab, pressed && styles.pressed, !projects?.length && styles.fabOff]}
+          onPress={onImport}
+          disabled={!projects?.length || !!busy}
+        >
           <Text style={styles.fabText}>Importar</Text>
-        </View>
+        </Pressable>
       </View>
     </View>
   );

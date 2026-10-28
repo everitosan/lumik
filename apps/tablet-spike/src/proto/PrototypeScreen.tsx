@@ -1,12 +1,12 @@
-// Experimento 3.1 del spike (Android, D5): inicio → proyecto del disco →
-// culling, con cada cambio guardado en el disco por SAF. Etapa A: abrir y
-// cullar; importar la tarjeta (etapa B) viene después.
+// Experimento 3.1 del spike (Android, D5): inicio → importar la tarjeta a un
+// proyecto del disco → culling, con cada cambio guardado en el disco por SAF.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 
 import Saf from '../../modules/saf/src/LumikSafModule';
 import { Culling, type CullingBackend, type CullItem } from '../CullingScreen';
 import { HomeScreen } from './HomeScreen';
+import { ImportScreen } from './ImportScreen';
 import { discoverProjects } from './projects';
 import { type DiskProject, ProjectSession } from './session';
 
@@ -14,11 +14,12 @@ type Log = { at: string; text: string; error?: boolean };
 
 export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (clean: boolean) => void }) {
   const [trees, setTrees] = useState<string[]>(() => Saf.persistedTrees());
-  const [disk, setDisk] = useState<string | null>(() => Saf.persistedTrees()[0] ?? null);
+  const [disk, setDisk] = useState<string | null>(() => defaultDisk(Saf.persistedTrees()));
   const [projects, setProjects] = useState<DiskProject[] | null>(null);
   const [session, setSession] = useState<ProjectSession | null>(null);
   const [opening, setOpening] = useState<{ name: string; done: number; total: number } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const [version, setVersion] = useState(0);
   const [log, setLog] = useState<Log[]>([]);
   const sessionRef = useRef<ProjectSession | null>(null);
@@ -108,6 +109,19 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     [session],
   );
 
+  if (importing && projects) {
+    return (
+      <ImportScreen
+        projects={projects}
+        onClose={() => setImporting(false)}
+        onOpenProject={(p) => {
+          setImporting(false);
+          open(p);
+        }}
+      />
+    );
+  }
+
   if (opening) {
     return (
       <View style={[styles.root, styles.center]}>
@@ -136,6 +150,7 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
         onPickDisk={pickDisk}
         onSelectDisk={setDisk}
         onOpen={open}
+        onImport={() => setImporting(true)}
       />
       {log.length > 0 && (
         <View style={styles.log} pointerEvents="none">
@@ -148,6 +163,18 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
       )}
     </View>
   );
+}
+
+// Un permiso cuyo volumen esté conectado y que no sea la DCIM de una tarjeta.
+function defaultDisk(trees: string[]): string | null {
+  const mounted = trees.filter((t) => {
+    try {
+      return Saf.exists(Saf.rootDocument(t));
+    } catch {
+      return false;
+    }
+  });
+  return mounted.find((t) => !decodeURIComponent(t).endsWith('DCIM')) ?? mounted[0] ?? null;
 }
 
 const styles = StyleSheet.create({

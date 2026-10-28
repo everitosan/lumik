@@ -17,6 +17,10 @@ uniffi = "0.31"
 log = "0.4"
 # Histograma de la vista previa (mismo decodificador que el núcleo con `embeddings`).
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
+# Import en la tablet: lo mismo que la app Tauri en Android (exif_android.rs).
+rawler = "0.6"
+kamadak-exif = "0.5"
+chrono = "0.4"
 thiserror = "1"
 # Huella de una entrega (`fingerprint_fd`), como el núcleo.
 sha2 = "0.10"

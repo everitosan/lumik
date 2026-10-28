@@ -4,7 +4,7 @@
 /* eslint-disable */
 // @ts-nocheck
 import nativeModule from "./lumik_mobile-ffi";
-import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDroppedCallback, type UniffiForeignFutureDroppedCallbackStruct, type UniffiVTableCallbackInterfaceLumikMobileCopyListener, type UniffiVTableCallbackInterfaceLumikMobileDiskFiles, type UniffiVTableCallbackInterfaceLumikMobileHistogramListener, type UniffiVTableCallbackInterfaceLumikMobileImportListener,
+import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDroppedCallback, type UniffiForeignFutureDroppedCallbackStruct, type UniffiVTableCallbackInterfaceLumikMobileCardImportListener, type UniffiVTableCallbackInterfaceLumikMobileCardSource, type UniffiVTableCallbackInterfaceLumikMobileCopyListener, type UniffiVTableCallbackInterfaceLumikMobileDiskFiles, type UniffiVTableCallbackInterfaceLumikMobileHistogramListener, type UniffiVTableCallbackInterfaceLumikMobileImportListener,
 } from "./lumik_mobile-ffi";
 import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, type UniffiReferenceHolder, type UniffiRustCallStatus, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterBool, FfiConverterFloat64, FfiConverterInt32, FfiConverterObject, FfiConverterObjectWithCallbacks, FfiConverterOptional, FfiConverterUInt32, FfiConverterUInt64, FfiConverterUInt8, RustBuffer, UniffiAbstractObject, UniffiError, UniffiInternalError, UniffiResult, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiTraitInterfaceCall, uniffiTraitInterfaceCallWithError, uniffiTypeNameSymbol, variantOrdinalSymbol,
 } from "@ubjs/core";
@@ -121,6 +121,21 @@ export function fingerprintFd(fd: number): DiskFingerprint /*throws*/ {
     }
 
 /**
+ * Crea en `dir` archivos vacíos con `names`: los nombres que ya hay en el disco,
+ * para que el núcleo no elija uno ocupado al mover a `_media/`.
+ */
+export function makePlaceholders(dir: string, names: Array<string>): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_make_placeholders(
+        FfiConverterString.lower(dir, nativeModule().rustbuffer_alloc),
+        FfiConverterSequenceString.lower(names, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
  * De `names`, los que no están en `dir` (lo que falta traer al caché).
  */
 export function missingFiles(dir: string, names: Array<string>): Array<string> {
@@ -227,6 +242,22 @@ export function setStars(projectDir: string, photoId: string, stars: number): vo
     }
 
 /**
+ * Importa `files` de la tarjeta al proyecto cuya copia de trabajo está en
+ * `shadow_dir`. Vuelve de inmediato; el avance y el resultado llegan a `listener`.
+ */
+export function startCardImport(shadowDir: string, files: Array<CardFile>, card: CardSource, listener: CardImportListener): void {uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_start_card_import(
+        FfiConverterString.lower(shadowDir, nativeModule().rustbuffer_alloc),
+        FfiConverterSequenceTypeCardFile.lower(files, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeCardSource.lower(card, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeCardImportListener.lower(listener, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
  * Copia cada fd de `fds` a `dir/<names[i]>` en un hilo (miniaturas del disco
  * a la sandbox), avisando cada archivo terminado con `on_progress(i + 1)`.
  * Cierra todos los fds; uno que falla se salta.
@@ -321,6 +352,21 @@ export function startHistogram(path: string, listener: HistogramListener): void 
     }
 
 /**
+ * Copia `path` (sandbox) a `dst_fd` (disco) en otro hilo, leyendo y
+ * escribiendo a la vez; cierra el fd. Para subir lo importado.
+ */
+export function startPathToFd(path: string, dstFd: number, listener: CopyListener): void {uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_start_path_to_fd(
+        FfiConverterString.lower(path, nativeModule().rustbuffer_alloc),
+        FfiConverterInt32.lower(dstFd, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeCopyListener.lower(listener, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
  * Emite `count` eventos sintéticos, uno cada `interval_us` microsegundos, desde
  * un hilo de Rust. Sirve para medir si la UI sigue fluida con muchos eventos.
  */
@@ -365,49 +411,6 @@ export function vacuumInto(dbPath: string, outPath: string): void /*throws*/ {un
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
     );
     }
-
-export type CopyResult = {
-    bytes: bigint,
-    elapsedMs: bigint
-}
-
-/**
- * Generated factory for {@link CopyResult} record objects.
- */
-export const CopyResult = (() => {
-    const defaults = () => ({
-    });
-    const create = (() => {
-        return uniffiCreateRecord<CopyResult, ReturnType<typeof defaults>>(defaults);
-    })();
-    return Object.freeze({
-        create,
-        new: create,
-        defaults: () => Object.freeze(defaults()) as Partial<CopyResult>,
-    });
-})();
-
-const FfiConverterTypeCopyResult = (() => {
-    type TypeName = CopyResult;
-    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-        readFromCursor(c: Cursor): TypeName {
-            return {
-                bytes: FfiConverterUInt64.readFromCursor(c), 
-                elapsedMs: FfiConverterUInt64.readFromCursor(c)
-            };
-        }
-        writeIntoCursor(value: TypeName, c: Cursor): void {
-            FfiConverterUInt64.writeIntoCursor(value.bytes, c);
-            FfiConverterUInt64.writeIntoCursor(value.elapsedMs, c);
-        }
-        allocationSize(value: TypeName): number {
-            return FfiConverterUInt64.allocationSize(value.bytes) +
-             FfiConverterUInt64.allocationSize(value.elapsedMs);
-            
-        }
-    };
-    return new FFIConverter();
-})();
 
 // Hermes (React Native ≥ 0.74) ships TextEncoder and encodeInto, but not
 // TextDecoder. For single-string decode (bytesToString), we polyfill via the
@@ -460,6 +463,162 @@ const stringConverter = (() => {
     };
 })();
 const FfiConverterString = uniffiCreateFfiConverterString(stringConverter);
+
+export type CardFile = {
+    name: string,
+    size: bigint
+}
+
+/**
+ * Generated factory for {@link CardFile} record objects.
+ */
+export const CardFile = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<CardFile, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<CardFile>,
+    });
+})();
+
+const FfiConverterTypeCardFile = (() => {
+    type TypeName = CardFile;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                name: FfiConverterString.readFromCursor(c), 
+                size: FfiConverterUInt64.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.name, c);
+            FfiConverterUInt64.writeIntoCursor(value.size, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.name) +
+             FfiConverterUInt64.allocationSize(value.size);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
+export type CardImportResult = {
+    imported: number,
+    joined: number,
+    failed: number,
+    skipped: number,
+    /**
+     * Primeros motivos de fallo, para mostrarlos.
+     */
+    errors: Array<string>,
+    /**
+     * Rutas relativas al proyecto de lo que hay que subir al disco: originales,
+     * sidecars `.xmp`, miniaturas y vistas previas.
+     */
+    uploads: Array<string>,
+    elapsedMs: bigint
+}
+
+/**
+ * Generated factory for {@link CardImportResult} record objects.
+ */
+export const CardImportResult = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<CardImportResult, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<CardImportResult>,
+    });
+})();
+
+const FfiConverterTypeCardImportResult = (() => {
+    type TypeName = CardImportResult;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                imported: FfiConverterUInt32.readFromCursor(c), 
+                joined: FfiConverterUInt32.readFromCursor(c), 
+                failed: FfiConverterUInt32.readFromCursor(c), 
+                skipped: FfiConverterUInt32.readFromCursor(c), 
+                errors: FfiConverterSequenceString.readFromCursor(c), 
+                uploads: FfiConverterSequenceString.readFromCursor(c), 
+                elapsedMs: FfiConverterUInt64.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterUInt32.writeIntoCursor(value.imported, c);
+            FfiConverterUInt32.writeIntoCursor(value.joined, c);
+            FfiConverterUInt32.writeIntoCursor(value.failed, c);
+            FfiConverterUInt32.writeIntoCursor(value.skipped, c);
+            FfiConverterSequenceString.writeIntoCursor(value.errors, c);
+            FfiConverterSequenceString.writeIntoCursor(value.uploads, c);
+            FfiConverterUInt64.writeIntoCursor(value.elapsedMs, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterUInt32.allocationSize(value.imported) +
+             FfiConverterUInt32.allocationSize(value.joined) +
+             FfiConverterUInt32.allocationSize(value.failed) +
+             FfiConverterUInt32.allocationSize(value.skipped) +
+             FfiConverterSequenceString.allocationSize(value.errors) +
+             FfiConverterSequenceString.allocationSize(value.uploads) +
+             FfiConverterUInt64.allocationSize(value.elapsedMs);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
+export type CopyResult = {
+    bytes: bigint,
+    elapsedMs: bigint
+}
+
+/**
+ * Generated factory for {@link CopyResult} record objects.
+ */
+export const CopyResult = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<CopyResult, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<CopyResult>,
+    });
+})();
+
+const FfiConverterTypeCopyResult = (() => {
+    type TypeName = CopyResult;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                bytes: FfiConverterUInt64.readFromCursor(c), 
+                elapsedMs: FfiConverterUInt64.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterUInt64.writeIntoCursor(value.bytes, c);
+            FfiConverterUInt64.writeIntoCursor(value.elapsedMs, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterUInt64.allocationSize(value.bytes) +
+             FfiConverterUInt64.allocationSize(value.elapsedMs);
+            
+        }
+    };
+    return new FFIConverter();
+})();
 
 export type DiskFile = {
     name: string,
@@ -655,6 +814,68 @@ const FfiConverterTypeImportProgressEvent = (() => {
             return FfiConverterUInt32.allocationSize(value.fileIndex) +
              FfiConverterUInt32.allocationSize(value.fileTotal) +
              FfiConverterString.allocationSize(value.fileName) +
+             FfiConverterUInt64.allocationSize(value.bytesDone) +
+             FfiConverterUInt64.allocationSize(value.bytesTotal);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
+export type ImportStatus = {
+    /**
+     * `copy`, `metadata`, `move`, `register`, `complete` o `previews`.
+     */
+    phase: string,
+    fileName: string,
+    fileIndex: number,
+    fileTotal: number,
+    bytesDone: bigint,
+    bytesTotal: bigint
+}
+
+/**
+ * Generated factory for {@link ImportStatus} record objects.
+ */
+export const ImportStatus = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<ImportStatus, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<ImportStatus>,
+    });
+})();
+
+const FfiConverterTypeImportStatus = (() => {
+    type TypeName = ImportStatus;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                phase: FfiConverterString.readFromCursor(c), 
+                fileName: FfiConverterString.readFromCursor(c), 
+                fileIndex: FfiConverterUInt32.readFromCursor(c), 
+                fileTotal: FfiConverterUInt32.readFromCursor(c), 
+                bytesDone: FfiConverterUInt64.readFromCursor(c), 
+                bytesTotal: FfiConverterUInt64.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.phase, c);
+            FfiConverterString.writeIntoCursor(value.fileName, c);
+            FfiConverterUInt32.writeIntoCursor(value.fileIndex, c);
+            FfiConverterUInt32.writeIntoCursor(value.fileTotal, c);
+            FfiConverterUInt64.writeIntoCursor(value.bytesDone, c);
+            FfiConverterUInt64.writeIntoCursor(value.bytesTotal, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.phase) +
+             FfiConverterString.allocationSize(value.fileName) +
+             FfiConverterUInt32.allocationSize(value.fileIndex) +
+             FfiConverterUInt32.allocationSize(value.fileTotal) +
              FfiConverterUInt64.allocationSize(value.bytesDone) +
              FfiConverterUInt64.allocationSize(value.bytesTotal);
             
@@ -1326,6 +1547,387 @@ const FfiConverterTypeProjectError = (() => {
     }
     return new FFIConverter();
 })();
+
+export interface CardImportListener {
+    
+    onStatus(status: ImportStatus): void;
+    onDone(result: CardImportResult): void;
+    onError(message: string): void;
+}
+
+
+export class CardImportListenerImpl extends UniffiAbstractObject implements CardImportListener {
+
+    readonly [uniffiTypeNameSymbol] = "CardImportListenerImpl";
+    readonly [destructorGuardSymbol]: UniffiGcObject;
+    readonly [pointerLiteralSymbol]: UniffiHandle;
+    // No primary constructor declared for this class.
+private constructor(pointer: UniffiHandle) {
+    super();
+    this[pointerLiteralSymbol] = pointer;
+    this[destructorGuardSymbol] = uniffiTypeCardImportListenerImplObjectFactory.bless(pointer);
+}
+
+    
+
+    
+    onStatus(status: ImportStatus): void {uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_method_cardimportlistener_on_status(
+                uniffiTypeCardImportListenerImplObjectFactory.clonePointer(this),
+        FfiConverterTypeImportStatus.lower(status, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+    
+    onDone(result: CardImportResult): void {uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_method_cardimportlistener_on_done(
+                uniffiTypeCardImportListenerImplObjectFactory.clonePointer(this),
+        FfiConverterTypeCardImportResult.lower(result, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+    
+    onError(message: string): void {uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_method_cardimportlistener_on_error(
+                uniffiTypeCardImportListenerImplObjectFactory.clonePointer(this),
+        FfiConverterString.lower(message, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+    
+
+    uniffiDestroy(): void {
+        const ptr = (this as any)[destructorGuardSymbol];
+        if (ptr !== undefined) {
+            const pointer = uniffiTypeCardImportListenerImplObjectFactory.pointer(this);
+            uniffiTypeCardImportListenerImplObjectFactory.freePointer(pointer);
+            uniffiTypeCardImportListenerImplObjectFactory.unbless(ptr);
+            delete (this as any)[destructorGuardSymbol];
+        }
+    }
+
+    static instanceOf(obj_: any): obj_ is CardImportListenerImpl {
+        return uniffiTypeCardImportListenerImplObjectFactory.isConcreteType(obj_);
+    }
+
+    
+}
+
+const uniffiTypeCardImportListenerImplObjectFactory: UniffiObjectFactory<CardImportListener> = (() => {
+    
+    return {
+    create(pointer: UniffiHandle): CardImportListener {
+        const instance = Object.create(CardImportListenerImpl.prototype);
+        instance[pointerLiteralSymbol] = pointer;
+        instance[destructorGuardSymbol] = this.bless(pointer);
+        instance[uniffiTypeNameSymbol] = "CardImportListenerImpl";
+        return instance;
+    },
+
+    
+    bless(p: UniffiHandle): UniffiGcObject {
+        return uniffiCaller.rustCall(
+            /*caller:*/ (status) =>
+                nativeModule().ubrn_uniffi_internal_fn_method_cardimportlistener_ffi__bless_pointer(p, status),
+            /*liftString:*/ FfiConverterString.lift
+        );
+    },
+
+    unbless(ptr_: UniffiGcObject) {
+        ptr_.markDestroyed();
+    },
+
+    pointer(obj_: CardImportListener): UniffiHandle {
+        if ((obj_ as any)[destructorGuardSymbol] === undefined) {
+            throw new UniffiInternalError.UnexpectedNullPointer();
+        }
+        return (obj_ as any)[pointerLiteralSymbol];
+    },
+
+    clonePointer(obj_: CardImportListener): UniffiHandle {
+        const pointer = this.pointer(obj_);
+        return uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => nativeModule().ubrn_uniffi_lumik_mobile_fn_clone_cardimportlistener(pointer, callStatus),
+            /*liftString:*/ FfiConverterString.lift
+        );
+    },
+
+    freePointer(pointer: UniffiHandle): void {
+        uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => nativeModule().ubrn_uniffi_lumik_mobile_fn_free_cardimportlistener(pointer, callStatus),
+            /*liftString:*/ FfiConverterString.lift
+        );
+    },
+
+    isConcreteType(obj_: any): obj_ is CardImportListener {
+        return obj_[destructorGuardSymbol] && obj_[uniffiTypeNameSymbol] === "CardImportListenerImpl";
+    },
+}})();
+const FfiConverterTypeCardImportListener = new FfiConverterObjectWithCallbacks(uniffiTypeCardImportListenerImplObjectFactory);
+
+// Add a vtable for the callbacks that go in CardImportListener.
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+const uniffiCallbackInterfaceCardImportListener: { vtable: any; register: () => void; } = {
+    // Create the VTable using a series of closures.
+    // ts automatically converts these into C callback functions.
+    vtable: {
+        on_status: (
+            uniffiHandle: bigint,
+            status: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : void => {
+                const jsCallback = FfiConverterTypeCardImportListener.lift(uniffiHandle);
+                return jsCallback.onStatus(
+                    FfiConverterTypeImportStatus.lift(status)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<void>();
+            const uniffiHandleSuccess = (obj: any) => {};
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCall(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            )
+            return uniffiResult;
+        },
+        on_done: (
+            uniffiHandle: bigint,
+            result: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : void => {
+                const jsCallback = FfiConverterTypeCardImportListener.lift(uniffiHandle);
+                return jsCallback.onDone(
+                    FfiConverterTypeCardImportResult.lift(result)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<void>();
+            const uniffiHandleSuccess = (obj: any) => {};
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCall(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            )
+            return uniffiResult;
+        },
+        on_error: (
+            uniffiHandle: bigint,
+            message: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : void => {
+                const jsCallback = FfiConverterTypeCardImportListener.lift(uniffiHandle);
+                return jsCallback.onError(
+                    FfiConverterString.lift(message)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<void>();
+            const uniffiHandleSuccess = (obj: any) => {};
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCall(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            )
+            return uniffiResult;
+        },
+        uniffi_free: (uniffiHandle: UniffiHandle): void => {
+            // this will throw a stale handle error if the handle isn't found.
+            FfiConverterTypeCardImportListener.drop(uniffiHandle);
+        },
+        uniffi_clone: (uniffiHandle: UniffiHandle): UniffiHandle => {
+            return FfiConverterTypeCardImportListener.clone(uniffiHandle);
+        }
+    },
+    register: () => {nativeModule().ubrn_uniffi_lumik_mobile_fn_init_callback_vtable_cardimportlistener(
+            uniffiCallbackInterfaceCardImportListener.vtable
+        );
+    },
+};
+
+/**
+ * Abre el archivo `index` de la tarjeta (en el orden de `CardFile`) y devuelve
+ * su fd; quien lo recibe lo cierra. Lo implementa la app con SAF.
+ */
+export interface CardSource {
+    
+    open(index: number) /*throws*/: number;
+}
+
+
+/**
+ * Abre el archivo `index` de la tarjeta (en el orden de `CardFile`) y devuelve
+ * su fd; quien lo recibe lo cierra. Lo implementa la app con SAF.
+ */
+export class CardSourceImpl extends UniffiAbstractObject implements CardSource {
+
+    readonly [uniffiTypeNameSymbol] = "CardSourceImpl";
+    readonly [destructorGuardSymbol]: UniffiGcObject;
+    readonly [pointerLiteralSymbol]: UniffiHandle;
+    // No primary constructor declared for this class.
+private constructor(pointer: UniffiHandle) {
+    super();
+    this[pointerLiteralSymbol] = pointer;
+    this[destructorGuardSymbol] = uniffiTypeCardSourceImplObjectFactory.bless(pointer);
+}
+
+    
+
+    
+    open(index: number): number /*throws*/ {
+    return FfiConverterInt32.lift(uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeDiskError.lift.bind(FfiConverterTypeDiskError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_method_cardsource_open(
+                uniffiTypeCardSourceImplObjectFactory.clonePointer(this),
+        FfiConverterUInt32.lower(index, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    ));
+    }
+    
+
+    uniffiDestroy(): void {
+        const ptr = (this as any)[destructorGuardSymbol];
+        if (ptr !== undefined) {
+            const pointer = uniffiTypeCardSourceImplObjectFactory.pointer(this);
+            uniffiTypeCardSourceImplObjectFactory.freePointer(pointer);
+            uniffiTypeCardSourceImplObjectFactory.unbless(ptr);
+            delete (this as any)[destructorGuardSymbol];
+        }
+    }
+
+    static instanceOf(obj_: any): obj_ is CardSourceImpl {
+        return uniffiTypeCardSourceImplObjectFactory.isConcreteType(obj_);
+    }
+
+    
+}
+
+const uniffiTypeCardSourceImplObjectFactory: UniffiObjectFactory<CardSource> = (() => {
+    
+    return {
+    create(pointer: UniffiHandle): CardSource {
+        const instance = Object.create(CardSourceImpl.prototype);
+        instance[pointerLiteralSymbol] = pointer;
+        instance[destructorGuardSymbol] = this.bless(pointer);
+        instance[uniffiTypeNameSymbol] = "CardSourceImpl";
+        return instance;
+    },
+
+    
+    bless(p: UniffiHandle): UniffiGcObject {
+        return uniffiCaller.rustCall(
+            /*caller:*/ (status) =>
+                nativeModule().ubrn_uniffi_internal_fn_method_cardsource_ffi__bless_pointer(p, status),
+            /*liftString:*/ FfiConverterString.lift
+        );
+    },
+
+    unbless(ptr_: UniffiGcObject) {
+        ptr_.markDestroyed();
+    },
+
+    pointer(obj_: CardSource): UniffiHandle {
+        if ((obj_ as any)[destructorGuardSymbol] === undefined) {
+            throw new UniffiInternalError.UnexpectedNullPointer();
+        }
+        return (obj_ as any)[pointerLiteralSymbol];
+    },
+
+    clonePointer(obj_: CardSource): UniffiHandle {
+        const pointer = this.pointer(obj_);
+        return uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => nativeModule().ubrn_uniffi_lumik_mobile_fn_clone_cardsource(pointer, callStatus),
+            /*liftString:*/ FfiConverterString.lift
+        );
+    },
+
+    freePointer(pointer: UniffiHandle): void {
+        uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => nativeModule().ubrn_uniffi_lumik_mobile_fn_free_cardsource(pointer, callStatus),
+            /*liftString:*/ FfiConverterString.lift
+        );
+    },
+
+    isConcreteType(obj_: any): obj_ is CardSource {
+        return obj_[destructorGuardSymbol] && obj_[uniffiTypeNameSymbol] === "CardSourceImpl";
+    },
+}})();
+const FfiConverterTypeCardSource = new FfiConverterObjectWithCallbacks(uniffiTypeCardSourceImplObjectFactory);
+
+// Add a vtable for the callbacks that go in CardSource.
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+const uniffiCallbackInterfaceCardSource: { vtable: any; register: () => void; } = {
+    // Create the VTable using a series of closures.
+    // ts automatically converts these into C callback functions.
+    vtable: {
+        open: (
+            uniffiHandle: bigint,
+            index: number,) => {
+            const uniffiMakeCall = 
+            ()
+            : number => {
+                const jsCallback = FfiConverterTypeCardSource.lift(uniffiHandle);
+                return jsCallback.open(
+                    FfiConverterUInt32.lift(index)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<number>();
+            const uniffiHandleSuccess = (obj: any) => {
+                UniffiResult.writeSuccess(uniffiResult, FfiConverterInt32.lower(obj, nativeModule().rustbuffer_alloc));
+            };
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCallWithError(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*isErrorType:*/ DiskError.instanceOf,
+                /*lowerError:*/ FfiConverterTypeDiskError.lower.bind(FfiConverterTypeDiskError),
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            );
+            return uniffiResult;
+        },
+        uniffi_free: (uniffiHandle: UniffiHandle): void => {
+            // this will throw a stale handle error if the handle isn't found.
+            FfiConverterTypeCardSource.drop(uniffiHandle);
+        },
+        uniffi_clone: (uniffiHandle: UniffiHandle): UniffiHandle => {
+            return FfiConverterTypeCardSource.clone(uniffiHandle);
+        }
+    },
+    register: () => {nativeModule().ubrn_uniffi_lumik_mobile_fn_init_callback_vtable_cardsource(
+            uniffiCallbackInterfaceCardSource.vtable
+        );
+    },
+};
 
 /**
  * Lo implementa la UI; Rust lo llama desde su hilo.
@@ -2353,6 +2955,9 @@ const uniffiCallbackInterfaceImportListener: { vtable: any; register: () => void
     },
 };
 
+// FfiConverter for Array<string>
+const FfiConverterSequenceString = new FfiConverterArray(FfiConverterString);
+
 // FfiConverter for Array<number>
 const FfiConverterSequenceUInt32 = new FfiConverterArray(FfiConverterUInt32);
 
@@ -2368,11 +2973,11 @@ const FfiConverterOptionalFloat64 = new FfiConverterOptional(FfiConverterFloat64
 // FfiConverter for Array<DiskFile>
 const FfiConverterSequenceTypeDiskFile = new FfiConverterArray(FfiConverterTypeDiskFile);
 
-// FfiConverter for Array<string>
-const FfiConverterSequenceString = new FfiConverterArray(FfiConverterString);
-
 // FfiConverter for Array<PhotoInfo>
 const FfiConverterSequenceTypePhotoInfo = new FfiConverterArray(FfiConverterTypePhotoInfo);
+
+// FfiConverter for Array<CardFile>
+const FfiConverterSequenceTypeCardFile = new FfiConverterArray(FfiConverterTypeCardFile);
 
 // FfiConverter for Array<number>
 const FfiConverterSequenceInt32 = new FfiConverterArray(FfiConverterInt32);
@@ -2411,6 +3016,9 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_fingerprint_fd() !== 49197) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_fingerprint_fd");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_make_placeholders() !== 31956) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_make_placeholders");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_missing_files() !== 38010) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_missing_files");
     }
@@ -2428,6 +3036,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_set_stars() !== 23964) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_set_stars");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_card_import() !== 27332) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_card_import");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_copy_to_dir() !== 25065) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_copy_to_dir");
@@ -2447,6 +3058,9 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_histogram() !== 37103) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_histogram");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_path_to_fd() !== 40466) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_path_to_fd");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_progress_burst() !== 39495) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_progress_burst");
     }
@@ -2455,6 +3069,18 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_vacuum_into() !== 14624) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_vacuum_into");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_cardimportlistener_on_status() !== 1826) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_cardimportlistener_on_status");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_cardimportlistener_on_done() !== 29631) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_cardimportlistener_on_done");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_cardimportlistener_on_error() !== 3927) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_cardimportlistener_on_error");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_cardsource_open() !== 1759) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_cardsource_open");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_copylistener_on_progress() !== 58042) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_copylistener_on_progress");
@@ -2499,6 +3125,8 @@ function uniffiEnsureInitialized() {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_importlistener_on_done");
     }
 
+    uniffiCallbackInterfaceCardImportListener.register();
+    uniffiCallbackInterfaceCardSource.register();
     uniffiCallbackInterfaceCopyListener.register();
     uniffiCallbackInterfaceDiskFiles.register();
     uniffiCallbackInterfaceHistogramListener.register();
@@ -2508,6 +3136,10 @@ function uniffiEnsureInitialized() {
 export default Object.freeze({
   initialize: uniffiEnsureInitialized,
   converters: {
+    FfiConverterTypeCardFile,
+    FfiConverterTypeCardImportListener,
+    FfiConverterTypeCardImportResult,
+    FfiConverterTypeCardSource,
     FfiConverterTypeCopyListener,
     FfiConverterTypeCopyResult,
     FfiConverterTypeDiskError,
@@ -2518,6 +3150,7 @@ export default Object.freeze({
     FfiConverterTypeHistogramListener,
     FfiConverterTypeImportListener,
     FfiConverterTypeImportProgressEvent,
+    FfiConverterTypeImportStatus,
     FfiConverterTypeImportSummary,
     FfiConverterTypeMirrorError,
     FfiConverterTypePhotoInfo,
