@@ -13,8 +13,9 @@ import { HomeScreen } from './HomeScreen';
 import { ImportScreen } from './ImportScreen';
 import { lockMessage } from './lock';
 import { readPrefs, savePrefs } from './prefs';
-import { type Filters, NO_FILTERS, ProjectScreen } from './ProjectScreen';
+import { type Filters, NO_FILTERS, ProjectScreen, type ViewMode } from './ProjectScreen';
 import { discoverProjects } from './projects';
+import type { ViewSettings } from '@lumik/core-native';
 import { type DiskProject, ProjectSession } from './session';
 
 type Log = { at: string; text: string; error?: boolean };
@@ -34,7 +35,8 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
   const [session, setSession] = useState<ProjectSession | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const [fetching, setFetching] = useState<{ done: number; total: number } | null>(null);
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [filters, setFiltersState] = useState<Filters>(NO_FILTERS);
+  const [viewMode, setViewModeState] = useState<ViewMode>('by-date');
   const [viewer, setViewer] = useState<ViewerState | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   // Proyecto al que se está importando.
@@ -42,6 +44,8 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
   const [version, setVersion] = useState(0);
   const [log, setLog] = useState<Log[]>([]);
   const sessionRef = useRef<ProjectSession | null>(null);
+  // Como el desktop: un proyecto sin fotos abre el import, una sola vez.
+  const autoImported = useRef(new Set<string>());
 
   const note = useCallback((text: string, error = false) => {
     const at = new Date().toTimeString().slice(0, 8);
@@ -106,15 +110,49 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
       try {
         const s = await ProjectSession.open(project, () => setVersion((v) => v + 1), note);
         sessionRef.current = s;
-        setFilters(NO_FILTERS);
+        // Los filtros y el modo de vista con que el desktop dejó el proyecto (la papelera empieza apagada).
+        setFiltersState(fromSettings(s.viewSettings));
+        setViewModeState(s.viewSettings.viewMode === 'grid' ? 'grid' : 'by-date');
         setViewer(null);
         setSession(s);
         s.fetchThumbs((done, total) => setFetching(done < total ? { done, total } : null))
           .catch((e) => note(`Miniaturas: ${String(e)}`, true))
           .finally(() => setFetching(null));
+        if (!s.readOnly && s.photos.length === 0 && !autoImported.current.has(project.uri)) {
+          autoImported.current.add(project.uri);
+          s.close();
+          sessionRef.current = null;
+          setSession(null);
+          setImporting(project);
+        }
       } finally {
         setOpening(null);
       }
+    });
+
+  // Cada cambio de filtros o de vista se guarda en el proyecto, como el desktop.
+  const saveView = (f: Filters, mode: ViewMode) => {
+    try {
+      sessionRef.current?.saveView(toSettings(f, mode));
+    } catch (e) {
+      note(`Guardar los filtros: ${String(e)}`, true);
+    }
+  };
+  const setFilters = (f: Filters) => {
+    setFiltersState(f);
+    saveView(f, viewMode);
+  };
+  const setViewMode = (mode: ViewMode) => {
+    setViewModeState(mode);
+    saveView(filters, mode);
+  };
+
+  const trashOrRestore = (restore: boolean, i: number) =>
+    run(restore ? 'Restaurando' : 'Moviendo a la papelera', async () => {
+      const s = sessionRef.current;
+      if (!s) return;
+      if (restore) s.restorePhoto(s.trash[i]);
+      else s.trashPhoto(s.photos[i]);
     });
 
   const closeViewer = () => {
@@ -273,11 +311,15 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
         trash={trashGrid}
         filters={filters}
         onFilters={setFilters}
+        viewMode={viewMode}
+        onViewMode={setViewMode}
         onOpenPhoto={(fromTrash, visible, position) => setViewer({ fromTrash, visible, position })}
+        onTrash={lock ? undefined : (i) => trashOrRestore(false, i)}
+        onRestore={lock ? undefined : (i) => trashOrRestore(true, i)}
         onBack={close}
         onImport={lock ? undefined : startImport}
         fetching={fetching}
-        notice={lock ? `${lockMessage(lock)} · solo lectura. Ábrela en el visor para tomar el control.` : undefined}
+        lock={lock ? { text: `${lockMessage(lock)} · solo lectura`, onTakeControl: takeControl } : undefined}
       />
     );
   }
@@ -316,6 +358,30 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
       )}
     </View>
   );
+}
+
+const list = (v?: string) => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+
+function fromSettings(s: ViewSettings): Filters {
+  return {
+    approvedOnly: s.showCulled,
+    trash: false,
+    minStars: s.minStars ?? null,
+    starsMode: s.starsFilterMode === 'exact' ? 'exact' : 'inclusive',
+    colors: new Set(list(s.selectedColors).map(Number)),
+    tags: new Set(list(s.selectedTags)),
+  };
+}
+
+function toSettings(f: Filters, mode: ViewMode): ViewSettings {
+  return {
+    showCulled: f.approvedOnly,
+    minStars: f.minStars ?? undefined,
+    starsFilterMode: f.starsMode,
+    selectedTags: [...f.tags].join(','),
+    selectedColors: [...f.colors].join(','),
+    viewMode: mode,
+  };
 }
 
 // Los permisos que sirven como disco: volumen conectado y que no sea una

@@ -63,6 +63,8 @@ class NativeLumikMobile : public jsi::HostObject {
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_start_test_import(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_cull_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_rate_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_fn_func_restore_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_fn_func_trash_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_start_histogram(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_make_placeholders(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_start_card_import(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
@@ -89,13 +91,17 @@ class NativeLumikMobile : public jsi::HostObject {
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_write_fd_string(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_write_text(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_create_project_db(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_fn_func_get_view_settings(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_open_project(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_open_project_trash(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_prepare_grid(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_fn_func_save_view_settings(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_start_progress_burst(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_start_test_import(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_cull_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_rate_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_checksum_func_restore_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_checksum_func_trash_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_start_histogram(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_make_placeholders(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_start_card_import(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
@@ -122,9 +128,11 @@ class NativeLumikMobile : public jsi::HostObject {
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_write_fd_string(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_write_text(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_create_project_db(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_checksum_func_get_view_settings(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_open_project(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_open_project_trash(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_prepare_grid(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_checksum_func_save_view_settings(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_method_importlistener_on_progress(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_method_importlistener_on_done(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_method_diskfiles_create_dir_all(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);

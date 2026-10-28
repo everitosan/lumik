@@ -23,6 +23,8 @@ pub struct PhotoInfo {
     pub file_name: String,
     /// Ruta relativa al proyecto (`_media/…` o `_culled/…`).
     pub dng_path: String,
+    /// JPG de cámara de un par RAW+JPG (para el indicador de formato del desktop).
+    pub camera_jpg_path: Option<String>,
     /// Aprobada (en Lumik, aprobar es mover a `_culled/`).
     pub culled: bool,
     /// Etiquetas de color, formato del desktop: `"1,3,5"`.
@@ -74,6 +76,7 @@ fn photos_of(project_dir: &str, trashed: bool) -> Result<Vec<PhotoInfo>, Project
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| p.dng_path.clone()),
             dng_path: p.dng_path.clone(),
+            camera_jpg_path: p.camera_jpg_path.clone(),
             culled: p.culled,
             color_label: p.color_label.clone(),
             tags: p.tags.clone(),
@@ -94,6 +97,55 @@ fn photos_of(project_dir: &str, trashed: bool) -> Result<Vec<PhotoInfo>, Project
             stars: p.stars,
         })
         .collect())
+}
+
+/// Ajustes de la vista del proyecto que el desktop guarda en `project_settings`
+/// (filtros y modo de vista), para que la tablet abra el proyecto igual.
+#[derive(uniffi::Record)]
+pub struct ViewSettings {
+    pub show_culled: bool,
+    pub min_stars: Option<i32>,
+    /// `"inclusive"` (≥) o `"exact"` (=).
+    pub stars_filter_mode: Option<String>,
+    /// Tags separados por comas.
+    pub selected_tags: Option<String>,
+    /// Etiquetas de color separadas por comas (`"1,3"`).
+    pub selected_colors: Option<String>,
+    /// `"by-date"` o `"grid"`.
+    pub view_mode: Option<String>,
+}
+
+fn open_db(project_dir: &str) -> Result<ProjectDatabase, ProjectError> {
+    let dir = PathBuf::from(project_dir);
+    ProjectDatabase::open(dir.join("project.db"), "", dir).map_err(|e| ProjectError::Open(e.to_string()))
+}
+
+#[uniffi::export]
+pub fn get_view_settings(project_dir: String) -> Result<ViewSettings, ProjectError> {
+    let s = open_db(&project_dir)?.get_project_settings().map_err(|e| ProjectError::Read(e.to_string()))?;
+    Ok(ViewSettings {
+        show_culled: s.show_culled,
+        min_stars: s.min_stars,
+        stars_filter_mode: s.stars_filter_mode,
+        selected_tags: s.selected_tags,
+        selected_colors: s.selected_colors,
+        view_mode: s.view_mode,
+    })
+}
+
+/// Guarda los ajustes de la vista; lo que la tablet no maneja (el panel
+/// lateral del visor del desktop) se queda como estaba.
+#[uniffi::export]
+pub fn save_view_settings(project_dir: String, settings: ViewSettings) -> Result<(), ProjectError> {
+    let db = open_db(&project_dir)?;
+    let mut s = db.get_project_settings().map_err(|e| ProjectError::Read(e.to_string()))?;
+    s.show_culled = settings.show_culled;
+    s.min_stars = settings.min_stars;
+    s.stars_filter_mode = settings.stars_filter_mode;
+    s.selected_tags = settings.selected_tags;
+    s.selected_colors = settings.selected_colors;
+    s.view_mode = settings.view_mode;
+    db.update_project_settings(&s).map_err(|e| ProjectError::Files(e.to_string()))
 }
 
 /// Copia las miniaturas y vistas previas de `photos` a `out_dir/{thumbs,previews}/{n}.jpg`

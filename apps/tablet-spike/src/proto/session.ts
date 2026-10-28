@@ -14,15 +14,20 @@ import {
   copyFdToPath,
   copyPathToFd,
   cullPhoto,
+  getViewSettings,
   missingFiles,
   openProject,
   openProjectTrash,
   type PhotoInfo,
   ratePhoto,
   resetDir,
+  restorePhoto,
+  saveViewSettings,
   startCopyToDir,
   startFdToPath,
+  trashPhoto,
   vacuumInto,
+  type ViewSettings,
 } from '@lumik/core-native';
 
 import Saf from '../../modules/saf/src/LumikSafModule';
@@ -52,9 +57,11 @@ export type SessionPhoto = {
 const safeName = (s: string) => s.replace(/[^\w.-]+/g, '_');
 
 export class ProjectSession {
-  readonly photos: SessionPhoto[];
+  photos: SessionPhoto[];
   /** Fotos en la papelera (`_trash/`), para el filtro "Papelera". */
-  readonly trash: SessionPhoto[];
+  trash: SessionPhoto[];
+  /** Filtros y modo de vista guardados en el proyecto (`project_settings`), como los deja el desktop. */
+  readonly viewSettings: ViewSettings;
   private giveBackTimer: ReturnType<typeof setTimeout> | null = null;
   private dirty = false;
   private fetching = new Set<string>();
@@ -75,6 +82,7 @@ export class ProjectSession {
     this.readOnly = lock.state === 'foreign' ? lock : null;
     this.photos = this.wrap(infos);
     this.trash = this.wrap(trashed);
+    this.viewSettings = getViewSettings(mirrorDir);
   }
 
   /** Con lo que ya estaba en el caché de una apertura anterior. */
@@ -194,13 +202,61 @@ export class ProjectSession {
     ratePhoto(this.mirrorDir, p.info.id, stars, colorLabel);
     p.info = { ...p.info, stars, colorLabel };
     this.onChange();
-    // El disco ya no tiene todo: que lo sepa quien vea el candado.
+    this.markPending();
+  }
+
+  /** Guarda los filtros y el modo de vista en el proyecto, como el desktop.
+   *  En solo lectura se quedan en memoria. */
+  saveView(settings: ViewSettings) {
+    if (this.readOnly) return;
+    saveViewSettings(this.mirrorDir, settings);
+    this.markPending();
+  }
+
+  /** El disco ya no tiene todo: que lo sepa quien vea el candado; vuelve con debounce. */
+  private markPending() {
     if (!this.pendingInLock) {
       this.ensureOwned();
       writeOwnLock(this.project.uri, this.mirrorDir, true);
       this.pendingInLock = true;
     }
     this.scheduleGiveBack();
+  }
+
+  /** Mueve la foto a la papelera con el `TrashPhoto` del núcleo (sus archivos van a `_trash/`). */
+  trashPhoto(p: SessionPhoto) {
+    this.ensureOwned();
+    trashPhoto(this.mirrorDir, p.info.id, safDiskFiles(this.project.uri));
+    this.reload();
+    this.log(`A la papelera: ${p.info.fileName}`);
+    this.giveBack();
+  }
+
+  /** Restaura la foto de la papelera con el `RestorePhoto` del núcleo. */
+  restorePhoto(p: SessionPhoto) {
+    this.ensureOwned();
+    restorePhoto(this.mirrorDir, p.info.id, safDiskFiles(this.project.uri));
+    this.reload();
+    this.log(`Restaurada: ${p.info.fileName}`);
+    this.giveBack();
+  }
+
+  /** Vuelve a leer las dos listas de la copia de trabajo, conservando lo ya
+   *  traído al caché de cada foto. */
+  private reload() {
+    const known = new Map([...this.photos, ...this.trash].map((p) => [p.info.id, p]));
+    const rewrap = (infos: PhotoInfo[]) => {
+      const fresh = new Map(this.wrap(infos.filter((i) => !known.has(i.id))).map((p) => [p.info.id, p]));
+      return infos.map((info) => {
+        const p = known.get(info.id);
+        if (!p) return fresh.get(info.id)!;
+        p.info = info;
+        return p;
+      });
+    };
+    this.photos = rewrap(openProject(this.mirrorDir));
+    this.trash = rewrap(openProjectTrash(this.mirrorDir));
+    this.onChange();
   }
 
   /** Aprueba o quita la aprobación con el `CullPhoto` del núcleo, sobre el disco. */

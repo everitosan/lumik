@@ -6,6 +6,7 @@
 
 use lumik_core::application::ports::{DirFile, FileStore, FinderTagWriter, Fingerprint};
 use lumik_core::application::use_cases::cull_photo::CullPhoto;
+use lumik_core::application::use_cases::trash_photo::{RestorePhoto, TrashPhoto};
 use lumik_core::db::ProjectDatabase;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -136,6 +137,27 @@ pub fn cull_photo(mirror_dir: String, photo_id: String, culled: bool, disk: Arc<
     .map_err(MirrorError::Db)
 }
 
+/// Mueve la foto a la papelera con el `TrashPhoto` del desktop: aparta sus
+/// archivos en `_trash/` del disco y la marca en la copia de trabajo.
+#[uniffi::export]
+pub fn trash_photo(mirror_dir: String, photo_id: String, disk: Arc<dyn DiskFiles>) -> Result<(), MirrorError> {
+    let db = open(&mirror_dir)?;
+    let files = SafFileStore(disk);
+    TrashPhoto { photos: &db, files: &files, finder_tags: &NoFinderTags, project_dir: Path::new(DISK_ROOT) }
+        .execute(&photo_id)
+        .map_err(MirrorError::Db)
+}
+
+/// Restaura una foto de la papelera con el `RestorePhoto` del desktop.
+#[uniffi::export]
+pub fn restore_photo(mirror_dir: String, photo_id: String, disk: Arc<dyn DiskFiles>) -> Result<(), MirrorError> {
+    let db = open(&mirror_dir)?;
+    let files = SafFileStore(disk);
+    RestorePhoto { photos: &db, files: &files, finder_tags: &NoFinderTags, project_dir: Path::new(DISK_ROOT) }
+        .execute(&photo_id)
+        .map_err(MirrorError::Db)
+}
+
 /// Estrellas y etiquetas de color (formato del desktop: `"1,3,5"`, o `None`)
 /// en la copia de trabajo, conservando los tags.
 #[uniffi::export]
@@ -215,6 +237,33 @@ mod tests {
 
         cull_photo(mirror.clone(), photo.id.clone(), false, disk.clone()).unwrap();
         let back = open(&mirror).unwrap().get_photo(&photo.id).unwrap().unwrap();
+        assert_eq!(back.dng_path, photo.dng_path);
+        assert!(disk.exists(photo.dng_path));
+    }
+
+    /// Como el anterior, con la papelera: va a `_trash/` y vuelve.
+    #[test]
+    #[ignore]
+    fn trash_and_restore_move_the_file() {
+        let real = PathBuf::from(std::env::var("LUMIK_PROJECT").expect("LUMIK_PROJECT"));
+        let copy = tempfile::tempdir().unwrap();
+        std::fs::copy(real.join("project.db"), copy.path().join("project.db")).unwrap();
+        let mirror = copy.path().display().to_string();
+        let db = open(&mirror).unwrap();
+        let photo = db.get_project_photos().unwrap().into_iter().find(|p| p.camera_jpg_path.is_none() && p.jpg_path.is_none()).unwrap();
+        drop(db);
+        let disk = Arc::new(MemDisk::default());
+        disk.0.lock().unwrap().push(photo.dng_path.clone());
+
+        trash_photo(mirror.clone(), photo.id.clone(), disk.clone()).unwrap();
+        let trashed = open(&mirror).unwrap().get_photo(&photo.id).unwrap().unwrap();
+        assert!(trashed.deleted);
+        assert!(trashed.dng_path.starts_with("_trash/"), "{}", trashed.dng_path);
+        assert!(disk.exists(trashed.dng_path.clone()));
+
+        restore_photo(mirror.clone(), photo.id.clone(), disk.clone()).unwrap();
+        let back = open(&mirror).unwrap().get_photo(&photo.id).unwrap().unwrap();
+        assert!(!back.deleted);
         assert_eq!(back.dng_path, photo.dng_path);
         assert!(disk.exists(photo.dng_path));
     }

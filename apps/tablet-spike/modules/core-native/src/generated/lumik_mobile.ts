@@ -147,6 +147,23 @@ export function fingerprintFd(fd: number): DiskFingerprint /*throws*/ {
     }
     }
 
+export function getViewSettings(projectDir: string): ViewSettings /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeProjectError.lift.bind(FfiConverterTypeProjectError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_get_view_settings(
+        FfiConverterString.lower(projectDir, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterTypeViewSettings.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
 /**
  * Identidad de esta instalación, guardada en `path` (se crea la primera vez).
  */
@@ -396,6 +413,36 @@ export function resetDir(path: string): void /*throws*/ {uniffiCaller.rustCallWi
     }
 
 /**
+ * Restaura una foto de la papelera con el `RestorePhoto` del desktop.
+ */
+export function restorePhoto(mirrorDir: string, photoId: string, disk: DiskFiles): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_restore_photo(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(photoId, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeDiskFiles.lower(disk, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Guarda los ajustes de la vista; lo que la tablet no maneja (el panel
+ * lateral del visor del desktop) se queda como estaba.
+ */
+export function saveViewSettings(projectDir: string, settings: ViewSettings): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeProjectError.lift.bind(FfiConverterTypeProjectError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_save_view_settings(
+        FfiConverterString.lower(projectDir, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeViewSettings.lower(settings, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
  * Cambia las estrellas de una foto en la copia de trabajo, conservando su
  * etiqueta de color y sus tags (como `update_rating` del desktop).
  */
@@ -561,6 +608,22 @@ export function startTestImport(sourceDir: string, projectDir: string, listener:
         FfiConverterString.lower(sourceDir, nativeModule().rustbuffer_alloc),
         FfiConverterString.lower(projectDir, nativeModule().rustbuffer_alloc),
         FfiConverterTypeImportListener.lower(listener, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Mueve la foto a la papelera con el `TrashPhoto` del desktop: aparta sus
+ * archivos en `_trash/` del disco y la marca en la copia de trabajo.
+ */
+export function trashPhoto(mirrorDir: string, photoId: string, disk: DiskFiles): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_trash_photo(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(photoId, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeDiskFiles.lower(disk, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
@@ -1364,6 +1427,10 @@ export type PhotoInfo = {
      */
     dngPath: string,
     /**
+     * JPG de cámara de un par RAW+JPG (para el indicador de formato del desktop).
+     */
+    cameraJpgPath?: string,
+    /**
      * Aprobada (en Lumik, aprobar es mover a `_culled/`).
      */
     culled: boolean,
@@ -1418,6 +1485,7 @@ const FfiConverterTypePhotoInfo = (() => {
                 id: FfiConverterString.readFromCursor(c), 
                 fileName: FfiConverterString.readFromCursor(c), 
                 dngPath: FfiConverterString.readFromCursor(c), 
+                cameraJpgPath: FfiConverterOptionalString.readFromCursor(c), 
                 culled: FfiConverterBool.readFromCursor(c), 
                 colorLabel: FfiConverterOptionalString.readFromCursor(c), 
                 tags: FfiConverterOptionalString.readFromCursor(c), 
@@ -1441,6 +1509,7 @@ const FfiConverterTypePhotoInfo = (() => {
             FfiConverterString.writeIntoCursor(value.id, c);
             FfiConverterString.writeIntoCursor(value.fileName, c);
             FfiConverterString.writeIntoCursor(value.dngPath, c);
+            FfiConverterOptionalString.writeIntoCursor(value.cameraJpgPath, c);
             FfiConverterBool.writeIntoCursor(value.culled, c);
             FfiConverterOptionalString.writeIntoCursor(value.colorLabel, c);
             FfiConverterOptionalString.writeIntoCursor(value.tags, c);
@@ -1463,6 +1532,7 @@ const FfiConverterTypePhotoInfo = (() => {
             return FfiConverterString.allocationSize(value.id) +
              FfiConverterString.allocationSize(value.fileName) +
              FfiConverterString.allocationSize(value.dngPath) +
+             FfiConverterOptionalString.allocationSize(value.cameraJpgPath) +
              FfiConverterBool.allocationSize(value.culled) +
              FfiConverterOptionalString.allocationSize(value.colorLabel) +
              FfiConverterOptionalString.allocationSize(value.tags) +
@@ -1526,6 +1596,81 @@ const FfiConverterTypeProjectSummary = (() => {
         allocationSize(value: TypeName): number {
             return FfiConverterOptionalString.allocationSize(value.name) +
              FfiConverterOptionalString.allocationSize(value.cover);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
+/**
+ * Ajustes de la vista del proyecto que el desktop guarda en `project_settings`
+ * (filtros y modo de vista), para que la tablet abra el proyecto igual.
+ */
+export type ViewSettings = {
+    showCulled: boolean,
+    minStars?: number,
+    /**
+     * `"inclusive"` (≥) o `"exact"` (=).
+     */
+    starsFilterMode?: string,
+    /**
+     * Tags separados por comas.
+     */
+    selectedTags?: string,
+    /**
+     * Etiquetas de color separadas por comas (`"1,3"`).
+     */
+    selectedColors?: string,
+    /**
+     * `"by-date"` o `"grid"`.
+     */
+    viewMode?: string
+}
+
+/**
+ * Generated factory for {@link ViewSettings} record objects.
+ */
+export const ViewSettings = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<ViewSettings, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<ViewSettings>,
+    });
+})();
+
+const FfiConverterTypeViewSettings = (() => {
+    type TypeName = ViewSettings;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                showCulled: FfiConverterBool.readFromCursor(c), 
+                minStars: FfiConverterOptionalInt32.readFromCursor(c), 
+                starsFilterMode: FfiConverterOptionalString.readFromCursor(c), 
+                selectedTags: FfiConverterOptionalString.readFromCursor(c), 
+                selectedColors: FfiConverterOptionalString.readFromCursor(c), 
+                viewMode: FfiConverterOptionalString.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterBool.writeIntoCursor(value.showCulled, c);
+            FfiConverterOptionalInt32.writeIntoCursor(value.minStars, c);
+            FfiConverterOptionalString.writeIntoCursor(value.starsFilterMode, c);
+            FfiConverterOptionalString.writeIntoCursor(value.selectedTags, c);
+            FfiConverterOptionalString.writeIntoCursor(value.selectedColors, c);
+            FfiConverterOptionalString.writeIntoCursor(value.viewMode, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterBool.allocationSize(value.showCulled) +
+             FfiConverterOptionalInt32.allocationSize(value.minStars) +
+             FfiConverterOptionalString.allocationSize(value.starsFilterMode) +
+             FfiConverterOptionalString.allocationSize(value.selectedTags) +
+             FfiConverterOptionalString.allocationSize(value.selectedColors) +
+             FfiConverterOptionalString.allocationSize(value.viewMode);
             
         }
     };
@@ -3538,6 +3683,9 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_fingerprint_fd() !== 49197) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_fingerprint_fd");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_get_view_settings() !== 65310) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_get_view_settings");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_install_identity() !== 2513) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_install_identity");
     }
@@ -3577,6 +3725,12 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_reset_dir() !== 61925) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_reset_dir");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_restore_photo() !== 23714) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_restore_photo");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_save_view_settings() !== 54461) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_save_view_settings");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_set_stars() !== 23964) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_set_stars");
     }
@@ -3609,6 +3763,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_test_import() !== 57823) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_test_import");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_trash_photo() !== 43559) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_trash_photo");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_vacuum_into() !== 14624) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_vacuum_into");
@@ -3712,5 +3869,6 @@ export default Object.freeze({
     FfiConverterTypePhotoInfo,
     FfiConverterTypeProjectError,
     FfiConverterTypeProjectSummary,
+    FfiConverterTypeViewSettings,
   }
 });
