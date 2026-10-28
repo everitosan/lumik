@@ -67,18 +67,32 @@ interface NativeModuleInterface {
     ubrn_ffi_lumik_mobile_rust_future_cancel_void(handle: bigint): void;
     ubrn_ffi_lumik_mobile_rust_future_complete_void(handle: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_ffi_lumik_mobile_rust_future_free_void(handle: bigint): void;
+    ubrn_uniffi_lumik_mobile_fn_clone_histogramlistener(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): bigint;
+    ubrn_uniffi_lumik_mobile_fn_free_histogramlistener(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_clone_importlistener(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): bigint;
     ubrn_uniffi_lumik_mobile_fn_free_importlistener(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): void;
+    ubrn_uniffi_lumik_mobile_fn_init_callback_vtable_histogramlistener(vtable: UniffiVTableCallbackInterfaceLumikMobileHistogramListener): void;
     ubrn_uniffi_lumik_mobile_fn_init_callback_vtable_importlistener(vtable: UniffiVTableCallbackInterfaceLumikMobileImportListener): void;
+    ubrn_uniffi_lumik_mobile_fn_func_open_project(projectDir: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
+    ubrn_uniffi_lumik_mobile_fn_func_prepare_grid(thumbs: Uint8Array, previews: Uint8Array, outDir: Uint8Array, count: number, uniffi_out_err: UniffiRustCallStatus): void;
+    ubrn_uniffi_lumik_mobile_fn_func_start_histogram(path: Uint8Array, listener: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_start_progress_burst(count: number, intervalUs: bigint, listener: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_start_test_import(sourceDir: Uint8Array, projectDir: Uint8Array, listener: bigint, uniffi_out_err: UniffiRustCallStatus): void;
+    ubrn_uniffi_lumik_mobile_fn_method_histogramlistener_on_histogram(uniffiSelf: bigint, histogram: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
+    ubrn_uniffi_lumik_mobile_fn_method_histogramlistener_on_error(uniffiSelf: bigint, message: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_method_importlistener_on_progress(uniffiSelf: bigint, event: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_method_importlistener_on_done(uniffiSelf: bigint, summary: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_ffi_lumik_mobile_uniffi_contract_version(): number;
+    ubrn_uniffi_lumik_mobile_checksum_func_open_project(): number;
+    ubrn_uniffi_lumik_mobile_checksum_func_prepare_grid(): number;
+    ubrn_uniffi_lumik_mobile_checksum_func_start_histogram(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_start_progress_burst(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_start_test_import(): number;
+    ubrn_uniffi_lumik_mobile_checksum_method_histogramlistener_on_histogram(): number;
+    ubrn_uniffi_lumik_mobile_checksum_method_histogramlistener_on_error(): number;
     ubrn_uniffi_lumik_mobile_checksum_method_importlistener_on_progress(): number;
     ubrn_uniffi_lumik_mobile_checksum_method_importlistener_on_done(): number;
+    ubrn_uniffi_internal_fn_method_histogramlistener_ffi__bless_pointer(pointer: bigint, uniffi_out_err: UniffiRustCallStatus): UniffiGcObject;
     ubrn_uniffi_internal_fn_method_importlistener_ffi__bless_pointer(pointer: bigint, uniffi_out_err: UniffiRustCallStatus): UniffiGcObject;
     // Codegen call sites use these via `nativeModule().rustbuffer_alloc(...)`
     // and `nativeModule().rustbuffer_free(...)`. The JSI host object exposes
@@ -97,6 +111,16 @@ export type UniffiForeignFutureDroppedCallback = (handle: bigint) => void;
 export type UniffiForeignFutureDroppedCallbackStruct = {
   handle: bigint;
   free: UniffiForeignFutureDroppedCallback;
+};
+type UniffiCallbackInterfaceLumikMobileHistogramListenerMethod0 = (uniffiHandle: bigint, histogram: Uint8Array) => UniffiResult<void>;
+type UniffiCallbackInterfaceLumikMobileHistogramListenerMethod1 = (uniffiHandle: bigint, message: Uint8Array) => UniffiResult<void>;
+type UniffiCallbackInterfaceCloneLumikMobileHistogramListener = (handle: bigint) => UniffiResult<void>;
+type UniffiCallbackInterfaceFreeLumikMobileHistogramListener = (handle: bigint) => void;
+export type UniffiVTableCallbackInterfaceLumikMobileHistogramListener = {
+  uniffi_free: UniffiCallbackInterfaceFreeLumikMobileHistogramListener;
+  uniffi_clone: UniffiCallbackInterfaceCloneLumikMobileHistogramListener;
+  on_histogram: UniffiCallbackInterfaceLumikMobileHistogramListenerMethod0;
+  on_error: UniffiCallbackInterfaceLumikMobileHistogramListenerMethod1;
 };
 type UniffiCallbackInterfaceLumikMobileImportListenerMethod0 = (uniffiHandle: bigint, event: Uint8Array) => UniffiResult<void>;
 type UniffiCallbackInterfaceLumikMobileImportListenerMethod1 = (uniffiHandle: bigint, summary: Uint8Array) => UniffiResult<void>;

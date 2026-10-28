@@ -4,9 +4,9 @@
 /* eslint-disable */
 // @ts-nocheck
 import nativeModule from "./lumik_mobile-ffi";
-import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDroppedCallback, type UniffiForeignFutureDroppedCallbackStruct, type UniffiVTableCallbackInterfaceLumikMobileImportListener,
+import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDroppedCallback, type UniffiForeignFutureDroppedCallbackStruct, type UniffiVTableCallbackInterfaceLumikMobileHistogramListener, type UniffiVTableCallbackInterfaceLumikMobileImportListener,
 } from "./lumik_mobile-ffi";
-import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, type UniffiReferenceHolder, type UniffiRustCallStatus, AbstractFfiConverterByteArray, Cursor, FfiConverterObject, FfiConverterObjectWithCallbacks, FfiConverterUInt32, FfiConverterUInt64, RustBuffer, UniffiAbstractObject, UniffiInternalError, UniffiResult, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiTraitInterfaceCall, uniffiTypeNameSymbol,
+import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, type UniffiReferenceHolder, type UniffiRustCallStatus, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterFloat64, FfiConverterInt32, FfiConverterObject, FfiConverterObjectWithCallbacks, FfiConverterOptional, FfiConverterUInt32, FfiConverterUInt64, FfiConverterUInt8, RustBuffer, UniffiAbstractObject, UniffiError, UniffiInternalError, UniffiResult, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiTraitInterfaceCall, uniffiTypeNameSymbol, variantOrdinalSymbol,
 } from "@ubjs/core";
 const uniffiCaller = new UniffiRustCaller(() => ({ code: 0 }));
 
@@ -18,6 +18,59 @@ const uniffiIsDebug =
   false;
 
 // Public interface members begin here.
+
+/**
+ * Fotos del proyecto en `project_dir` (sin la papelera), en el orden del
+ * desktop: por fecha de captura.
+ */
+export function openProject(projectDir: string): Array<PhotoInfo> /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeProjectError.lift.bind(FfiConverterTypeProjectError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_open_project(
+        FfiConverterString.lower(projectDir, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterSequenceTypePhotoInfo.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
+ * Copia las miniaturas y vistas previas de `photos` a `out_dir/{thumbs,previews}/{n}.jpg`
+ * hasta `count`, repitiéndolas en orden, para probar el grid con muchas fotos
+ * sin que el caché de imágenes las reutilice. No repite lo que ya existe.
+ */
+export function prepareGrid(thumbs: Array<string>, previews: Array<string>, outDir: string, count: number): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeProjectError.lift.bind(FfiConverterTypeProjectError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_prepare_grid(
+        FfiConverterSequenceString.lower(thumbs, nativeModule().rustbuffer_alloc),
+        FfiConverterSequenceString.lower(previews, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(outDir, nativeModule().rustbuffer_alloc),
+        FfiConverterUInt32.lower(count, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Decodifica `path` y cuenta cada píxel. Vuelve de inmediato; el resultado
+ * llega a `listener` desde otro hilo.
+ */
+export function startHistogram(path: string, listener: HistogramListener): void {uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_start_histogram(
+        FfiConverterString.lower(path, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeHistogramListener.lower(listener, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
 
 /**
  * Emite `count` eventos sintéticos, uno cada `interval_us` microsegundos, desde
@@ -49,6 +102,60 @@ export function startTestImport(sourceDir: string, projectDir: string, listener:
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
     );
     }
+
+/**
+ * Cuentas por nivel (0–255) de cada canal.
+ */
+export type Histogram = {
+    r: Array<number>,
+    g: Array<number>,
+    b: Array<number>,
+    elapsedMs: bigint
+}
+
+/**
+ * Generated factory for {@link Histogram} record objects.
+ */
+export const Histogram = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<Histogram, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<Histogram>,
+    });
+})();
+
+const FfiConverterTypeHistogram = (() => {
+    type TypeName = Histogram;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                r: FfiConverterSequenceUInt32.readFromCursor(c), 
+                g: FfiConverterSequenceUInt32.readFromCursor(c), 
+                b: FfiConverterSequenceUInt32.readFromCursor(c), 
+                elapsedMs: FfiConverterUInt64.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterSequenceUInt32.writeIntoCursor(value.r, c);
+            FfiConverterSequenceUInt32.writeIntoCursor(value.g, c);
+            FfiConverterSequenceUInt32.writeIntoCursor(value.b, c);
+            FfiConverterUInt64.writeIntoCursor(value.elapsedMs, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterSequenceUInt32.allocationSize(value.r) +
+             FfiConverterSequenceUInt32.allocationSize(value.g) +
+             FfiConverterSequenceUInt32.allocationSize(value.b) +
+             FfiConverterUInt64.allocationSize(value.elapsedMs);
+            
+        }
+    };
+    return new FFIConverter();
+})();
 
 // Hermes (React Native ≥ 0.74) ships TextEncoder and encodeInto, but not
 // TextDecoder. For single-string decode (bytesToString), we polyfill via the
@@ -217,6 +324,516 @@ const FfiConverterTypeImportSummary = (() => {
     };
     return new FFIConverter();
 })();
+
+/**
+ * Una foto con lo que el visor necesita: rutas, rotación y los datos de
+ * captura que el desktop muestra en la barra lateral.
+ */
+export type PhotoInfo = {
+    id: string,
+    /**
+     * Nombre del archivo en el proyecto (el RAW, o el JPG si la foto es solo JPG).
+     */
+    fileName: string,
+    thumbPath: string,
+    previewPath: string,
+    /**
+     * Grados: 0 / 90 / 180 / 270.
+     */
+    rotation: number,
+    captureDate?: string,
+    camera?: string,
+    lensModel?: string,
+    focalLength?: string,
+    iso?: number,
+    aperture?: string,
+    shutterSpeed?: string,
+    exposureCompensation?: number,
+    width?: number,
+    height?: number,
+    stars: number
+}
+
+/**
+ * Generated factory for {@link PhotoInfo} record objects.
+ */
+export const PhotoInfo = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<PhotoInfo, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<PhotoInfo>,
+    });
+})();
+
+const FfiConverterTypePhotoInfo = (() => {
+    type TypeName = PhotoInfo;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                id: FfiConverterString.readFromCursor(c), 
+                fileName: FfiConverterString.readFromCursor(c), 
+                thumbPath: FfiConverterString.readFromCursor(c), 
+                previewPath: FfiConverterString.readFromCursor(c), 
+                rotation: FfiConverterInt32.readFromCursor(c), 
+                captureDate: FfiConverterOptionalString.readFromCursor(c), 
+                camera: FfiConverterOptionalString.readFromCursor(c), 
+                lensModel: FfiConverterOptionalString.readFromCursor(c), 
+                focalLength: FfiConverterOptionalString.readFromCursor(c), 
+                iso: FfiConverterOptionalInt32.readFromCursor(c), 
+                aperture: FfiConverterOptionalString.readFromCursor(c), 
+                shutterSpeed: FfiConverterOptionalString.readFromCursor(c), 
+                exposureCompensation: FfiConverterOptionalFloat64.readFromCursor(c), 
+                width: FfiConverterOptionalInt32.readFromCursor(c), 
+                height: FfiConverterOptionalInt32.readFromCursor(c), 
+                stars: FfiConverterInt32.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.id, c);
+            FfiConverterString.writeIntoCursor(value.fileName, c);
+            FfiConverterString.writeIntoCursor(value.thumbPath, c);
+            FfiConverterString.writeIntoCursor(value.previewPath, c);
+            FfiConverterInt32.writeIntoCursor(value.rotation, c);
+            FfiConverterOptionalString.writeIntoCursor(value.captureDate, c);
+            FfiConverterOptionalString.writeIntoCursor(value.camera, c);
+            FfiConverterOptionalString.writeIntoCursor(value.lensModel, c);
+            FfiConverterOptionalString.writeIntoCursor(value.focalLength, c);
+            FfiConverterOptionalInt32.writeIntoCursor(value.iso, c);
+            FfiConverterOptionalString.writeIntoCursor(value.aperture, c);
+            FfiConverterOptionalString.writeIntoCursor(value.shutterSpeed, c);
+            FfiConverterOptionalFloat64.writeIntoCursor(value.exposureCompensation, c);
+            FfiConverterOptionalInt32.writeIntoCursor(value.width, c);
+            FfiConverterOptionalInt32.writeIntoCursor(value.height, c);
+            FfiConverterInt32.writeIntoCursor(value.stars, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.id) +
+             FfiConverterString.allocationSize(value.fileName) +
+             FfiConverterString.allocationSize(value.thumbPath) +
+             FfiConverterString.allocationSize(value.previewPath) +
+             FfiConverterInt32.allocationSize(value.rotation) +
+             FfiConverterOptionalString.allocationSize(value.captureDate) +
+             FfiConverterOptionalString.allocationSize(value.camera) +
+             FfiConverterOptionalString.allocationSize(value.lensModel) +
+             FfiConverterOptionalString.allocationSize(value.focalLength) +
+             FfiConverterOptionalInt32.allocationSize(value.iso) +
+             FfiConverterOptionalString.allocationSize(value.aperture) +
+             FfiConverterOptionalString.allocationSize(value.shutterSpeed) +
+             FfiConverterOptionalFloat64.allocationSize(value.exposureCompensation) +
+             FfiConverterOptionalInt32.allocationSize(value.width) +
+             FfiConverterOptionalInt32.allocationSize(value.height) +
+             FfiConverterInt32.allocationSize(value.stars);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
+
+// Error type: ProjectError
+export enum ProjectError_Tags {
+    Open = "Open",
+    Read = "Read",
+    Files = "Files"
+}
+export const ProjectError = (() => {
+
+    type Open__interface = {
+        tag: ProjectError_Tags.Open;
+        inner: 
+Readonly<
+[string
+]>
+    };
+    class Open_ extends UniffiError implements Open__interface {
+        /**
+         * @private
+         * This field is private and should not be used, use `tag` instead.
+         */
+        readonly [uniffiTypeNameSymbol] = "ProjectError";
+        readonly tag = ProjectError_Tags.Open;
+        readonly inner: 
+Readonly<
+[string
+]>;
+        constructor(v0: string) {
+            super("ProjectError", "Open");
+
+            this.inner = Object.freeze([v0]);
+        }
+        static new(v0: string): Open_ {
+            return new Open_(v0);
+        }
+
+        static instanceOf(obj: any): obj is Open_ {
+            return obj.tag === ProjectError_Tags.Open;
+        }
+        static hasInner(obj: any): obj is Open_ {
+            return Open_.instanceOf(obj);
+        }
+
+        static getInner(obj: Open_): 
+Readonly<
+[string
+]> {
+            return obj.inner;
+        }
+
+    }
+
+    type Read__interface = {
+        tag: ProjectError_Tags.Read;
+        inner: 
+Readonly<
+[string
+]>
+    };
+    class Read_ extends UniffiError implements Read__interface {
+        /**
+         * @private
+         * This field is private and should not be used, use `tag` instead.
+         */
+        readonly [uniffiTypeNameSymbol] = "ProjectError";
+        readonly tag = ProjectError_Tags.Read;
+        readonly inner: 
+Readonly<
+[string
+]>;
+        constructor(v0: string) {
+            super("ProjectError", "Read");
+
+            this.inner = Object.freeze([v0]);
+        }
+        static new(v0: string): Read_ {
+            return new Read_(v0);
+        }
+
+        static instanceOf(obj: any): obj is Read_ {
+            return obj.tag === ProjectError_Tags.Read;
+        }
+        static hasInner(obj: any): obj is Read_ {
+            return Read_.instanceOf(obj);
+        }
+
+        static getInner(obj: Read_): 
+Readonly<
+[string
+]> {
+            return obj.inner;
+        }
+
+    }
+
+    type Files__interface = {
+        tag: ProjectError_Tags.Files;
+        inner: 
+Readonly<
+[string
+]>
+    };
+    class Files_ extends UniffiError implements Files__interface {
+        /**
+         * @private
+         * This field is private and should not be used, use `tag` instead.
+         */
+        readonly [uniffiTypeNameSymbol] = "ProjectError";
+        readonly tag = ProjectError_Tags.Files;
+        readonly inner: 
+Readonly<
+[string
+]>;
+        constructor(v0: string) {
+            super("ProjectError", "Files");
+
+            this.inner = Object.freeze([v0]);
+        }
+        static new(v0: string): Files_ {
+            return new Files_(v0);
+        }
+
+        static instanceOf(obj: any): obj is Files_ {
+            return obj.tag === ProjectError_Tags.Files;
+        }
+        static hasInner(obj: any): obj is Files_ {
+            return Files_.instanceOf(obj);
+        }
+
+        static getInner(obj: Files_): 
+Readonly<
+[string
+]> {
+            return obj.inner;
+        }
+
+    }
+
+    function instanceOf(obj: any): obj is ProjectError {
+        return obj[uniffiTypeNameSymbol] === "ProjectError";
+    }
+
+    return Object.freeze({
+        instanceOf,
+  Open: Open_, 
+  Read: Read_, 
+  Files: Files_
+    });
+
+})();
+export type ProjectError = InstanceType<
+    typeof ProjectError['Open' | 'Read' | 'Files']
+>;
+
+// FfiConverter for enum ProjectError
+const FfiConverterTypeProjectError = (() => {
+    type TypeName = ProjectError;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            switch (c.readI32()) {
+                case 1: return new ProjectError.Open(FfiConverterString.readFromCursor(c));
+                case 2: return new ProjectError.Read(FfiConverterString.readFromCursor(c));
+                case 3: return new ProjectError.Files(FfiConverterString.readFromCursor(c));
+                default: throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            switch (value.tag) {
+                case ProjectError_Tags.Open: {
+                    c.writeI32(1);
+                    const inner = value.inner;
+                    FfiConverterString.writeIntoCursor(inner[0], c);
+                    return;
+                }
+                case ProjectError_Tags.Read: {
+                    c.writeI32(2);
+                    const inner = value.inner;
+                    FfiConverterString.writeIntoCursor(inner[0], c);
+                    return;
+                }
+                case ProjectError_Tags.Files: {
+                    c.writeI32(3);
+                    const inner = value.inner;
+                    FfiConverterString.writeIntoCursor(inner[0], c);
+                    return;
+                }
+                default:
+                    // Throwing from here means that ProjectError_Tags hasn't matched an ordinal.
+                    throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+        allocationSize(value: TypeName): number {
+            switch (value.tag) {
+                case ProjectError_Tags.Open: {
+                    const inner = value.inner;
+                    let size = 4;
+                    size += FfiConverterString.allocationSize(inner[0]);
+                    return size;
+                }
+                case ProjectError_Tags.Read: {
+                    const inner = value.inner;
+                    let size = 4;
+                    size += FfiConverterString.allocationSize(inner[0]);
+                    return size;
+                }
+                case ProjectError_Tags.Files: {
+                    const inner = value.inner;
+                    let size = 4;
+                    size += FfiConverterString.allocationSize(inner[0]);
+                    return size;
+                }
+                default: throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+    }
+    return new FFIConverter();
+})();
+
+export interface HistogramListener {
+    
+    onHistogram(histogram: Histogram): void;
+    onError(message: string): void;
+}
+
+
+export class HistogramListenerImpl extends UniffiAbstractObject implements HistogramListener {
+
+    readonly [uniffiTypeNameSymbol] = "HistogramListenerImpl";
+    readonly [destructorGuardSymbol]: UniffiGcObject;
+    readonly [pointerLiteralSymbol]: UniffiHandle;
+    // No primary constructor declared for this class.
+private constructor(pointer: UniffiHandle) {
+    super();
+    this[pointerLiteralSymbol] = pointer;
+    this[destructorGuardSymbol] = uniffiTypeHistogramListenerImplObjectFactory.bless(pointer);
+}
+
+    
+
+    
+    onHistogram(histogram: Histogram): void {uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_method_histogramlistener_on_histogram(
+                uniffiTypeHistogramListenerImplObjectFactory.clonePointer(this),
+        FfiConverterTypeHistogram.lower(histogram, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+    
+    onError(message: string): void {uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_method_histogramlistener_on_error(
+                uniffiTypeHistogramListenerImplObjectFactory.clonePointer(this),
+        FfiConverterString.lower(message, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+    
+
+    uniffiDestroy(): void {
+        const ptr = (this as any)[destructorGuardSymbol];
+        if (ptr !== undefined) {
+            const pointer = uniffiTypeHistogramListenerImplObjectFactory.pointer(this);
+            uniffiTypeHistogramListenerImplObjectFactory.freePointer(pointer);
+            uniffiTypeHistogramListenerImplObjectFactory.unbless(ptr);
+            delete (this as any)[destructorGuardSymbol];
+        }
+    }
+
+    static instanceOf(obj_: any): obj_ is HistogramListenerImpl {
+        return uniffiTypeHistogramListenerImplObjectFactory.isConcreteType(obj_);
+    }
+
+    
+}
+
+const uniffiTypeHistogramListenerImplObjectFactory: UniffiObjectFactory<HistogramListener> = (() => {
+    
+    return {
+    create(pointer: UniffiHandle): HistogramListener {
+        const instance = Object.create(HistogramListenerImpl.prototype);
+        instance[pointerLiteralSymbol] = pointer;
+        instance[destructorGuardSymbol] = this.bless(pointer);
+        instance[uniffiTypeNameSymbol] = "HistogramListenerImpl";
+        return instance;
+    },
+
+    
+    bless(p: UniffiHandle): UniffiGcObject {
+        return uniffiCaller.rustCall(
+            /*caller:*/ (status) =>
+                nativeModule().ubrn_uniffi_internal_fn_method_histogramlistener_ffi__bless_pointer(p, status),
+            /*liftString:*/ FfiConverterString.lift
+        );
+    },
+
+    unbless(ptr_: UniffiGcObject) {
+        ptr_.markDestroyed();
+    },
+
+    pointer(obj_: HistogramListener): UniffiHandle {
+        if ((obj_ as any)[destructorGuardSymbol] === undefined) {
+            throw new UniffiInternalError.UnexpectedNullPointer();
+        }
+        return (obj_ as any)[pointerLiteralSymbol];
+    },
+
+    clonePointer(obj_: HistogramListener): UniffiHandle {
+        const pointer = this.pointer(obj_);
+        return uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => nativeModule().ubrn_uniffi_lumik_mobile_fn_clone_histogramlistener(pointer, callStatus),
+            /*liftString:*/ FfiConverterString.lift
+        );
+    },
+
+    freePointer(pointer: UniffiHandle): void {
+        uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => nativeModule().ubrn_uniffi_lumik_mobile_fn_free_histogramlistener(pointer, callStatus),
+            /*liftString:*/ FfiConverterString.lift
+        );
+    },
+
+    isConcreteType(obj_: any): obj_ is HistogramListener {
+        return obj_[destructorGuardSymbol] && obj_[uniffiTypeNameSymbol] === "HistogramListenerImpl";
+    },
+}})();
+const FfiConverterTypeHistogramListener = new FfiConverterObjectWithCallbacks(uniffiTypeHistogramListenerImplObjectFactory);
+
+// Add a vtable for the callbacks that go in HistogramListener.
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+const uniffiCallbackInterfaceHistogramListener: { vtable: any; register: () => void; } = {
+    // Create the VTable using a series of closures.
+    // ts automatically converts these into C callback functions.
+    vtable: {
+        on_histogram: (
+            uniffiHandle: bigint,
+            histogram: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : void => {
+                const jsCallback = FfiConverterTypeHistogramListener.lift(uniffiHandle);
+                return jsCallback.onHistogram(
+                    FfiConverterTypeHistogram.lift(histogram)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<void>();
+            const uniffiHandleSuccess = (obj: any) => {};
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCall(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            )
+            return uniffiResult;
+        },
+        on_error: (
+            uniffiHandle: bigint,
+            message: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : void => {
+                const jsCallback = FfiConverterTypeHistogramListener.lift(uniffiHandle);
+                return jsCallback.onError(
+                    FfiConverterString.lift(message)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<void>();
+            const uniffiHandleSuccess = (obj: any) => {};
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCall(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            )
+            return uniffiResult;
+        },
+        uniffi_free: (uniffiHandle: UniffiHandle): void => {
+            // this will throw a stale handle error if the handle isn't found.
+            FfiConverterTypeHistogramListener.drop(uniffiHandle);
+        },
+        uniffi_clone: (uniffiHandle: UniffiHandle): UniffiHandle => {
+            return FfiConverterTypeHistogramListener.clone(uniffiHandle);
+        }
+    },
+    register: () => {nativeModule().ubrn_uniffi_lumik_mobile_fn_init_callback_vtable_histogramlistener(
+            uniffiCallbackInterfaceHistogramListener.vtable
+        );
+    },
+};
 
 /**
  * Lo implementa la UI en TypeScript; Rust lo llama desde un hilo propio.
@@ -407,6 +1024,24 @@ const uniffiCallbackInterfaceImportListener: { vtable: any; register: () => void
     },
 };
 
+// FfiConverter for Array<number>
+const FfiConverterSequenceUInt32 = new FfiConverterArray(FfiConverterUInt32);
+
+// FfiConverter for string | undefined
+const FfiConverterOptionalString = new FfiConverterOptional(FfiConverterString);
+
+// FfiConverter for number | undefined
+const FfiConverterOptionalInt32 = new FfiConverterOptional(FfiConverterInt32);
+
+// FfiConverter for number | undefined
+const FfiConverterOptionalFloat64 = new FfiConverterOptional(FfiConverterFloat64);
+
+// FfiConverter for Array<PhotoInfo>
+const FfiConverterSequenceTypePhotoInfo = new FfiConverterArray(FfiConverterTypePhotoInfo);
+
+// FfiConverter for Array<string>
+const FfiConverterSequenceString = new FfiConverterArray(FfiConverterString);
+
 
 /**
  * This should be called before anything else.
@@ -426,11 +1061,26 @@ function uniffiEnsureInitialized() {
     if (bindingsContractVersion !== scaffoldingContractVersion) {
         throw new UniffiInternalError.ContractVersionMismatch(scaffoldingContractVersion, bindingsContractVersion);
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_open_project() !== 13630) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_open_project");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_prepare_grid() !== 8517) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_prepare_grid");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_histogram() !== 37103) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_histogram");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_progress_burst() !== 39495) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_progress_burst");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_start_test_import() !== 57823) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_start_test_import");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_histogramlistener_on_histogram() !== 45180) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_histogramlistener_on_histogram");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_histogramlistener_on_error() !== 56112) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_histogramlistener_on_error");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_importlistener_on_progress() !== 5911) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_importlistener_on_progress");
@@ -439,14 +1089,19 @@ function uniffiEnsureInitialized() {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_importlistener_on_done");
     }
 
+    uniffiCallbackInterfaceHistogramListener.register();
     uniffiCallbackInterfaceImportListener.register();
     }
 
 export default Object.freeze({
   initialize: uniffiEnsureInitialized,
   converters: {
+    FfiConverterTypeHistogram,
+    FfiConverterTypeHistogramListener,
     FfiConverterTypeImportListener,
     FfiConverterTypeImportProgressEvent,
     FfiConverterTypeImportSummary,
+    FfiConverterTypePhotoInfo,
+    FfiConverterTypeProjectError,
   }
 });

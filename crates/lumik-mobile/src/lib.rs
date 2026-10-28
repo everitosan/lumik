@@ -1,6 +1,13 @@
 //! Puente de `lumik-core` hacia la app de tablet (React Native) con uniffi.
-//! Spike: solo lo necesario para el experimento 2.1 (import de prueba con
-//! progreso por callback desde un hilo de Rust).
+//! Spike: solo lo necesario para los experimentos 2.1 (import de prueba con
+//! progreso por callback desde un hilo de Rust) y 2.4 (proyecto real con sus
+//! datos de captura e histograma).
+
+mod histogram;
+mod project;
+
+pub use histogram::{start_histogram, Histogram, HistogramListener};
+pub use project::{open_project, prepare_grid, PhotoInfo, ProjectError};
 
 use lumik_core::import::pipeline::{pipeline_passthrough, PipelineWorkspace, StageEvent};
 use std::path::PathBuf;
@@ -167,4 +174,58 @@ mod tests {
         assert_eq!(summary.events, 1000);
         assert_eq!(rec.progress.lock().unwrap().len(), 1000);
     }
+}
+
+#[cfg(test)]
+mod project_tests {
+    use super::*;
+
+    #[test]
+    fn histogram_counts_every_pixel() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rojo.jpg");
+        image::RgbImage::from_pixel(40, 30, image::Rgb([250, 10, 10])).save(&path).unwrap();
+
+        let h = histogram::histogram_of(path.to_str().unwrap()).unwrap();
+
+        assert_eq!(h.r.iter().sum::<u32>(), 1200);
+        // JPEG con pérdida: el rojo queda cerca de 250, no exacto.
+        assert!(h.r[240..].iter().sum::<u32>() > 1100);
+        assert!(h.g[..30].iter().sum::<u32>() > 1100);
+    }
+
+    #[test]
+    fn prepare_grid_repeats_sources_in_order() {
+        let src = tempfile::tempdir().unwrap();
+        let out = tempfile::tempdir().unwrap();
+        let a = src.path().join("a.jpg");
+        let b = src.path().join("b.jpg");
+        std::fs::write(&a, b"A").unwrap();
+        std::fs::write(&b, b"B").unwrap();
+        let list = vec![a.display().to_string(), b.display().to_string()];
+
+        prepare_grid(list.clone(), list, out.path().display().to_string(), 5).unwrap();
+
+        let read = |n: u32| std::fs::read(out.path().join("thumbs").join(format!("{n}.jpg"))).unwrap();
+        assert_eq!((read(0), read(1), read(4)), (b"A".to_vec(), b"B".to_vec(), b"A".to_vec()));
+        assert!(out.path().join("previews/4.jpg").exists());
+    }
+}
+
+/// Con un proyecto real: `LUMIK_PROJECT=/ruta/al/proyecto cargo test -- --ignored`.
+/// Trabaja sobre una copia de `project.db`, porque abrirlo aplica migraciones.
+#[cfg(test)]
+#[test]
+#[ignore]
+fn open_project_reads_a_real_project() {
+    let real = std::path::PathBuf::from(std::env::var("LUMIK_PROJECT").expect("LUMIK_PROJECT"));
+    let copy = tempfile::tempdir().unwrap();
+    std::fs::copy(real.join("project.db"), copy.path().join("project.db")).unwrap();
+
+    let photos = open_project(copy.path().display().to_string()).unwrap();
+
+    assert!(!photos.is_empty());
+    let p = &photos[0];
+    eprintln!("{} fotos; la primera: {} {:?} {:?} {:?} {:?} {:?} rot {}", photos.len(), p.file_name, p.camera, p.lens_model, p.shutter_speed, p.aperture, p.iso, p.rotation);
+    assert!(p.thumb_path.ends_with(&format!(".thumbs/{}.jpg", p.id)));
 }

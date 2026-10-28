@@ -15,6 +15,9 @@ lumik-core = { path = "../lumik-core" }
 # Debe coincidir en minor con uniffi-bindgen-react-native (0.31.x).
 uniffi = "0.31"
 log = "0.4"
+# Histograma de la vista previa (mismo decodificador que el núcleo con `embeddings`).
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+thiserror = "1"
 
 [dev-dependencies]
 tempfile = "3"
