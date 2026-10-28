@@ -259,6 +259,27 @@ export function prepareGrid(thumbs: Array<string>, previews: Array<string>, outD
     }
 
 /**
+ * Portada elegida en el desktop (`.thumbs/{id}.jpg`, relativa al proyecto), de
+ * una copia de su `project.db`. Se lee sin migrar: una base vieja sin la
+ * columna da `None`.
+ */
+export function projectCover(dbPath: string): string | undefined {
+    const __rb: Uint8Array = uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_project_cover(
+        FfiConverterString.lower(dbPath, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterOptionalString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * Estrellas y etiquetas de color (formato del desktop: `"1,3,5"`, o `None`)
  * en la copia de trabajo, conservando los tags.
  */
@@ -290,6 +311,25 @@ export function readFdString(fd: number): string /*throws*/ {
     );
     try {
         return FfiConverterString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
+ * Texto de un archivo de la sandbox (ajustes del prototipo), o `None` si no hay.
+ */
+export function readText(path: string): string | undefined {
+    const __rb: Uint8Array = uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_read_text(
+        FfiConverterString.lower(path, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterOptionalString.lift(__rb);
     } finally {
         nativeModule().rustbuffer_free(__rb);
     }
@@ -503,6 +543,20 @@ export function writeFdString(fd: number, text: string): void /*throws*/ {uniffi
             /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
             /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_write_fd_string(
         FfiConverterInt32.lower(fd, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(text, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Escribe `text` en `path` de la sandbox: a un temporal y luego el nombre.
+ */
+export function writeText(path: string, text: string): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_write_text(
+        FfiConverterString.lower(path, nativeModule().rustbuffer_alloc),
         FfiConverterString.lower(text, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
@@ -3356,11 +3410,17 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_prepare_grid() !== 8517) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_prepare_grid");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_project_cover() !== 61460) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_project_cover");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_rate_photo() !== 8190) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_rate_photo");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_read_fd_string() !== 44777) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_read_fd_string");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_read_text() !== 24780) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_read_text");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_reset_dir() !== 61925) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_reset_dir");
@@ -3403,6 +3463,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_write_fd_string() !== 36888) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_write_fd_string");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_write_text() !== 13658) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_write_text");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_cardimportlistener_on_status() !== 1826) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_cardimportlistener_on_status");

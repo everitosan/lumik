@@ -1,7 +1,9 @@
 // Inicio del prototipo (D5, Android): rail de navegación, los proyectos del
 // disco en tarjetas y el FAB de importar.
+import { Image } from 'expo-image';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { coverPath } from './covers';
 import type { DiskProject } from './session';
 
 type Props = {
@@ -13,6 +15,8 @@ type Props = {
   onSelectDisk: (tree: string) => void;
   onOpen: (project: DiskProject) => void;
   onImport: () => void;
+  /** Proyectos con portada ya en el caché (por `uri`). */
+  covers: Set<string>;
 };
 
 const RAIL = ['Proyectos', 'Discos', 'Respaldo', 'Ajustes'];
@@ -20,7 +24,7 @@ const RAIL = ['Proyectos', 'Discos', 'Respaldo', 'Ajustes'];
 // "content://…/tree/FB5F-B3EF%3A" → "FB5F-B3EF:"
 export const treeLabel = (tree: string) => decodeURIComponent(tree.split('/tree/')[1] ?? tree);
 
-export function HomeScreen({ trees, disk, projects, busy, onPickDisk, onSelectDisk, onOpen, onImport }: Props) {
+export function HomeScreen({ trees, disk, projects, busy, onPickDisk, onSelectDisk, onOpen, onImport, covers }: Props) {
   // Agrupados por la carpeta de arriba (el año, en los discos de Lumik).
   const groups = new Map<string, DiskProject[]>();
   for (const p of projects ?? []) {
@@ -80,7 +84,11 @@ export function HomeScreen({ trees, disk, projects, busy, onPickDisk, onSelectDi
                     disabled={!!busy}
                   >
                     <View style={styles.cardArt}>
-                      <Text style={styles.cardInitial}>{p.name.split('/').pop()?.[0] ?? '?'}</Text>
+                      {covers.has(p.uri) ? (
+                        <Image source={{ uri: `file://${coverPath(p)}` }} style={styles.cover} contentFit="cover" transition={150} />
+                      ) : (
+                        <Text style={styles.cardInitial}>{p.name.split('/').pop()?.[0] ?? '?'}</Text>
+                      )}
                     </View>
                     <Text style={styles.cardName} numberOfLines={2}>
                       {p.name.split('/').pop()}
@@ -136,7 +144,8 @@ const styles = StyleSheet.create({
   groupTitle: { color: '#9a9a9a', fontSize: 15, fontWeight: '600' },
   cards: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
   card: { width: 200, gap: 8 },
-  cardArt: { height: 140, borderRadius: 12, backgroundColor: '#1f1f1f', alignItems: 'center', justifyContent: 'center' },
+  cardArt: { height: 140, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1f1f1f', alignItems: 'center', justifyContent: 'center' },
+  cover: { width: '100%', height: '100%' },
   cardInitial: { color: '#444', fontSize: 48, fontWeight: '700' },
   cardName: { color: '#fff', fontSize: 16 },
   lockTag: { color: '#c7d6ff', fontSize: 13 },

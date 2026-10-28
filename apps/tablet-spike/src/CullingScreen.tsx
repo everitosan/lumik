@@ -20,6 +20,7 @@ import type { PhotoInfo } from '@lumik/core-native';
 import { GestureGuide } from './GestureGuide';
 import { PhotoInfoPanel } from './PhotoInfoPanel';
 import { loadPhotos } from './photos';
+import { readPrefs, savePrefs } from './proto/prefs';
 import { Viewer } from './Viewer';
 
 const THUMB = 72;
@@ -105,8 +106,12 @@ export function Culling({ photos, onCleanChange, backend, onBack, notice }: Cull
   const [error, setError] = useState<string | null>(null);
   const [clean, setClean] = useState(false);
   const [showInfo, setShowInfo] = useState(true);
-  // La guía se abre sola al entrar; el spike no recuerda si ya se vio.
-  const [guideStep, setGuideStep] = useState<number | null>(0);
+  // La guía se abre sola la primera vez; después, con "?".
+  const [guideStep, setGuideStep] = useState<number | null>(() => (readPrefs().guideSeen ? null : 0));
+  const closeGuide = useCallback(() => {
+    setGuideStep(null);
+    savePrefs({ guideSeen: true });
+  }, []);
   const [undo, setUndo] = useState<Undo | null>(null);
   const [bench, setBench] = useState<string | null>(null);
   const stripRef = useRef<FlashListRef<CullItem>>(null);
@@ -331,7 +336,7 @@ export function Culling({ photos, onCleanChange, backend, onBack, notice }: Cull
           </View>
         )}
 
-        {guideStep !== null && <GestureGuide step={guideStep} onStep={setGuideStep} onClose={() => setGuideStep(null)} />}
+        {guideStep !== null && <GestureGuide step={guideStep} onStep={setGuideStep} onClose={closeGuide} />}
       </View>
 
       {!clean && (

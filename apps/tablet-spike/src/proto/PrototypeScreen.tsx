@@ -5,7 +5,9 @@ import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-nativ
 
 import Saf from '../../modules/saf/src/LumikSafModule';
 import { Culling, type CullingBackend, type CullItem } from '../CullingScreen';
+import { fetchCovers } from './covers';
 import { HomeScreen } from './HomeScreen';
+import { readPrefs, savePrefs } from './prefs';
 import { ImportScreen } from './ImportScreen';
 import { lockMessage } from './lock';
 import { discoverProjects } from './projects';
@@ -14,8 +16,14 @@ import { type DiskProject, ProjectSession } from './session';
 type Log = { at: string; text: string; error?: boolean };
 
 export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (clean: boolean) => void }) {
-  const [trees, setTrees] = useState<string[]>(() => Saf.persistedTrees());
-  const [disk, setDisk] = useState<string | null>(() => defaultDisk(Saf.persistedTrees()));
+  const [trees, setTrees] = useState<string[]>(() => diskTrees(Saf.persistedTrees()));
+  const [disk, setDiskState] = useState<string | null>(() => defaultDisk(diskTrees(Saf.persistedTrees())));
+  const [covers, setCovers] = useState<Set<string>>(new Set());
+  // El disco elegido se recuerda para la próxima vez.
+  const setDisk = useCallback((tree: string | null) => {
+    setDiskState(tree);
+    if (tree) savePrefs({ disk: tree });
+  }, []);
   const [projects, setProjects] = useState<DiskProject[] | null>(null);
   const [session, setSession] = useState<ProjectSession | null>(null);
   const [opening, setOpening] = useState<{ name: string; done: number; total: number } | null>(null);
@@ -48,7 +56,12 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
   useEffect(() => {
     if (!disk) return;
     setProjects(null);
-    run('Buscando proyectos', async () => setProjects(await discoverProjects(disk, note)));
+    run('Buscando proyectos', async () => {
+      const found = await discoverProjects(disk, note);
+      setProjects(found);
+      // Las portadas llegan después, sin frenar la lista.
+      fetchCovers(found, (p) => setCovers((c) => new Set(c).add(p.uri)));
+    });
   }, [disk, note, run]);
 
   // Al pasar a segundo plano, lo pendiente vuelve al disco (D2).
@@ -63,7 +76,7 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     run('Eligiendo disco', async () => {
       const tree = await Saf.pickDirectory();
       if (!tree) return;
-      setTrees(Saf.persistedTrees());
+      setTrees(diskTrees(Saf.persistedTrees()));
       setDisk(tree);
     });
 
@@ -191,6 +204,7 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
         onSelectDisk={setDisk}
         onOpen={open}
         onImport={() => setImporting(true)}
+        covers={covers}
       />
       {log.length > 0 && (
         <View style={styles.log} pointerEvents="none">
@@ -205,16 +219,23 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
   );
 }
 
-// Un permiso cuyo volumen esté conectado y que no sea la DCIM de una tarjeta.
-function defaultDisk(trees: string[]): string | null {
-  const mounted = trees.filter((t) => {
+// Los permisos que sirven como disco: volumen conectado y que no sea una
+// carpeta de la tarjeta (DCIM y lo que cuelga de ella).
+function diskTrees(trees: string[]): string[] {
+  return trees.filter((t) => {
+    if (/(^|[:/])DCIM(\/|$)/.test(decodeURIComponent(t.split('/tree/')[1] ?? t))) return false;
     try {
       return Saf.exists(Saf.rootDocument(t));
     } catch {
       return false;
     }
   });
-  return mounted.find((t) => !decodeURIComponent(t).endsWith('DCIM')) ?? mounted[0] ?? null;
+}
+
+// El último disco elegido, si sigue conectado; si no, el primero.
+function defaultDisk(trees: string[]): string | null {
+  const last = readPrefs().disk;
+  return (last && trees.includes(last) ? last : trees[0]) ?? null;
 }
 
 const styles = StyleSheet.create({

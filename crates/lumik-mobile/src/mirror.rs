@@ -255,6 +255,33 @@ pub fn write_fd_string(fd: i32, text: String) -> Result<(), MirrorError> {
     Ok(())
 }
 
+/// Texto de un archivo de la sandbox (ajustes del prototipo), o `None` si no hay.
+#[uniffi::export]
+pub fn read_text(path: String) -> Option<String> {
+    std::fs::read_to_string(path).ok()
+}
+
+/// Escribe `text` en `path` de la sandbox: a un temporal y luego el nombre.
+#[uniffi::export]
+pub fn write_text(path: String, text: String) -> Result<(), MirrorError> {
+    if let Some(dir) = Path::new(&path).parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = format!("{path}.tmp");
+    std::fs::write(&tmp, text)?;
+    std::fs::rename(&tmp, &path)?;
+    Ok(())
+}
+
+/// Portada elegida en el desktop (`.thumbs/{id}.jpg`, relativa al proyecto), de
+/// una copia de su `project.db`. Se lee sin migrar: una base vieja sin la
+/// columna da `None`.
+#[uniffi::export]
+pub fn project_cover(db_path: String) -> Option<String> {
+    let conn = rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
+    conn.query_row("SELECT cover_photo_path FROM project LIMIT 1", [], |r| r.get::<_, Option<String>>(0)).ok().flatten()
+}
+
 /// De `names`, los que no están en `dir` (lo que falta traer al caché).
 #[uniffi::export]
 pub fn missing_files(dir: String, names: Vec<String>) -> Vec<String> {

@@ -208,7 +208,12 @@ function Progress({ progress, startedAt }: { progress: ImportProgress | null; st
   }
   const s = progress.status;
   const total = Number(s.bytesTotal);
-  const fraction = s.phase === 'copy' && total > 0 ? Number(s.bytesDone) / total : s.fileTotal ? s.fileIndex / s.fileTotal : 0;
+  const done = Number(s.bytesDone);
+  const fraction = s.phase === 'copy' && total > 0 ? done / total : s.fileTotal ? s.fileIndex / s.fileTotal : 0;
+  // Tiempo restante de la copia, al ritmo que lleva (lo demás es corto).
+  const elapsed = (Date.now() - startedAt) / 1000;
+  const rate = elapsed > 2 ? done / elapsed : 0;
+  const left = s.phase === 'copy' && rate > 0 ? (total - done) / rate : null;
   return (
     <View style={styles.progress}>
       <Text style={styles.text}>{PHASES[s.phase] ?? s.phase}</Text>
@@ -216,11 +221,14 @@ function Progress({ progress, startedAt }: { progress: ImportProgress | null; st
       <Text style={styles.muted}>
         {s.fileTotal ? `${s.fileIndex}/${s.fileTotal} · ` : ''}
         {s.fileName} · {secs} s
+        {left !== null ? ` · quedan ~${formatSecs(left)} de copia (${(rate / 1e6).toFixed(0)} MB/s)` : ''}
       </Text>
       <Text style={styles.warn}>No cierres Lumik mientras se importa.</Text>
     </View>
   );
 }
+
+const formatSecs = (s: number) => (s >= 90 ? `${Math.round(s / 60)} min` : `${Math.max(1, Math.round(s))} s`);
 
 function Bar({ value }: { value: number }) {
   return (
