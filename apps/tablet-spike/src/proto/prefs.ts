@@ -1,10 +1,17 @@
-// Ajustes del prototipo que deben sobrevivir al cierre: el disco elegido y si
-// ya se vio la guía de gestos. Un JSON en la sandbox.
+// Ajustes del prototipo que deben sobrevivir al cierre: si ya se vio la guía de
+// gestos y el orden y los archivados del inicio (en el desktop van en la base
+// global). Un JSON en la sandbox.
 import { readText, writeText } from '@lumik/core-native';
 
 const PATH = '/data/user/0/com.lumik.tabletspike/files/prefs.json';
 
-type Prefs = { guideSeen?: boolean };
+export type SortDirection = 'asc' | 'desc';
+
+type Prefs = {
+  guideSeen?: boolean;
+  dashboardSort?: { years: SortDirection; projects: SortDirection };
+  showArchived?: boolean;
+};
 
 export function readPrefs(): Prefs {
   try {

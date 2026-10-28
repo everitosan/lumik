@@ -1,7 +1,8 @@
-// Lo que muestran las tarjetas del inicio: el id y el nombre del proyecto (de su
-// `project.db`, no el de la carpeta) y la portada (la elegida en el desktop o,
+// Lo que muestran las tarjetas del inicio: los datos del proyecto de su
+// `project.db` (nombre, fecha, fotos, estado, archivado; como `ProjectDashboard`
+// del desktop) y la portada (la elegida en el desktop o,
 // si no hay, la primera miniatura). Se traen en segundo plano, una a la vez.
-import { copyFdToPath, missingFiles, projectSummary, startFdToPath } from '@lumik/core-native';
+import { copyFdToPath, missingFiles, projectCard, type ProjectCard, resetDir, startFdToPath } from '@lumik/core-native';
 
 import Saf from '../../modules/saf/src/LumikSafModule';
 import { type DiskProject, projectKey } from './session';
@@ -10,7 +11,7 @@ const DIR = '/data/user/0/com.lumik.tabletspike/files/covers';
 export const coverPath = (p: DiskProject) => `${DIR}/${projectKey(p)}.jpg`;
 
 /** `id`: el `project.id`, para listar una sola vez un proyecto que está en dos discos. */
-export type CardInfo = { id?: string; title?: string; cover: boolean };
+export type CardInfo = { id?: string; title?: string; card?: ProjectCard; cover: boolean };
 
 /** Trae nombre y portada de cada proyecto; avisa cada uno con `onReady`. */
 export async function fetchCovers(projects: DiskProject[], onReady: (p: DiskProject, info: CardInfo) => void) {
@@ -21,16 +22,20 @@ export async function fetchCovers(projects: DiskProject[], onReady: (p: DiskProj
       let rel: string | undefined;
       let id: string | undefined;
       let title: string | undefined;
+      let card: ProjectCard | undefined;
       if (db) {
-        const copy = `${DIR}/${projectKey(p)}.db`;
+        // Una carpeta por proyecto, vaciada antes: un `-wal` viejo no se mezcla con la copia nueva.
+        const dir = `${DIR}/db/${projectKey(p)}`;
+        resetDir(dir);
+        const copy = `${dir}/project.db`;
         copyFdToPath(Saf.openFd(db.uri, 'r'), copy);
-        const summary = projectSummary(copy);
-        id = summary.id;
-        title = summary.name;
-        rel = summary.cover;
+        card = projectCard(copy) ?? undefined;
+        id = card?.id;
+        title = card?.name;
+        rel = card?.cover;
       }
       if (!missing.has(`${projectKey(p)}.jpg`)) {
-        onReady(p, { id, title, cover: true });
+        onReady(p, { id, title, card, cover: true });
         continue;
       }
       if (!rel) {
@@ -40,7 +45,7 @@ export async function fetchCovers(projects: DiskProject[], onReady: (p: DiskProj
       }
       const uri = rel ? Saf.childUri(p.uri, rel) : undefined;
       if (!uri || !Saf.exists(uri)) {
-        onReady(p, { id, title, cover: false });
+        onReady(p, { id, title, card, cover: false });
         continue;
       }
       await new Promise<void>((resolve) =>
@@ -50,7 +55,7 @@ export async function fetchCovers(projects: DiskProject[], onReady: (p: DiskProj
           onError: () => resolve(),
         }),
       );
-      onReady(p, { id, title, cover: true });
+      onReady(p, { id, title, card, cover: true });
     } catch (e) {
       console.warn('portada de', p.name, e);
     }

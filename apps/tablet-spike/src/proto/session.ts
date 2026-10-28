@@ -11,8 +11,6 @@
 // relee: si otro lo tomó, la tablet deja de escribir.
 import {
   type LockView,
-  copyFdToPath,
-  copyPathToFd,
   cullPhoto,
   getViewSettings,
   missingFiles,
@@ -20,24 +18,21 @@ import {
   openProjectTrash,
   type PhotoInfo,
   ratePhoto,
-  resetDir,
   restorePhoto,
   saveViewSettings,
   startCopyToDir,
   startFdToPath,
   trashPhoto,
-  vacuumInto,
   type ViewSettings,
 } from '@lumik/core-native';
 
 import Saf from '../../modules/saf/src/LumikSafModule';
 import type { SafEntry } from '../../modules/saf/src/LumikSaf.types';
 import { safDiskFiles } from './disk';
+import { pullProjectDb, pushProjectDb } from './projectDb';
 import { readLock, removeLock, writeOwnLock } from './lock';
 
-const FILES_DIR = '/data/user/0/com.lumik.tabletspike/files';
-const BINARY = 'application/octet-stream';
-const TMP_NAME = 'project.db.lumik-tmp';
+export const FILES_DIR = '/data/user/0/com.lumik.tabletspike/files';
 // Tras calificar o etiquetar, cuánto esperar otro cambio antes de devolver.
 const GIVE_BACK_DEBOUNCE_MS = 3000;
 // fds abiertos a la vez al traer miniaturas.
@@ -115,12 +110,7 @@ export class ProjectSession {
     const started = Date.now();
     const key = projectKey(project);
     const mirrorDir = `${FILES_DIR}/mirror/${key}`;
-    resetDir(mirrorDir);
-    const files = await Saf.listChildren(project.uri);
-    for (const suffix of ['', '-wal']) {
-      const f = files.find((e) => e.name === `project.db${suffix}`);
-      if (f) copyFdToPath(Saf.openFd(f.uri, 'r'), `${mirrorDir}/project.db${suffix}`);
-    }
+    const files = await pullProjectDb(project.uri, mirrorDir);
     const infos = openProject(mirrorDir);
     const trashed = openProjectTrash(mirrorDir);
     const lock = readLock(project.uri);
@@ -293,17 +283,7 @@ export class ProjectSession {
     const started = Date.now();
     try {
       this.ensureOwned();
-      const out = `${this.mirrorDir}/out.db`;
-      vacuumInto(`${this.mirrorDir}/project.db`, out);
-      const stale = Saf.childUri(this.project.uri, TMP_NAME);
-      if (Saf.exists(stale)) Saf.delete(stale);
-      const tmp = Saf.createFile(this.project.uri, TMP_NAME, BINARY);
-      copyPathToFd(out, Saf.openFd(tmp, 'w'));
-      for (const name of ['project.db', 'project.db-wal', 'project.db-shm']) {
-        const f = Saf.childUri(this.project.uri, name);
-        if (Saf.exists(f)) Saf.delete(f);
-      }
-      Saf.rename(tmp, 'project.db');
+      pushProjectDb(this.project.uri, this.mirrorDir);
       writeOwnLock(this.project.uri, this.mirrorDir, false);
       this.pendingInLock = false;
       this.log(`project.db devuelto al disco (${Date.now() - started} ms)`);

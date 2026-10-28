@@ -9,6 +9,7 @@ mod import;
 mod lock;
 mod mirror;
 mod project;
+mod projects;
 
 pub use disk::{cull_photo, rate_photo, DiskError, DiskFile, DiskFiles, DiskFingerprint};
 pub use import::{make_placeholders, start_card_import, CardFile, CardImportListener, CardImportResult, CardSource, ImportStatus};

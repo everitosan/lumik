@@ -648,6 +648,29 @@ extern "C" {
         RustBuffer settings, 
         RustCallStatus *uniffi_out_err
     );
+    RustBuffer uniffi_lumik_mobile_fn_func_edit_project_details(
+        RustBuffer mirror_dir, 
+        RustBuffer name, 
+        RustBuffer session_date, 
+        RustBuffer description, 
+        int8_t rename_files, 
+        /*handle*/ uint64_t disk, 
+        RustCallStatus *uniffi_out_err
+    );
+    void uniffi_lumik_mobile_fn_func_move_dir(
+        RustBuffer from, 
+        RustBuffer to, 
+        RustCallStatus *uniffi_out_err
+    );
+    RustBuffer uniffi_lumik_mobile_fn_func_project_card(
+        RustBuffer db_path, 
+        RustCallStatus *uniffi_out_err
+    );
+    void uniffi_lumik_mobile_fn_func_set_project_archived(
+        RustBuffer mirror_dir, 
+        int8_t archived, 
+        RustCallStatus *uniffi_out_err
+    );
     RustBuffer ffi_lumik_mobile_rustbuffer_alloc(
         uint64_t size, 
         RustCallStatus *uniffi_out_err
@@ -918,6 +941,14 @@ extern "C" {
     uint16_t uniffi_lumik_mobile_checksum_func_prepare_grid(
     );
     uint16_t uniffi_lumik_mobile_checksum_func_save_view_settings(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_edit_project_details(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_move_dir(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_project_card(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_set_project_archived(
     );
     uint16_t uniffi_lumik_mobile_checksum_method_importlistener_on_progress(
     );
@@ -7294,6 +7325,38 @@ NativeLumikMobile::NativeLumikMobile(
             return this->cpp_uniffi_lumik_mobile_fn_func_save_view_settings(rt, thisVal, args, count);
         }
     );
+    props["ubrn_uniffi_lumik_mobile_fn_func_edit_project_details"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_edit_project_details"),
+        6,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_edit_project_details(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_move_dir"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_move_dir"),
+        2,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_move_dir(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_project_card"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_project_card"),
+        1,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_project_card(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_set_project_archived"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_set_project_archived"),
+        2,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_set_project_archived(rt, thisVal, args, count);
+        }
+    );
     props["ubrn_uniffi_lumik_mobile_checksum_func_start_progress_burst"] = jsi::Function::createFromHostFunction(
         rt,
         jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_start_progress_burst"),
@@ -7588,6 +7651,38 @@ NativeLumikMobile::NativeLumikMobile(
         0,
         [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_uniffi_lumik_mobile_checksum_func_save_view_settings(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_edit_project_details"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_edit_project_details"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_edit_project_details(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_move_dir"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_move_dir"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_move_dir(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_project_card"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_project_card"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_project_card(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_set_project_archived"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_set_project_archived"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_set_project_archived(rt, thisVal, args, count);
         }
     );
     props["ubrn_uniffi_lumik_mobile_checksum_method_importlistener_on_progress"] = jsi::Function::createFromHostFunction(
@@ -8815,6 +8910,46 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_save_view_settings
         
         return jsi::Value::undefined();
 }
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_edit_project_details(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        auto value = uniffi_lumik_mobile_fn_func_edit_project_details(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[2]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[3]), uniffi_jsi::Bridging<int8_t>::fromJs(rt, callInvoker, args[4]), uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker, args[5]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_move_dir(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        uniffi_lumik_mobile_fn_func_move_dir(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return jsi::Value::undefined();
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_project_card(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        auto value = uniffi_lumik_mobile_fn_func_project_card(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_set_project_archived(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        uniffi_lumik_mobile_fn_func_set_project_archived(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi_jsi::Bridging<int8_t>::fromJs(rt, callInvoker, args[1]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return jsi::Value::undefined();
+}
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_start_progress_burst(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         auto value = uniffi_lumik_mobile_checksum_func_start_progress_burst(
         );
@@ -9069,6 +9204,34 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_prepare_grid
 }
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_save_view_settings(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         auto value = uniffi_lumik_mobile_checksum_func_save_view_settings(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_edit_project_details(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_edit_project_details(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_move_dir(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_move_dir(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_project_card(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_project_card(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_set_project_archived(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_set_project_archived(
         );
 
         

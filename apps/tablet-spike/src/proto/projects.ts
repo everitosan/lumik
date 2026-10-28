@@ -17,10 +17,10 @@ export async function discoverAll(trees: string[], note: (text: string, error?: 
 // sin bajar más al encontrar un `project.db`.
 import Saf from '../../modules/saf/src/LumikSafModule';
 import { readLock } from './lock';
+import { TMP_NAME } from './projectDb';
 import type { DiskProject } from './session';
 
 const MAX_DEPTH = 4;
-const TMP_NAME = 'project.db.lumik-tmp';
 
 export async function discoverProjects(tree: string, note: (text: string) => void): Promise<DiskProject[]> {
   const root = Saf.rootDocument(tree);

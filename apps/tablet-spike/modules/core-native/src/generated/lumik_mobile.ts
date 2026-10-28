@@ -128,6 +128,34 @@ export function cullPhoto(mirrorDir: string, photoId: string, culled: boolean, d
     }
 
 /**
+ * Editar proyecto, como `edit_project` del desktop: valida, guarda nombre,
+ * fecha (con la misma regla de fecha efectiva) y descripción en la copia de
+ * trabajo y, si se pide, renombra las fotos con el `RenameProjectFiles` del
+ * núcleo sobre el disco (todo o nada). Devuelve la carpeta que le toca.
+ */
+export function editProjectDetails(mirrorDir: string, name: string, sessionDate: string, description: string | undefined, renameFiles: boolean, disk: DiskFiles): EditOutcome /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_edit_project_details(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(name, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(sessionDate, nativeModule().rustbuffer_alloc),
+        FfiConverterOptionalString.lower(description, nativeModule().rustbuffer_alloc),
+        FfiConverterBool.lower(renameFiles, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeDiskFiles.lower(disk, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterTypeEditOutcome.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * Tamaño y SHA-256 del contenido de `fd` (huella de una entrega); lo cierra.
  */
 export function fingerprintFd(fd: number): DiskFingerprint /*throws*/ {
@@ -242,6 +270,20 @@ export function missingFiles(dir: string, names: Array<string>): Array<string> {
     }
 
 /**
+ * Mueve una carpeta de la sandbox (el caché de un proyecto que cambió de carpeta).
+ */
+export function moveDir(from: string, to: string): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_move_dir(
+        FfiConverterString.lower(from, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(to, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
  * Fotos del proyecto en `project_dir` (sin la papelera), en el orden del
  * desktop: por fecha de captura.
  */
@@ -320,6 +362,27 @@ export function prepareGrid(thumbs: Array<string>, previews: Array<string>, outD
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
     );
+    }
+
+/**
+ * Tarjeta del proyecto de una copia de su `project.db` (la copia puede
+ * migrarse; el original del disco no se toca). `None` si está borrado.
+ */
+export function projectCard(dbPath: string): ProjectCard | undefined /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_project_card(
+        FfiConverterString.lower(dbPath, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterOptionalTypeProjectCard.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
     }
 
 /**
@@ -436,6 +499,17 @@ export function saveViewSettings(projectDir: string, settings: ViewSettings): vo
             /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_save_view_settings(
         FfiConverterString.lower(projectDir, nativeModule().rustbuffer_alloc),
         FfiConverterTypeViewSettings.lower(settings, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+export function setProjectArchived(mirrorDir: string, archived: boolean): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_set_project_archived(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterBool.lower(archived, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
@@ -1027,6 +1101,52 @@ const FfiConverterTypeDiskFingerprint = (() => {
     return new FFIConverter();
 })();
 
+export type EditOutcome = {
+    /**
+     * Carpeta que le toca al proyecto bajo `lumik/`: `{año}/{mes}/{día}_{nombre}`.
+     */
+    folder: string,
+    renamedFiles: number
+}
+
+/**
+ * Generated factory for {@link EditOutcome} record objects.
+ */
+export const EditOutcome = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<EditOutcome, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<EditOutcome>,
+    });
+})();
+
+const FfiConverterTypeEditOutcome = (() => {
+    type TypeName = EditOutcome;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                folder: FfiConverterString.readFromCursor(c), 
+                renamedFiles: FfiConverterUInt32.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.folder, c);
+            FfiConverterUInt32.writeIntoCursor(value.renamedFiles, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.folder) +
+             FfiConverterUInt32.allocationSize(value.renamedFiles);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
 /**
  * Cuentas por nivel (0–255) de cada canal.
  */
@@ -1550,6 +1670,86 @@ const FfiConverterTypePhotoInfo = (() => {
              FfiConverterOptionalInt32.allocationSize(value.width) +
              FfiConverterOptionalInt32.allocationSize(value.height) +
              FfiConverterInt32.allocationSize(value.stars);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
+/**
+ * Lo que muestra la tarjeta del dashboard, como `ProjectDashboard` del desktop.
+ */
+export type ProjectCard = {
+    id: string,
+    name: string,
+    description?: string,
+    createdAt: string,
+    sessionDate?: string,
+    photoCount: number,
+    /**
+     * `imported`, `edited` o `delivered`.
+     */
+    workflowStatus: string,
+    archived: boolean,
+    /**
+     * Portada elegida en el desktop (`.thumbs/{id}.jpg`, relativa al proyecto).
+     */
+    cover?: string
+}
+
+/**
+ * Generated factory for {@link ProjectCard} record objects.
+ */
+export const ProjectCard = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<ProjectCard, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<ProjectCard>,
+    });
+})();
+
+const FfiConverterTypeProjectCard = (() => {
+    type TypeName = ProjectCard;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                id: FfiConverterString.readFromCursor(c), 
+                name: FfiConverterString.readFromCursor(c), 
+                description: FfiConverterOptionalString.readFromCursor(c), 
+                createdAt: FfiConverterString.readFromCursor(c), 
+                sessionDate: FfiConverterOptionalString.readFromCursor(c), 
+                photoCount: FfiConverterInt32.readFromCursor(c), 
+                workflowStatus: FfiConverterString.readFromCursor(c), 
+                archived: FfiConverterBool.readFromCursor(c), 
+                cover: FfiConverterOptionalString.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.id, c);
+            FfiConverterString.writeIntoCursor(value.name, c);
+            FfiConverterOptionalString.writeIntoCursor(value.description, c);
+            FfiConverterString.writeIntoCursor(value.createdAt, c);
+            FfiConverterOptionalString.writeIntoCursor(value.sessionDate, c);
+            FfiConverterInt32.writeIntoCursor(value.photoCount, c);
+            FfiConverterString.writeIntoCursor(value.workflowStatus, c);
+            FfiConverterBool.writeIntoCursor(value.archived, c);
+            FfiConverterOptionalString.writeIntoCursor(value.cover, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.id) +
+             FfiConverterString.allocationSize(value.name) +
+             FfiConverterOptionalString.allocationSize(value.description) +
+             FfiConverterString.allocationSize(value.createdAt) +
+             FfiConverterOptionalString.allocationSize(value.sessionDate) +
+             FfiConverterInt32.allocationSize(value.photoCount) +
+             FfiConverterString.allocationSize(value.workflowStatus) +
+             FfiConverterBool.allocationSize(value.archived) +
+             FfiConverterOptionalString.allocationSize(value.cover);
             
         }
     };
@@ -3647,6 +3847,9 @@ const FfiConverterSequenceTypeDiskFile = new FfiConverterArray(FfiConverterTypeD
 // FfiConverter for Array<PhotoInfo>
 const FfiConverterSequenceTypePhotoInfo = new FfiConverterArray(FfiConverterTypePhotoInfo);
 
+// FfiConverter for ProjectCard | undefined
+const FfiConverterOptionalTypeProjectCard = new FfiConverterOptional(FfiConverterTypeProjectCard);
+
 // FfiConverter for Array<CardFile>
 const FfiConverterSequenceTypeCardFile = new FfiConverterArray(FfiConverterTypeCardFile);
 
@@ -3687,6 +3890,9 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_cull_photo() !== 37748) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_cull_photo");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_edit_project_details() !== 43456) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_edit_project_details");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_fingerprint_fd() !== 49197) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_fingerprint_fd");
     }
@@ -3705,6 +3911,9 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_missing_files() !== 38010) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_missing_files");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_move_dir() !== 6885) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_move_dir");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_open_project() !== 13630) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_open_project");
     }
@@ -3716,6 +3925,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_prepare_grid() !== 8517) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_prepare_grid");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_project_card() !== 28475) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_project_card");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_project_summary() !== 11451) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_project_summary");
@@ -3737,6 +3949,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_save_view_settings() !== 54461) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_save_view_settings");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_set_project_archived() !== 9323) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_set_project_archived");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_set_stars() !== 23964) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_set_stars");
@@ -3863,6 +4078,7 @@ export default Object.freeze({
     FfiConverterTypeDiskFiles,
     FfiConverterTypeDiskFingerprint,
     FfiConverterTypeDiskMove,
+    FfiConverterTypeEditOutcome,
     FfiConverterTypeHistogram,
     FfiConverterTypeHistogramListener,
     FfiConverterTypeImportListener,
@@ -3874,6 +4090,7 @@ export default Object.freeze({
     FfiConverterTypeMirrorError,
     FfiConverterTypeNewProject,
     FfiConverterTypePhotoInfo,
+    FfiConverterTypeProjectCard,
     FfiConverterTypeProjectError,
     FfiConverterTypeProjectSummary,
     FfiConverterTypeViewSettings,

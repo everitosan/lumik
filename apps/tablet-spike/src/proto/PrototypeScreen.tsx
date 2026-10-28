@@ -10,6 +10,7 @@ import { Culling, type CullingBackend, type CullItem } from '../CullingScreen';
 import { type CardInfo, fetchCovers } from './covers';
 import { createProject, type ProjectForm } from './createProject';
 import { HomeScreen } from './HomeScreen';
+import { deleteProject, editProject, toggleArchived } from './projectActions';
 import { ImportScreen } from './ImportScreen';
 import { lockMessage } from './lock';
 import { type Filters, NO_FILTERS, ProjectScreen, type ViewMode } from './ProjectScreen';
@@ -384,6 +385,24 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
         onEject={eject}
         onUnEject={unEject}
         onStorageSettings={() => Saf.openStorageSettings()}
+        actions={{
+          archive: async (p, archived, force) => {
+            await toggleArchived(p, archived, force);
+            note(`${titleOf(p)}: ${archived ? 'archivado' : 'desarchivado'}`);
+            refreshProjects(trees);
+          },
+          edit: async (p, form, force) => {
+            const out = await editProject(p, form, force);
+            note(`${form.name.trim()}: guardado${out.renamed ? ` · ${out.renamed} archivos renombrados` : ''}${out.moved ? ' · carpeta movida' : ''}`);
+            refreshProjects(trees);
+            return out;
+          },
+          remove: async (p, force) => {
+            deleteProject(p, force);
+            note(`${titleOf(p)}: eliminado`);
+            refreshProjects(trees);
+          },
+        }}
         onPickDisk={pickDisk}
         onOpen={open}
         cards={cards}
@@ -394,7 +413,11 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
           const found = await discoverAll(trees, note);
           setProjects(found);
           const created = found.find((p) => p.uri === dirUri);
-          if (created) open(created);
+          if (created) {
+            // Su nombre ya se sabe: no hace falta esperar a que lleguen los datos de la tarjeta.
+            setCards((c) => new Map(c).set(created.uri, { title: form.name.trim(), cover: false }));
+            open(created);
+          }
         }}
       />
       {log.length > 0 && (
@@ -462,7 +485,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#131313' },
   center: { alignItems: 'center', justifyContent: 'center', gap: 12 },
   text: { color: '#fff', fontSize: 18 },
-  log: { position: 'absolute', left: 112, bottom: 16, right: 180, gap: 2 },
+  // Encima del pie del inicio (archivados y orden).
+  log: { position: 'absolute', left: 112, bottom: 76, right: 180, gap: 2 },
   logText: { color: '#777', fontSize: 12 },
   logError: { color: '#f87171' },
 });

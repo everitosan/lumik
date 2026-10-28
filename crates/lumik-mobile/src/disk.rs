@@ -14,7 +14,7 @@ use std::sync::Arc;
 use crate::mirror::MirrorError;
 
 /// Raíz ficticia: el núcleo arma `raíz/<ruta relativa>` y aquí se le quita.
-const DISK_ROOT: &str = "/disk";
+pub(crate) const DISK_ROOT: &str = "/disk";
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum DiskError {
@@ -49,7 +49,7 @@ pub trait DiskFiles: Send + Sync {
     fn list_files(&self, rel: String) -> Result<Vec<DiskFile>, DiskError>;
 }
 
-struct SafFileStore(Arc<dyn DiskFiles>);
+pub(crate) struct SafFileStore(pub(crate) Arc<dyn DiskFiles>);
 
 fn rel(path: &Path) -> String {
     path.strip_prefix(DISK_ROOT)
@@ -98,7 +98,7 @@ impl FileStore for SafFileStore {
 }
 
 /// Android no tiene Finder tags.
-struct NoFinderTags;
+pub(crate) struct NoFinderTags;
 impl FinderTagWriter for NoFinderTags {
     fn sync_color(&self, _target: &Path, _color_label: Option<&str>) -> std::io::Result<()> {
         Ok(())
@@ -114,7 +114,7 @@ impl FinderTagWriter for NoFinderTags {
     }
 }
 
-fn open(mirror_dir: &str) -> Result<ProjectDatabase, MirrorError> {
+pub(crate) fn open(mirror_dir: &str) -> Result<ProjectDatabase, MirrorError> {
     let dir = PathBuf::from(mirror_dir);
     ProjectDatabase::open(dir.join("project.db"), "", PathBuf::from(DISK_ROOT)).map_err(|e| MirrorError::Db(e.to_string()))
 }

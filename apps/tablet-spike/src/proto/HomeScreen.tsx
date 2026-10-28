@@ -2,13 +2,13 @@
 // todos los discos conectados, como el dashboard del desktop) y Discos (como
 // "Almacenamiento" en la barra del desktop). Importar no va aquí:
 // como en el desktop, se importa desde dentro de un proyecto.
-import { Image } from 'expo-image';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { SafVolume } from '../../modules/saf/src/LumikSafModule';
-import { type CardInfo, coverPath } from './covers';
+import type { CardInfo } from './covers';
 import { type ProjectForm, today } from './createProject';
+import { type ProjectMenuActions, ProjectsDashboard } from './ProjectsDashboard';
 import type { DiskProject } from './session';
 
 type Section = 'projects' | 'disks';
@@ -33,6 +33,8 @@ type Props = {
   cards: Map<string, CardInfo>;
   /** Crea el proyecto; si falla, lanza y el formulario muestra el error. */
   onCreate: (form: ProjectForm) => Promise<void>;
+  /** Menú de las tarjetas: editar, archivar y eliminar. */
+  actions: ProjectMenuActions;
 };
 
 const RAIL: { key: Section | 'backup' | 'settings'; label: string; glyph: string }[] = [
@@ -82,7 +84,7 @@ export function HomeScreen(props: Props) {
           </View>
         ))}
         {section === 'projects' ? (
-          <Projects
+          <ProjectsDashboard
             trees={trees}
             labelOf={labelOf}
             projects={projects}
@@ -91,6 +93,7 @@ export function HomeScreen(props: Props) {
             onOpen={onOpen}
             onNew={() => setCreating(true)}
             onChooseDisk={() => setSection('disks')}
+            actions={props.actions}
           />
         ) : (
           <Disks
@@ -105,109 +108,9 @@ export function HomeScreen(props: Props) {
             onPickDisk={onPickDisk}
           />
         )}
-        {creating && <NewProjectSheet trees={trees} onClose={() => setCreating(false)} onCreate={onCreate} />}
+        {creating && <NewProjectSheet trees={trees} labelOf={labelOf} onClose={() => setCreating(false)} onCreate={onCreate} />}
       </View>
     </View>
-  );
-}
-
-function Projects({
-  trees,
-  labelOf,
-  projects,
-  busy,
-  cards,
-  onOpen,
-  onNew,
-  onChooseDisk,
-}: {
-  trees: string[];
-  labelOf: (tree: string) => string;
-  projects: DiskProject[] | null;
-  busy: string | null;
-  cards: Map<string, CardInfo>;
-  onOpen: (p: DiskProject) => void;
-  onNew: () => void;
-  onChooseDisk: () => void;
-}) {
-  // Como el desktop: si el mismo proyecto (`project.id`) está en dos discos, se lista uno.
-  const seen = new Set<string>();
-  const unique = (projects ?? []).filter((p) => {
-    const id = cards.get(p.uri)?.id;
-    if (!id) return true;
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
-  // Agrupados por año (la primera carpeta, en los discos de Lumik).
-  const groups = new Map<string, DiskProject[]>();
-  for (const p of unique) {
-    const year = p.name.split('/')[0];
-    const group = p.name.includes('/') && /^\d{4}$/.test(year) ? year : '';
-    groups.set(group, [...(groups.get(group) ?? []), p]);
-  }
-
-  return (
-    <>
-      <View style={styles.header}>
-        <Text style={styles.title}>Proyectos</Text>
-        <Pressable style={({ pressed }) => [styles.primary, pressed && styles.pressed]} onPress={onNew} disabled={!!busy}>
-          <Text style={styles.primaryText}>+ Proyecto</Text>
-        </Pressable>
-      </View>
-      <ScrollView contentContainerStyle={styles.content}>
-        {busy && <Text style={styles.busy}>{busy}…</Text>}
-        {trees.length === 0 && (
-          <Pressable onPress={onChooseDisk}>
-            <Text style={styles.empty}>Agrega un disco en "Discos" para ver sus proyectos.</Text>
-          </Pressable>
-        )}
-        {trees.length > 0 && projects && projects.length === 0 && (
-          <Text style={styles.empty}>Los discos conectados no tienen proyectos todavía. Crea uno con "+ Proyecto".</Text>
-        )}
-        {[...groups.entries()].map(([group, list]) => (
-          <View key={group} style={styles.group}>
-            {group !== '' && <Text style={styles.groupTitle}>{group}</Text>}
-            <View style={styles.cards}>
-              {list.map((p) => {
-                const card = cards.get(p.uri);
-                const title = card?.title ?? p.name.split('/').pop() ?? p.name;
-                return (
-                  <Pressable
-                    key={p.uri}
-                    style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-                    onPress={() => onOpen(p)}
-                    disabled={!!busy}
-                  >
-                    <View style={styles.cardArt}>
-                      {card?.cover ? (
-                        <Image source={{ uri: `file://${coverPath(p)}` }} style={styles.cover} contentFit="cover" transition={150} />
-                      ) : (
-                        <Text style={styles.cardInitial}>{title[0] ?? '?'}</Text>
-                      )}
-                    </View>
-                    <Text style={styles.cardName} numberOfLines={2}>
-                      {title}
-                    </Text>
-                    {trees.length > 1 && (
-                      <Text style={styles.cardDisk} numberOfLines={1}>
-                        ⛁ {labelOf(p.tree)}
-                      </Text>
-                    )}
-                    {p.lock?.state === 'foreign' && (
-                      <Text style={[styles.lockTag, p.lock.pending && styles.lockTagWarn]} numberOfLines={1}>
-                        En {p.lock.installName}
-                        {p.lock.pending ? ' · cambios sin devolver' : ''}
-                      </Text>
-                    )}
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        ))}
-      </ScrollView>
-    </>
   );
 }
 
@@ -287,10 +190,12 @@ function Disks({
 // desktop, el disco es obligatorio y se preselecciona solo si hay uno.
 function NewProjectSheet({
   trees,
+  labelOf,
   onClose,
   onCreate,
 }: {
   trees: string[];
+  labelOf: (tree: string) => string;
   onClose: () => void;
   onCreate: (f: ProjectForm) => Promise<void>;
 }) {
@@ -350,7 +255,7 @@ function NewProjectSheet({
                 style={({ pressed }) => [styles.diskChoice, form.disk === t && styles.diskChoiceOn, pressed && styles.pressed]}
                 onPress={() => setForm((f) => ({ ...f, disk: t }))}
               >
-                <Text style={[styles.diskChoiceText, form.disk === t && styles.diskChoiceTextOn]}>⛁ {treeLabel(t)}</Text>
+                <Text style={[styles.diskChoiceText, form.disk === t && styles.diskChoiceTextOn]}>⛁ {labelOf(t)}</Text>
               </Pressable>
             ))}
           </View>
@@ -400,18 +305,8 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   off: { opacity: 0.4 },
   content: { paddingHorizontal: 24, paddingBottom: 48, gap: 20 },
-  busy: { color: '#e9c349', fontSize: 15 },
   empty: { color: '#9a9a9a', fontSize: 16, paddingVertical: 24 },
   muted: { color: '#777', fontSize: 14 },
-  group: { gap: 10 },
-  groupTitle: { color: '#9a9a9a', fontSize: 15, fontWeight: '600' },
-  cards: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
-  card: { width: 200, gap: 8 },
-  cardArt: { height: 140, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1f1f1f', alignItems: 'center', justifyContent: 'center' },
-  cover: { width: '100%', height: '100%' },
-  cardInitial: { color: '#444', fontSize: 48, fontWeight: '700' },
-  cardName: { color: '#fff', fontSize: 16 },
-  cardDisk: { color: '#9a9a9a', fontSize: 13 },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -430,8 +325,6 @@ const styles = StyleSheet.create({
   ejectText: { color: '#ddd', fontSize: 14, fontWeight: '600' },
   diskRowEjected: { opacity: 0.8 },
   diskEjectedText: { flex: 1, gap: 2 },
-  lockTag: { color: '#c7d6ff', fontSize: 13 },
-  lockTagWarn: { color: '#e9c349' },
   diskRow: { flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 64, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#1f1f1f' },
   diskGlyph: { color: '#9a9a9a', fontSize: 22 },
   diskName: { color: '#fff', fontSize: 17, flex: 1 },
