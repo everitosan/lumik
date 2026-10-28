@@ -238,6 +238,23 @@ pub fn start_fd_to_path(src_fd: i32, path: String, listener: Arc<dyn CopyListene
     });
 }
 
+/// Lee el texto de `fd` (un archivo chico del disco, como `.lumik-lock`) y lo cierra.
+#[uniffi::export]
+pub fn read_fd_string(fd: i32) -> Result<String, MirrorError> {
+    let mut text = String::new();
+    unsafe { File::from_raw_fd(fd as RawFd) }.read_to_string(&mut text)?;
+    Ok(text)
+}
+
+/// Escribe `text` en `fd` (truncado al abrirlo), lo sincroniza y lo cierra.
+#[uniffi::export]
+pub fn write_fd_string(fd: i32, text: String) -> Result<(), MirrorError> {
+    let mut file = unsafe { File::from_raw_fd(fd as RawFd) };
+    file.write_all(text.as_bytes())?;
+    file.sync_all()?;
+    Ok(())
+}
+
 /// De `names`, los que no están en `dir` (lo que falta traer al caché).
 #[uniffi::export]
 pub fn missing_files(dir: String, names: Vec<String>) -> Vec<String> {

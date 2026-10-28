@@ -121,6 +121,48 @@ export function fingerprintFd(fd: number): DiskFingerprint /*throws*/ {
     }
 
 /**
+ * Identidad de esta instalación, guardada en `path` (se crea la primera vez).
+ */
+export function installIdentity(path: string, defaultName: string): InstallInfo /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_install_identity(
+        FfiConverterString.lower(path, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(defaultName, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterTypeInstallInfo.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
+ * Interpreta el contenido de `.lumik-lock` (o `None` si no hay). Uno ilegible
+ * cuenta como libre, como en el núcleo.
+ */
+export function lockView(lockJson: string | undefined, installId: string): LockView {
+    const __rb: Uint8Array = uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_lock_view(
+        FfiConverterOptionalString.lower(lockJson, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(installId, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterTypeLockView.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * Crea en `dir` archivos vacíos con `names`: los nombres que ya hay en el disco,
  * para que el núcleo no elija uno ocupado al mover a `_media/`.
  */
@@ -177,6 +219,28 @@ export function openProject(projectDir: string): Array<PhotoInfo> /*throws*/ {
     }
 
 /**
+ * JSON del candado propio, con la generación de la copia de trabajo.
+ */
+export function ownLockJson(install: InstallInfo, mirrorDir: string, pending: boolean): string /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_own_lock_json(
+        FfiConverterTypeInstallInfo.lower(install, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterBool.lower(pending, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * Copia las miniaturas y vistas previas de `photos` a `out_dir/{thumbs,previews}/{n}.jpg`
  * hasta `count`, repitiéndolas en orden, para probar el grid con muchas fotos
  * sin que el caché de imágenes las reutilice. No repite lo que ya existe.
@@ -209,6 +273,26 @@ export function ratePhoto(mirrorDir: string, photoId: string, stars: number, col
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
     );
+    }
+
+/**
+ * Lee el texto de `fd` (un archivo chico del disco, como `.lumik-lock`) y lo cierra.
+ */
+export function readFdString(fd: number): string /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_read_fd_string(
+        FfiConverterInt32.lower(fd, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
     }
 
 /**
@@ -406,6 +490,20 @@ export function vacuumInto(dbPath: string, outPath: string): void /*throws*/ {un
             /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_vacuum_into(
         FfiConverterString.lower(dbPath, nativeModule().rustbuffer_alloc),
         FfiConverterString.lower(outPath, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Escribe `text` en `fd` (truncado al abrirlo), lo sincroniza y lo cierra.
+ */
+export function writeFdString(fd: number, text: string): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_write_fd_string(
+        FfiConverterInt32.lower(fd, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(text, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
@@ -936,6 +1034,112 @@ const FfiConverterTypeImportSummary = (() => {
              FfiConverterUInt32.allocationSize(value.skipped) +
              FfiConverterUInt32.allocationSize(value.events) +
              FfiConverterUInt64.allocationSize(value.elapsedMs);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
+export type InstallInfo = {
+    id: string,
+    name: string
+}
+
+/**
+ * Generated factory for {@link InstallInfo} record objects.
+ */
+export const InstallInfo = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<InstallInfo, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<InstallInfo>,
+    });
+})();
+
+const FfiConverterTypeInstallInfo = (() => {
+    type TypeName = InstallInfo;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                id: FfiConverterString.readFromCursor(c), 
+                name: FfiConverterString.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.id, c);
+            FfiConverterString.writeIntoCursor(value.name, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.id) +
+             FfiConverterString.allocationSize(value.name);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
+/**
+ * Cómo ve esta tablet el candado de un proyecto.
+ */
+export type LockView = {
+    /**
+     * `free`, `own` o `foreign`.
+     */
+    state: string,
+    installName: string,
+    /**
+     * RFC 3339 en UTC.
+     */
+    since: string,
+    /**
+     * El otro dispositivo tiene cambios que no llegaron al disco.
+     */
+    pending: boolean
+}
+
+/**
+ * Generated factory for {@link LockView} record objects.
+ */
+export const LockView = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<LockView, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<LockView>,
+    });
+})();
+
+const FfiConverterTypeLockView = (() => {
+    type TypeName = LockView;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                state: FfiConverterString.readFromCursor(c), 
+                installName: FfiConverterString.readFromCursor(c), 
+                since: FfiConverterString.readFromCursor(c), 
+                pending: FfiConverterBool.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.state, c);
+            FfiConverterString.writeIntoCursor(value.installName, c);
+            FfiConverterString.writeIntoCursor(value.since, c);
+            FfiConverterBool.writeIntoCursor(value.pending, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.state) +
+             FfiConverterString.allocationSize(value.installName) +
+             FfiConverterString.allocationSize(value.since) +
+             FfiConverterBool.allocationSize(value.pending);
             
         }
     };
@@ -3016,6 +3220,12 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_fingerprint_fd() !== 49197) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_fingerprint_fd");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_install_identity() !== 2513) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_install_identity");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_lock_view() !== 46998) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_lock_view");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_make_placeholders() !== 31956) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_make_placeholders");
     }
@@ -3025,11 +3235,17 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_open_project() !== 13630) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_open_project");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_own_lock_json() !== 15648) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_own_lock_json");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_prepare_grid() !== 8517) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_prepare_grid");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_rate_photo() !== 8190) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_rate_photo");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_read_fd_string() !== 44777) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_read_fd_string");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_reset_dir() !== 61925) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_reset_dir");
@@ -3069,6 +3285,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_vacuum_into() !== 14624) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_vacuum_into");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_write_fd_string() !== 36888) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_write_fd_string");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_cardimportlistener_on_status() !== 1826) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_cardimportlistener_on_status");
@@ -3152,6 +3371,8 @@ export default Object.freeze({
     FfiConverterTypeImportProgressEvent,
     FfiConverterTypeImportStatus,
     FfiConverterTypeImportSummary,
+    FfiConverterTypeInstallInfo,
+    FfiConverterTypeLockView,
     FfiConverterTypeMirrorError,
     FfiConverterTypePhotoInfo,
     FfiConverterTypeProjectError,

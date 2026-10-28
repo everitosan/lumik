@@ -85,6 +85,12 @@ export function HomeScreen({ trees, disk, projects, busy, onPickDisk, onSelectDi
                     <Text style={styles.cardName} numberOfLines={2}>
                       {p.name.split('/').pop()}
                     </Text>
+                    {p.lock?.state === 'foreign' && (
+                      <Text style={[styles.lockTag, p.lock.pending && styles.lockTagWarn]} numberOfLines={1}>
+                        En {p.lock.installName}
+                        {p.lock.pending ? ' · cambios sin devolver' : ''}
+                      </Text>
+                    )}
                   </Pressable>
                 ))}
               </View>
@@ -133,6 +139,8 @@ const styles = StyleSheet.create({
   cardArt: { height: 140, borderRadius: 12, backgroundColor: '#1f1f1f', alignItems: 'center', justifyContent: 'center' },
   cardInitial: { color: '#444', fontSize: 48, fontWeight: '700' },
   cardName: { color: '#fff', fontSize: 16 },
+  lockTag: { color: '#c7d6ff', fontSize: 13 },
+  lockTagWarn: { color: '#e9c349' },
   fab: { position: 'absolute', right: 24, bottom: 24, minHeight: 56, paddingHorizontal: 24, borderRadius: 16, justifyContent: 'center', backgroundColor: '#2c3a5c' },
   fabOff: { opacity: 0.4 },
   fabText: { color: '#c7d6ff', fontSize: 16, fontWeight: '600' },

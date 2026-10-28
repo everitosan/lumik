@@ -2,6 +2,7 @@
 // (`discover_projects_on_device`): bajo `lumik/` si existe, hasta 4 niveles, y
 // sin bajar más al encontrar un `project.db`.
 import Saf from '../../modules/saf/src/LumikSafModule';
+import { readLock } from './lock';
 import type { DiskProject } from './session';
 
 const MAX_DEPTH = 4;
@@ -28,7 +29,9 @@ async function walk(dirUri: string, path: string, depth: number, out: DiskProjec
     files = await Saf.listChildren(dirUri);
   }
   if (files.some((f) => f.name === 'project.db')) {
-    out.push({ name: path || 'raíz', uri: dirUri, files });
+    // Quién lo tiene, para marcar la tarjeta (listar no toma el candado).
+    const lock = files.some((f) => f.name === '.lumik-lock') ? readLock(dirUri) : undefined;
+    out.push({ name: path || 'raíz', uri: dirUri, files, lock });
     return;
   }
   for (const dir of files.filter((f) => f.isDirectory && !f.name.startsWith('.'))) {

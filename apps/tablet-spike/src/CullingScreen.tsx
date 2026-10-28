@@ -90,9 +90,11 @@ type CullingProps = {
   backend?: CullingBackend;
   /** Volver al inicio (prototipo); sin él no hay botón. */
   onBack?: () => void;
+  /** Aviso fijo arriba (p. ej. proyecto en solo lectura) con una acción. */
+  notice?: { text: string; detail?: string; warn?: boolean; actionLabel: string; onAction: () => void };
 };
 
-export function Culling({ photos, onCleanChange, backend, onBack }: CullingProps) {
+export function Culling({ photos, onCleanChange, backend, onBack, notice }: CullingProps) {
   const count = photos.length;
   const [index, setIndex] = useState(0);
   const [marks, setMarks] = useState<Marks>(() => ({
@@ -266,6 +268,18 @@ export function Culling({ photos, onCleanChange, backend, onBack }: CullingProps
             <RoundToggle label="i" on={showInfo} onPress={() => setShowInfo((v) => !v)} italic />
           </View>
         </View>
+
+        {notice && (
+          <View style={[styles.notice, notice.warn && styles.noticeWarn]}>
+            <View style={styles.noticeTexts}>
+              <Text style={styles.noticeText}>{notice.text}</Text>
+              {notice.detail && <Text style={styles.noticeDetail}>{notice.detail}</Text>}
+            </View>
+            <Pressable style={styles.noticeAction} onPress={notice.onAction}>
+              <Text style={styles.noticeActionText}>{notice.actionLabel}</Text>
+            </Pressable>
+          </View>
+        )}
 
         {!clean && (
           <View style={styles.marksRow} pointerEvents="box-none">
@@ -485,6 +499,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#e9e9e9',
   },
   snackbarClean: { bottom: 20 },
+  notice: {
+    position: 'absolute',
+    top: 68,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(28,40,64,0.95)',
+  },
+  noticeWarn: { backgroundColor: 'rgba(72,48,12,0.95)' },
+  noticeTexts: { flex: 1, gap: 2 },
+  noticeText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  noticeDetail: { color: '#ddd', fontSize: 14 },
+  noticeAction: { minHeight: 48, paddingHorizontal: 18, justifyContent: 'center', borderRadius: 24, backgroundColor: '#e9e9e9' },
+  noticeActionText: { color: '#131313', fontSize: 15, fontWeight: '700' },
   snackbarError: { backgroundColor: '#3a1414', paddingRight: 20 },
   snackErrorText: { color: '#fca5a5', fontSize: 14, flexShrink: 1, paddingVertical: 10 },
   snackText: { color: '#131313', fontSize: 16 },

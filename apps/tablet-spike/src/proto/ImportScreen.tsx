@@ -65,7 +65,17 @@ export function ImportScreen({ projects, onClose, onOpenProject }: Props) {
     setStartedAt(Date.now());
     try {
       const session = await ProjectSession.open(project, () => {}, () => {});
-      setReport(await importCard(session, card, setProgress));
+      if (session.readOnly) {
+        throw new Error(
+          `${session.readOnly.installName} tiene este proyecto. Ábrelo y toma el control antes de importar.`,
+        );
+      }
+      try {
+        setReport(await importCard(session, card, setProgress));
+      } finally {
+        // El import terminó: el candado se suelta (o se queda con `pending` si algo no llegó).
+        session.close();
+      }
     } catch (e) {
       setError(String(e));
     } finally {

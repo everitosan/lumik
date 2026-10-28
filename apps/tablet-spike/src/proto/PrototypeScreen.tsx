@@ -7,6 +7,7 @@ import Saf from '../../modules/saf/src/LumikSafModule';
 import { Culling, type CullingBackend, type CullItem } from '../CullingScreen';
 import { HomeScreen } from './HomeScreen';
 import { ImportScreen } from './ImportScreen';
+import { lockMessage } from './lock';
 import { discoverProjects } from './projects';
 import { type DiskProject, ProjectSession } from './session';
 
@@ -77,10 +78,27 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     }).finally(() => setOpening(null));
 
   const close = () => {
-    session?.flush();
+    try {
+      session?.close();
+    } catch (e) {
+      note(`Al cerrar: ${String(e)}`, true);
+    }
     sessionRef.current = null;
     setSession(null);
     onCleanChange(false);
+    // Las tarjetas muestran de nuevo quién tiene cada proyecto.
+    if (disk) run('Buscando proyectos', async () => setProjects(await discoverProjects(disk, note)));
+  };
+
+  // Tomar el control: el candado pasa a esta tablet y se vuelve a abrir desde
+  // el disco, con la base tal como la dejó el otro dispositivo.
+  const takeControl = () => {
+    if (!session) return;
+    const project = session.project;
+    ProjectSession.takeControl(project, session.mirrorDir);
+    sessionRef.current = null;
+    setSession(null);
+    open(project);
   };
 
   // Lo que ve el culling: la vista previa si ya está en el caché, si no la miniatura.
@@ -137,7 +155,29 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
   }
 
   if (session && photos.length > 0) {
-    return <Culling key={session.project.uri} photos={photos} onCleanChange={onCleanChange} backend={backend} onBack={close} />;
+    const lock = session.readOnly;
+    return (
+      <Culling
+        key={session.project.uri}
+        photos={photos}
+        onCleanChange={onCleanChange}
+        backend={backend}
+        onBack={close}
+        notice={
+          lock
+            ? {
+                text: `${lockMessage(lock)} · solo lectura`,
+                detail: lock.pending
+                  ? 'Tiene cambios que no llegaron al disco: si tomas el control, esos cambios quedan fuera.'
+                  : 'El disco está al día.',
+                warn: lock.pending,
+                actionLabel: 'Tomar el control',
+                onAction: takeControl,
+              }
+            : undefined
+        }
+      />
+    );
   }
 
   return (

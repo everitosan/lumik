@@ -3,7 +3,13 @@
 // `VACUUM INTO` + renombrado justo después de mover archivos y, con debounce,
 // tras calificar o etiquetar. Las miniaturas se copian al caché de la sandbox
 // al abrir; las vistas previas, cuando el visor las va a necesitar.
+//
+// Candado (`project-lock`): al abrir se toma si está libre o es propio; si es
+// de otro dispositivo, la sesión queda en solo lectura. Mientras haya cambios
+// sin devolver, el candado dice `pending`. Antes de escribir en el disco se
+// relee: si otro lo tomó, la tablet deja de escribir.
 import {
+  type LockView,
   copyFdToPath,
   copyPathToFd,
   cullPhoto,
@@ -20,6 +26,7 @@ import {
 import Saf from '../../modules/saf/src/LumikSafModule';
 import type { SafEntry } from '../../modules/saf/src/LumikSaf.types';
 import { safDiskFiles } from './disk';
+import { readLock, removeLock, writeOwnLock } from './lock';
 
 const FILES_DIR = '/data/user/0/com.lumik.tabletspike/files';
 const BINARY = 'application/octet-stream';
@@ -29,7 +36,7 @@ const GIVE_BACK_DEBOUNCE_MS = 3000;
 // fds abiertos a la vez al traer miniaturas.
 const THUMB_BATCH = 100;
 
-export type DiskProject = { name: string; uri: string; files: SafEntry[] };
+export type DiskProject = { name: string; uri: string; files: SafEntry[]; lock?: LockView };
 
 export type SessionPhoto = {
   info: PhotoInfo;
@@ -46,6 +53,9 @@ export class ProjectSession {
   private giveBackTimer: ReturnType<typeof setTimeout> | null = null;
   private dirty = false;
   private fetching = new Set<number>();
+  /** Candado de otro dispositivo: no se escribe nada. */
+  readOnly: LockView | null;
+  private pendingInLock = false;
 
   private constructor(
     readonly project: DiskProject,
@@ -54,7 +64,9 @@ export class ProjectSession {
     infos: PhotoInfo[],
     private readonly onChange: () => void,
     private readonly log: (text: string, error?: boolean) => void,
+    lock: LockView,
   ) {
+    this.readOnly = lock.state === 'foreign' ? lock : null;
     this.photos = infos.map((info) => ({
       info,
       thumb: `file://${cacheDir}/thumbs/${info.id}.jpg`,
@@ -83,8 +95,10 @@ export class ProjectSession {
       if (f) copyFdToPath(Saf.openFd(f.uri, 'r'), `${mirrorDir}/project.db${suffix}`);
     }
     const infos = openProject(mirrorDir);
-    log(`${project.name}: ${infos.length} fotos (base en ${Date.now() - started} ms)`);
-    return new ProjectSession({ ...project, files }, mirrorDir, `${FILES_DIR}/cache/${key}`, infos, onChange, log);
+    const lock = readLock(project.uri);
+    if (lock.state !== 'foreign') writeOwnLock(project.uri, mirrorDir, false);
+    log(`${project.name}: ${infos.length} fotos (base en ${Date.now() - started} ms, candado ${lock.state})`);
+    return new ProjectSession({ ...project, files }, mirrorDir, `${FILES_DIR}/cache/${key}`, infos, onChange, log, lock);
   }
 
   /** Copia al caché las miniaturas que falten, avisando el avance. */
@@ -141,11 +155,29 @@ export class ProjectSession {
     });
   }
 
+  /** Antes de tocar el disco: el candado sigue siendo nuestro, o se pasa a solo lectura. */
+  private ensureOwned() {
+    if (this.readOnly) throw new Error(`Solo lectura: lo tiene ${this.readOnly.installName}`);
+    const lock = readLock(this.project.uri);
+    if (lock.state === 'foreign') {
+      this.readOnly = lock;
+      this.onChange();
+      throw new Error(`${lock.installName} tomó el control del proyecto; no se guardó el cambio.`);
+    }
+  }
+
   rate(i: number, stars: number, labels: number[]) {
+    if (this.readOnly) throw new Error(`Solo lectura: lo tiene ${this.readOnly.installName}`);
     const p = this.photos[i];
     const colorLabel = labels.length ? labels.join(',') : undefined;
     ratePhoto(this.mirrorDir, p.info.id, stars, colorLabel);
     p.info = { ...p.info, stars, colorLabel };
+    // El disco ya no tiene todo: que lo sepa quien vea el candado.
+    if (!this.pendingInLock) {
+      this.ensureOwned();
+      writeOwnLock(this.project.uri, this.mirrorDir, true);
+      this.pendingInLock = true;
+    }
     this.scheduleGiveBack();
   }
 
@@ -153,6 +185,7 @@ export class ProjectSession {
   approve(i: number, approved: boolean) {
     const p = this.photos[i];
     const started = Date.now();
+    this.ensureOwned();
     cullPhoto(this.mirrorDir, p.info.id, approved, safDiskFiles(this.project.uri));
     // El núcleo movió el archivo: la ruta nueva está en la copia de trabajo.
     const fresh = openProject(this.mirrorDir).find((x) => x.id === p.info.id);
@@ -175,6 +208,7 @@ export class ProjectSession {
     this.dirty = false;
     const started = Date.now();
     try {
+      this.ensureOwned();
       const out = `${this.mirrorDir}/out.db`;
       vacuumInto(`${this.mirrorDir}/project.db`, out);
       const stale = Saf.childUri(this.project.uri, TMP_NAME);
@@ -186,6 +220,8 @@ export class ProjectSession {
         if (Saf.exists(f)) Saf.delete(f);
       }
       Saf.rename(tmp, 'project.db');
+      writeOwnLock(this.project.uri, this.mirrorDir, false);
+      this.pendingInLock = false;
       this.log(`project.db devuelto al disco (${Date.now() - started} ms)`);
     } catch (e) {
       this.dirty = true;
@@ -195,6 +231,19 @@ export class ProjectSession {
 
   /** Al salir o pasar a segundo plano: devuelve si quedó algo pendiente. */
   flush() {
-    if (this.dirty) this.giveBack();
+    if (this.dirty && !this.readOnly) this.giveBack();
+  }
+
+  /** Al salir del proyecto: devuelve lo pendiente y suelta el candado si es propio. */
+  close() {
+    this.flush();
+    if (this.readOnly || this.dirty) return; // Con cambios sin devolver, el candado se queda con `pending`.
+    if (readLock(this.project.uri).state === 'own') removeLock(this.project.uri);
+  }
+
+  /** Tomar el control: el candado pasa a esta tablet. Hay que volver a abrir
+   *  la sesión para leer la base del disco tal como la dejó el otro. */
+  static takeControl(project: DiskProject, mirrorDir: string) {
+    writeOwnLock(project.uri, mirrorDir, false);
   }
 }

@@ -21,6 +21,8 @@ image = { version = "0.25", default-features = false, features = ["jpeg"] }
 rawler = "0.6"
 kamadak-exif = "0.5"
 chrono = "0.4"
+# Identidad de la instalación (candado del proyecto).
+uuid = { version = "1", features = ["v4"] }
 thiserror = "1"
 # Huella de una entrega (`fingerprint_fd`), como el núcleo.
 sha2 = "0.10"
