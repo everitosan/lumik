@@ -253,10 +253,12 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
         onOpen={open}
         cards={cards}
         onCreate={async (form: ProjectForm) => {
-          if (!disk) return;
-          const dirUri = await createProject(disk, form);
+          const dirUri = await createProject(form);
           note(`Proyecto creado: ${form.name}`);
-          const found = await discoverProjects(disk, note);
+          // El inicio pasa al disco del proyecto nuevo y lo abre.
+          const target = form.disk!;
+          if (target !== disk) setDisk(target);
+          const found = await discoverProjects(target, note);
           setProjects(found);
           const created = found.find((p) => p.uri === dirUri);
           if (created) open(created);

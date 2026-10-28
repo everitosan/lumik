@@ -9,10 +9,13 @@ import { thisInstall } from './lock';
 const WORK_DIR = '/data/user/0/com.lumik.tabletspike/files/new-project';
 const BINARY = 'application/octet-stream';
 
-export type ProjectForm = { name: string; date: string; description: string };
+/** `disk`: el permiso (árbol SAF) del disco donde va el proyecto. */
+export type ProjectForm = { name: string; date: string; description: string; disk: string | null };
 
-/** Crea el proyecto y devuelve la URI de su carpeta en el disco. */
-export async function createProject(tree: string, form: ProjectForm): Promise<string> {
+/** Crea el proyecto en `form.disk` y devuelve la URI de su carpeta. */
+export async function createProject(form: ProjectForm): Promise<string> {
+  const tree = form.disk;
+  if (!tree) throw new Error('Elige el disco del proyecto');
   const created = createProjectDb(
     WORK_DIR,
     form.name,

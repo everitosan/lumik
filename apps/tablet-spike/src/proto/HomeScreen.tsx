@@ -84,7 +84,7 @@ export function HomeScreen({ trees, disk, projects, busy, onPickDisk, onSelectDi
             }}
           />
         )}
-        {creating && <NewProjectSheet onClose={() => setCreating(false)} onCreate={onCreate} />}
+        {creating && <NewProjectSheet trees={trees} onClose={() => setCreating(false)} onCreate={onCreate} />}
       </View>
     </View>
   );
@@ -119,11 +119,9 @@ function Projects({
     <>
       <View style={styles.header}>
         <Text style={styles.title}>Proyectos</Text>
-        {disk && (
-          <Pressable style={({ pressed }) => [styles.primary, pressed && styles.pressed]} onPress={onNew} disabled={!!busy}>
-            <Text style={styles.primaryText}>+ Proyecto</Text>
-          </Pressable>
-        )}
+        <Pressable style={({ pressed }) => [styles.primary, pressed && styles.pressed]} onPress={onNew} disabled={!!busy}>
+          <Text style={styles.primaryText}>+ Proyecto</Text>
+        </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         {busy && <Text style={styles.busy}>{busy}…</Text>}
@@ -220,14 +218,31 @@ function Disks({
 }
 
 // Nuevo proyecto: los mismos campos que el modal del desktop (nombre, fecha
-// de la sesión y descripción); la carpeta sale de la fecha.
-function NewProjectSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (f: ProjectForm) => Promise<void> }) {
-  const [form, setForm] = useState<ProjectForm>({ name: '', date: today(), description: '' });
+// de la sesión, descripción y disco); la carpeta sale de la fecha. Como en el
+// desktop, el disco es obligatorio y se preselecciona solo si hay uno.
+function NewProjectSheet({
+  trees,
+  onClose,
+  onCreate,
+}: {
+  trees: string[];
+  onClose: () => void;
+  onCreate: (f: ProjectForm) => Promise<void>;
+}) {
+  const [form, setForm] = useState<ProjectForm>({
+    name: '',
+    date: today(),
+    description: '',
+    disk: trees.length === 1 ? trees[0] : null,
+  });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const valid = form.name.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(form.date.trim());
+  const [tried, setTried] = useState(false);
+  const valid = form.name.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(form.date.trim()) && !!form.disk;
 
   const save = async () => {
+    setTried(true);
+    if (!valid) return;
     setSaving(true);
     setError(null);
     try {
@@ -261,6 +276,20 @@ function NewProjectSheet({ onClose, onCreate }: { onClose: () => void; onCreate:
             onChangeText={(date) => setForm((f) => ({ ...f, date }))}
             keyboardType="numbers-and-punctuation"
           />
+          <Text style={styles.label}>Disco</Text>
+          {trees.length === 0 && <Text style={styles.error}>No hay discos conectados: agrega uno en "Discos".</Text>}
+          <View style={styles.diskChoices}>
+            {trees.map((t) => (
+              <Pressable
+                key={t}
+                style={({ pressed }) => [styles.diskChoice, form.disk === t && styles.diskChoiceOn, pressed && styles.pressed]}
+                onPress={() => setForm((f) => ({ ...f, disk: t }))}
+              >
+                <Text style={[styles.diskChoiceText, form.disk === t && styles.diskChoiceTextOn]}>⛁ {treeLabel(t)}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {tried && !form.disk && trees.length > 0 && <Text style={styles.error}>Elige el disco del proyecto.</Text>}
           <Text style={styles.label}>Descripción (opcional)</Text>
           <TextInput
             style={[styles.input, styles.multiline]}
@@ -276,7 +305,7 @@ function NewProjectSheet({ onClose, onCreate }: { onClose: () => void; onCreate:
             <Pressable
               style={({ pressed }) => [styles.create, pressed && styles.pressed, (!valid || saving) && styles.off]}
               onPress={save}
-              disabled={!valid || saving}
+              disabled={saving}
             >
               <Text style={styles.createText}>{saving ? 'Creando…' : 'Crear'}</Text>
             </Pressable>
@@ -324,6 +353,11 @@ const styles = StyleSheet.create({
   diskGlyph: { color: '#9a9a9a', fontSize: 22 },
   diskName: { color: '#fff', fontSize: 17, flex: 1 },
   diskCurrent: { color: '#c7d6ff', fontSize: 14 },
+  diskChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  diskChoice: { minHeight: 48, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 10, backgroundColor: '#262626', borderWidth: 2, borderColor: 'transparent' },
+  diskChoiceOn: { borderColor: '#3b5bdb', backgroundColor: '#1c2540' },
+  diskChoiceText: { color: '#ddd', fontSize: 15 },
+  diskChoiceTextOn: { color: '#fff', fontWeight: '600' },
   scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
   sheet: { width: 520, padding: 24, gap: 8, borderRadius: 16, backgroundColor: '#1d1d1d' },
   sheetTitle: { color: '#fff', fontSize: 22, fontWeight: '600', marginBottom: 8 },
