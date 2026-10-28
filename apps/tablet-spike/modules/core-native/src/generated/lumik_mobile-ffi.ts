@@ -117,6 +117,7 @@ interface NativeModuleInterface {
     ubrn_uniffi_lumik_mobile_fn_method_cardimportlistener_on_done(uniffiSelf: bigint, result: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_method_cardimportlistener_on_error(uniffiSelf: bigint, message: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_method_cardsource_open(uniffiSelf: bigint, index: number, uniffi_out_err: UniffiRustCallStatus): number;
+    ubrn_uniffi_lumik_mobile_fn_method_cardsource_open_disk_staging(uniffiSelf: bigint, index: number, name: Uint8Array, uniffi_out_err: UniffiRustCallStatus): number;
     ubrn_uniffi_lumik_mobile_fn_method_copylistener_on_progress(uniffiSelf: bigint, bytes: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_method_copylistener_on_done(uniffiSelf: bigint, result: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_method_copylistener_on_error(uniffiSelf: bigint, message: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
@@ -164,6 +165,7 @@ interface NativeModuleInterface {
     ubrn_uniffi_lumik_mobile_checksum_method_cardimportlistener_on_done(): number;
     ubrn_uniffi_lumik_mobile_checksum_method_cardimportlistener_on_error(): number;
     ubrn_uniffi_lumik_mobile_checksum_method_cardsource_open(): number;
+    ubrn_uniffi_lumik_mobile_checksum_method_cardsource_open_disk_staging(): number;
     ubrn_uniffi_lumik_mobile_checksum_method_copylistener_on_progress(): number;
     ubrn_uniffi_lumik_mobile_checksum_method_copylistener_on_done(): number;
     ubrn_uniffi_lumik_mobile_checksum_method_copylistener_on_error(): number;
@@ -215,12 +217,14 @@ export type UniffiVTableCallbackInterfaceLumikMobileCardImportListener = {
   on_error: UniffiCallbackInterfaceLumikMobileCardImportListenerMethod2;
 };
 type UniffiCallbackInterfaceLumikMobileCardSourceMethod0 = (uniffiHandle: bigint, index: number) => number;
+type UniffiCallbackInterfaceLumikMobileCardSourceMethod1 = (uniffiHandle: bigint, index: number, name: Uint8Array) => number;
 type UniffiCallbackInterfaceCloneLumikMobileCardSource = (handle: bigint) => UniffiResult<void>;
 type UniffiCallbackInterfaceFreeLumikMobileCardSource = (handle: bigint) => void;
 export type UniffiVTableCallbackInterfaceLumikMobileCardSource = {
   uniffi_free: UniffiCallbackInterfaceFreeLumikMobileCardSource;
   uniffi_clone: UniffiCallbackInterfaceCloneLumikMobileCardSource;
   open: UniffiCallbackInterfaceLumikMobileCardSourceMethod0;
+  open_disk_staging: UniffiCallbackInterfaceLumikMobileCardSourceMethod1;
 };
 type UniffiCallbackInterfaceLumikMobileCopyListenerMethod0 = (uniffiHandle: bigint, bytes: bigint) => UniffiResult<void>;
 type UniffiCallbackInterfaceLumikMobileCopyListenerMethod1 = (uniffiHandle: bigint, result: Uint8Array) => UniffiResult<void>;

@@ -605,6 +605,55 @@ const FfiConverterTypeCardFile = (() => {
     return new FFIConverter();
 })();
 
+export type DiskMove = {
+    /**
+     * Archivo de la tarjeta (su copia está en el staging del disco).
+     */
+    cardIndex: number,
+    /**
+     * Ruta final, relativa al proyecto (`_media/…`).
+     */
+    to: string
+}
+
+/**
+ * Generated factory for {@link DiskMove} record objects.
+ */
+export const DiskMove = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<DiskMove, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<DiskMove>,
+    });
+})();
+
+const FfiConverterTypeDiskMove = (() => {
+    type TypeName = DiskMove;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                cardIndex: FfiConverterUInt32.readFromCursor(c), 
+                to: FfiConverterString.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterUInt32.writeIntoCursor(value.cardIndex, c);
+            FfiConverterString.writeIntoCursor(value.to, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterUInt32.allocationSize(value.cardIndex) +
+             FfiConverterString.allocationSize(value.to);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
 export type CardImportResult = {
     imported: number,
     joined: number,
@@ -615,8 +664,12 @@ export type CardImportResult = {
      */
     errors: Array<string>,
     /**
-     * Rutas relativas al proyecto de lo que hay que subir al disco: originales,
-     * sidecars `.xmp`, miniaturas y vistas previas.
+     * Originales: de su copia en el staging del disco a su ruta final.
+     */
+    moves: Array<DiskMove>,
+    /**
+     * Lo que hay que copiar de la sandbox al disco (rutas relativas al
+     * proyecto): sidecars `.xmp`, miniaturas y vistas previas.
      */
     uploads: Array<string>,
     elapsedMs: bigint
@@ -648,6 +701,7 @@ const FfiConverterTypeCardImportResult = (() => {
                 failed: FfiConverterUInt32.readFromCursor(c), 
                 skipped: FfiConverterUInt32.readFromCursor(c), 
                 errors: FfiConverterSequenceString.readFromCursor(c), 
+                moves: FfiConverterSequenceTypeDiskMove.readFromCursor(c), 
                 uploads: FfiConverterSequenceString.readFromCursor(c), 
                 elapsedMs: FfiConverterUInt64.readFromCursor(c)
             };
@@ -658,6 +712,7 @@ const FfiConverterTypeCardImportResult = (() => {
             FfiConverterUInt32.writeIntoCursor(value.failed, c);
             FfiConverterUInt32.writeIntoCursor(value.skipped, c);
             FfiConverterSequenceString.writeIntoCursor(value.errors, c);
+            FfiConverterSequenceTypeDiskMove.writeIntoCursor(value.moves, c);
             FfiConverterSequenceString.writeIntoCursor(value.uploads, c);
             FfiConverterUInt64.writeIntoCursor(value.elapsedMs, c);
         }
@@ -667,6 +722,7 @@ const FfiConverterTypeCardImportResult = (() => {
              FfiConverterUInt32.allocationSize(value.failed) +
              FfiConverterUInt32.allocationSize(value.skipped) +
              FfiConverterSequenceString.allocationSize(value.errors) +
+             FfiConverterSequenceTypeDiskMove.allocationSize(value.moves) +
              FfiConverterSequenceString.allocationSize(value.uploads) +
              FfiConverterUInt64.allocationSize(value.elapsedMs);
             
@@ -1972,18 +2028,23 @@ const uniffiCallbackInterfaceCardImportListener: { vtable: any; register: () => 
 };
 
 /**
- * Abre el archivo `index` de la tarjeta (en el orden de `CardFile`) y devuelve
- * su fd; quien lo recibe lo cierra. Lo implementa la app con SAF.
+ * La tarjeta y el staging del disco, por SAF. Los fds los cierra quien los recibe.
  */
 export interface CardSource {
     
+/**
+ * fd de lectura del archivo `index` de la tarjeta (en el orden de `CardFile`).
+ */
     open(index: number) /*throws*/: number;
+/**
+ * fd de escritura de su copia en el staging del disco.
+ */
+    openDiskStaging(index: number, name: string) /*throws*/: number;
 }
 
 
 /**
- * Abre el archivo `index` de la tarjeta (en el orden de `CardFile`) y devuelve
- * su fd; quien lo recibe lo cierra. Lo implementa la app con SAF.
+ * La tarjeta y el staging del disco, por SAF. Los fds los cierra quien los recibe.
  */
 export class CardSourceImpl extends UniffiAbstractObject implements CardSource {
 
@@ -2000,6 +2061,9 @@ private constructor(pointer: UniffiHandle) {
     
 
     
+/**
+ * fd de lectura del archivo `index` de la tarjeta (en el orden de `CardFile`).
+ */
     open(index: number): number /*throws*/ {
     return FfiConverterInt32.lift(uniffiCaller.rustCallWithError(
             /*liftError:*/ FfiConverterTypeDiskError.lift.bind(FfiConverterTypeDiskError),
@@ -2007,6 +2071,23 @@ private constructor(pointer: UniffiHandle) {
                 return nativeModule().ubrn_uniffi_lumik_mobile_fn_method_cardsource_open(
                 uniffiTypeCardSourceImplObjectFactory.clonePointer(this),
         FfiConverterUInt32.lower(index, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    ));
+    }
+    
+/**
+ * fd de escritura de su copia en el staging del disco.
+ */
+    openDiskStaging(index: number, name: string): number /*throws*/ {
+    return FfiConverterInt32.lift(uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeDiskError.lift.bind(FfiConverterTypeDiskError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_method_cardsource_open_disk_staging(
+                uniffiTypeCardSourceImplObjectFactory.clonePointer(this),
+        FfiConverterUInt32.lower(index, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(name, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
@@ -2099,6 +2180,37 @@ const uniffiCallbackInterfaceCardSource: { vtable: any; register: () => void; } 
                 const jsCallback = FfiConverterTypeCardSource.lift(uniffiHandle);
                 return jsCallback.open(
                     FfiConverterUInt32.lift(index)
+                )
+            };
+            const uniffiResult = UniffiResult.ready<number>();
+            const uniffiHandleSuccess = (obj: any) => {
+                UniffiResult.writeSuccess(uniffiResult, FfiConverterInt32.lower(obj, nativeModule().rustbuffer_alloc));
+            };
+            const uniffiHandleError = (code: number, errBuf: UniffiByteArray) => {
+                UniffiResult.writeError(uniffiResult, code, errBuf);
+            };
+            uniffiTraitInterfaceCallWithError(
+                /*makeCall:*/ uniffiMakeCall,
+                /*handleSuccess:*/ uniffiHandleSuccess,
+                /*handleError:*/ uniffiHandleError,
+                /*isErrorType:*/ DiskError.instanceOf,
+                /*lowerError:*/ FfiConverterTypeDiskError.lower.bind(FfiConverterTypeDiskError),
+                /*lowerString:*/ FfiConverterString.lower.bind(FfiConverterString),
+                /*alloc:*/ nativeModule().rustbuffer_alloc,
+            );
+            return uniffiResult;
+        },
+        open_disk_staging: (
+            uniffiHandle: bigint,
+            index: number,
+            name: Uint8Array,) => {
+            const uniffiMakeCall = 
+            ()
+            : number => {
+                const jsCallback = FfiConverterTypeCardSource.lift(uniffiHandle);
+                return jsCallback.openDiskStaging(
+                    FfiConverterUInt32.lift(index), 
+                    FfiConverterString.lift(name)
                 )
             };
             const uniffiResult = UniffiResult.ready<number>();
@@ -3162,6 +3274,9 @@ const uniffiCallbackInterfaceImportListener: { vtable: any; register: () => void
 // FfiConverter for Array<string>
 const FfiConverterSequenceString = new FfiConverterArray(FfiConverterString);
 
+// FfiConverter for Array<DiskMove>
+const FfiConverterSequenceTypeDiskMove = new FfiConverterArray(FfiConverterTypeDiskMove);
+
 // FfiConverter for Array<number>
 const FfiConverterSequenceUInt32 = new FfiConverterArray(FfiConverterUInt32);
 
@@ -3298,8 +3413,11 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_cardimportlistener_on_error() !== 3927) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_cardimportlistener_on_error");
     }
-    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_cardsource_open() !== 1759) {
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_cardsource_open() !== 10624) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_cardsource_open");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_cardsource_open_disk_staging() !== 3771) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_cardsource_open_disk_staging");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_method_copylistener_on_progress() !== 58042) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_method_copylistener_on_progress");
@@ -3365,6 +3483,7 @@ export default Object.freeze({
     FfiConverterTypeDiskFile,
     FfiConverterTypeDiskFiles,
     FfiConverterTypeDiskFingerprint,
+    FfiConverterTypeDiskMove,
     FfiConverterTypeHistogram,
     FfiConverterTypeHistogramListener,
     FfiConverterTypeImportListener,

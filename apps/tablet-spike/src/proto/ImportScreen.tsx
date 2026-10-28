@@ -176,7 +176,7 @@ export function ImportScreen({ projects, onClose, onOpenProject }: Props) {
               {report.result.failed ? ` · ${report.result.failed} fallidas` : ''}
             </Text>
             <Text style={styles.muted}>
-              Import en la tablet {(report.importMs / 1000).toFixed(1)} s · subir al disco {(report.uploadMs / 1000).toFixed(1)} s (
+              Copia y proceso {(report.importMs / 1000).toFixed(1)} s · ordenar en el disco {(report.uploadMs / 1000).toFixed(1)} s (
               {(report.uploadedBytes / 1e9).toFixed(2)} GB) · total {((report.importMs + report.uploadMs) / 1000).toFixed(1)} s
             </Text>
             {report.result.errors.map((e, i) => (
@@ -198,7 +198,7 @@ function Progress({ progress, startedAt }: { progress: ImportProgress | null; st
   if (progress.step === 'upload') {
     return (
       <View style={styles.progress}>
-        <Text style={styles.text}>Subiendo al disco</Text>
+        <Text style={styles.text}>Ordenando en el disco</Text>
         <Bar value={progress.done / Math.max(1, progress.total)} />
         <Text style={styles.muted}>
           {progress.done}/{progress.total} archivos · {(progress.bytes / 1e9).toFixed(2)} GB · {secs} s

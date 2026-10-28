@@ -222,6 +222,13 @@ extern "C" {
     int32_t * uniffi_out_return, RustCallStatus* rust_call_status
     );
     typedef void
+    (*UniffiCallbackInterfaceCardSourceMethod1)(
+    uint64_t uniffi_handle, 
+    uint32_t index, 
+    RustBuffer name, 
+    int32_t * uniffi_out_return, RustCallStatus* rust_call_status
+    );
+    typedef void
     (*UniffiCallbackInterfaceCopyListenerMethod0)(
     uint64_t uniffi_handle, 
     uint64_t bytes, 
@@ -268,6 +275,7 @@ extern "C" {
         UniffiCallbackInterfaceFree uniffi_free;
         UniffiCallbackInterfaceClone uniffi_clone;
         UniffiCallbackInterfaceCardSourceMethod0 open;
+        UniffiCallbackInterfaceCardSourceMethod1 open_disk_staging;
     } UniffiVTableCallbackInterfaceCardSource;typedef struct UniffiVTableCallbackInterfaceCopyListener {
         UniffiCallbackInterfaceFree uniffi_free;
         UniffiCallbackInterfaceClone uniffi_clone;
@@ -405,6 +413,12 @@ extern "C" {
     int32_t uniffi_lumik_mobile_fn_method_cardsource_open(
         /*handle*/ uint64_t ptr, 
         uint32_t index, 
+        RustCallStatus *uniffi_out_err
+    );
+    int32_t uniffi_lumik_mobile_fn_method_cardsource_open_disk_staging(
+        /*handle*/ uint64_t ptr, 
+        uint32_t index, 
+        RustBuffer name, 
         RustCallStatus *uniffi_out_err
     );
     /*handle*/ uint64_t uniffi_lumik_mobile_fn_clone_copylistener(
@@ -870,6 +884,8 @@ extern "C" {
     uint16_t uniffi_lumik_mobile_checksum_method_cardimportlistener_on_error(
     );
     uint16_t uniffi_lumik_mobile_checksum_method_cardsource_open(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_method_cardsource_open_disk_staging(
     );
     uint16_t uniffi_lumik_mobile_checksum_method_copylistener_on_progress(
     );
@@ -5815,6 +5831,150 @@ namespace uniffi::lumik_mobile::cb::callbackinterfacecardsourcemethod0::vtableca
         rsLambda = nullptr;
     }
 } // namespace uniffi::lumik_mobile::cb::callbackinterfacecardsourcemethod0::vtablecallbackinterfacecardsource
+    // Implementation of CallbackInterfaceCardSourceMethod1 for vtable field open_disk_staging in VTableCallbackInterfaceCardSource
+
+
+// Callback function: uniffi::lumik_mobile::cb::callbackinterfacecardsourcemethod1::vtablecallbackinterfacecardsource::UniffiCallbackInterfaceCardSourceMethod1
+//
+// We have the following constraints:
+// - we need to pass a function pointer to Rust.
+// - we need a jsi::Runtime and jsi::Function to call into JS.
+// - function pointers can't store state, so we can't use a lamda.
+//
+// For this, we store a lambda as a global, as `rsLambda`. The `callback` function calls
+// the lambda, which itself calls the `body` which then calls into JS.
+//
+// We then give the `callback` function pointer to Rust which will call the lambda sometime in the
+// future.
+namespace uniffi::lumik_mobile::cb::callbackinterfacecardsourcemethod1::vtablecallbackinterfacecardsource {
+    using namespace facebook;
+
+    // We need to store a lambda in a global so we can call it from
+    // a function pointer. The function pointer is passed to Rust.
+    static std::function<void(uint64_t, uint32_t, RustBuffer, int32_t *, RustCallStatus*)> rsLambda = nullptr;
+
+    // This is the main body of the callback. It's called from the lambda,
+    // which itself is called from the callback function which is passed to Rust.
+    static void body(jsi::Runtime &rt,
+                     std::shared_ptr<uniffi_runtime::UniffiCallInvoker> callInvoker,
+                     std::shared_ptr<jsi::Value> callbackValue
+            ,uint64_t rs_uniffiHandle
+            ,uint32_t rs_index
+            ,RustBuffer rs_name
+            ,int32_t * rs_uniffiOutReturn, RustCallStatus* uniffi_call_status) {
+
+        // Convert the arguments from Rust, into jsi::Values.
+        // We'll use the Bridging class to do this…
+        auto js_uniffiHandle = uniffi_jsi::Bridging<uint64_t>::toJs(rt, callInvoker, rs_uniffiHandle);
+        auto js_index = uniffi_jsi::Bridging<uint32_t>::toJs(rt, callInvoker, rs_index);
+        auto js_name = uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, rs_name);
+
+        // Now we are ready to call the callback.
+        // We are already on the JS thread, because this `body` function was
+        // invoked from the CallInvoker.
+        try {
+            // Getting the callback function
+            auto cb = callbackValue->asObject(rt).asFunction(rt);
+            auto uniffiResult = cb.call(rt, js_uniffiHandle, js_index, js_name
+            );
+
+            // Now copy the result back from JS into the RustCallStatus object.
+            uniffi::lumik_mobile::Bridging<RustCallStatus>::copyFromJs(rt, callInvoker, uniffiResult, uniffi_call_status);
+
+            if (uniffi_call_status->code != UNIFFI_CALL_STATUS_OK) {
+                // The JS callback finished abnormally, so we cannot retrieve the return value.
+                return;
+            }
+
+            
+            // return type is Int32
+            // Finally, we need to copy the return value back into the Rust pointer.
+            *rs_uniffiOutReturn =
+                uniffi_jsi::Bridging<
+                    ReferenceHolder<int32_t>
+                >::fromJs(
+                    rt, callInvoker, uniffiResult
+                );
+        } catch (const jsi::JSError &error) {
+            std::cout << "Error in callback UniffiCallbackInterfaceCardSourceMethod1: "
+                    << error.what() << std::endl;
+            throw error;
+        }
+    }
+
+    static void callback(uint64_t rs_uniffiHandle, uint32_t rs_index, RustBuffer rs_name, int32_t * rs_uniffiOutReturn, RustCallStatus* uniffi_call_status) {
+        // If the runtime has shutdown, then there is no point in trying to
+        // call into Javascript. BUT how do we tell if the runtime has shutdown?
+        //
+        // Answer: the module destructor calls into callback `cleanup` method,
+        // which nulls out the rsLamda.
+        //
+        // If rsLamda is null, then there is no runtime to call into.
+        if (rsLambda == nullptr) {
+            // This only occurs when destructors are calling into Rust free/drop,
+            // which causes the JS callback to be dropped.
+            return;
+        }
+
+        // The runtime, the actual callback jsi::funtion, and the callInvoker
+        // are all in the lambda.
+        rsLambda(
+            rs_uniffiHandle, 
+            rs_index, 
+            rs_name, 
+            rs_uniffiOutReturn, uniffi_call_status);
+    }
+
+    [[maybe_unused]] static UniffiCallbackInterfaceCardSourceMethod1
+    makeCallbackFunction( // uniffi::lumik_mobile::cb::callbackinterfacecardsourcemethod1::vtablecallbackinterfacecardsource
+                    jsi::Runtime &rt,
+                     std::shared_ptr<uniffi_runtime::UniffiCallInvoker> callInvoker,
+                     const jsi::Value &value) {
+        if (rsLambda != nullptr) {
+            // `makeCallbackFunction` is called in two circumstances:
+            //
+            // 1. at startup, when initializing callback interface vtables.
+            // 2. when polling futures. This happens at least once per future that is
+            //    exposed to Javascript. We know that this is always the same function,
+            //    `uniffiFutureContinuationCallback` in `async-rust-calls.ts`.
+            //
+            // We can therefore return the callback function without making anything
+            // new if we've been initialized already.
+            return callback;
+        }
+        auto callbackFunction = value.asObject(rt).asFunction(rt);
+        auto callbackValue = std::make_shared<jsi::Value>(rt, callbackFunction);
+        rsLambda = [&rt, callInvoker, callbackValue](uint64_t rs_uniffiHandle, uint32_t rs_index, RustBuffer rs_name, int32_t * rs_uniffiOutReturn, RustCallStatus* uniffi_call_status) {
+                // We immediately make a lambda which will do the work of transforming the
+                // arguments into JSI values and calling the callback.
+                uniffi_runtime::UniffiCallFunc jsLambda = [
+                    callInvoker,
+                    callbackValue
+                    , rs_uniffiHandle
+                    , rs_index
+                    , rs_name
+                    , rs_uniffiOutReturn, uniffi_call_status](jsi::Runtime &rt) mutable {
+                    body(rt, callInvoker, callbackValue
+                        , rs_uniffiHandle
+                        , rs_index
+                        , rs_name
+                        , rs_uniffiOutReturn, uniffi_call_status);
+                };
+                // We'll then call that lambda from the callInvoker which will
+                // look after calling it on the correct thread.
+                callInvoker->invokeBlocking(rt, jsLambda);
+        };
+        return callback;
+    }
+
+    // This method is called from the destructor of NativeLumikMobile, which only happens
+    // when the jsi::Runtime is being destroyed.
+    static void cleanup() {
+        // The lambda holds a reference to the the Runtime, so when this is nulled out,
+        // then the pointer will no longer be left dangling.
+        rsLambda = nullptr;
+    }
+} // namespace uniffi::lumik_mobile::cb::callbackinterfacecardsourcemethod1::vtablecallbackinterfacecardsource
 namespace uniffi::lumik_mobile {
 using namespace facebook;
 using CallInvoker = uniffi_runtime::UniffiCallInvoker;
@@ -5844,6 +6004,9 @@ template <> struct Bridging<UniffiVTableCallbackInterfaceCardSource> {
         );
     rsObject.open = uniffi::lumik_mobile::cb::callbackinterfacecardsourcemethod0::vtablecallbackinterfacecardsource::makeCallbackFunction(
           rt, callInvoker, jsObject.getProperty(rt, "open")
+        );
+    rsObject.open_disk_staging = uniffi::lumik_mobile::cb::callbackinterfacecardsourcemethod1::vtablecallbackinterfacecardsource::makeCallbackFunction(
+          rt, callInvoker, jsObject.getProperty(rt, "open_disk_staging")
         );
 
     return rsObject;
@@ -6715,6 +6878,14 @@ NativeLumikMobile::NativeLumikMobile(
             return this->cpp_uniffi_lumik_mobile_fn_method_cardsource_open(rt, thisVal, args, count);
         }
     );
+    props["ubrn_uniffi_lumik_mobile_fn_method_cardsource_open_disk_staging"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_method_cardsource_open_disk_staging"),
+        3,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_method_cardsource_open_disk_staging(rt, thisVal, args, count);
+        }
+    );
     props["ubrn_uniffi_lumik_mobile_fn_clone_copylistener"] = jsi::Function::createFromHostFunction(
         rt,
         jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_clone_copylistener"),
@@ -7331,6 +7502,14 @@ NativeLumikMobile::NativeLumikMobile(
             return this->cpp_uniffi_lumik_mobile_checksum_method_cardsource_open(rt, thisVal, args, count);
         }
     );
+    props["ubrn_uniffi_lumik_mobile_checksum_method_cardsource_open_disk_staging"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_method_cardsource_open_disk_staging"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_method_cardsource_open_disk_staging(rt, thisVal, args, count);
+        }
+    );
     props["ubrn_uniffi_lumik_mobile_checksum_method_copylistener_on_progress"] = jsi::Function::createFromHostFunction(
         rt,
         jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_method_copylistener_on_progress"),
@@ -7567,6 +7746,7 @@ uniffi::lumik_mobile::cb::callbackinterfacecardimportlistenermethod1::vtablecall
 uniffi::lumik_mobile::cb::callbackinterfacecardimportlistenermethod2::vtablecallbackinterfacecardimportlistener::cleanup();
 uniffi::lumik_mobile::cb::callbackinterfaceclone::vtablecallbackinterfacecardsource::cleanup();
 uniffi::lumik_mobile::cb::callbackinterfacecardsourcemethod0::vtablecallbackinterfacecardsource::cleanup();
+uniffi::lumik_mobile::cb::callbackinterfacecardsourcemethod1::vtablecallbackinterfacecardsource::cleanup();
 uniffi::lumik_mobile::cb::callbackinterfaceclone::vtablecallbackinterfacecopylistener::cleanup();
 uniffi::lumik_mobile::cb::callbackinterfacecopylistenermethod0::vtablecallbackinterfacecopylistener::cleanup();
 uniffi::lumik_mobile::cb::callbackinterfacecopylistenermethod1::vtablecallbackinterfacecopylistener::cleanup();
@@ -7973,6 +8153,16 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_init_callback_vtable_ca
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_method_cardsource_open(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
         auto value = uniffi_lumik_mobile_fn_method_cardsource_open(uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker, args[0]), uniffi_jsi::Bridging<uint32_t>::fromJs(rt, callInvoker, args[1]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return uniffi_jsi::Bridging<int32_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_method_cardsource_open_disk_staging(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        auto value = uniffi_lumik_mobile_fn_method_cardsource_open_disk_staging(uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker, args[0]), uniffi_jsi::Bridging<uint32_t>::fromJs(rt, callInvoker, args[1]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[2]), 
             &status
         );
         uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
@@ -8623,6 +8813,13 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_method_cardimport
 }
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_method_cardsource_open(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         auto value = uniffi_lumik_mobile_checksum_method_cardsource_open(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_method_cardsource_open_disk_staging(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_method_cardsource_open_disk_staging(
         );
 
         

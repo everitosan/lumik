@@ -5,7 +5,9 @@
 //! con rutas, como en la app Tauri en Android. La app sube después al disco
 //! por SAF lo que devuelve `uploads`.
 //!
-//! Costo conocido: cada original se escribe dos veces (sandbox y disco).
+//! Cada original se lee una vez de la tarjeta y se escribe a la vez en la
+//! sandbox (para el núcleo) y en el staging del disco; al final la app lo
+//! mueve a su nombre (`moves`) en lugar de copiarlo otra vez.
 
 mod adapters;
 mod exif;
@@ -30,6 +32,14 @@ pub struct CardFile {
 }
 
 #[derive(uniffi::Record)]
+pub struct DiskMove {
+    /// Archivo de la tarjeta (su copia está en el staging del disco).
+    pub card_index: u32,
+    /// Ruta final, relativa al proyecto (`_media/…`).
+    pub to: String,
+}
+
+#[derive(uniffi::Record)]
 pub struct ImportStatus {
     /// `copy`, `metadata`, `move`, `register`, `complete` o `previews`.
     pub phase: String,
@@ -48,8 +58,10 @@ pub struct CardImportResult {
     pub skipped: u32,
     /// Primeros motivos de fallo, para mostrarlos.
     pub errors: Vec<String>,
-    /// Rutas relativas al proyecto de lo que hay que subir al disco: originales,
-    /// sidecars `.xmp`, miniaturas y vistas previas.
+    /// Originales: de su copia en el staging del disco a su ruta final.
+    pub moves: Vec<DiskMove>,
+    /// Lo que hay que copiar de la sandbox al disco (rutas relativas al
+    /// proyecto): sidecars `.xmp`, miniaturas y vistas previas.
     pub uploads: Vec<String>,
     pub elapsed_ms: u64,
 }
@@ -181,8 +193,12 @@ fn run(
     // miniatura y la vista previa de cada foto nueva.
     let rel = |p: &Path| p.strip_prefix(&dir).ok().map(|r| r.to_string_lossy().replace('\\', "/"));
     let mut uploads: Vec<String> = Vec::new();
-    for file in pipeline.produced.lock().unwrap().iter() {
-        uploads.extend(rel(file));
+    let mut moves: Vec<DiskMove> = Vec::new();
+    let produced = std::mem::take(&mut *pipeline.produced.lock().unwrap());
+    for (file, card_index) in &produced {
+        if let Some(to) = rel(file) {
+            moves.push(DiskMove { card_index: *card_index, to });
+        }
         let xmp = file.with_extension("xmp");
         if xmp.exists() {
             uploads.extend(rel(&xmp));
@@ -214,6 +230,11 @@ fn run(
         }
     }
 
+    // Los originales ya están en el disco: su copia en la sandbox sobra.
+    for (file, _) in &produced {
+        let _ = std::fs::remove_file(file);
+    }
+
     let mut errors: Vec<String> = outcome.failed_files.iter().take(5).map(|f| format!("{}: {}", f.name, f.error)).collect();
     if let Some(fatal) = &outcome.fatal {
         errors.insert(0, format!("{:?}: {}", fatal.code, fatal.detail));
@@ -224,6 +245,7 @@ fn run(
         failed: outcome.failed_files.len() as u32,
         skipped: outcome.skipped_files.len() as u32,
         errors,
+        moves,
         uploads,
         elapsed_ms: started.elapsed().as_millis() as u64,
     })
@@ -240,10 +262,14 @@ mod tests {
     use std::os::fd::IntoRawFd;
     use std::sync::mpsc;
 
-    struct Files(Vec<PathBuf>);
+    /// La tarjeta son `files`; el staging del disco, `disk/`.
+    struct Files(Vec<PathBuf>, PathBuf);
     impl CardSource for Files {
         fn open(&self, index: u32) -> Result<i32, crate::disk::DiskError> {
             Ok(std::fs::File::open(&self.0[index as usize]).unwrap().into_raw_fd())
+        }
+        fn open_disk_staging(&self, index: u32, name: String) -> Result<i32, crate::disk::DiskError> {
+            Ok(std::fs::File::create(self.1.join(format!("{index:05}_{name}"))).unwrap().into_raw_fd())
         }
     }
 
@@ -275,18 +301,30 @@ mod tests {
             .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("raf"))).take(3).collect();
         let files = raws.iter().map(|p| CardFile { name: format!("DSCF{:04}.RAF", raws.iter().position(|q| q == p).unwrap() + 1), size: std::fs::metadata(p).unwrap().len() }).collect();
 
+        let disk = tempfile::tempdir().unwrap();
         let (tx, rx) = mpsc::channel();
-        start_card_import(shadow.path().display().to_string(), files, Arc::new(Files(raws.clone())), Arc::new(Done(Mutex::new(tx))));
+        start_card_import(shadow.path().display().to_string(), files, Arc::new(Files(raws.clone(), disk.path().to_path_buf())), Arc::new(Done(Mutex::new(tx))));
         let r = rx.recv_timeout(std::time::Duration::from_secs(120)).unwrap().unwrap();
 
-        eprintln!("importadas {} · fallidas {} · {:?} · {} ms\nsubir: {:#?}", r.imported, r.failed, r.errors, r.elapsed_ms, r.uploads);
+        eprintln!("importadas {} · fallidas {} · {:?} · {} ms\nmover: {:#?}\nsubir: {:#?}", r.imported, r.failed, r.errors, r.elapsed_ms,
+            r.moves.iter().map(|m| (m.card_index, m.to.clone())).collect::<Vec<_>>(), r.uploads);
         assert_eq!((r.imported, r.failed), (3, 0));
-        let media: Vec<&String> = r.uploads.iter().filter(|u| u.starts_with("_media/") && u.ends_with(".raf")).collect();
-        assert_eq!(media.len(), 3);
-        for m in media {
-            // Ningún marcador (archivo vacío) quedó como destino: el nombre es nuevo.
-            assert!(std::fs::metadata(shadow.path().join(m)).unwrap().len() > 0, "{m}");
+        assert_eq!(r.moves.len(), 3);
+        for m in &r.moves {
+            // El staging del disco tiene el archivo completo de la tarjeta que le corresponde.
+            assert!(m.to.starts_with("_media/"), "{}", m.to);
+            let staged = std::fs::read_dir(disk.path()).unwrap().map(|e| e.unwrap().path())
+                .find(|p| p.file_name().unwrap().to_string_lossy().starts_with(&format!("{:05}_", m.card_index))).unwrap();
+            assert_eq!(std::fs::read(staged).unwrap(), std::fs::read(&raws[m.card_index as usize]).unwrap());
         }
+        // Tres nombres distintos, y ninguno es un marcador del disco (los nombres viejos).
+        let names: std::collections::HashSet<&String> = r.moves.iter().map(|m| &m.to).collect();
+        assert_eq!(names.len(), 3);
+        for m in &r.moves {
+            assert!(!real.join(&m.to).exists(), "pisaría {}", m.to);
+        }
+        // Los originales ya no ocupan la sandbox.
+        assert!(r.moves.iter().all(|m| !shadow.path().join(&m.to).exists()));
         assert!(r.uploads.iter().any(|u| u.starts_with(".thumbs/")));
         assert!(r.uploads.iter().any(|u| u.starts_with(".previews/")));
     }

@@ -1,6 +1,8 @@
 //! `ImportPipeline` de la tablet: como la rama `android` de `StdImportPipeline`
-//! (desktop), pero la tarjeta se lee por fd (SAF) directo al staging. Todo pasa
-//! en la carpeta sombra del proyecto en la sandbox; subir al disco es aparte.
+//! (desktop), pero la tarjeta se lee por fd (SAF). Cada bloque se escribe a la
+//! vez en el staging de la sandbox (donde el núcleo renombra, firma, empareja y
+//! registra) y en el staging del disco: los originales no se vuelven a copiar,
+//! la app solo los mueve a su nombre final (`DiskMove`).
 
 use lumik_core::application::ports::{
     ExistingShot, ImportPipeline, ImportedJoin, ImportedShot, MetadataTool, PipelineOutcome, PipelineRequest,
@@ -23,11 +25,13 @@ use std::time::{Duration, Instant};
 
 use crate::disk::DiskError;
 
-/// Abre el archivo `index` de la tarjeta (en el orden de `CardFile`) y devuelve
-/// su fd; quien lo recibe lo cierra. Lo implementa la app con SAF.
+/// La tarjeta y el staging del disco, por SAF. Los fds los cierra quien los recibe.
 #[uniffi::export(with_foreign)]
 pub trait CardSource: Send + Sync {
+    /// fd de lectura del archivo `index` de la tarjeta (en el orden de `CardFile`).
     fn open(&self, index: u32) -> Result<i32, DiskError>;
+    /// fd de escritura de su copia en el staging del disco.
+    fn open_disk_staging(&self, index: u32, name: String) -> Result<i32, DiskError>;
 }
 
 /// Raíz ficticia de los archivos de la tarjeta: `/card/{index}/{nombre}`. El
@@ -48,8 +52,9 @@ const BYTES_EVERY: Duration = Duration::from_millis(100);
 pub struct MobilePipeline {
     pub card: Arc<dyn CardSource>,
     pub sizes: Vec<u64>,
-    /// Lo que quedó en `_media/` (y junto a fotos existentes): lo que hay que subir.
-    pub produced: Mutex<Vec<PathBuf>>,
+    /// Lo que quedó en el proyecto, con el archivo de la tarjeta de donde salió
+    /// (su copia ya está en el staging del disco).
+    pub produced: Mutex<Vec<(PathBuf, u32)>>,
 }
 
 impl ImportPipeline for MobilePipeline {
@@ -87,10 +92,10 @@ impl ImportPipeline for MobilePipeline {
             let dst = slot.join(&name);
             let result = (|| -> Result<u64, String> {
                 let index = card_index(source).ok_or("ruta de tarjeta inválida")?;
-                let fd = self.card.open(index).map_err(|e| e.to_string())?;
-                let src = unsafe { File::from_raw_fd(fd as RawFd) };
+                let src = unsafe { File::from_raw_fd(self.card.open(index).map_err(|e| e.to_string())? as RawFd) };
+                let disk = unsafe { File::from_raw_fd(self.card.open_disk_staging(index, name.clone()).map_err(|e| e.to_string())? as RawFd) };
                 std::fs::create_dir_all(&slot).map_err(|e| e.to_string())?;
-                copy_reporting(src, &dst, &mut |b| reporter.progress(progress(b)))
+                copy_tee(src, &dst, disk, &mut |b| reporter.progress(progress(b)))
             })();
             match result {
                 Ok(n) => {
@@ -120,50 +125,86 @@ impl ImportPipeline for MobilePipeline {
         out.failed.extend(failed);
 
         // Mover: staging → `_media/` con nombre libre (los del disco están como
-        // marcadores vacíos en la sombra, para que no se pisen).
+        // marcadores vacíos en la sombra, para que no se pisen). Una toma a la
+        // vez, para saber a qué ruta fue cada archivo de la tarjeta.
         let shots = stage_shots(ready, req.metadata_tool, req.existing);
-        match pipeline_move_shots(shots, req.dest_folder, &mut |_, _, _| {}) {
-            Ok(moved) => {
-                out.failed.extend(moved.failed);
-                let mut produced = self.produced.lock().unwrap();
-                for m in &moved.moved {
-                    produced.push(m.file.clone());
-                    produced.extend(m.camera_jpg.clone());
+        let mut produced = self.produced.lock().unwrap();
+        for shot in shots {
+            let (main, jpg) = match &shot {
+                StagedShot::Single(f) | StagedShot::Join { file: f, .. } => (card_index(&f.source), None),
+                StagedShot::Pair { raw, jpg } => (card_index(&raw.source), card_index(&jpg.source)),
+            };
+            match pipeline_move_shots(vec![shot], req.dest_folder, &mut |_, _, _| {}) {
+                Ok(moved) => {
+                    out.failed.extend(moved.failed);
+                    for m in moved.moved {
+                        produced.extend(main.map(|i| (m.file.clone(), i)));
+                        if let (Some(file), Some(i)) = (&m.camera_jpg, jpg) {
+                            produced.push((file.clone(), i));
+                        }
+                        out.photos.push(ImportedShot { source_stem: stem_of(&m.source), file: m.file, camera_jpg: m.camera_jpg });
+                    }
+                    for j in moved.joined {
+                        produced.extend(main.map(|i| (j.file.clone(), i)));
+                        out.joined.push(ImportedJoin { photo_id: j.photo_id, file: j.file });
+                    }
                 }
-                produced.extend(moved.joined.iter().map(|j| j.file.clone()));
-                out.photos = moved
-                    .moved
-                    .into_iter()
-                    .map(|m| ImportedShot { source_stem: stem_of(&m.source), file: m.file, camera_jpg: m.camera_jpg })
-                    .collect();
-                out.joined = moved.joined.into_iter().map(|j| ImportedJoin { photo_id: j.photo_id, file: j.file }).collect();
+                Err(e) => {
+                    out.fatal = Some(FatalError { code: ImportErrorCode::WriteFailed, detail: e.to_string() });
+                    break;
+                }
             }
-            Err(e) => out.fatal = Some(FatalError { code: ImportErrorCode::WriteFailed, detail: e.to_string() }),
         }
+        drop(produced);
         drop(workspace);
         out
     }
 }
 
-fn copy_reporting(mut src: File, dst: &Path, on_bytes: &mut dyn FnMut(u64)) -> Result<u64, String> {
+/// Bloques en vuelo hacia el disco mientras se sigue leyendo la tarjeta.
+const DISK_QUEUE: usize = 4;
+
+/// Lee `src` una vez y escribe cada bloque en `dst` (sandbox, en este hilo) y
+/// en `disk` (staging del disco, en otro hilo). Termina cuando los dos están
+/// escritos; el del disco, sincronizado.
+fn copy_tee(mut src: File, dst: &Path, mut disk: File, on_bytes: &mut dyn FnMut(u64)) -> Result<u64, String> {
     let mut out = File::create(dst).map_err(|e| e.to_string())?;
-    let mut buf = vec![0u8; CHUNK];
+    let (tx, rx) = std::sync::mpsc::sync_channel::<Arc<Vec<u8>>>(DISK_QUEUE);
+    let writer = std::thread::spawn(move || -> std::io::Result<()> {
+        for chunk in rx {
+            disk.write_all(&chunk)?;
+        }
+        disk.sync_all()
+    });
     let mut done = 0u64;
     let mut last = Instant::now();
-    loop {
-        let n = match src.read(&mut buf) {
-            Ok(0) => break,
-            Ok(n) => n,
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-            Err(e) => return Err(e.to_string()),
-        };
-        out.write_all(&buf[..n]).map_err(|e| e.to_string())?;
-        done += n as u64;
-        if last.elapsed() >= BYTES_EVERY {
-            on_bytes(done);
-            last = Instant::now();
+    let read = (|| -> Result<(), String> {
+        loop {
+            let mut buf = vec![0u8; CHUNK];
+            let n = match src.read(&mut buf) {
+                Ok(0) => return Ok(()),
+                Ok(n) => n,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(e.to_string()),
+            };
+            buf.truncate(n);
+            let chunk = Arc::new(buf);
+            out.write_all(&chunk).map_err(|e| e.to_string())?;
+            // Si el disco falló, el hilo ya no recibe: se ve al unirlo.
+            if tx.send(chunk).is_err() {
+                return Ok(());
+            }
+            done += n as u64;
+            if last.elapsed() >= BYTES_EVERY {
+                on_bytes(done);
+                last = Instant::now();
+            }
         }
-    }
+    })();
+    drop(tx);
+    let written = writer.join().map_err(|_| "el hilo del disco falló".to_string())?;
+    read?;
+    written.map_err(|e| format!("disco: {e}"))?;
     on_bytes(done);
     Ok(done)
 }
