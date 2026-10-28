@@ -11,6 +11,8 @@ declare class LumikSafModule extends NativeModule<{ onVolumesChanged: (e: { acti
   volumes(): SafVolume[];
   /** Selector de carpeta abierto en la raíz del disco `uuid`; null si se cancela. */
   requestVolumeAccess(uuid: string): Promise<string | null>;
+  /** Abre la carpeta en la app de Archivos del sistema; false si ninguna app la abre. */
+  openFolder(documentUri: string): boolean;
   /** Pantalla de almacenamiento de Android (donde se expulsa un disco). */
   openStorageSettings(): void;
   pickDirectory(): Promise<string | null>;

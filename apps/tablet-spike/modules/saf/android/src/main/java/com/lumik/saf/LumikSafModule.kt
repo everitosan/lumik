@@ -103,6 +103,23 @@ class LumikSafModule : Module() {
       appContext.throwingActivity.startActivityForResult(intent, PICK_TREE)
     }
 
+    // Abre una carpeta en la app de Archivos del sistema (como "Abrir carpeta"
+    // del desktop). Se pasa como documento suelto, sin el árbol del permiso,
+    // que es como la reconoce la app de Archivos. false si ninguna app la abre.
+    Function("openFolder") { documentUri: String ->
+      val doc = Uri.parse(documentUri)
+      val plain = DocumentsContract.buildDocumentUri(doc.authority, DocumentsContract.getDocumentId(doc))
+      val intent = Intent(Intent.ACTION_VIEW)
+        .setDataAndType(plain, Document.MIME_TYPE_DIR)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      try {
+        requireNotNull(appContext.reactContext).startActivity(intent)
+        true
+      } catch (e: android.content.ActivityNotFoundException) {
+        false
+      }
+    }
+
     // Una app no puede desmontar un disco: se abre la pantalla de
     // almacenamiento de Android, donde está "Expulsar".
     Function("openStorageSettings") {

@@ -1,6 +1,6 @@
 // Vista del proyecto (como `ProjectDetail` del desktop): las fotos agrupadas
 // por día o en cuadrícula, con las tarjetas del desktop (nombre, formato, fecha,
-// estrellas y colores) y su menú (papelera o restaurar), "Importar" y, abajo a
+// estrellas y colores) y su menú (mostrar en carpeta, papelera o restaurar), "Importar" y, abajo a
 // la derecha, "Filtros" (aprobadas, papelera, estrellas ≥/=, colores y tags).
 // Tocar una foto abre el visor, que recorre solo las que pasan los filtros.
 import { FlashList } from '@shopify/flash-list';
@@ -135,6 +135,8 @@ type Props = {
   onTrash?: (index: number) => void;
   /** Restaurar (índice en `trash`). */
   onRestore?: (index: number) => void;
+  /** Mostrar en carpeta: abre en la app de Archivos la carpeta de la foto (índice en la lista que se ve). */
+  onReveal?: (fromTrash: boolean, index: number) => void;
   onBack: () => void;
   onImport?: () => void;
   /** Miniaturas que aún se copian al caché (`done/total`), o `null`. */
@@ -144,7 +146,7 @@ type Props = {
 };
 
 export function ProjectScreen(props: Props) {
-  const { title, photos, trash, filters, onFilters, viewMode, onViewMode, onOpenPhoto, onTrash, onRestore, onBack, onImport, fetching, lock } =
+  const { title, photos, trash, filters, onFilters, viewMode, onViewMode, onOpenPhoto, onTrash, onRestore, onReveal, onBack, onImport, fetching, lock } =
     props;
   const { width } = useWindowDimensions();
   const inner = width - 2 * 16;
@@ -168,7 +170,7 @@ export function ProjectScreen(props: Props) {
     else next.add(v);
     return next;
   };
-  const hasMenu = filters.trash ? !!onRestore : !!onTrash;
+  const hasMenu = !!onReveal || (filters.trash ? !!onRestore : !!onTrash);
   const menuPhoto = menu !== null ? source[menu] : null;
 
   const renderCard = (index: number, position: number) => {
@@ -363,17 +365,29 @@ export function ProjectScreen(props: Props) {
               <Text style={styles.menuTitle} numberOfLines={1}>
                 {menuPhoto.info.fileName}
               </Text>
-              {filters.trash ? (
+              {onReveal && (
                 <Pressable
                   style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
                   onPress={() => {
                     setMenu(null);
-                    onRestore?.(menu);
+                    onReveal(filters.trash, menu);
+                  }}
+                >
+                  <Text style={styles.menuItemText}>Mostrar en carpeta</Text>
+                </Pressable>
+              )}
+              {filters.trash && onRestore && (
+                <Pressable
+                  style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
+                  onPress={() => {
+                    setMenu(null);
+                    onRestore(menu);
                   }}
                 >
                   <Text style={styles.menuItemText}>Restaurar</Text>
                 </Pressable>
-              ) : (
+              )}
+              {!filters.trash && onTrash && (
                 <Pressable
                   style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
                   onPress={() => {

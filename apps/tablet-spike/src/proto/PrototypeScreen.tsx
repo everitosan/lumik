@@ -364,6 +364,14 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
         onOpenPhoto={(fromTrash, visible, position) => setViewer({ fromTrash, visible, position })}
         onTrash={lock ? undefined : (i) => trashOrRestore(false, i)}
         onRestore={lock ? undefined : (i) => trashOrRestore(true, i)}
+        onReveal={(fromTrash, i) => {
+          const s = sessionRef.current;
+          const p = s && (fromTrash ? s.trash : s.photos)[i];
+          if (!s || !p) return;
+          // La carpeta donde está el archivo (`_media/`, `_culled/` o `_trash/`).
+          const dir = p.info.dngPath.split('/').slice(0, -1).join('/');
+          if (!Saf.openFolder(Saf.childUri(s.project.uri, dir))) note('Ninguna app de archivos puede abrir la carpeta', true);
+        }}
         onBack={close}
         onImport={lock ? undefined : startImport}
         fetching={fetching}
@@ -396,6 +404,9 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
             note(`${form.name.trim()}: guardado${out.renamed ? ` · ${out.renamed} archivos renombrados` : ''}${out.moved ? ' · carpeta movida' : ''}`);
             refreshProjects(trees);
             return out;
+          },
+          openFolder: (p) => {
+            if (!Saf.openFolder(p.uri)) note('Ninguna app de archivos puede abrir la carpeta', true);
           },
           remove: async (p, force) => {
             deleteProject(p, force);

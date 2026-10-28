@@ -1,7 +1,7 @@
 // Proyectos del inicio, como el dashboard del desktop (`Projects.tsx`): por
 // año, con las tarjetas (portada, nombre, fecha, fotos, estado, disco,
-// archivado, quién lo tiene) y su menú "⋯" (o pulsación larga): editar,
-// archivar o desarchivar y eliminar. Abajo a la derecha, "Archivados (n)" y
+// archivado, quién lo tiene) y su menú "⋯" (o pulsación larga): abrir
+// carpeta, editar, archivar o desarchivar y eliminar. Abajo a la derecha, "Archivados (n)" y
 // "Ordenar". Un proyecto que tiene otro dispositivo pide antes tomar el control.
 import { Image } from 'expo-image';
 import { useMemo, useState } from 'react';
@@ -18,6 +18,8 @@ export type ProjectMenuActions = {
   archive: (p: DiskProject, archived: boolean, force: boolean) => Promise<void>;
   edit: (p: DiskProject, form: EditForm, force: boolean) => Promise<{ renamed: number }>;
   remove: (p: DiskProject, force: boolean) => Promise<void>;
+  /** Abre la carpeta del proyecto en la app de Archivos. */
+  openFolder: (p: DiskProject) => void;
 };
 
 type Props = {
@@ -257,6 +259,7 @@ export function ProjectsDashboard({ trees, labelOf, projects, busy, cards, onOpe
               </Text>
               {(
                 [
+                  ['Abrir carpeta', () => actions.openFolder(menu)],
                   ['Editar', () => setPending({ kind: 'edit', project: menu })],
                   [cards.get(menu.uri)?.card?.archived ? 'Desarchivar' : 'Archivar', () => archive(menu)],
                   ['Eliminar', () => setPending({ kind: 'delete', project: menu })],
