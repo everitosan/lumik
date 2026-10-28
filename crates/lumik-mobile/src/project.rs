@@ -27,6 +27,8 @@ pub struct PhotoInfo {
     pub culled: bool,
     /// Etiquetas de color, formato del desktop: `"1,3,5"`.
     pub color_label: Option<String>,
+    /// Tags del fotógrafo (`"boda,ceremonia"`), para filtrar como el desktop.
+    pub tags: Option<String>,
     pub thumb_path: String,
     pub preview_path: String,
     /// Grados: 0 / 90 / 180 / 270.
@@ -63,6 +65,7 @@ pub fn open_project(project_dir: String) -> Result<Vec<PhotoInfo>, ProjectError>
             dng_path: p.dng_path.clone(),
             culled: p.culled,
             color_label: p.color_label.clone(),
+            tags: p.tags.clone(),
             thumb_path: cache(".thumbs", &p.id),
             preview_path: cache(".previews", &p.id),
             id: p.id,

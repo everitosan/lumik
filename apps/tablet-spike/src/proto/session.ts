@@ -1,8 +1,9 @@
 // Un proyecto del disco abierto en la tablet, en modo espejado (D2):
 // `project.db` se trae a la sandbox, se edita ahí y vuelve al disco con
 // `VACUUM INTO` + renombrado justo después de mover archivos y, con debounce,
-// tras calificar o etiquetar. Las miniaturas se copian al caché de la sandbox
-// al abrir; las vistas previas, cuando el visor las va a necesitar.
+// tras calificar o etiquetar. Las miniaturas se muestran del disco mientras se
+// copian al caché de la sandbox en segundo plano (la primera vez de un proyecto
+// de 1 000 fotos son unos 30 s); las vistas previas, cuando el visor las pide.
 //
 // Candado (`project-lock`): al abrir se toma si está libre o es propio; si es
 // de otro dispositivo, la sesión queda en solo lectura. Mientras haya cambios
@@ -40,6 +41,7 @@ export type DiskProject = { name: string; uri: string; files: SafEntry[]; lock?:
 
 export type SessionPhoto = {
   info: PhotoInfo;
+  /** La del caché (`file://`) o, mientras llega, la del disco (`content://`). */
   thumb: string;
   /** Ruta en el caché; existe cuando `previewReady`. */
   previewPath: string;
@@ -67,16 +69,16 @@ export class ProjectSession {
     lock: LockView,
   ) {
     this.readOnly = lock.state === 'foreign' ? lock : null;
-    this.photos = infos.map((info) => ({
-      info,
-      thumb: `file://${cacheDir}/thumbs/${info.id}.jpg`,
-      previewPath: `${cacheDir}/previews/${info.id}.jpg`,
-      previewReady: false,
-    }));
-    // Las vistas previas que ya estaban en el caché de una apertura anterior.
+    // Lo que ya estaba en el caché de una apertura anterior.
     const names = infos.map((i) => `${i.id}.jpg`);
-    const missing = new Set(missingFiles(`${cacheDir}/previews`, names));
-    this.photos.forEach((p, i) => (p.previewReady = !missing.has(names[i])));
+    const noThumb = new Set(missingFiles(`${cacheDir}/thumbs`, names));
+    const noPreview = new Set(missingFiles(`${cacheDir}/previews`, names));
+    this.photos = infos.map((info, i) => ({
+      info,
+      thumb: noThumb.has(names[i]) ? Saf.childUri(project.uri, `.thumbs/${names[i]}`) : `file://${cacheDir}/thumbs/${names[i]}`,
+      previewPath: `${cacheDir}/previews/${names[i]}`,
+      previewReady: !noPreview.has(names[i]),
+    }));
   }
 
   /** Trae `project.db` (y su `-wal`) a la sandbox y abre la copia de trabajo. */
@@ -114,6 +116,7 @@ export class ProjectSession {
       return;
     }
     const onDisk = (await Saf.listChildren(thumbsDir.uri)).filter((f) => missing.has(f.name));
+    const byName = new Map(this.photos.map((p) => [`${p.info.id}.jpg`, p]));
     let done = 0;
     for (let i = 0; i < onDisk.length; i += THUMB_BATCH) {
       const batch = onDisk.slice(i, i + THUMB_BATCH);
@@ -130,6 +133,12 @@ export class ProjectSession {
         ),
       );
       done += batch.length;
+      // Esta tanda ya está en el caché: el grid la toma de ahí.
+      for (const f of batch) {
+        const p = byName.get(f.name);
+        if (p) p.thumb = `file://${dir}/${f.name}`;
+      }
+      this.onChange();
     }
     this.log(`${onDisk.length} miniaturas al caché en ${((Date.now() - started) / 1000).toFixed(1)} s`);
   }
@@ -172,6 +181,7 @@ export class ProjectSession {
     const colorLabel = labels.length ? labels.join(',') : undefined;
     ratePhoto(this.mirrorDir, p.info.id, stars, colorLabel);
     p.info = { ...p.info, stars, colorLabel };
+    this.onChange();
     // El disco ya no tiene todo: que lo sepa quien vea el candado.
     if (!this.pendingInLock) {
       this.ensureOwned();
@@ -190,6 +200,7 @@ export class ProjectSession {
     // El núcleo movió el archivo: la ruta nueva está en la copia de trabajo.
     const fresh = openProject(this.mirrorDir).find((x) => x.id === p.info.id);
     if (fresh) p.info = fresh;
+    this.onChange();
     this.log(`${approved ? 'Aprobada' : 'Aprobación quitada'}: ${p.info.dngPath} (${Date.now() - started} ms)`);
     // Se movieron archivos: la base vuelve al disco ya, para que coincidan.
     this.giveBack();

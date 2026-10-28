@@ -89,17 +89,20 @@ type CullingProps = {
   photos: CullItem[];
   onCleanChange: (clean: boolean) => void;
   backend?: CullingBackend;
-  /** Volver al inicio (prototipo); sin él no hay botón. */
+  /** Regresar (al grid del proyecto, en el prototipo); sin él no hay botón. */
   onBack?: () => void;
+  backLabel?: string;
+  /** Foto con la que abre el visor. */
+  initialIndex?: number;
   /** Importar al proyecto (como en el desktop, desde dentro); sin él no hay botón. */
   onImport?: () => void;
   /** Aviso fijo arriba (p. ej. proyecto en solo lectura) con una acción. */
   notice?: { text: string; detail?: string; warn?: boolean; actionLabel: string; onAction: () => void };
 };
 
-export function Culling({ photos, onCleanChange, backend, onBack, onImport, notice }: CullingProps) {
+export function Culling({ photos, onCleanChange, backend, onBack, backLabel = '‹ Proyectos', initialIndex = 0, onImport, notice }: CullingProps) {
   const count = photos.length;
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() => Math.min(Math.max(0, initialIndex), Math.max(0, count - 1)));
   const [marks, setMarks] = useState<Marks>(() => ({
     approved: photos.map((p) => p.info.culled),
     rating: photos.map((p) => p.info.stars),
@@ -260,7 +263,7 @@ export function Culling({ photos, onCleanChange, backend, onBack, onImport, noti
           <View style={styles.topLeft}>
             {onBack && (
               <Pressable style={({ pressed }) => [styles.navPill, pressed && styles.navPillPressed]} onPress={onBack} hitSlop={8}>
-                <Text style={styles.navPillText}>‹ Proyectos</Text>
+                <Text style={styles.navPillText}>{backLabel}</Text>
               </Pressable>
             )}
             <Text style={styles.chip}>

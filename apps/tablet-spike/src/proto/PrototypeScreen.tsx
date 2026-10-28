@@ -1,22 +1,25 @@
-// Experimento 3.1 del spike (Android, D5): inicio → proyecto del disco →
-// culling, e importar desde dentro del proyecto (como en el desktop), con cada
-// cambio guardado en el disco por SAF. El botón "atrás" de Android regresa:
-// del import al proyecto y del proyecto al inicio.
+// Experimento 3.1 del spike (Android, D5). Como el desktop: inicio (proyectos
+// del disco) → proyecto (grid con filtros) → foto (visor), e importar desde
+// el proyecto. Cada cambio se guarda en el disco por SAF. "‹" y el botón atrás
+// de Android regresan un nivel.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, BackHandler, StyleSheet, Text, View } from 'react-native';
 
 import Saf from '../../modules/saf/src/LumikSafModule';
 import { Culling, type CullingBackend, type CullItem } from '../CullingScreen';
 import { type CardInfo, fetchCovers } from './covers';
 import { createProject, type ProjectForm } from './createProject';
 import { HomeScreen } from './HomeScreen';
-import { readPrefs, savePrefs } from './prefs';
 import { ImportScreen } from './ImportScreen';
 import { lockMessage } from './lock';
+import { readPrefs, savePrefs } from './prefs';
+import { type Filters, NO_FILTERS, ProjectScreen } from './ProjectScreen';
 import { discoverProjects } from './projects';
 import { type DiskProject, ProjectSession } from './session';
 
 type Log = { at: string; text: string; error?: boolean };
+/** Visor abierto: índices (en `session.photos`) que recorre y dónde empieza. */
+type ViewerState = { visible: number[]; position: number };
 
 export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (clean: boolean) => void }) {
   const [trees, setTrees] = useState<string[]>(() => diskTrees(Saf.persistedTrees()));
@@ -29,7 +32,10 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
   }, []);
   const [projects, setProjects] = useState<DiskProject[] | null>(null);
   const [session, setSession] = useState<ProjectSession | null>(null);
-  const [opening, setOpening] = useState<{ name: string; done: number; total: number } | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [fetching, setFetching] = useState<{ done: number; total: number } | null>(null);
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [viewer, setViewer] = useState<ViewerState | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   // Proyecto al que se está importando.
   const [importing, setImporting] = useState<DiskProject | null>(null);
@@ -57,16 +63,22 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     [note],
   );
 
+  const refreshProjects = useCallback(
+    (tree: string) =>
+      run('Buscando proyectos', async () => {
+        const found = await discoverProjects(tree, note);
+        setProjects(found);
+        // Nombres y portadas llegan después, sin frenar la lista.
+        fetchCovers(found, (p, info) => setCards((c) => new Map(c).set(p.uri, info)));
+      }),
+    [note, run],
+  );
+
   useEffect(() => {
     if (!disk) return;
     setProjects(null);
-    run('Buscando proyectos', async () => {
-      const found = await discoverProjects(disk, note);
-      setProjects(found);
-      // Nombres y portadas llegan después, sin frenar la lista.
-      fetchCovers(found, (p, info) => setCards((c) => new Map(c).set(p.uri, info)));
-    });
-  }, [disk, note, run]);
+    refreshProjects(disk);
+  }, [disk, refreshProjects]);
 
   // Al pasar a segundo plano, lo pendiente vuelve al disco (D2).
   useEffect(() => {
@@ -86,28 +98,42 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
 
   const titleOf = (p: DiskProject) => cards.get(p.uri)?.title ?? p.name.split('/').pop() ?? p.name;
 
+  // Abrir: la base y el candado, y a la vista; las miniaturas que falten se
+  // copian al caché en segundo plano (mientras tanto se ven del disco).
   const open = (project: DiskProject) =>
     run('Abriendo proyecto', async () => {
-      const name = titleOf(project);
-      setOpening({ name, done: 0, total: 0 });
-      const s = await ProjectSession.open(project, () => setVersion((v) => v + 1), note);
-      await s.fetchThumbs((done, total) => setOpening({ name, done, total }));
-      sessionRef.current = s;
-      setSession(s);
-      setOpening(null);
-    }).finally(() => setOpening(null));
+      setOpening(titleOf(project));
+      try {
+        const s = await ProjectSession.open(project, () => setVersion((v) => v + 1), note);
+        sessionRef.current = s;
+        setFilters(NO_FILTERS);
+        setViewer(null);
+        setSession(s);
+        s.fetchThumbs((done, total) => setFetching(done < total ? { done, total } : null))
+          .catch((e) => note(`Miniaturas: ${String(e)}`, true))
+          .finally(() => setFetching(null));
+      } finally {
+        setOpening(null);
+      }
+    });
+
+  const closeViewer = () => {
+    setViewer(null);
+    onCleanChange(false);
+  };
 
   const close = () => {
     try {
-      session?.close();
+      sessionRef.current?.close();
     } catch (e) {
       note(`Al cerrar: ${String(e)}`, true);
     }
     sessionRef.current = null;
     setSession(null);
+    setViewer(null);
     onCleanChange(false);
     // Las tarjetas muestran de nuevo quién tiene cada proyecto.
-    if (disk) run('Buscando proyectos', async () => setProjects(await discoverProjects(disk, note)));
+    if (disk) refreshProjects(disk);
   };
 
   // Tomar el control: el candado pasa a esta tablet y se vuelve a abrir desde
@@ -130,10 +156,14 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     setImporting(project);
   };
 
-  // Atrás (gesto o botón de Android): del proyecto al inicio. El import
-  // maneja el suyo; en el inicio, el sistema hace lo de siempre.
+  // Atrás (gesto o botón de Android): del visor al grid y del grid al inicio.
+  // El import maneja el suyo; en el inicio, el sistema hace lo de siempre.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (viewer) {
+        closeViewer();
+        return true;
+      }
       if (sessionRef.current) {
         close();
         return true;
@@ -143,31 +173,38 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     return () => sub.remove();
   });
 
-  // Lo que ve el culling: la vista previa si ya está en el caché, si no la miniatura.
-  const photos: CullItem[] = useMemo(
-    () =>
-      (session?.photos ?? []).map((p) => ({
-        info: p.info,
-        thumb: p.thumb,
-        preview: p.previewReady ? `file://${p.previewPath}` : p.thumb,
-        histPath: p.previewReady ? p.previewPath : p.thumb.replace('file://', ''),
-      })),
-    // `version` cambia cuando llega una vista previa.
+  // El grid y el visor leen `session.photos`, que cambia en su lugar: `version` avisa.
+  const grid = useMemo(
+    () => (session?.photos ?? []).map((p) => ({ info: p.info, thumb: p.thumb })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session, version],
   );
 
-  const backend: CullingBackend | undefined = useMemo(
-    () =>
-      session
-        ? {
-            rate: (i, stars, labels) => session.rate(i, stars, labels),
-            approve: (i, approved) => session.approve(i, approved),
-            onIndex: (i) => [i, i + 1, i - 1, i + 2].forEach((j) => session.ensurePreview(j)),
-          }
-        : undefined,
-    [session],
-  );
+  const items: CullItem[] = useMemo(() => {
+    if (!session || !viewer) return [];
+    return viewer.visible.map((i) => {
+      const p = session.photos[i];
+      return {
+        info: p.info,
+        thumb: p.thumb,
+        preview: p.previewReady ? `file://${p.previewPath}` : p.thumb,
+        // Sin vista previa todavía: la miniatura, si ya está en el caché.
+        histPath: p.previewReady ? p.previewPath : p.thumb.startsWith('file://') ? p.thumb.slice(7) : '',
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, viewer, version]);
+
+  // El visor habla en posiciones de su lista; la sesión, en índices de todas.
+  const backend: CullingBackend | undefined = useMemo(() => {
+    if (!session || !viewer) return undefined;
+    const at = (j: number) => viewer.visible[j];
+    return {
+      rate: (j, stars, labels) => session.rate(at(j), stars, labels),
+      approve: (j, approved) => session.approve(at(j), approved),
+      onIndex: (j) => [j, j + 1, j - 1, j + 2].forEach((k) => k >= 0 && k < viewer.visible.length && session.ensurePreview(at(k))),
+    };
+  }, [session, viewer]);
 
   if (importing) {
     const project = importing;
@@ -187,43 +224,22 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     return (
       <View style={[styles.root, styles.center]}>
         <ActivityIndicator color="#e9c349" size="large" />
-        <Text style={styles.text}>Abriendo {opening.name}</Text>
-        {opening.total > 0 && (
-          <Text style={styles.muted}>
-            Miniaturas {opening.done} / {opening.total}
-          </Text>
-        )}
+        <Text style={styles.text}>Abriendo {opening}</Text>
       </View>
     );
   }
 
-  // Proyecto sin fotos (p. ej. recién creado): lo único que hay que hacer es importar.
-  if (session && photos.length === 0) {
-    const project = session.project;
-    return (
-      <View style={[styles.root, styles.center]}>
-        <Text style={styles.text}>{titleOf(project)}</Text>
-        <Text style={styles.muted}>Todavía no tiene fotos.</Text>
-        <Pressable style={({ pressed }) => [styles.importButton, pressed && { opacity: 0.7 }]} onPress={startImport}>
-          <Text style={styles.importButtonText}>Importar fotos</Text>
-        </Pressable>
-        <Pressable onPress={close} hitSlop={8}>
-          <Text style={styles.muted}>Volver a los proyectos</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  if (session && photos.length > 0) {
+  if (session && viewer && items.length > 0) {
     const lock = session.readOnly;
     return (
       <Culling
-        key={session.project.uri}
-        photos={photos}
+        key={`${session.project.uri}-${viewer.visible[viewer.position]}`}
+        photos={items}
+        initialIndex={viewer.position}
         onCleanChange={onCleanChange}
         backend={backend}
-        onBack={close}
-        onImport={lock ? undefined : startImport}
+        onBack={closeViewer}
+        backLabel="‹ Fotos"
         notice={
           lock
             ? {
@@ -237,6 +253,23 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
               }
             : undefined
         }
+      />
+    );
+  }
+
+  if (session) {
+    const lock = session.readOnly;
+    return (
+      <ProjectScreen
+        title={titleOf(session.project)}
+        photos={grid}
+        filters={filters}
+        onFilters={setFilters}
+        onOpenPhoto={(visible, position) => setViewer({ visible, position })}
+        onBack={close}
+        onImport={lock ? undefined : startImport}
+        fetching={fetching}
+        notice={lock ? `${lockMessage(lock)} · solo lectura. Ábrela en el visor para tomar el control.` : undefined}
       />
     );
   }
@@ -300,9 +333,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#131313' },
   center: { alignItems: 'center', justifyContent: 'center', gap: 12 },
   text: { color: '#fff', fontSize: 18 },
-  muted: { color: '#9a9a9a', fontSize: 15, fontVariant: ['tabular-nums'] },
-  importButton: { minHeight: 56, paddingHorizontal: 28, justifyContent: 'center', borderRadius: 16, backgroundColor: '#3b5bdb', marginTop: 8 },
-  importButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   log: { position: 'absolute', left: 112, bottom: 16, right: 180, gap: 2 },
   logText: { color: '#777', fontSize: 12 },
   logError: { color: '#f87171' },

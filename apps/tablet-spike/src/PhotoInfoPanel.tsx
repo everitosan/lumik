@@ -17,6 +17,10 @@ function useHistogram(path: string) {
   const [hist, setHist] = useState<Histogram | null>(() => cache.get(path) ?? null);
 
   useEffect(() => {
+    if (!path) {
+      setHist(null);
+      return;
+    }
     const cached = cache.get(path);
     if (cached) {
       setHist(cached);

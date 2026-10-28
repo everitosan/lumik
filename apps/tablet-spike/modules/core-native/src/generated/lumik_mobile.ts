@@ -1351,6 +1351,10 @@ export type PhotoInfo = {
      * Etiquetas de color, formato del desktop: `"1,3,5"`.
      */
     colorLabel?: string,
+    /**
+     * Tags del fotógrafo (`"boda,ceremonia"`), para filtrar como el desktop.
+     */
+    tags?: string,
     thumbPath: string,
     previewPath: string,
     /**
@@ -1396,6 +1400,7 @@ const FfiConverterTypePhotoInfo = (() => {
                 dngPath: FfiConverterString.readFromCursor(c), 
                 culled: FfiConverterBool.readFromCursor(c), 
                 colorLabel: FfiConverterOptionalString.readFromCursor(c), 
+                tags: FfiConverterOptionalString.readFromCursor(c), 
                 thumbPath: FfiConverterString.readFromCursor(c), 
                 previewPath: FfiConverterString.readFromCursor(c), 
                 rotation: FfiConverterInt32.readFromCursor(c), 
@@ -1418,6 +1423,7 @@ const FfiConverterTypePhotoInfo = (() => {
             FfiConverterString.writeIntoCursor(value.dngPath, c);
             FfiConverterBool.writeIntoCursor(value.culled, c);
             FfiConverterOptionalString.writeIntoCursor(value.colorLabel, c);
+            FfiConverterOptionalString.writeIntoCursor(value.tags, c);
             FfiConverterString.writeIntoCursor(value.thumbPath, c);
             FfiConverterString.writeIntoCursor(value.previewPath, c);
             FfiConverterInt32.writeIntoCursor(value.rotation, c);
@@ -1439,6 +1445,7 @@ const FfiConverterTypePhotoInfo = (() => {
              FfiConverterString.allocationSize(value.dngPath) +
              FfiConverterBool.allocationSize(value.culled) +
              FfiConverterOptionalString.allocationSize(value.colorLabel) +
+             FfiConverterOptionalString.allocationSize(value.tags) +
              FfiConverterString.allocationSize(value.thumbPath) +
              FfiConverterString.allocationSize(value.previewPath) +
              FfiConverterInt32.allocationSize(value.rotation) +
