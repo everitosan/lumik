@@ -3,8 +3,14 @@ import { NativeModule, requireNativeModule } from 'expo';
 
 import type { SafEntry } from './LumikSaf.types';
 
-/** Disco externo montado (USB o tarjeta). */
-export type SafVolume = { uuid: string; label: string; readOnly: boolean };
+/** Disco externo montado (USB o tarjeta). Capacidad y espacio libre, si Android los da. */
+export type SafVolume = {
+  uuid: string;
+  label: string;
+  readOnly: boolean;
+  totalBytes: number | null;
+  freeBytes: number | null;
+};
 
 declare class LumikSafModule extends NativeModule<{ onVolumesChanged: (e: { action: string }) => void }> {
   /** Discos externos montados; la memoria interna no cuenta. */

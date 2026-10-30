@@ -8,7 +8,10 @@ import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.StatFs
+import android.util.Log
 import android.os.storage.StorageManager
+import android.os.storage.StorageVolume
 import android.provider.Settings
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
@@ -21,6 +24,8 @@ import expo.modules.kotlin.modules.ModuleDefinition
 // Acceso a carpetas por Storage Access Framework (experimento 2.5 del spike).
 // La app elige la carpeta del disco una vez y el permiso queda guardado; Rust
 // lee y escribe por fd (`openFd`), no por ruta.
+private const val TAG = "LumikSaf"
+
 class LumikSafModule : Module() {
   private var pendingPick: Promise? = null
   private var pendingFiles: Promise? = null
@@ -58,8 +63,9 @@ class LumikSafModule : Module() {
       volumeReceiver = null
     }
 
-    // Discos externos montados (USB, tarjeta): uuid, nombre y si son de solo
-    // lectura. La memoria interna no cuenta.
+    // Discos externos montados (USB, tarjeta): uuid, nombre, si son de solo
+    // lectura y, si Android los da, capacidad y espacio libre. La memoria
+    // interna no cuenta.
     Function("volumes") {
       val context = requireNotNull(appContext.reactContext)
       val storage = context.getSystemService(StorageManager::class.java)
@@ -67,10 +73,13 @@ class LumikSafModule : Module() {
         .filter { !it.isPrimary && it.uuid != null }
         .filter { it.state == Environment.MEDIA_MOUNTED || it.state == Environment.MEDIA_MOUNTED_READ_ONLY }
         .map {
+          val (total, free) = volumeSpace(it)
           mapOf(
             "uuid" to it.uuid,
             "label" to it.getDescription(context),
             "readOnly" to (it.state == Environment.MEDIA_MOUNTED_READ_ONLY),
+            "totalBytes" to total,
+            "freeBytes" to free,
           )
         }
     }
@@ -312,5 +321,50 @@ class LumikSafModule : Module() {
   companion object {
     private const val PICK_TREE = 4271
     private const val PICK_FILES = 4272
+  }
+
+  // Capacidad y espacio libre del volumen: `StatFs` sobre su carpeta (API 30+)
+  // y, si no se puede, las columnas de la raíz de `ExternalStorageProvider`.
+  // (null, null) si Android no da ninguno de los dos.
+  private fun volumeSpace(volume: StorageVolume): Pair<Long?, Long?> {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      try {
+        val dir = volume.directory
+        if (dir != null) {
+          val stat = StatFs(dir.path)
+          if (stat.totalBytes > 0) {
+            Log.i(TAG, "volumeSpace ${volume.uuid}: StatFs ${stat.totalBytes}/${stat.availableBytes}")
+            return Pair(stat.totalBytes, stat.availableBytes)
+          }
+        }
+      } catch (e: Exception) {
+        Log.i(TAG, "volumeSpace ${volume.uuid}: StatFs falló: $e")
+      }
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      try {
+        val roots = DocumentsContract.buildRootsUri("com.android.externalstorage.documents")
+        val columns = arrayOf(
+          DocumentsContract.Root.COLUMN_ROOT_ID,
+          DocumentsContract.Root.COLUMN_CAPACITY_BYTES,
+          DocumentsContract.Root.COLUMN_AVAILABLE_BYTES,
+        )
+        resolver.query(roots, columns, null, null, null)?.use { c ->
+          while (c.moveToNext()) {
+            if (c.getString(0) != volume.uuid) continue
+            val total = if (c.isNull(1)) null else c.getLong(1)
+            val free = if (c.isNull(2)) null else c.getLong(2)
+            if (total != null && total > 0) {
+              Log.i(TAG, "volumeSpace ${volume.uuid}: raíces $total/$free")
+              return Pair(total, free)
+            }
+          }
+        }
+      } catch (e: Exception) {
+        Log.i(TAG, "volumeSpace ${volume.uuid}: raíces fallaron: $e")
+      }
+    }
+    Log.i(TAG, "volumeSpace ${volume.uuid}: sin dato")
+    return Pair(null, null)
   }
 }

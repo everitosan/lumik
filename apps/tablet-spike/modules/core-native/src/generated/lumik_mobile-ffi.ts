@@ -90,6 +90,7 @@ interface NativeModuleInterface {
     ubrn_uniffi_lumik_mobile_fn_func_copy_path_to_fd(path: Uint8Array, dstFd: number, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     ubrn_uniffi_lumik_mobile_fn_func_create_project_db(workDir: Uint8Array, name: Uint8Array, description: Uint8Array, sessionDate: Uint8Array, creatorId: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     ubrn_uniffi_lumik_mobile_fn_func_cull_photo(mirrorDir: Uint8Array, photoId: Uint8Array, culled: number, disk: bigint, uniffi_out_err: UniffiRustCallStatus): void;
+    ubrn_uniffi_lumik_mobile_fn_func_disk_name_view(json: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     ubrn_uniffi_lumik_mobile_fn_func_edit_project_details(mirrorDir: Uint8Array, name: Uint8Array, sessionDate: Uint8Array, description: Uint8Array, renameFiles: number, disk: bigint, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     ubrn_uniffi_lumik_mobile_fn_func_fingerprint_fd(fd: number, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     ubrn_uniffi_lumik_mobile_fn_func_get_view_settings(projectDir: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
@@ -123,6 +124,7 @@ interface NativeModuleInterface {
     ubrn_uniffi_lumik_mobile_fn_func_start_progress_burst(count: number, intervalUs: bigint, listener: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_start_test_import(sourceDir: Uint8Array, projectDir: Uint8Array, listener: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_trash_photo(mirrorDir: Uint8Array, photoId: Uint8Array, disk: bigint, uniffi_out_err: UniffiRustCallStatus): void;
+    ubrn_uniffi_lumik_mobile_fn_func_user_disk_name_json(name: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     ubrn_uniffi_lumik_mobile_fn_func_vacuum_into(dbPath: Uint8Array, outPath: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_write_fd_string(fd: number, text: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
     ubrn_uniffi_lumik_mobile_fn_func_write_text(path: Uint8Array, text: Uint8Array, uniffi_out_err: UniffiRustCallStatus): void;
@@ -151,6 +153,7 @@ interface NativeModuleInterface {
     ubrn_uniffi_lumik_mobile_checksum_func_copy_path_to_fd(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_create_project_db(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_cull_photo(): number;
+    ubrn_uniffi_lumik_mobile_checksum_func_disk_name_view(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_edit_project_details(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_fingerprint_fd(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_get_view_settings(): number;
@@ -184,6 +187,7 @@ interface NativeModuleInterface {
     ubrn_uniffi_lumik_mobile_checksum_func_start_progress_burst(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_start_test_import(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_trash_photo(): number;
+    ubrn_uniffi_lumik_mobile_checksum_func_user_disk_name_json(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_vacuum_into(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_write_fd_string(): number;
     ubrn_uniffi_lumik_mobile_checksum_func_write_text(): number;

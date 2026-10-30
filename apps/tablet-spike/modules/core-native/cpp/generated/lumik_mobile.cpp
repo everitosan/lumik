@@ -485,6 +485,14 @@ extern "C" {
         /*handle*/ uint64_t disk, 
         RustCallStatus *uniffi_out_err
     );
+    RustBuffer uniffi_lumik_mobile_fn_func_disk_name_view(
+        RustBuffer json, 
+        RustCallStatus *uniffi_out_err
+    );
+    RustBuffer uniffi_lumik_mobile_fn_func_user_disk_name_json(
+        RustBuffer name, 
+        RustCallStatus *uniffi_out_err
+    );
     void uniffi_lumik_mobile_fn_func_start_histogram(
         RustBuffer path, 
         /*handle*/ uint64_t listener, 
@@ -879,6 +887,10 @@ extern "C" {
     uint16_t uniffi_lumik_mobile_checksum_func_restore_photo(
     );
     uint16_t uniffi_lumik_mobile_checksum_func_trash_photo(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_disk_name_view(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_user_disk_name_json(
     );
     uint16_t uniffi_lumik_mobile_checksum_func_start_histogram(
     );
@@ -7077,6 +7089,22 @@ NativeLumikMobile::NativeLumikMobile(
             return this->cpp_uniffi_lumik_mobile_fn_func_trash_photo(rt, thisVal, args, count);
         }
     );
+    props["ubrn_uniffi_lumik_mobile_fn_func_disk_name_view"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_disk_name_view"),
+        1,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_disk_name_view(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_user_disk_name_json"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_user_disk_name_json"),
+        1,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_user_disk_name_json(rt, thisVal, args, count);
+        }
+    );
     props["ubrn_uniffi_lumik_mobile_fn_func_start_histogram"] = jsi::Function::createFromHostFunction(
         rt,
         jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_start_histogram"),
@@ -7403,6 +7431,22 @@ NativeLumikMobile::NativeLumikMobile(
         0,
         [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_uniffi_lumik_mobile_checksum_func_trash_photo(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_disk_name_view"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_disk_name_view"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_disk_name_view(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_user_disk_name_json"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_user_disk_name_json"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_user_disk_name_json(rt, thisVal, args, count);
         }
     );
     props["ubrn_uniffi_lumik_mobile_checksum_func_start_histogram"] = jsi::Function::createFromHostFunction(
@@ -8600,6 +8644,26 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_trash_photo(jsi::R
         
         return jsi::Value::undefined();
 }
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_disk_name_view(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        auto value = uniffi_lumik_mobile_fn_func_disk_name_view(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_user_disk_name_json(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        auto value = uniffi_lumik_mobile_fn_func_user_disk_name_json(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
+}
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_start_histogram(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
         uniffi_lumik_mobile_fn_func_start_histogram(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker, args[1]), 
@@ -8987,6 +9051,20 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_restore_phot
 }
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_trash_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         auto value = uniffi_lumik_mobile_checksum_func_trash_photo(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_disk_name_view(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_disk_name_view(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_user_disk_name_json(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_user_disk_name_json(
         );
 
         

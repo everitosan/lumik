@@ -4,6 +4,7 @@
 //! datos de captura e histograma) y 2.5 (copias por fd y `project.db` espejado).
 
 mod disk;
+mod disk_name;
 mod histogram;
 mod import;
 mod lock;

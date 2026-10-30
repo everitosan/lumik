@@ -128,6 +128,26 @@ export function cullPhoto(mirrorDir: string, photoId: string, culled: boolean, d
     }
 
 /**
+ * Interpreta el contenido de `lumik/.disk.json` (o `None` si no hay). Uno
+ * ilegible cuenta como sin nombre, como en el núcleo.
+ */
+export function diskNameView(json: string | undefined): DiskNameView | undefined {
+    const __rb: Uint8Array = uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_disk_name_view(
+        FfiConverterOptionalString.lower(json, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterOptionalTypeDiskNameView.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * Editar proyecto, como `edit_project` del desktop: valida, guarda nombre,
  * fecha (con la misma regla de fecha efectiva) y descripción en la copia de
  * trabajo y, si se pide, renombra las fotos con el `RenameProjectFiles` del
@@ -705,6 +725,25 @@ export function trashPhoto(mirrorDir: string, photoId: string, disk: DiskFiles):
     }
 
 /**
+ * JSON de un nombre puesto a mano en la tablet.
+ */
+export function userDiskNameJson(name: string): string {
+    const __rb: Uint8Array = uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_user_disk_name_json(
+        FfiConverterString.lower(name, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * Escribe en `out_path` una copia compacta y consistente de la base en
  * `db_path` (sin `-wal` aparte), lista para devolverla al disco.
  */
@@ -1095,6 +1134,52 @@ const FfiConverterTypeDiskFingerprint = (() => {
         allocationSize(value: TypeName): number {
             return FfiConverterUInt64.allocationSize(value.size) +
              FfiConverterString.allocationSize(value.sha256);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
+export type DiskNameView = {
+    name: string,
+    /**
+     * `true` si es la etiqueta copiada por un desktop: no se cambia a mano.
+     */
+    fromLabel: boolean
+}
+
+/**
+ * Generated factory for {@link DiskNameView} record objects.
+ */
+export const DiskNameView = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<DiskNameView, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<DiskNameView>,
+    });
+})();
+
+const FfiConverterTypeDiskNameView = (() => {
+    type TypeName = DiskNameView;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                name: FfiConverterString.readFromCursor(c), 
+                fromLabel: FfiConverterBool.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.name, c);
+            FfiConverterBool.writeIntoCursor(value.fromLabel, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.name) +
+             FfiConverterBool.allocationSize(value.fromLabel);
             
         }
     };
@@ -3844,6 +3929,9 @@ const FfiConverterOptionalFloat64 = new FfiConverterOptional(FfiConverterFloat64
 // FfiConverter for Array<DiskFile>
 const FfiConverterSequenceTypeDiskFile = new FfiConverterArray(FfiConverterTypeDiskFile);
 
+// FfiConverter for DiskNameView | undefined
+const FfiConverterOptionalTypeDiskNameView = new FfiConverterOptional(FfiConverterTypeDiskNameView);
+
 // FfiConverter for Array<PhotoInfo>
 const FfiConverterSequenceTypePhotoInfo = new FfiConverterArray(FfiConverterTypePhotoInfo);
 
@@ -3889,6 +3977,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_cull_photo() !== 37748) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_cull_photo");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_disk_name_view() !== 28461) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_disk_name_view");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_edit_project_details() !== 43456) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_edit_project_details");
@@ -3989,6 +4080,9 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_trash_photo() !== 43559) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_trash_photo");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_user_disk_name_json() !== 35935) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_user_disk_name_json");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_vacuum_into() !== 14624) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_vacuum_into");
     }
@@ -4078,6 +4172,7 @@ export default Object.freeze({
     FfiConverterTypeDiskFiles,
     FfiConverterTypeDiskFingerprint,
     FfiConverterTypeDiskMove,
+    FfiConverterTypeDiskNameView,
     FfiConverterTypeEditOutcome,
     FfiConverterTypeHistogram,
     FfiConverterTypeHistogramListener,

@@ -21,7 +21,17 @@ type Props = {
   labelOf: (tree: string) => string;
   /** Discos conectados sin acceso: se ofrece darlo en un toque. */
   pendingVolumes: SafVolume[];
+  /** Descripción de un disco sin acceso. */
+  pendingLabelOf: (volume: SafVolume) => string;
   onGrant: (uuid: string) => void;
+  /** De dónde viene el nombre del disco: etiqueta (no se cambia), a mano, ninguno, o disco de solo lectura. */
+  nameSourceOf: (tree: string) => 'label' | 'user' | 'none' | 'readonly';
+  /** Disco al que se le está poniendo nombre. */
+  naming: { tree: string; suggestion: string; current?: string } | null;
+  onRename: (tree: string) => void;
+  /** Guarda el nombre; si falla, lanza y el formulario muestra el error. */
+  onSaveName: (tree: string, name: string) => void;
+  onCloseNaming: () => void;
   /** Discos expulsados desde la app, que ya se pueden desconectar. */
   ejected: string[];
   onEject: (tree: string) => void;
@@ -77,7 +87,7 @@ export function HomeScreen(props: Props) {
       <View style={styles.main}>
         {pendingVolumes.map((v) => (
           <View key={v.uuid} style={styles.banner}>
-            <Text style={styles.bannerText}>⛁ {v.label} está conectado y Lumik aún no tiene acceso.</Text>
+            <Text style={styles.bannerText}>⛁ {props.pendingLabelOf(v)} está conectado y Lumik aún no tiene acceso.</Text>
             <Pressable style={({ pressed }) => [styles.bannerButton, pressed && styles.pressed]} onPress={() => onGrant(v.uuid)}>
               <Text style={styles.bannerButtonText}>Dar acceso</Text>
             </Pressable>
@@ -106,9 +116,19 @@ export function HomeScreen(props: Props) {
             onUnEject={props.onUnEject}
             onStorageSettings={props.onStorageSettings}
             onPickDisk={onPickDisk}
+            nameSourceOf={props.nameSourceOf}
+            onRename={props.onRename}
           />
         )}
         {creating && <NewProjectSheet trees={trees} labelOf={labelOf} onClose={() => setCreating(false)} onCreate={onCreate} />}
+        {props.naming && (
+          <DiskNameSheet
+            key={props.naming.tree}
+            {...props.naming}
+            onSave={(name) => props.onSaveName(props.naming!.tree, name)}
+            onClose={props.onCloseNaming}
+          />
+        )}
       </View>
     </View>
   );
@@ -124,6 +144,8 @@ function Disks({
   onUnEject,
   onStorageSettings,
   onPickDisk,
+  nameSourceOf,
+  onRename,
 }: {
   trees: string[];
   projects: DiskProject[] | null;
@@ -134,6 +156,8 @@ function Disks({
   onUnEject: (tree: string) => void;
   onStorageSettings: () => void;
   onPickDisk: () => void;
+  nameSourceOf: Props['nameSourceOf'];
+  onRename: (tree: string) => void;
 }) {
   return (
     <>
@@ -155,6 +179,17 @@ function Disks({
               <Text style={styles.diskCurrent}>
                 {projects.filter((p) => p.tree === t).length} proyectos
               </Text>
+            )}
+            {/* El nombre que viene de la etiqueta se cambia en la compu, no aquí. */}
+            {nameSourceOf(t) === 'label' ? (
+              <Text style={styles.muted}>Etiqueta del disco</Text>
+            ) : (
+              !treeLabel(t).startsWith('primary:') &&
+              nameSourceOf(t) !== 'readonly' && (
+                <Pressable style={({ pressed }) => [styles.eject, pressed && styles.pressed]} onPress={() => onRename(t)} disabled={!!busy}>
+                  <Text style={styles.ejectText}>{nameSourceOf(t) === 'user' ? 'Cambiar nombre' : 'Poner nombre'}</Text>
+                </Pressable>
+              )
             )}
             {/* La memoria interna no se expulsa. */}
             {!treeLabel(t).startsWith('primary:') && (
@@ -278,6 +313,67 @@ function NewProjectSheet({
               disabled={saving}
             >
               <Text style={styles.createText}>{saving ? 'Creando…' : 'Crear'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// Nombre del disco, guardado en el disco (`lumik/.disk.json`) para verlo igual
+// en otras tablets. Sale al dar acceso a un disco sin nombre y desde "Discos".
+function DiskNameSheet({
+  suggestion,
+  current,
+  onSave,
+  onClose,
+}: {
+  suggestion: string;
+  current?: string;
+  onSave: (name: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(current ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const valid = name.trim().length > 0;
+
+  const save = () => {
+    if (!valid) return;
+    try {
+      onSave(name);
+      onClose();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.scrim}>
+        <View style={styles.sheet}>
+          <Text style={styles.sheetTitle}>Nombre del disco</Text>
+          <Text style={styles.muted}>
+            Android no da el nombre de este disco. Ponle uno para reconocerlo; se guarda en el disco y si lo conectas a una
+            compu con Lumik, se usa su etiqueta.
+          </Text>
+          <Text style={styles.label}>Nombre</Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            placeholder={suggestion}
+            placeholderTextColor="#666"
+            autoFocus
+            onSubmitEditing={save}
+          />
+          {error && <Text style={styles.error}>{error}</Text>}
+          <View style={styles.sheetButtons}>
+            <Pressable style={styles.textButton} onPress={onClose}>
+              <Text style={styles.textButtonText}>{current ? 'Cancelar' : 'Omitir'}</Text>
+            </Pressable>
+            <Pressable style={({ pressed }) => [styles.create, pressed && styles.pressed, !valid && styles.off]} onPress={save}>
+              <Text style={styles.createText}>Guardar</Text>
             </Pressable>
           </View>
         </View>

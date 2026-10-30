@@ -9,6 +9,7 @@ import Saf, { type SafVolume } from '../../modules/saf/src/LumikSafModule';
 import { Culling, type CullingBackend, type CullItem } from '../CullingScreen';
 import { type CardInfo, fetchCovers } from './covers';
 import { createProject, type ProjectForm } from './createProject';
+import { type DiskInfo, genericName, readDiskInfo, volumeOf, writeUserDiskName } from './diskName';
 import { HomeScreen } from './HomeScreen';
 import { deleteProject, editProject, toggleArchived } from './projectActions';
 import { ImportScreen } from './ImportScreen';
@@ -44,6 +45,10 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
   const [importing, setImporting] = useState<DiskProject | null>(null);
   const [version, setVersion] = useState(0);
   const [log, setLog] = useState<Log[]>([]);
+  // Disco recién con acceso y sin nombre: se pide uno (o se omite).
+  const [naming, setNaming] = useState<string | null>(null);
+  // Sube al guardar un nombre, para volver a leer los discos.
+  const [diskVersion, setDiskVersion] = useState(0);
   const sessionRef = useRef<ProjectSession | null>(null);
   // Como el desktop: un proyecto sin fotos abre el import, una sola vez.
   const autoImported = useRef(new Set<string>());
@@ -117,12 +122,38 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
       setTrees(diskTrees(Saf.persistedTrees()));
     });
 
-  // Acceso en un toque a un disco conectado que aún no lo tiene.
+  // Acceso en un toque a un disco conectado que aún no lo tiene. Si no tiene
+  // nombre guardado (`lumik/.disk.json`), se pide uno.
   const grantVolume = (uuid: string) =>
     run('Dando acceso al disco', async () => {
-      await Saf.requestVolumeAccess(uuid);
+      const tree = await Saf.requestVolumeAccess(uuid);
       refreshDisks();
+      const volume = volumes.find((v) => v.uuid === uuid);
+      if (tree && volume && !volume.readOnly && !readDiskInfo(tree).saved) setNaming(tree);
     });
+
+  const saveDiskName = (tree: string, name: string) => {
+    writeUserDiskName(tree, name);
+    setDiskVersion((v) => v + 1);
+    note(`Disco nombrado: ${name.trim()}`);
+  };
+
+  // Nombre guardado y tipo de cada disco con acceso; se leen al cambiar los discos.
+  const diskInfo = useMemo(() => {
+    const m = new Map<string, DiskInfo>();
+    for (const t of [...trees, ...ejected]) m.set(t, readDiskInfo(t));
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trees, ejected, volumes, diskVersion]);
+
+  const diskLabel = (tree: string) => {
+    const id = decodeURIComponent(tree.split('/tree/')[1] ?? tree);
+    if (id.startsWith('primary:')) return `Memoria interna · ${id.slice(8)}`;
+    const info = diskInfo.get(tree) ?? readDiskInfo(tree);
+    const volume = volumes.find((v) => v.uuid === volumeOf(tree));
+    const count = projects?.filter((p) => p.tree === tree).length;
+    return `${info.saved?.name ?? genericName(info.kind, volume, count)} · ${volumeOf(tree)}`;
+  };
 
   // Expulsar (como el desktop): lo abierto en ese disco se cierra, lo pendiente
   // vuelve a él y se suelta el candado. Android no deja a una app desmontarlo:
@@ -137,7 +168,7 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
     ejectedRef.current = next;
     setEjected(next);
     setTrees((prev) => prev.filter((t) => t !== tree));
-    note(`${diskLabel(tree, volumes)}: ya puedes desconectarlo`);
+    note(`${diskLabel(tree)}: ya puedes desconectarlo`);
   };
 
   const unEject = (tree: string) => {
@@ -386,9 +417,24 @@ export default function PrototypeScreen({ onCleanChange }: { onCleanChange: (cle
         trees={trees}
         projects={projects}
         busy={busy}
-        labelOf={(t) => diskLabel(t, volumes)}
+        labelOf={diskLabel}
         pendingVolumes={volumes.filter((v) => !v.readOnly && !Saf.persistedTrees().some((t) => volumeOf(t) === v.uuid))}
+        // Sin acceso no se puede leer el contenido: solo "Disco" y su capacidad.
+        pendingLabelOf={(v) => `${genericName('Disco', v)} · ${v.uuid}`}
         onGrant={grantVolume}
+        nameSourceOf={(t) => {
+          if (volumes.find((v) => v.uuid === volumeOf(t))?.readOnly) return 'readonly';
+          const saved = diskInfo.get(t)?.saved;
+          return saved ? (saved.fromLabel ? 'label' : 'user') : 'none';
+        }}
+        naming={
+          naming
+            ? { tree: naming, suggestion: diskLabel(naming).replace(/ · [^·]+$/, ''), current: diskInfo.get(naming)?.saved?.name }
+            : null
+        }
+        onRename={setNaming}
+        onSaveName={saveDiskName}
+        onCloseNaming={() => setNaming(null)}
         ejected={ejected}
         onEject={eject}
         onUnEject={unEject}
@@ -466,17 +512,6 @@ function toSettings(f: Filters, mode: ViewMode): ViewSettings {
     selectedColors: [...f.colors].join(','),
     viewMode: mode,
   };
-}
-
-/** "content://…/tree/FB5F-B3EF%3Alumik" → "FB5F-B3EF" (el uuid del volumen). */
-const volumeOf = (tree: string) => decodeURIComponent(tree.split('/tree/')[1] ?? tree).split(':')[0];
-
-/** El nombre del disco que da Android ("Disco USB SanDisk") o, si no, su id. */
-function diskLabel(tree: string, volumes: SafVolume[]): string {
-  const id = decodeURIComponent(tree.split('/tree/')[1] ?? tree);
-  const volume = volumes.find((v) => v.uuid === volumeOf(tree));
-  if (id.startsWith('primary:')) return `Memoria interna · ${id.slice(8)}`;
-  return volume ? volume.label : id;
 }
 
 // Los permisos que sirven como disco: volumen conectado y que no sea una

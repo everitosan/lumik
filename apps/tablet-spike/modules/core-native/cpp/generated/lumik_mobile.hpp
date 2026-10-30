@@ -65,6 +65,8 @@ class NativeLumikMobile : public jsi::HostObject {
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_rate_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_restore_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_trash_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_fn_func_disk_name_view(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_fn_func_user_disk_name_json(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_start_histogram(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_make_placeholders(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_fn_func_start_card_import(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
@@ -106,6 +108,8 @@ class NativeLumikMobile : public jsi::HostObject {
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_rate_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_restore_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_trash_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_checksum_func_disk_name_view(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
+    jsi::Value cpp_uniffi_lumik_mobile_checksum_func_user_disk_name_json(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_start_histogram(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_make_placeholders(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
     jsi::Value cpp_uniffi_lumik_mobile_checksum_func_start_card_import(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count);
