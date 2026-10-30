@@ -87,7 +87,8 @@ crates/lumik-core/src/              # núcleo compartido (desktop y tablet)
     search.rs                       #   SearchQuery: operadores de búsqueda y texto libre (ida y vuelta)
     embedding.rs                    #   paquete del modelo de búsqueda por contenido (CLIP_MULTILINGUAL), AnalysisMode, vector ↔ bytes
     exported.rs                     #   exported_id (uuid5) y extensiones de _exported/
-    device.rs                       #   DetectedDevice
+    device.rs                       #   DetectedDevice (name mostrado + label real del sistema de archivos)
+    disk_name.rs                    #   nombre del disco en lumik/.disk.json: formato, prioridad y cuándo copiar la etiqueta
     project.rs                      #   ProjectFolder (slug/date_parts/path), compare_dashboard
     error.rs                        #   DomainError
 
@@ -119,6 +120,7 @@ src-tauri/src/                      # shell del desktop
     imaging.rs                      #   DesktopImaging / AndroidImaging (thumbnails/previews)
     import_signing.rs               #   firma del import: pool de exiftool (desktop) / rawler + XMP (Android)
     lock.rs                         #   FsLockStore (escritura atómica de .lumik-lock), nombre del equipo
+    disk_name.rs                    #   FsDiskNameStore: lee y escribe (atómico) lumik/.disk.json
     app_data.rs                     #   ruta de lumik.db por plataforma
     devices.rs, finder_tags.rs, folder.rs, fs.rs, progress.rs, import_pipeline.rs
     backup_auth.rs, catalog.rs, backup_client.rs   # clientes HTTP del server de respaldo
@@ -167,6 +169,14 @@ y solo sirve para localizar y expulsar.
 lee. Limitación: si el mismo `project.id` está en dos discos montados, solo se
 lista uno.
 
+**Nombre del disco:** se muestra la etiqueta del sistema de archivos
+(`DetectedDevice.label`; en macOS, la carpeta de `/Volumes/`), si no el nombre de
+`lumik/.disk.json` y si no uno genérico (punto de montaje; "SD Card"/"USB Drive" en
+Android). `refresh_open_projects` copia la etiqueta a `lumik/.disk.json` en los discos
+con escritura y carpeta `lumik/` cuando el archivo falta o tiene otro nombre, para que
+la tablet Android (que no recibe la etiqueta) muestre el mismo nombre. Es el único
+archivo que se escribe en un disco para nombrarlo; los discos sin `lumik/` no se tocan.
+
 **Discos de solo lectura:** `DetectedDevice.read_only` (`statvfs`/`ST_RDONLY` en
 Linux y macOS, `GetVolumeInformationW` en Windows). Se registran y se listan con
 la marca "Solo lectura", pero `refresh_open_projects` no abre sus `project.db`
@@ -193,6 +203,7 @@ como `project_locked:<dispositivo>`); `delete_project` y `edit_project` usan
 ## Estructura de carpetas en disco externo
 
 ```
+{mount_point}/lumik/.disk.json  # nombre del disco (etiqueta copiada o puesto en la tablet)
 {mount_point}/lumik/{año}/{mes}/{día}_{nombre-proyecto}/
   project.db
   _media/

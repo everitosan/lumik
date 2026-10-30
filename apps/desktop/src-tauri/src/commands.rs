@@ -283,6 +283,8 @@ pub fn refresh_open_projects(
             continue;
         }
 
+        sync_disk_name(device);
+
         // Discover project databases on this device
         let projects = discover_projects_on_device(&device.mount_point, &device.uuid);
         for project_db in projects {
@@ -290,6 +292,28 @@ pub fn refresh_open_projects(
             if !registry.contains(&id) {
                 registry.insert(id, Arc::new(project_db));
             }
+        }
+    }
+}
+
+/// Copia la etiqueta del disco a `lumik/.disk.json` para que la tablet, que no
+/// la recibe, muestre el mismo nombre (spec `device-detection`). Solo en discos
+/// de Lumik con etiqueta, y solo si el archivo no la tiene ya.
+fn sync_disk_name(device: &crate::devices::DetectedDevice) {
+    use crate::domain::disk_name::label_update;
+    use crate::infrastructure::disk_name::FsDiskNameStore;
+
+    let Some(label) = device.label.as_deref() else { return };
+    let mount = std::path::Path::new(&device.mount_point);
+    if !mount.join("lumik").is_dir() {
+        return;
+    }
+    let store = FsDiskNameStore;
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    if let Some(update) = label_update(label, store.read(mount).as_ref(), &now) {
+        match store.write(mount, &update) {
+            Ok(()) => log::info!("sync_disk_name: {} → \"{}\"", device.uuid, update.name),
+            Err(e) => log::warn!("sync_disk_name: {}: {}", device.uuid, e),
         }
     }
 }
@@ -314,6 +338,7 @@ mod tests {
         DetectedDevice {
             uuid: uuid.into(),
             name: uuid.into(),
+            label: None,
             mount_point: mount.to_string_lossy().into_owned(),
             total_bytes: None,
             available_bytes: None,
@@ -348,6 +373,46 @@ mod tests {
         assert!(!ro_project.join("project.db-wal").exists());
         let known: Vec<String> = global.get_known_devices().unwrap().into_iter().map(|d| d.uuid).collect();
         assert!(known.contains(&"RO".to_string()), "el disco de solo lectura se registra igual");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn label_is_copied_only_to_lumik_disks() {
+        use crate::domain::disk_name::{DiskName, DiskNameSource, DISK_NAME_FILE};
+        use crate::infrastructure::disk_name::FsDiskNameStore;
+
+        let root = std::env::temp_dir().join(format!("lumik_dn_{}", uuid::Uuid::new_v4().as_simple()));
+        let lumik_disk = root.join("lumik_disk");
+        let plain = root.join("plain");
+        let unlabeled = root.join("unlabeled");
+        std::fs::create_dir_all(lumik_disk.join("lumik")).unwrap();
+        std::fs::create_dir_all(unlabeled.join("lumik")).unwrap();
+        std::fs::create_dir_all(&plain).unwrap();
+        let labeled = |uuid: &str, mount: &std::path::Path| DetectedDevice {
+            label: Some("SEAGATE".into()),
+            ..device(uuid, mount, false)
+        };
+        let global = Arc::new(GlobalDatabase::new(root.join("lumik.db")).unwrap());
+        let registry = ProjectRegistry::new();
+        let scan = |devices: Vec<DetectedDevice>| refresh_open_projects(&FakeScanner(devices), &global, &registry);
+
+        // Un nombre puesto a mano en la tablet: la etiqueta lo reemplaza.
+        FsDiskNameStore
+            .write(&lumik_disk, &DiskName::new("SSD Bodas", DiskNameSource::User, "2026-10-01T00:00:00Z"))
+            .unwrap();
+        scan(vec![labeled("A", &lumik_disk), labeled("B", &plain), device("C", &unlabeled, false)]);
+
+        let saved = FsDiskNameStore.read(&lumik_disk).expect("se escribe en el disco de Lumik");
+        assert_eq!((saved.name.as_str(), saved.source), ("SEAGATE", DiskNameSource::Label));
+        assert!(!plain.join("lumik").exists(), "un disco sin lumik/ no se toca");
+        assert!(!unlabeled.join(DISK_NAME_FILE).exists(), "sin etiqueta no se escribe");
+
+        // Con el nombre al día, otro escaneo no reescribe el archivo.
+        let old = DiskName::new("SEAGATE", DiskNameSource::Label, "2000-01-01T00:00:00Z");
+        FsDiskNameStore.write(&lumik_disk, &old).unwrap();
+        scan(vec![labeled("A", &lumik_disk)]);
+        assert_eq!(FsDiskNameStore.read(&lumik_disk), Some(old));
 
         let _ = std::fs::remove_dir_all(&root);
     }

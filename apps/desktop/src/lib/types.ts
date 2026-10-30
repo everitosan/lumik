@@ -77,6 +77,8 @@ export interface KnownDevice {
 export interface DetectedDevice {
   uuid: string;
   name: string;
+  /** File-system label reported by the OS, if any; `name` may come from `lumik/.disk.json`. */
+  label: string | null;
   mount_point: string;
   total_bytes: number | null;
   available_bytes: number | null;

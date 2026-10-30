@@ -26,13 +26,13 @@ pub fn scan_mounted_devices() -> Vec<DetectedDevice> {
 
             let read_only = is_read_only(&mount_point);
 
-            let name = get_volume_label(disk)
-                .filter(|s| !s.is_empty())
-                .unwrap_or_else(|| generate_device_name(&mount_point));
+            let label = get_volume_label(disk, &mount_point).filter(|s| !s.is_empty());
+            let name = device_name(label.as_deref(), &mount_point, || generate_device_name(&mount_point));
 
             devices.push(DetectedDevice {
                 uuid,
                 name,
+                label,
                 mount_point,
                 total_bytes: Some(disk.total_space()),
                 available_bytes: Some(disk.available_space()),
@@ -88,13 +88,14 @@ fn scan_mounted_devices_android() -> Vec<DetectedDevice> {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| mount_point.to_string());
 
-        let name = friendly_volume_name(&uuid);
+        let name = device_name(None, mount_point, || friendly_volume_name(&uuid));
         debug!("scan_mounted_devices_android: volume {} → \"{}\"", uuid, name);
 
         let (total_bytes, available_bytes) = statvfs_space(mount_point);
         devices.push(DetectedDevice {
             uuid: uuid.clone(),
             name,
+            label: None,
             mount_point: mount_point.to_string(),
             total_bytes,
             available_bytes,
@@ -415,14 +416,37 @@ fn bsd_disk_id(device_name: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Name shown for a device: its label, else the name saved in `lumik/.disk.json`,
+/// else `fallback` (spec `device-detection`, "Prioridad del nombre mostrado").
+fn device_name(label: Option<&str>, mount_point: &str, fallback: impl FnOnce() -> String) -> String {
+    use crate::domain::disk_name::display_name;
+    use crate::infrastructure::disk_name::FsDiskNameStore;
+
+    let has_label = label.is_some_and(|l| !l.trim().is_empty());
+    // With a label the file can't win, so it isn't read.
+    let file = if has_label { None } else { FsDiskNameStore.read(std::path::Path::new(mount_point)) };
+    display_name(label, file.as_ref(), &fallback())
+}
+
 /// Get the volume label for a disk (platform-specific).
-fn get_volume_label(disk: &sysinfo::Disk) -> Option<String> {
+/// On macOS the volume is mounted at `/Volumes/<label>`, so the folder name is the label.
+fn get_volume_label(disk: &sysinfo::Disk, mount_point: &str) -> Option<String> {
     #[cfg(target_os = "linux")]
-    { get_volume_label_linux(disk) }
+    { let _ = mount_point; get_volume_label_linux(disk) }
     #[cfg(target_os = "windows")]
-    { get_volume_label_windows(disk) }
-    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-    { let _ = disk; None }
+    { let _ = mount_point; get_volume_label_windows(disk) }
+    #[cfg(target_os = "macos")]
+    { let _ = disk; macos_volume_label(mount_point) }
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+    { let _ = (disk, mount_point); None }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn macos_volume_label(mount_point: &str) -> Option<String> {
+    mount_point
+        .strip_prefix("/Volumes/")
+        .filter(|rest| !rest.is_empty() && !rest.contains('/'))
+        .map(str::to_string)
 }
 
 #[cfg(target_os = "linux")]
@@ -551,7 +575,7 @@ fn statvfs_space(mount_point: &str) -> (Option<u64>, Option<u64>) {
 /// so we derive the name from the UUID format instead:
 ///  - "XXXX-XXXX"  (FAT32 short serial) → "SD Card"
 ///  - long UUID → "USB Drive"
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", test))]
 fn friendly_volume_name(uuid: &str) -> String {
     let looks_like_fat32_serial = uuid.len() == 9
         && uuid.chars().nth(4) == Some('-')
@@ -574,6 +598,35 @@ mod tests {
         assert_eq!(bsd_disk_id("/dev/disk2s1").as_deref(), Some("disk2s1"));
         assert_eq!(bsd_disk_id("map auto_home"), None);
         assert_eq!(bsd_disk_id("/dev/disk3"), None);
+    }
+
+    #[test]
+    fn macos_label_from_volumes_folder() {
+        assert_eq!(macos_volume_label("/Volumes/SEAGATE").as_deref(), Some("SEAGATE"));
+        assert_eq!(macos_volume_label("/Volumes/SEAGATE 1").as_deref(), Some("SEAGATE 1"));
+        assert_eq!(macos_volume_label("/Volumes/"), None);
+        assert_eq!(macos_volume_label("/media/u/SEAGATE"), None);
+    }
+
+    #[test]
+    fn device_name_priority() {
+        use crate::domain::disk_name::{DiskName, DiskNameSource};
+        use crate::infrastructure::disk_name::FsDiskNameStore;
+
+        let mount = std::env::temp_dir().join(format!("lumik_device_name_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&mount);
+        std::fs::create_dir_all(mount.join("lumik")).unwrap();
+        let m = mount.to_str().unwrap();
+
+        // Android "SD Card" sin archivo; con archivo, el nombre guardado.
+        assert_eq!(device_name(None, m, || friendly_volume_name("1A2B-3C4D")), "SD Card");
+        let saved = DiskName::new("SEAGATE", DiskNameSource::Label, "2026-10-30T13:34:40Z");
+        FsDiskNameStore.write(&mount, &saved).unwrap();
+        assert_eq!(device_name(None, m, || friendly_volume_name("0D6F-0A43")), "SEAGATE");
+        // La etiqueta del sistema gana al archivo.
+        assert_eq!(device_name(Some("FOTOS"), m, || "x".into()), "FOTOS");
+
+        let _ = std::fs::remove_dir_all(&mount);
     }
 
     #[test]

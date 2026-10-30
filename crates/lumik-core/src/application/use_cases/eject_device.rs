@@ -114,6 +114,7 @@ mod tests {
         DetectedDevice {
             uuid: uuid.into(),
             name: uuid.into(),
+            label: None,
             mount_point: mount.into(),
             total_bytes: None,
             available_bytes: None,

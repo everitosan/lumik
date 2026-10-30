@@ -5,6 +5,7 @@
 
 pub mod delivery;
 pub mod device;
+pub mod disk_name;
 pub mod embedding;
 pub mod error;
 pub mod exported;
