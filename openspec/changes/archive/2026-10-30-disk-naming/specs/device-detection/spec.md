@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Identidad estable por UUID
-Un dispositivo SHALL identificarse por el UUID de su sistema de archivos que reporta el sistema operativo de esa máquina, no por su punto de montaje. Ese UUID no SHALL usarse para identificar proyectos ni fotos. El único archivo que el sistema SHALL escribir en un disco para nombrarlo es `lumik/.disk.json`, y solo en discos con carpeta `lumik/`. Cada dispositivo visto SHALL registrarse en el registro global de dispositivos conocidos con su nombre, última ruta de montaje (solo como pista) y fecha de última vez visto.
+Un dispositivo SHALL identificarse por el UUID de su sistema de archivos que reporta el sistema operativo de esa máquina, no por su punto de montaje. Ese UUID no SHALL usarse para identificar proyectos ni fotos. Para nombrarlo solo SHALL escribirse `lumik/.disk.json`, en discos con `lumik/`. Cada dispositivo visto SHALL registrarse en el registro global de dispositivos conocidos con su nombre, última ruta de montaje (solo como pista) y fecha de última vez visto.
 
 #### Scenario: Cambio de punto de montaje
 - **WHEN** un disco que se montó en `/media/a` se vuelve a montar en `/media/b`
