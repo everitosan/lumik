@@ -168,7 +168,7 @@ const DISK_QUEUE: usize = 4;
 /// en `disk` (staging del disco, en otro hilo). Termina cuando los dos están
 /// escritos; el del disco, sincronizado.
 fn copy_tee(mut src: File, dst: &Path, mut disk: File, on_bytes: &mut dyn FnMut(u64)) -> Result<u64, String> {
-    let mut out = File::create(dst).map_err(|e| e.to_string())?;
+    let mut out = File::create(dst).map_err(|e| format!("sandbox: {e}"))?;
     let (tx, rx) = std::sync::mpsc::sync_channel::<Arc<Vec<u8>>>(DISK_QUEUE);
     let writer = std::thread::spawn(move || -> std::io::Result<()> {
         for chunk in rx {
@@ -185,11 +185,11 @@ fn copy_tee(mut src: File, dst: &Path, mut disk: File, on_bytes: &mut dyn FnMut(
                 Ok(0) => return Ok(()),
                 Ok(n) => n,
                 Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(e.to_string()),
+                Err(e) => return Err(format!("tarjeta (tras {done} bytes): {e}")),
             };
             buf.truncate(n);
             let chunk = Arc::new(buf);
-            out.write_all(&chunk).map_err(|e| e.to_string())?;
+            out.write_all(&chunk).map_err(|e| format!("sandbox (tras {done} bytes): {e}"))?;
             // Si el disco falló, el hilo ya no recibe: se ve al unirlo.
             if tx.send(chunk).is_err() {
                 return Ok(());

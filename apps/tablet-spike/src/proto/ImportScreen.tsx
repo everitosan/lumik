@@ -63,6 +63,7 @@ export function ImportScreen({ project, title, onClose }: Props) {
         return [...current, ...ok.filter((f) => !seen.has(f.uri))];
       });
     } catch (e) {
+      console.warn(`Import falló: ${String(e)}`);
       setError(String(e));
     } finally {
       setBusy(false);
@@ -82,12 +83,17 @@ export function ImportScreen({ project, title, onClose }: Props) {
         );
       }
       try {
-        setReport(await importCard(session, card, setProgress));
+        const r = await importCard(session, card, setProgress);
+        // Diagnóstico: los errores también al log de Android (logcat, ReactNativeJS).
+        console.warn(`Import: ${r.result.imported} nuevas, ${r.result.failed} fallidas de ${card.length}`);
+        r.result.errors.forEach((e) => console.warn(`Import error: ${e}`));
+        setReport(r);
       } finally {
         // El import terminó: el candado se suelta (o se queda con `pending` si algo no llegó).
         session.close();
       }
     } catch (e) {
+      console.warn(`Import falló: ${String(e)}`);
       setError(String(e));
     } finally {
       setBusy(false);
