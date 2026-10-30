@@ -145,3 +145,33 @@ En Android, la base se copia a la sandbox al abrir y se devuelve al disco (`VACU
 - [SAF es lento para muchas operaciones chicas] → Las miniaturas y vistas previas van a la sandbox en Android; en el disco solo se copian los originales y se escribe la base.
 - [Dos UIs de producto (desktop DOM y tablet RN)] → Se comparten núcleo, tipos, textos y tokens de diseño. Las pantallas se diseñan juntas para que el flujo sea el mismo.
 - [WAL sobre exFAT por USB-C en iPadOS puede no funcionar] → El experimento 3 lo decide; si falla, el iPad usa también el modo espejado.
+
+## Decisión (4.1, 2026-10-30)
+
+**Seguir con la arquitectura en Android y evolucionar el prototipo a la app real** (`apps/tablet-spike` → `apps/tablet`). El iPad queda pendiente de la cuenta de Apple Developer: sus experimentos (2.2, 2.3 y la mitad iPad de 1.2, 2.1 y 2.4) se harán en el change que construya la app, antes de publicar en iPad.
+
+### Resultados (Android, Huawei DBR-W09, Android 12, build de release)
+
+| Riesgo | Resultado | Veredicto |
+|---|---|---|
+| 2.1 Puente RN ↔ Rust (uniffi) | 1 000 eventos en 1.5 s con la UI a 52–60 fps; 2.3 GB copiados con el JS a 58 fps como mínimo. En debug, cada callback frena la copia | D1 se confirma. La app limita los eventos de progreso (uno cada ~100 ms) y las cifras solo valen en release |
+| 2.4 Grid y visor | FlashList con 2 000 miniaturas a 57 fps de promedio; visor con pellizco, doble toque y deslizar, que sigue al dedo | Se confirma. Falta la validación del fotógrafo en una sesión real |
+| 2.5 SAF y modo espejado | El permiso sobrevive a reinicios y a reinstalar; devolver `project.db` tarda 0.2–0.3 s con `integrity_check` ok; la copia SD → disco va a ~27 MB/s, limitada por la escritura de Android en el disco, ~2× el desktop | D2 se confirma para Android |
+| 3.1 Prototipo D5 | Inicio, crear, editar, archivar y eliminar proyectos, import con el núcleo, culling, papelera, filtros, candado, discos con nombre y expulsar: todo con los casos de uso del núcleo sobre SAF | Se confirma; el flujo sigue las reglas del desktop |
+| 2.2, 2.3 iPad | Sin probar | Pendiente |
+
+### Ajustes a las decisiones
+
+- **D3 "cada gesto tiene su botón" se ajusta.** A pedido del fotógrafo, el visor no tiene botones de aprobar y quitar. Los gestos se enseñan con una guía de dedos animados y todo se puede deshacer. Las estrellas y las etiquetas de color siguen siendo botones grandes.
+- **D5 se ajusta a las reglas del desktop.** No hay FAB de importar en el inicio: se importa desde dentro de un proyecto. El disco es obligatorio al crear un proyecto. Los discos van en el rail. "‹" y el botón atrás regresan un nivel. El visor usa todo el ancho con una tira de miniaturas abajo, en lugar del grid de lista y detalle.
+- **D2, reglas de SAF aprendidas:**
+  - Ningún archivo del disco se sobrescribe en su lugar: en esta tablet quedaba vacío al desmontar. Se escribe un temporal, se borra el anterior y se renombra (`safWrite.ts`).
+  - Los archivos se crean como binarios, para que Android no les agregue una extensión.
+  - Android no da la etiqueta del disco: se usa `lumik/.disk.json` (change `disk-naming`).
+
+### Lo que falta antes de publicar en Android
+
+- La sesión real de culling de 200 fotos y una tanda grande con el disco real comparada con el desktop (3.1).
+- Quitar del prototipo la pestaña de experimentos y lo que solo era medición.
+- Las specs de la app (import en la tablet, culling táctil, modo espejado, discos), en el change que la construya.
+- Retirar `MANAGE_EXTERNAL_STORAGE` del build de Android de Tauri cuando la app de tablet lo reemplace.

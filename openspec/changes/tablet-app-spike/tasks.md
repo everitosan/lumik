@@ -19,7 +19,7 @@
 
 ## 4. Decisión
 
-- [ ] 4.1 Escribir la decisión (seguir, ajustar o descartar la arquitectura) con los resultados de 2.1–2.5 y 3.1 en `design.md`, y actualizar la fila de la app de tablet en `CLAUDE.md`. Verificar que `openspec validate tablet-app-spike --strict` pasa.
+- [x] 4.1 Escribir la decisión (seguir, ajustar o descartar la arquitectura) con los resultados de 2.1–2.5 y 3.1 en `design.md`, y actualizar la fila de la app de tablet en `CLAUDE.md`. Verificar que `openspec validate tablet-app-spike --strict` pasa.
 
 ## Workflow follow-up
 

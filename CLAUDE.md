@@ -12,7 +12,8 @@ Permite organizar sesiones en proyectos, seleccionar, etiquetar, calificar y tag
 | Portal web de respaldo | `apps/web/` | React 19 + Vite | Beta |
 | Landing | `apps/landing/` | Astro | Publicada |
 | UI kit (Storybook) | `apps/uikit/` | Storybook + Vite | Activo |
-| App iPad | `apps/ios/` | Swift/SwiftUI | Planificado (requiere Mac); hoy el iPad usa el portal web |
+| App de tablet (Android; iPad después) | `apps/tablet-spike/` (pasará a `apps/tablet/`) | Expo / React Native + `lumik-core` por uniffi (`crates/lumik-mobile`) | Prototipo: spike cerrado con "seguir"; el iPad espera la cuenta de Apple y hoy usa el portal web |
+| App iPad nativa | `apps/ios/` | Swift/SwiftUI | Descartada a favor de la app de tablet en React Native (`tablet-app-spike`) |
 
 La especificación de comportamiento de cada capability vive en `openspec/specs/`.
 
@@ -26,12 +27,14 @@ lumik/
 │   ├── web/          # Portal web de respaldo (tambien para iPad)
 │   ├── landing/      # Sitio publico (Astro)
 │   ├── uikit/        # Storybook de @lumik/ui
-│   └── ios/          # App iPad nativa (vacia, planificada)
+│   ├── tablet-spike/ # App de tablet (Expo/RN), prototipo que pasará a apps/tablet/
+│   └── ios/          # App iPad nativa (vacía, descartada a favor de la de tablet)
 ├── packages/
 │   ├── ts-types/     # Tipos compartidos (TS)
 │   └── ui/           # Componentes UI reutilizables
 ├── crates/
-│   └── lumik-core/   # Núcleo Rust compartido (dominio, casos de uso, import, SQLite)
+│   ├── lumik-core/   # Núcleo Rust compartido (dominio, casos de uso, import, SQLite)
+│   └── lumik-mobile/ # Puente del núcleo para la tablet (uniffi)
 ├── openspec/         # Specs de comportamiento y changes (OpenSpec)
 └── docs/             # Documentacion compartida
 ```
