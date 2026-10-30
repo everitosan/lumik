@@ -8,11 +8,11 @@ import {
   type LockView,
   ownLockJson,
   readFdString,
-  writeFdString,
 } from '@lumik/core-native';
 import { Platform } from 'react-native';
 
 import Saf from '../../modules/saf/src/LumikSafModule';
+import { replaceFile } from './safWrite';
 
 const FILES_DIR = '/data/user/0/com.lumik.tabletspike/files';
 const LOCK_FILE = '.lumik-lock';
@@ -31,18 +31,16 @@ export function thisInstall(): InstallInfo {
 export function readLock(projectUri: string): LockView {
   const uri = Saf.childUri(projectUri, LOCK_FILE);
   const text = Saf.exists(uri) ? readFdString(Saf.openFd(uri, 'r')) : undefined;
-  return lockView(text, thisInstall().id);
+  const view = lockView(text, thisInstall().id);
+  // Uno ilegible cuenta como libre: que quede rastro para saber si pasa.
+  if (text !== undefined && view.state === 'free') console.warn(`${LOCK_FILE} ilegible en ${projectUri}: ${JSON.stringify(text)}`);
+  return view;
 }
 
-/** Escribe el candado propio. Se sobrescribe en el lugar: SAF no renombra
- *  sobre un archivo existente, así que no es atómico como en el desktop. */
+/** Escribe el candado propio. SAF no renombra sobre un archivo existente, así
+ *  que no es atómico como en el desktop: hay un instante sin candado. */
 export function writeOwnLock(projectUri: string, mirrorDir: string, pending: boolean) {
-  const json = ownLockJson(thisInstall(), mirrorDir, pending);
-  const uri = Saf.childUri(projectUri, LOCK_FILE);
-  // Con otro tipo, Android le agrega la extensión (`.lumik-lock.json`) y el
-  // desktop no lo vería: como binario, el nombre queda tal cual.
-  const target = Saf.exists(uri) ? uri : Saf.createFile(projectUri, LOCK_FILE, 'application/octet-stream');
-  writeFdString(Saf.openFd(target, 'w'), json);
+  replaceFile(projectUri, LOCK_FILE, ownLockJson(thisInstall(), mirrorDir, pending));
 }
 
 export function removeLock(projectUri: string) {
