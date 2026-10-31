@@ -14,6 +14,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { PhotoInfo } from '@lumik/core-native';
 
 import { GestureGuide } from './GestureGuide';
+import { Icon, type IconName } from './Icon';
 import { PhotoInfoPanel } from './PhotoInfoPanel';
 import { readPrefs, savePrefs } from './prefs';
 import { Viewer } from './Viewer';
@@ -42,6 +43,8 @@ export type CullItem = {
 export type CullingBackend = {
   rate(index: number, stars: number, labels: number[]): void;
   approve(index: number, approved: boolean): void;
+  /** Gira la foto `delta` grados (±90). */
+  rotate?(index: number, delta: number): void;
   /** La foto actual cambió: momento de traer las vistas previas cercanas. */
   onIndex?(index: number): void;
 };
@@ -68,7 +71,7 @@ type CullingProps = {
   notice?: { text: string; detail?: string; warn?: boolean; actionLabel: string; onAction: () => void };
 };
 
-export function Culling({ photos, onCleanChange, backend, onBack, backLabel = '‹ Proyectos', initialIndex = 0, onImport, notice }: CullingProps) {
+export function Culling({ photos, onCleanChange, backend, onBack, backLabel = 'Proyectos', initialIndex = 0, onImport, notice }: CullingProps) {
   const count = photos.length;
   const [index, setIndex] = useState(() => Math.min(Math.max(0, initialIndex), Math.max(0, count - 1)));
   const [marks, setMarks] = useState<Marks>(() => ({
@@ -77,8 +80,10 @@ export function Culling({ photos, onCleanChange, backend, onBack, backLabel = '�
     labels: photos.map((p) => parseLabels(p.info.colorLabel)),
   }));
   const [error, setError] = useState<string | null>(null);
-  const [clean, setClean] = useState(false);
-  const [showInfo, setShowInfo] = useState(true);
+  // El visor se abre como se dejó la última vez.
+  const [clean, setClean] = useState(() => readPrefs().viewer?.clean ?? false);
+  const [showInfo, setShowInfo] = useState(() => readPrefs().viewer?.showInfo ?? true);
+  useEffect(() => savePrefs({ viewer: { clean, showInfo } }), [clean, showInfo]);
   // La guía se abre sola la primera vez; después, con "?".
   const [guideStep, setGuideStep] = useState<number | null>(() => (readPrefs().guideSeen ? null : 0));
   const closeGuide = useCallback(() => {
@@ -197,6 +202,17 @@ export function Culling({ photos, onCleanChange, backend, onBack, backLabel = '�
     [change, index, marks.labels, marks.rating, backend],
   );
 
+  const rotate = useCallback(
+    (delta: number) => {
+      try {
+        backend?.rotate?.(index, delta);
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [backend, index],
+  );
+
   const toggleClean = useCallback(() => setClean((c) => !c), []);
   useEffect(() => onCleanChange(clean), [clean, onCleanChange]);
 
@@ -219,10 +235,18 @@ export function Culling({ photos, onCleanChange, backend, onBack, backLabel = '�
           <PhotoInfoPanel info={photos[index].info} previewPath={photos[index].histPath} />
         )}
 
+        {backend?.rotate && !clean && (
+          <View style={styles.rotateBar} pointerEvents="box-none">
+            <RoundToggle icon="rotate-ccw" on={false} onPress={() => rotate(-90)} />
+            <RoundToggle icon="rotate-cw" on={false} onPress={() => rotate(90)} />
+          </View>
+        )}
+
         <View style={styles.topBar} pointerEvents="box-none">
           <View style={styles.topLeft}>
             {onBack && (
-              <Pressable style={({ pressed }) => [styles.navPill, pressed && styles.navPillPressed]} onPress={onBack} hitSlop={8}>
+              <Pressable style={({ pressed }) => [styles.navPill, styles.navPillBack, pressed && styles.navPillPressed]} onPress={onBack} hitSlop={8}>
+                <Icon name="chevron-left" size={18} />
                 <Text style={styles.navPillText}>{backLabel}</Text>
               </Pressable>
             )}
@@ -240,8 +264,8 @@ export function Culling({ photos, onCleanChange, backend, onBack, backLabel = '�
                 <Text style={styles.navPillText}>Importar</Text>
               </Pressable>
             )}
-            <RoundToggle label="?" on={guideStep !== null} onPress={() => setGuideStep(guideStep === null ? 0 : null)} />
-            <RoundToggle label="i" on={showInfo} onPress={() => setShowInfo((v) => !v)} italic />
+            <RoundToggle icon="help" on={guideStep !== null} onPress={() => setGuideStep(guideStep === null ? 0 : null)} />
+            <RoundToggle icon="info" on={showInfo} onPress={() => setShowInfo((v) => !v)} />
           </View>
         </View>
 
@@ -262,7 +286,7 @@ export function Culling({ photos, onCleanChange, backend, onBack, backLabel = '�
             <View style={styles.pill}>
               {[1, 2, 3, 4, 5].map((s) => (
                 <Pressable key={s} style={styles.mark} onPress={() => rate(s)}>
-                  <Text style={[styles.starText, s <= marks.rating[index] && styles.starOn]}>★</Text>
+                  <Icon name="star-filled" size={24} color={s <= marks.rating[index] ? '#e9c349' : '#666'} />
                 </Pressable>
               ))}
             </View>
@@ -353,8 +377,18 @@ function Thumb({ photo, index, selected, approved, rating, labels, onPress }: Th
     <Pressable style={styles.cell} onPress={() => onPress(index)}>
       <View style={[styles.thumbFrame, selected && styles.thumbSelected]}>
         <Image source={{ uri: photo.thumb }} recyclingKey={photo.thumb} style={styles.thumb} contentFit="cover" transition={0} />
-        {approved && <Text style={styles.thumbApproved}>✓</Text>}
-        {rating > 0 && <Text style={styles.thumbRating}>{'★'.repeat(rating)}</Text>}
+        {approved && (
+          <View style={styles.thumbApproved}>
+            <Icon name="check" size={14} strokeWidth={3} color="#131313" />
+          </View>
+        )}
+        {rating > 0 && (
+          <View style={styles.thumbRating}>
+            {Array.from({ length: rating }, (_, k) => (
+              <Icon key={k} name="star-filled" size={9} color="#e9c349" />
+            ))}
+          </View>
+        )}
         {labels.length > 0 && (
           <View style={styles.thumbLabels}>
             {labels.map((l) => (
@@ -367,10 +401,10 @@ function Thumb({ photo, index, selected, approved, rating, labels, onPress }: Th
   );
 }
 
-function RoundToggle({ label, on, onPress, italic }: { label: string; on: boolean; onPress: () => void; italic?: boolean }) {
+function RoundToggle({ icon, on, onPress }: { icon: IconName; on: boolean; onPress: () => void }) {
   return (
     <Pressable style={[styles.round, on && styles.roundOn]} onPress={onPress} hitSlop={6}>
-      <Text style={[styles.roundText, italic && styles.italic, on && styles.roundTextOn]}>{label}</Text>
+      <Icon name={icon} size={22} color={on ? '#131313' : '#fff'} />
     </Pressable>
   );
 }
@@ -381,16 +415,16 @@ const styles = StyleSheet.create({
   topBar: { position: 'absolute', top: 12, left: 16, right: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // Girar: a la izquierda, centrado en vertical sobre la foto.
+  rotateBar: { position: 'absolute', left: 16, top: 0, bottom: 0, justifyContent: 'center', gap: 10 },
   chip: { color: '#ddd', fontSize: 15, backgroundColor: 'rgba(19,19,19,0.7)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   badge: { color: '#131313', backgroundColor: '#e9c349', fontWeight: '700', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  navPillBack: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 10 },
   navPill: { minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 22, backgroundColor: 'rgba(19,19,19,0.8)' },
   navPillPressed: { opacity: 0.7 },
   navPillText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(19,19,19,0.7)' },
   roundOn: { backgroundColor: '#e9e9e9' },
-  roundText: { color: '#fff', fontSize: 20, fontWeight: '700' },
-  italic: { fontStyle: 'italic' },
-  roundTextOn: { color: '#131313' },
   strip: { height: THUMB + 8, borderTopWidth: 1, borderTopColor: '#262626' },
   cell: { width: THUMB, height: THUMB + 8, padding: 3 },
   thumbFrame: { flex: 1, borderRadius: 6, overflow: 'hidden', borderWidth: 3, borderColor: 'transparent' },
@@ -403,22 +437,16 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    overflow: 'hidden',
-    textAlign: 'center',
-    lineHeight: 22,
-    fontSize: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#e9c349',
-    color: '#131313',
-    fontWeight: '700',
   },
-  thumbRating: { position: 'absolute', bottom: 2, left: 4, color: '#e9c349', fontSize: 9, textShadowRadius: 3, textShadowColor: '#000' },
+  thumbRating: { position: 'absolute', bottom: 3, left: 4, flexDirection: 'row', gap: 1 },
   thumbLabels: { position: 'absolute', top: 3, left: 3, flexDirection: 'row', gap: 2 },
   thumbLabel: { width: 8, height: 8, borderRadius: 4 },
   marksRow: { position: 'absolute', left: 12, right: 12, bottom: 10, flexDirection: 'row', justifyContent: 'space-between' },
   pill: { flexDirection: 'row', borderRadius: 22, backgroundColor: 'rgba(19,19,19,0.7)' },
   mark: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  starText: { color: '#666', fontSize: 22 },
-  starOn: { color: '#e9c349' },
   dot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2 },
   perfText: { color: '#888', fontSize: 11, fontVariant: ['tabular-nums'], backgroundColor: 'rgba(19,19,19,0.6)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   snackbar: {

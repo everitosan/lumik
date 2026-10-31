@@ -158,7 +158,7 @@
       "name": "Project name",
       "namePlaceholder": "E.g. John and Mary wedding",
       "date": "Session date",
-      "device": "Destination device",
+      "device": "Destination disk",
       "description": "Description",
       "descriptionPlaceholder": "Add notes about the project...",
       "validation": {

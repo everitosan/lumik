@@ -8,6 +8,8 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import type { SafVolume } from '../modules/saf/src/LumikSafModule';
 import type { CardInfo } from './covers';
 import { type ProjectForm, today } from './createProject';
+import { DateField } from './DateField';
+import { Icon, type IconName } from './Icon';
 import { type ProjectMenuActions, ProjectsDashboard } from './ProjectsDashboard';
 import { SettingsScreen } from './SettingsScreen';
 import type { DiskProject } from './session';
@@ -48,11 +50,11 @@ type Props = {
   actions: ProjectMenuActions;
 };
 
-const RAIL: { key: Section | 'backup'; label: string; glyph: string }[] = [
-  { key: 'projects', label: 'Proyectos', glyph: '▦' },
-  { key: 'disks', label: 'Discos', glyph: '⛁' },
-  { key: 'backup', label: 'Respaldo', glyph: '☁' },
-  { key: 'settings', label: 'Ajustes', glyph: '⚙' },
+const RAIL: { key: Section | 'backup'; label: string; icon: IconName }[] = [
+  { key: 'projects', label: 'Proyectos', icon: 'projects' },
+  { key: 'disks', label: 'Discos', icon: 'drive' },
+  { key: 'backup', label: 'Respaldo', icon: 'upload-cloud' },
+  { key: 'settings', label: 'Ajustes', icon: 'settings' },
 ];
 
 // "content://…/tree/FB5F-B3EF%3A" → "FB5F-B3EF:"
@@ -78,7 +80,7 @@ export function HomeScreen(props: Props) {
               disabled={!enabled}
             >
               <View style={[styles.railIcon, on && styles.railIconOn]}>
-                <Text style={[styles.railGlyph, on && styles.railGlyphOn]}>{item.glyph}</Text>
+                <Icon name={item.icon} size={22} color={on ? '#d6e3ff' : '#9a9a9a'} />
               </View>
               <Text style={[styles.railLabel, on && styles.railLabelOn]}>{item.label}</Text>
             </Pressable>
@@ -89,7 +91,8 @@ export function HomeScreen(props: Props) {
       <View style={styles.main}>
         {pendingVolumes.map((v) => (
           <View key={v.uuid} style={styles.banner}>
-            <Text style={styles.bannerText}>⛁ {props.pendingLabelOf(v)} está conectado y Lumik aún no tiene acceso.</Text>
+            <Icon name="drive" size={20} color="#c7d6ff" />
+            <Text style={styles.bannerText}>{props.pendingLabelOf(v)} está conectado y Lumik aún no tiene acceso.</Text>
             <Pressable style={({ pressed }) => [styles.bannerButton, pressed && styles.pressed]} onPress={() => onGrant(v.uuid)}>
               <Text style={styles.bannerButtonText}>Dar acceso</Text>
             </Pressable>
@@ -177,7 +180,7 @@ function Disks({
         )}
         {trees.map((t) => (
           <View key={t} style={styles.diskRow}>
-            <Text style={styles.diskGlyph}>⛁</Text>
+            <Icon name="drive" size={22} color="#9a9a9a" />
             <Text style={styles.diskName}>{labelOf(t)}</Text>
             {projects && (
               <Text style={styles.diskCurrent}>
@@ -197,15 +200,16 @@ function Disks({
             )}
             {/* La memoria interna no se expulsa. */}
             {!treeLabel(t).startsWith('primary:') && (
-              <Pressable style={({ pressed }) => [styles.eject, pressed && styles.pressed]} onPress={() => onEject(t)} disabled={!!busy}>
-                <Text style={styles.ejectText}>⏏ Expulsar</Text>
+              <Pressable style={({ pressed }) => [styles.eject, styles.withIcon, pressed && styles.pressed]} onPress={() => onEject(t)} disabled={!!busy}>
+                <Icon name="eject" size={16} color="#ddd" />
+                <Text style={styles.ejectText}>Expulsar</Text>
               </Pressable>
             )}
           </View>
         ))}
         {ejected.map((t) => (
           <View key={t} style={[styles.diskRow, styles.diskRowEjected]}>
-            <Text style={styles.diskGlyph}>⏏</Text>
+            <Icon name="eject" size={22} color="#9a9a9a" />
             <View style={styles.diskEjectedText}>
               <Text style={styles.diskName}>{labelOf(t)}</Text>
               <Text style={styles.muted}>Expulsado: ya puedes desconectarlo.</Text>
@@ -269,7 +273,7 @@ function NewProjectSheet({
       <View style={styles.scrim}>
         <View style={styles.sheet}>
           <Text style={styles.sheetTitle}>Nuevo proyecto</Text>
-          <Text style={styles.label}>Nombre</Text>
+          <Text style={styles.label}>Nombre del proyecto</Text>
           <TextInput
             style={styles.input}
             value={form.name}
@@ -278,23 +282,19 @@ function NewProjectSheet({
             placeholderTextColor="#666"
             autoFocus
           />
-          <Text style={styles.label}>Fecha de la sesión (AAAA-MM-DD)</Text>
-          <TextInput
-            style={styles.input}
-            value={form.date}
-            onChangeText={(date) => setForm((f) => ({ ...f, date }))}
-            keyboardType="numbers-and-punctuation"
-          />
-          <Text style={styles.label}>Disco</Text>
+          <Text style={styles.label}>Fecha de la sesión</Text>
+          <DateField value={form.date} onChange={(date) => setForm((f) => ({ ...f, date }))} />
+          <Text style={styles.label}>Disco destino</Text>
           {trees.length === 0 && <Text style={styles.error}>No hay discos conectados: agrega uno en "Discos".</Text>}
           <View style={styles.diskChoices}>
             {trees.map((t) => (
               <Pressable
                 key={t}
-                style={({ pressed }) => [styles.diskChoice, form.disk === t && styles.diskChoiceOn, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.diskChoice, styles.withIcon, form.disk === t && styles.diskChoiceOn, pressed && styles.pressed]}
                 onPress={() => setForm((f) => ({ ...f, disk: t }))}
               >
-                <Text style={[styles.diskChoiceText, form.disk === t && styles.diskChoiceTextOn]}>⛁ {labelOf(t)}</Text>
+                <Icon name="drive" size={16} color={form.disk === t ? '#fff' : '#ddd'} />
+                <Text style={[styles.diskChoiceText, form.disk === t && styles.diskChoiceTextOn]}>{labelOf(t)}</Text>
               </Pressable>
             ))}
           </View>
@@ -391,10 +391,10 @@ const styles = StyleSheet.create({
   rail: { width: 88, paddingTop: 16, alignItems: 'center', gap: 12, borderRightWidth: 1, borderRightColor: '#222' },
   railItem: { alignItems: 'center', gap: 4, minHeight: 56 },
   railOff: { opacity: 0.35 },
-  railIcon: { width: 56, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  railIconOn: { backgroundColor: '#2c3a5c' },
-  railGlyph: { color: '#9a9a9a', fontSize: 18 },
-  railGlyphOn: { color: '#c7d6ff' },
+  // Indicador de Material 3 (referencia de diseño): píldora de 64×32. `overflow`
+  // recorta el fondo a la píldora: con el ícono SVG dentro, Android lo pintaba cuadrado.
+  railIcon: { width: 64, height: 32, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  railIconOn: { backgroundColor: '#284777' },
   railLabel: { color: '#9a9a9a', fontSize: 12 },
   railLabelOn: { color: '#fff', fontWeight: '600' },
   main: { flex: 1 },
@@ -421,12 +421,12 @@ const styles = StyleSheet.create({
   bannerText: { color: '#c7d6ff', fontSize: 15, flex: 1 },
   bannerButton: { minHeight: 44, paddingHorizontal: 18, justifyContent: 'center', borderRadius: 22, backgroundColor: '#3b5bdb' },
   bannerButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  withIcon: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   eject: { minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 22, backgroundColor: '#2a2a2a' },
   ejectText: { color: '#ddd', fontSize: 14, fontWeight: '600' },
   diskRowEjected: { opacity: 0.8 },
   diskEjectedText: { flex: 1, gap: 2 },
   diskRow: { flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 64, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#1f1f1f' },
-  diskGlyph: { color: '#9a9a9a', fontSize: 22 },
   diskName: { color: '#fff', fontSize: 17, flex: 1 },
   diskCurrent: { color: '#c7d6ff', fontSize: 14 },
   diskChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

@@ -822,6 +822,29 @@ impl ProjectDatabase {
         Ok(())
     }
 
+    /// Portada que se muestra (spec `project-management`): la elegida o, si no
+    /// hay, la miniatura de la primera foto por fecha de captura (fuera de la
+    /// papelera). `None` si el proyecto no tiene fotos.
+    pub fn effective_cover_path(&self) -> DbResult<Option<String>> {
+        let conn = self.conn();
+        let chosen: Option<String> = conn
+            .query_row("SELECT cover_photo_path FROM project WHERE deleted = 0 LIMIT 1", [], |r| r.get(0))
+            .optional()?
+            .flatten();
+        if chosen.is_some() {
+            return Ok(chosen);
+        }
+        let first: Option<String> = conn
+            .query_row(
+                "SELECT id FROM photo WHERE project_id = ?1 AND deleted = 0
+                 ORDER BY capture_date ASC NULLS LAST, import_date ASC, id ASC LIMIT 1",
+                [&self.project_id],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(first.map(|id| format!(".thumbs/{id}.jpg")))
+    }
+
     pub fn set_cover_photo(&self, path: Option<&str>) -> DbResult<()> {
         let conn = self.conn();
         conn.execute(

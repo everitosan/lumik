@@ -10,6 +10,7 @@
 import {
   type CardImportResult,
   DiskError,
+  type ImportSettings,
   type ImportStatus,
   makePlaceholders,
   startCardImport,
@@ -18,7 +19,6 @@ import {
 
 import Saf from '../modules/saf/src/LumikSafModule';
 import type { SafEntry } from '../modules/saf/src/LumikSaf.types';
-import { importSettings } from './prefs';
 import type { ProjectSession } from './session';
 
 const BINARY = 'application/octet-stream';
@@ -46,6 +46,8 @@ export async function importCard(
   session: ProjectSession,
   card: SafEntry[],
   onProgress: (p: ImportProgress) => void,
+  /** Ajustes de esta importación (spec `tablet-import`). */
+  settings: ImportSettings,
 ): Promise<ImportReport> {
   const shadow = session.mirrorDir;
   const disk = session.project.uri;
@@ -69,7 +71,7 @@ export async function importCard(
     startCardImport(
       shadow,
       card.map((f) => ({ name: f.name, size: BigInt(Math.round(f.size)) })),
-      importSettings(),
+      settings,
       {
         open: (index) => {
           try {

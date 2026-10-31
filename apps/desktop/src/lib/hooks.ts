@@ -241,7 +241,8 @@ export function useCoverThumbnails(projects: ProjectDashboard[] | null): Record<
 
   useEffect(() => {
     if (!projects) return;
-    const withCover = projects.filter((p) => p.cover_photo_path);
+    // Sin portada elegida se muestra la primera foto por fecha (spec `project-management`).
+    const withCover = projects.filter((p) => p.cover_photo_path || p.photo_count > 0);
     if (withCover.length === 0) { setThumbnails({}); return; }
 
     let cancelled = false;

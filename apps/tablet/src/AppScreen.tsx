@@ -326,6 +326,7 @@ export default function AppScreen({ onCleanChange }: { onCleanChange: (clean: bo
     return {
       rate: (j, stars, labels) => session.rate(at(j), stars, labels),
       approve: (j, approved) => session.approve(at(j), approved),
+      rotate: (j, delta) => session.rotate(at(j), delta),
       onIndex: (j) => [j, j + 1, j - 1, j + 2].forEach((k) => k >= 0 && k < viewer.visible.length && session.ensurePreview(at(k))),
     };
   }, [session, viewer]);
@@ -363,7 +364,7 @@ export default function AppScreen({ onCleanChange }: { onCleanChange: (clean: bo
         onCleanChange={onCleanChange}
         backend={backend}
         onBack={closeViewer}
-        backLabel="‹ Fotos"
+        backLabel="Fotos"
         notice={
           lock
             ? {

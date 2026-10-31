@@ -6,9 +6,9 @@
 
 ## 2. De prototipo a app
 
-- [ ] 2.1 `git mv apps/tablet-spike apps/tablet`; paquete `@lumik/tablet`, nombre "Lumik", id `com.lumik.tablet` en Android e iOS; ajustar rutas de `pnpm-workspace.yaml`, `modules/core-native/ubrn.config.yaml` y referencias en docs. Verificar con `pnpm install`, `pnpm --filter @lumik/tablet typecheck` y un APK de release instalado que abre.
-- [ ] 2.2 Quitar las pestañas de experimentos: `App.tsx` monta la app sin pestañas; borrar `BridgeScreen`, `SafScreen`, el benchmark y las fotos de demo (`photos.ts`) de `CullingScreen`, moviendo a la app lo que `ProjectScreen` use de ahí; `src/proto/` pasa a `src/`. Verificar con `typecheck`, `grep -r "Experimento\|2\.4\|2\.5\|2\.1" src` vacío y la app abriendo en el inicio.
-- [ ] 2.3 Quitar de `lumik-mobile` las funciones de experimentos (`start_test_import`, `start_progress_burst`, `start_fd_copy`, `start_fd_read`, `start_fd_write`, `start_copy_to_dir` y lo que solo ellas usen) y regenerar `@lumik/core-native`. Verificar con `cargo test -p lumik-mobile`, `typecheck` y un APK de release que importa y abre un proyecto.
+- [x] 2.1 `git mv apps/tablet-spike apps/tablet`; paquete `@lumik/tablet`, nombre "Lumik", id `com.lumik.tablet` en Android e iOS; ajustar rutas de `pnpm-workspace.yaml`, `modules/core-native/ubrn.config.yaml` y referencias en docs. Verificar con `pnpm install`, `pnpm --filter @lumik/tablet typecheck` y un APK de release instalado que abre.
+- [x] 2.2 Quitar las pestañas de experimentos: `App.tsx` monta la app sin pestañas; borrar `BridgeScreen`, `SafScreen`, el benchmark y las fotos de demo (`photos.ts`) de `CullingScreen`, moviendo a la app lo que `ProjectScreen` use de ahí; `src/proto/` pasa a `src/`. Verificar con `typecheck`, `grep -r "Experimento\|2\.4\|2\.5\|2\.1" src` vacío y la app abriendo en el inicio.
+- [x] 2.3 Quitar de `lumik-mobile` las funciones de experimentos (`start_test_import`, `start_progress_burst`, `start_fd_copy`, `start_fd_read`, `start_fd_write`, `start_copy_to_dir` y lo que solo ellas usen) y regenerar `@lumik/core-native`. Verificar con `cargo test -p lumik-mobile`, `typecheck` y un APK de release que importa y abre un proyecto.
 - [x] 2.4 Actualizar `apps/tablet/AGENTS.md` (navegación por estado, no Expo Router; build con `ubrn` y Gradle; reglas de SAF de `tablet-storage`) y crear `apps/tablet/CLAUDE.md` con la estructura de la app. Verificar leyendo los dos archivos.
 
 ## 3. Ajustes e import
@@ -31,6 +31,15 @@
 - [x] 5.2 Comprobar el manifiesto del AAB: sin `MANAGE_EXTERNAL_STORAGE`, `READ_EXTERNAL_STORAGE` ni `WRITE_EXTERNAL_STORAGE`; quitar los que agreguen dependencias con `tools:node="remove"` si hace falta. Verificar con `bundletool dump manifest`.
 - [ ] 5.3 Job `build-tablet-android` en `release.yml`: Rust, NDK r26, `cargo-ndk`, `ubrn build android --release`, `expo prebuild`, `bundleRelease` firmado con secretos, AAB al release de GitHub y, si existe el secreto de la cuenta de servicio, a la pista interna de Play. Verificar con un tag de prueba en un fork o con `act`, y luego con la primera beta.
 - [ ] 5.4 Crear la app en Play Console (lo hace el usuario: cuenta, ficha, clave de subida, cuenta de servicio) y documentar en `apps/tablet/CLAUDE.md` qué secretos usa el workflow. Verificar que la primera beta aparece en la pista interna y se instala en la DBR-W09 desde Play.
+
+## 7. Correcciones del fotógrafo
+
+- [ ] 7.1 Formulario de crear proyecto: "Nombre del proyecto" y "Disco destino" en el desktop (`es.json`/`en.json`) y en la tablet; selector de fecha de Android en la tablet (`@react-native-community/datetimepicker` con `expo install`). Verificar con `pnpm --filter @lumik/desktop build`, `typecheck` y en la tablet eligiendo la fecha.
+- [ ] 7.2 Buscador en el inicio de la tablet que filtra proyectos por nombre o descripción, sin distinguir mayúsculas ni acentos. Verificar en la tablet escribiendo parte de un nombre.
+- [ ] 7.3 Portada por defecto en el núcleo: la primera foto por fecha de captura cuando no hay portada elegida, en `get_project_dashboard_entry` y en la portada del desktop; la tablet deja de listar `.thumbs/`. Test en `lumik-core`. Verificar con `cargo test` y viendo la misma portada en el desktop y en la tablet.
+- [ ] 7.4 Import en tres pasos con el paso de ajustes (renombrar con ejemplo, firmar, entrega del proyecto con `ChangeDeliveryMode` expuesto en `lumik-mobile`). Tests en `lumik-mobile` del cambio de entrega. Verificar en la tablet: importar sin renombrar solo esa vez y cambiar la entrega desde el import.
+- [ ] 7.5 Rotar en el visor (D9): botones, `RotatePhoto` en `lumik-mobile`, `.xmp` y miniatura al disco. Verificar en la tablet y abriendo el proyecto en el desktop con la misma orientación.
+- [ ] 7.6 Orientación de los `.cr2` verticales (D10): reproducir con una muestra real, corregir `read_exif_rotation` si hace falta, con test ignorado. Verificar importando una foto vertical de Canon en la tablet.
 
 ## 6. Integración
 

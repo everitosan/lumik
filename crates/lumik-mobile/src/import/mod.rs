@@ -336,6 +336,7 @@ mod tests {
             Some("Boda de Ana".into()),
             Some("2026-10-30".into()),
             "c".into(),
+            "none".into(),
         )
         .unwrap();
         let disk = tempfile::tempdir().unwrap();

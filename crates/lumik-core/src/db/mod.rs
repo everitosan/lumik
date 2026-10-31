@@ -543,6 +543,32 @@ mod tests {
     }
 
     #[test]
+    fn effective_cover_is_the_chosen_one_or_the_first_by_capture_date() {
+        let (dir, db) = temp_project("effective_cover");
+        assert_eq!(db.effective_cover_path().unwrap(), None, "sin fotos no hay portada");
+
+        let dated = |path: &str, date: Option<&str>| CreatePhoto { capture_date: date.map(String::from), ..new_photo(path) };
+        let photos = db
+            .create_photos_batch(&[
+                dated("_media/C.dng", Some("2024-06-15T14:00:00")),
+                dated("_media/SIN_FECHA.dng", None),
+                dated("_media/A.dng", Some("2024-06-15T09:00:00")),
+            ])
+            .unwrap();
+        let (c, a) = (&photos[0], &photos[2]);
+        assert_eq!(db.effective_cover_path().unwrap(), Some(format!(".thumbs/{}.jpg", a.id)), "la más antigua");
+
+        db.set_photo_deleted(&a.id, true, "_trash/A.dng", None, None).unwrap();
+        assert_eq!(db.effective_cover_path().unwrap(), Some(format!(".thumbs/{}.jpg", c.id)), "la papelera no cuenta");
+
+        db.set_cover_photo(Some(".thumbs/elegida.jpg")).unwrap();
+        assert_eq!(db.effective_cover_path().unwrap().as_deref(), Some(".thumbs/elegida.jpg"), "la elegida gana");
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn trashed_photo_leaves_listing_count_and_cover() {
         let (dir, db) = temp_project("trash_photo");
         let photos = db

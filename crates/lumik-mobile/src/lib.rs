@@ -11,7 +11,7 @@ mod mirror;
 mod project;
 mod projects;
 
-pub use disk::{cull_photo, rate_photo, DiskError, DiskFile, DiskFiles, DiskFingerprint};
+pub use disk::{cull_photo, delivery_mode, plan_delivery_change, rate_photo, rotate_photo, set_delivery_mode, write_sidecar_orientation, DeliveryPlanView, DiskError, DiskFile, DiskFiles, DiskFingerprint};
 pub use import::{make_placeholders, start_card_import, CardFile, CardImportListener, CardImportResult, CardSource, ImportSettings, ImportStatus};
 pub use lock::{install_identity, lock_view, own_lock_json, set_install_name, InstallInfo, LockView};
 pub use histogram::{start_histogram, Histogram, HistogramListener};

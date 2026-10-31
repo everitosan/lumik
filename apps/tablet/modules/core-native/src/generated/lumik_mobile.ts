@@ -86,10 +86,11 @@ export function copyPathToFd(path: string, dstFd: number): CopyResult /*throws*/
 /**
  * Crea el `project.db` de un proyecto nuevo en `work_dir` (sandbox), como
  * `create_project` del desktop: id nuevo, carpeta por la fecha de la sesión
- * (o la de hoy) y la entrega y el análisis de fábrica (la tablet aún no
- * tiene ajustes globales). La app sube la base y crea las carpetas en el disco.
+ * (o la de hoy), la entrega al aprobar de los ajustes de la tablet
+ * (`delivery_mode`: `none`, `pairs` o `all_camera_jpg`) y el análisis de
+ * fábrica. La app sube la base y crea las carpetas en el disco.
  */
-export function createProjectDb(workDir: string, name: string, description: string | undefined, sessionDate: string | undefined, creatorId: string): NewProject /*throws*/ {
+export function createProjectDb(workDir: string, name: string, description: string | undefined, sessionDate: string | undefined, creatorId: string, deliveryMode: string): NewProject /*throws*/ {
     const __rb: Uint8Array = uniffiCaller.rustCallWithError(
             /*liftError:*/ FfiConverterTypeProjectError.lift.bind(FfiConverterTypeProjectError),
             /*caller:*/ (callStatus) => {
@@ -99,6 +100,7 @@ export function createProjectDb(workDir: string, name: string, description: stri
         FfiConverterOptionalString.lower(description, nativeModule().rustbuffer_alloc),
         FfiConverterOptionalString.lower(sessionDate, nativeModule().rustbuffer_alloc),
         FfiConverterString.lower(creatorId, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(deliveryMode, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
@@ -125,6 +127,26 @@ export function cullPhoto(mirrorDir: string, photoId: string, culled: boolean, d
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
     );
+    }
+
+/**
+ * Opción "Al aprobar, entregar directamente" del proyecto: `none`, `pairs` o `all_camera_jpg`.
+ */
+export function deliveryMode(mirrorDir: string): string /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_delivery_mode(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
     }
 
 /**
@@ -366,6 +388,25 @@ export function ownLockJson(install: InstallInfo, mirrorDir: string, pending: bo
     }
     }
 
+export function planDeliveryChange(mirrorDir: string, mode: string, disk: DiskFiles): DeliveryPlanView /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_plan_delivery_change(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(mode, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeDiskFiles.lower(disk, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterTypeDeliveryPlanView.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
 /**
  * Tarjeta del proyecto de una copia de su `project.db` (la copia puede
  * migrarse; el original del disco no se toca). `None` si está borrado.
@@ -473,6 +514,32 @@ export function restorePhoto(mirrorDir: string, photoId: string, disk: DiskFiles
     }
 
 /**
+ * Rota la foto con el `RotatePhoto` del desktop sobre la copia de trabajo y
+ * gira su miniatura en `thumbs_dir` (caché de la tablet). Devuelve las rutas,
+ * relativas al proyecto, de los archivos cuya orientación hay que escribir en
+ * su `.xmp` (el original y, en un par, su JPG): la app los sube por SAF.
+ */
+export function rotatePhoto(mirrorDir: string, thumbsDir: string, photoId: string, rotation: number): Array<string> /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_rotate_photo(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(thumbsDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(photoId, nativeModule().rustbuffer_alloc),
+        FfiConverterInt32.lower(rotation, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterSequenceString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * Guarda los ajustes de la vista; lo que la tablet no maneja (el panel
  * lateral del visor del desktop) se queda como estaba.
  */
@@ -481,6 +548,24 @@ export function saveViewSettings(projectDir: string, settings: ViewSettings): vo
             /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_save_view_settings(
         FfiConverterString.lower(projectDir, nativeModule().rustbuffer_alloc),
         FfiConverterTypeViewSettings.lower(settings, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Cambia la entrega del proyecto con el `ChangeDeliveryMode` del desktop. Con
+ * `apply_to_approved`, también entrega o regresa los JPG de las ya aprobadas
+ * en el disco por SAF; si no, solo aplica a las siguientes aprobaciones.
+ */
+export function setDeliveryMode(mirrorDir: string, mode: string, applyToApproved: boolean, disk: DiskFiles): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_set_delivery_mode(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(mode, nativeModule().rustbuffer_alloc),
+        FfiConverterBool.lower(applyToApproved, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeDiskFiles.lower(disk, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
@@ -656,6 +741,20 @@ export function writeFdString(fd: number, text: string): void /*throws*/ {uniffi
             /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_write_fd_string(
         FfiConverterInt32.lower(fd, nativeModule().rustbuffer_alloc),
         FfiConverterString.lower(text, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Escribe la orientación en el `.xmp` junto a `file` (sandbox), creándolo si no existe.
+ */
+export function writeSidecarOrientation(file: string, rotation: number): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_write_sidecar_orientation(
+        FfiConverterString.lower(file, nativeModule().rustbuffer_alloc),
+        FfiConverterInt32.lower(rotation, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
@@ -934,6 +1033,66 @@ const FfiConverterTypeCopyResult = (() => {
         allocationSize(value: TypeName): number {
             return FfiConverterUInt64.allocationSize(value.bytes) +
              FfiConverterUInt64.allocationSize(value.elapsedMs);
+            
+        }
+    };
+    return new FFIConverter();
+})();
+
+/**
+ * Qué cambiaría al pasar la entrega del proyecto a `mode` (como
+ * `plan_project_delivery_change` del desktop).
+ */
+export type DeliveryPlanView = {
+    /**
+     * Aprobadas cuyo JPG se entregaría ahora.
+     */
+    deliver: number,
+    /**
+     * JPG entregados que volverían junto a su RAW.
+     */
+    returnBack: number,
+    /**
+     * JPG entregados que se editaron: se quedan como están.
+     */
+    editsKept: number
+}
+
+/**
+ * Generated factory for {@link DeliveryPlanView} record objects.
+ */
+export const DeliveryPlanView = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<DeliveryPlanView, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<DeliveryPlanView>,
+    });
+})();
+
+const FfiConverterTypeDeliveryPlanView = (() => {
+    type TypeName = DeliveryPlanView;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                deliver: FfiConverterUInt32.readFromCursor(c), 
+                returnBack: FfiConverterUInt32.readFromCursor(c), 
+                editsKept: FfiConverterUInt32.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterUInt32.writeIntoCursor(value.deliver, c);
+            FfiConverterUInt32.writeIntoCursor(value.returnBack, c);
+            FfiConverterUInt32.writeIntoCursor(value.editsKept, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterUInt32.allocationSize(value.deliver) +
+             FfiConverterUInt32.allocationSize(value.returnBack) +
+             FfiConverterUInt32.allocationSize(value.editsKept);
             
         }
     };
@@ -1615,7 +1774,7 @@ export type ProjectCard = {
     workflowStatus: string,
     archived: boolean,
     /**
-     * Portada elegida en el desktop (`.thumbs/{id}.jpg`, relativa al proyecto).
+     * Portada (`.thumbs/{id}.jpg`, relativa al proyecto): la elegida o la primera foto por fecha.
      */
     cover?: string
 }
@@ -3568,11 +3727,14 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_copy_path_to_fd() !== 18206) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_copy_path_to_fd");
     }
-    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_create_project_db() !== 42030) {
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_create_project_db() !== 48261) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_create_project_db");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_cull_photo() !== 37748) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_cull_photo");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_delivery_mode() !== 51142) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_delivery_mode");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_disk_name_view() !== 28461) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_disk_name_view");
@@ -3610,6 +3772,9 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_own_lock_json() !== 15648) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_own_lock_json");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_plan_delivery_change() !== 57340) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_plan_delivery_change");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_project_card() !== 28475) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_project_card");
     }
@@ -3628,8 +3793,14 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_restore_photo() !== 23714) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_restore_photo");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_rotate_photo() !== 38028) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_rotate_photo");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_save_view_settings() !== 54461) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_save_view_settings");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_set_delivery_mode() !== 19698) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_set_delivery_mode");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_set_install_name() !== 20228) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_set_install_name");
@@ -3663,6 +3834,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_write_fd_string() !== 36888) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_write_fd_string");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_write_sidecar_orientation() !== 34807) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_write_sidecar_orientation");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_write_text() !== 13658) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_write_text");
@@ -3735,6 +3909,7 @@ export default Object.freeze({
     FfiConverterTypeCardSource,
     FfiConverterTypeCopyListener,
     FfiConverterTypeCopyResult,
+    FfiConverterTypeDeliveryPlanView,
     FfiConverterTypeDiskError,
     FfiConverterTypeDiskFile,
     FfiConverterTypeDiskFiles,

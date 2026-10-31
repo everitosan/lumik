@@ -1,14 +1,19 @@
-// Importar (D5, Android): pantalla completa paso a paso, desde un proyecto
-// (como en el desktop). 1 de 2: qué archivos · 2 de 2: importar.
-// Los archivos se eligen como en el wizard del desktop: selector del sistema
-// con selección múltiple, y una lista a la que se agregan y de la que se quitan.
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, BackHandler, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+// Importar (Android): pantalla completa paso a paso, desde un proyecto, como el
+// wizard del desktop (spec `tablet-import`): 1 archivos · 2 ajustes · 3 importar.
+// Los archivos se eligen con el selector del sistema (selección múltiple) en una
+// lista a la que se agregan y de la que se quitan. Los ajustes salen de los de la
+// tablet y valen solo para esta importación; la entrega al aprobar es del proyecto.
+import type { ImportSettings } from '@lumik/core-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, BackHandler, FlatList, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import Saf from '../modules/saf/src/LumikSafModule';
 import type { SafEntry } from '../modules/saf/src/LumikSaf.types';
+import { DeliveryChoice } from './delivery';
 import { formatBytes, volumeOf } from './diskName';
+import { Icon } from './Icon';
 import { importCard, type ImportProgress, type ImportReport, isImportable } from './importer';
+import { importSettings } from './prefs';
 import { type DiskProject, ProjectSession } from './session';
 
 type Props = {
@@ -19,6 +24,8 @@ type Props = {
   onClose: () => void;
 };
 
+type Step = 1 | 2 | 3;
+
 const PHASES: Record<string, string> = {
   copy: 'Copiando de la tarjeta',
   metadata: 'Renombrando y firmando',
@@ -28,29 +35,61 @@ const PHASES: Record<string, string> = {
   previews: 'Creando vistas previas',
 };
 
+// Misma regla que `sanitize_file_name` del núcleo: letras, dígitos, `-` y `_`.
+const slug = (name: string) => name.trim().replace(/[^\p{L}\p{N}_-]/gu, '_');
+
+/** Cómo quedaría un archivo renombrado: `2026-10-30__14-30-22__Boda.cr2`. */
+function renameExample(title: string) {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}__${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}__${slug(title)}.cr2`;
+}
+
 export function ImportScreen({ project, title, onClose }: Props) {
   const [card, setCard] = useState<SafEntry[]>([]);
-  const [confirmed, setConfirmed] = useState(false);
+  const [step, setStep] = useState<Step>(1);
   const [ignored, setIgnored] = useState(0);
+  const [settings, setSettings] = useState<ImportSettings>(importSettings);
+  const [delivery, setDelivery] = useState<string | null>(null);
+  // Cambio de entrega que afecta a fotos ya aprobadas: se pregunta antes de aplicarlo.
+  const [pendingDelivery, setPendingDelivery] = useState<{ mode: string; affected: number } | null>(null);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [report, setReport] = useState<ImportReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [startedAt, setStartedAt] = useState(0);
+  // Abierta desde el paso de ajustes hasta que termina el import o se sale.
+  const sessionRef = useRef<ProjectSession | null>(null);
 
-  const step = !confirmed ? 1 : 2;
-  const running = busy && step === 2;
+  const running = busy && step === 3;
 
-  // Atrás: del resumen a la lista; de la lista, al proyecto. Mientras se importa, nada.
+  const closeSession = () => {
+    try {
+      sessionRef.current?.close();
+    } catch (e) {
+      console.warn(`Al cerrar el proyecto: ${String(e)}`);
+    }
+    sessionRef.current = null;
+  };
+
+  const leave = () => {
+    closeSession();
+    onClose();
+  };
+
+  // Atrás: un paso hacia atrás; del primero, al proyecto. Mientras se importa, nada.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (running) return true;
-      if (confirmed && !report) setConfirmed(false);
-      else onClose();
+      if (report || step === 1) leave();
+      else setStep((s) => (s - 1) as Step);
       return true;
     });
     return () => sub.remove();
-  }, [running, confirmed, report, onClose]);
+  });
+
+  // Al salir de la pantalla por otro camino, el candado no se queda tomado.
+  useEffect(() => () => closeSession(), []);
 
   const pickFiles = async () => {
     setError(null);
@@ -71,32 +110,77 @@ export function ImportScreen({ project, title, onClose }: Props) {
     }
   };
 
-  const start = async () => {
-    if (!project || !card) return;
+  // Paso 2: se abre el proyecto (copia de trabajo y candado) para leer su entrega.
+  const toSettings = async () => {
     setError(null);
     setBusy(true);
-    setStartedAt(Date.now());
     try {
-      const session = await ProjectSession.open(project, () => {}, () => {});
-      if (session.readOnly) {
-        throw new Error(
-          `${session.readOnly.installName} tiene este proyecto. Ábrelo y toma el control antes de importar.`,
-        );
+      if (!sessionRef.current) {
+        const session = await ProjectSession.open(project, () => {}, () => {});
+        if (session.readOnly) {
+          session.close();
+          throw new Error(`${session.readOnly.installName} tiene este proyecto. Ábrelo y toma el control antes de importar.`);
+        }
+        sessionRef.current = session;
       }
-      try {
-        const r = await importCard(session, card, setProgress);
-        // Diagnóstico: los errores también al log de Android (logcat, ReactNativeJS).
-        console.warn(`Import: ${r.result.imported} nuevas, ${r.result.failed} fallidas de ${card.length}`);
-        r.result.errors.forEach((e) => console.warn(`Import error: ${e}`));
-        setReport(r);
-      } finally {
-        // El import terminó: el candado se suelta (o se queda con `pending` si algo no llegó).
-        session.close();
-      }
+      setDelivery(sessionRef.current.delivery());
+      setStep(2);
     } catch (e) {
       console.warn(`Import falló: ${String(e)}`);
       setError(String(e));
     } finally {
+      setBusy(false);
+    }
+  };
+
+  const chooseDelivery = (mode: string) => {
+    const session = sessionRef.current;
+    if (!session || mode === delivery) return;
+    try {
+      const plan = session.planDelivery(mode);
+      const affected = plan.deliver + plan.returnBack;
+      if (affected > 0) {
+        setPendingDelivery({ mode, affected });
+        return;
+      }
+      session.setDelivery(mode, false);
+      setDelivery(mode);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const applyDelivery = (toApproved: boolean) => {
+    const session = sessionRef.current;
+    if (!session || !pendingDelivery) return;
+    try {
+      session.setDelivery(pendingDelivery.mode, toApproved);
+      setDelivery(pendingDelivery.mode);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPendingDelivery(null);
+    }
+  };
+
+  const start = async () => {
+    const session = sessionRef.current;
+    if (!session || card.length === 0) return;
+    setError(null);
+    setBusy(true);
+    setStartedAt(Date.now());
+    try {
+      const r = await importCard(session, card, setProgress, settings);
+      // Diagnóstico: los errores también al log de Android (logcat, ReactNativeJS).
+      console.warn(`Import: ${r.result.imported} nuevas, ${r.result.failed} fallidas de ${card.length}`);
+      r.result.errors.forEach((e) => console.warn(`Import error: ${e}`));
+      setReport(r);
+    } catch (e) {
+      console.warn(`Import falló: ${String(e)}`);
+      setError(String(e));
+    } finally {
+      // El import terminó: el candado se suelta (o se queda con `pending` si algo no llegó).
+      closeSession();
       setBusy(false);
     }
   };
@@ -110,11 +194,11 @@ export function ImportScreen({ project, title, onClose }: Props) {
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Pressable style={styles.back} onPress={onClose} disabled={running} hitSlop={8}>
-          <Text style={styles.backText}>←</Text>
+        <Pressable style={styles.back} onPress={() => (step === 1 || report ? leave() : setStep((s) => (s - 1) as Step))} disabled={running} hitSlop={8}>
+          <Icon name="chevron-left" size={26} />
         </Pressable>
         <Text style={styles.title}>Importar a {title}</Text>
-        <Text style={styles.step}>{report ? 'Listo' : `${step} de 2`}</Text>
+        <Text style={styles.step}>{report ? 'Listo' : `${step} de 3`}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -128,7 +212,7 @@ export function ImportScreen({ project, title, onClose }: Props) {
             </Text>
             <View style={styles.row}>
               <Button label={card.length ? 'Agregar más' : 'Elegir archivos'} onPress={pickFiles} disabled={busy} />
-              {card.length > 0 && <Button label="Siguiente" onPress={() => setConfirmed(true)} primary />}
+              {card.length > 0 && <Button label="Siguiente" onPress={toSettings} primary disabled={busy} />}
             </View>
             {ignored > 0 && <Text style={styles.warn}>{ignored} archivos no son fotos que Lumik importe y se dejaron fuera.</Text>}
             {card.length > 0 && (
@@ -151,7 +235,7 @@ export function ImportScreen({ project, title, onClose }: Props) {
                         onPress={() => setCard((c) => c.filter((f) => f.uri !== item.uri))}
                         hitSlop={8}
                       >
-                        <Text style={styles.removeText}>✕</Text>
+                        <Icon name="x" size={18} color="#9a9a9a" />
                       </Pressable>
                     </View>
                   )}
@@ -161,13 +245,62 @@ export function ImportScreen({ project, title, onClose }: Props) {
           </>
         )}
 
-        {step === 2 && !report && (
+        {step === 2 && (
+          <>
+            <Text style={styles.h2}>Ajustes de esta importación</Text>
+            <Text style={styles.muted}>Vienen de Ajustes; cambiarlos aquí no cambia los de la tablet.</Text>
+            <Toggle
+              label="Renombrar por fecha de captura"
+              detail={settings.rename ? `p. ej. ${renameExample(title)}` : 'Las fotos conservan el nombre de la cámara.'}
+              value={settings.rename}
+              onChange={(rename) => setSettings((s) => ({ ...s, rename }))}
+            />
+            <Toggle
+              label="Firmar las fotos"
+              detail={
+                settings.sign
+                  ? settings.author
+                    ? `Autor: ${settings.author}, en un .xmp junto a cada foto.`
+                    : 'Sin autor en Ajustes: solo se escribe la descripción del proyecto.'
+                  : 'No se escribe ningún .xmp.'
+              }
+              value={settings.sign}
+              onChange={(sign) => setSettings((s) => ({ ...s, sign }))}
+            />
+
+            <Text style={[styles.h2, styles.section]}>Del proyecto: al aprobar, entregar directamente</Text>
+            <DeliveryChoice value={delivery} onChange={chooseDelivery} disabled={!!pendingDelivery} />
+            {pendingDelivery && (
+              <View style={styles.ask}>
+                <Text style={styles.text}>
+                  {pendingDelivery.affected} {pendingDelivery.affected === 1 ? 'foto aprobada cambia' : 'fotos aprobadas cambian'} con esta opción. ¿Aplicarla
+                  también a ellas?
+                </Text>
+                <View style={styles.row}>
+                  <Button label="Solo a las siguientes" onPress={() => applyDelivery(false)} />
+                  <Button label="También a las aprobadas" onPress={() => applyDelivery(true)} primary />
+                </View>
+              </View>
+            )}
+
+            <View style={styles.row}>
+              <Button label="Atrás" onPress={() => setStep(1)} />
+              <Button label="Siguiente" onPress={() => setStep(3)} primary disabled={!!pendingDelivery} />
+            </View>
+          </>
+        )}
+
+        {step === 3 && !report && (
           <>
             <Text style={styles.h2}>
               {card.length} archivos · {(bytes / 1e9).toFixed(2)} GB → {title}
             </Text>
             <Text style={styles.muted}>
               {raws} RAW · {card.length - raws} JPG. Los RAW+JPG de la misma toma se unen en una foto.
+            </Text>
+            <Text style={styles.muted}>
+              {settings.rename ? 'Se renombran por fecha' : 'Conservan el nombre de la cámara'} ·{' '}
+              {settings.sign ? 'con firma' : 'sin firma'}
             </Text>
             {free !== null && (
               <Text style={fits ? styles.muted : styles.warn}>
@@ -178,7 +311,7 @@ export function ImportScreen({ project, title, onClose }: Props) {
             )}
             {!running && (
               <View style={styles.row}>
-                <Button label="Atrás" onPress={() => setConfirmed(false)} />
+                <Button label="Atrás" onPress={() => setStep(2)} />
                 <Button label="Importar" onPress={start} primary disabled={!fits} />
               </View>
             )}
@@ -201,11 +334,23 @@ export function ImportScreen({ project, title, onClose }: Props) {
                 {e}
               </Text>
             ))}
-            <Button label="Ir al proyecto" onPress={onClose} primary />
+            <Button label="Ir al proyecto" onPress={leave} primary />
           </>
         )}
       </ScrollView>
     </View>
+  );
+}
+
+function Toggle({ label, detail, value, onChange }: { label: string; detail: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <Pressable style={styles.toggle} onPress={() => onChange(!value)}>
+      <View style={styles.toggleText}>
+        <Text style={styles.text}>{label}</Text>
+        <Text style={styles.muted}>{detail}</Text>
+      </View>
+      <Switch value={value} onValueChange={onChange} trackColor={{ true: '#3b5bdb', false: '#333' }} thumbColor="#fff" />
+    </Pressable>
   );
 }
 
@@ -271,7 +416,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#131313' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#222' },
   back: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-  backText: { color: '#fff', fontSize: 24 },
   title: { color: '#fff', fontSize: 22, fontWeight: '600', flex: 1 },
   step: { color: '#9a9a9a', fontSize: 15 },
   content: { padding: 32, gap: 16, maxWidth: 820 },
@@ -289,8 +433,11 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 12 },
   file: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48, borderBottomWidth: 1, borderBottomColor: '#222' },
   remove: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' },
-  removeText: { color: '#9a9a9a', fontSize: 18 },
   progress: { gap: 10 },
   bar: { height: 8, borderRadius: 4, backgroundColor: '#2a2a2a', overflow: 'hidden' },
   barFill: { height: 8, backgroundColor: '#e9c349' },
+  section: { marginTop: 16 },
+  toggle: { flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 64, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: '#1f1f1f' },
+  toggleText: { flex: 1, gap: 2 },
+  ask: { gap: 12, padding: 16, borderRadius: 12, backgroundColor: '#2a2414' },
 });

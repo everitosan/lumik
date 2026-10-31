@@ -213,9 +213,17 @@ pub fn cache_thumbnail(src: &Path, dest: &Path) {
 /// Extract full-resolution embedded preview from a RAW/JPEG file and cache it at `dest`.
 /// Returns true on success. Falls back to the embedded thumbnail if the preview is unavailable.
 pub fn extract_preview(src: &Path, dest: &Path) -> bool {
-    // rawler is a RAW decoder — plain JPEGs are copied directly.
+    // rawler is a RAW decoder — plain JPEGs are copied directly, with their EXIF
+    // orientation set to 1: like the desktop, the viewer applies the rotation
+    // itself, and Android's image loader would otherwise rotate it a second time.
     if is_jpeg(src) {
-        return std::fs::copy(src, dest).is_ok();
+        return match std::fs::read(src) {
+            Ok(mut bytes) => {
+                reset_jpeg_orientation(&mut bytes);
+                std::fs::write(dest, bytes).is_ok()
+            }
+            Err(_) => false,
+        };
     }
 
     match extract_preview_pixels(src, PARAMS) {
@@ -249,6 +257,50 @@ pub fn extract_preview(src: &Path, dest: &Path) -> bool {
                 }
             }
         }
+    }
+}
+
+/// Sets the EXIF orientation tag of IFD0 to 1 (normal) in place, without
+/// re-encoding. Leaves the bytes untouched if there is no EXIF or no tag.
+fn reset_jpeg_orientation(bytes: &mut [u8]) {
+    let mut i = 2; // after SOI
+    while i + 4 <= bytes.len() && bytes[i] == 0xFF {
+        let marker = bytes[i + 1];
+        let len = u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]) as usize;
+        if marker == 0xDA || len < 2 {
+            return; // start of scan: no more metadata
+        }
+        let seg = i + 4;
+        if marker == 0xE1 && bytes.get(seg..seg + 6) == Some(b"Exif\0\0") {
+            let tiff = seg + 6;
+            let le = match bytes.get(tiff..tiff + 2) {
+                Some(b"II") => true,
+                Some(b"MM") => false,
+                _ => return,
+            };
+            let u16_at = |b: &[u8], o: usize| -> Option<u16> {
+                let v = b.get(o..o + 2)?;
+                Some(if le { u16::from_le_bytes([v[0], v[1]]) } else { u16::from_be_bytes([v[0], v[1]]) })
+            };
+            let u32_at = |b: &[u8], o: usize| -> Option<u32> {
+                let v = b.get(o..o + 4)?;
+                Some(if le { u32::from_le_bytes([v[0], v[1], v[2], v[3]]) } else { u32::from_be_bytes([v[0], v[1], v[2], v[3]]) })
+            };
+            let Some(ifd) = u32_at(bytes, tiff + 4).map(|o| tiff + o as usize) else { return };
+            let Some(count) = u16_at(bytes, ifd) else { return };
+            for e in 0..count as usize {
+                let entry = ifd + 2 + e * 12;
+                if u16_at(bytes, entry) == Some(0x0112) {
+                    let one: [u8; 2] = if le { 1u16.to_le_bytes() } else { 1u16.to_be_bytes() };
+                    if let Some(v) = bytes.get_mut(entry + 8..entry + 10) {
+                        v.copy_from_slice(&one);
+                    }
+                    return;
+                }
+            }
+            return;
+        }
+        i = seg + len - 2;
     }
 }
 
@@ -352,3 +404,52 @@ pub fn datetime_for_rename(path: &Path) -> String {
     }
     chrono::Local::now().format("%Y-%m-%d__%H-%M-%S").to_string()
 }
+
+/// Con una foto real: `LUMIK_RAW=/ruta/IMG.CR2 LUMIK_RAW_ROTATION=270 cargo test raw_rotation -- --ignored`.
+#[cfg(test)]
+#[test]
+#[ignore]
+fn raw_rotation_of_a_real_file() {
+    let path = std::path::PathBuf::from(std::env::var("LUMIK_RAW").expect("LUMIK_RAW"));
+    let expected: i32 = std::env::var("LUMIK_RAW_ROTATION").expect("LUMIK_RAW_ROTATION").parse().unwrap();
+    assert_eq!(read_exif_rotation(&path), expected, "{}", path.display());
+}
+
+/// Tamaños de la miniatura y la vista previa de una foto real, para ver si salen
+/// giradas: `LUMIK_RAW=/ruta/IMG.CR2 cargo test raw_images -- --ignored --nocapture`.
+#[cfg(test)]
+#[test]
+#[ignore]
+fn raw_images_of_a_real_file() {
+    let path = std::path::PathBuf::from(std::env::var("LUMIK_RAW").expect("LUMIK_RAW"));
+    let out = tempfile::tempdir().unwrap();
+    let (thumb, preview) = (out.path().join("t.jpg"), out.path().join("p.jpg"));
+    cache_thumbnail(&path, &thumb);
+    assert!(extract_preview(&path, &preview));
+    let size = |p: &std::path::Path| image::image_dimensions(p).unwrap();
+    eprintln!("rotación {} · miniatura {:?} · vista previa {:?}", read_exif_rotation(&path), size(&thumb), size(&preview));
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+
+    fn fixture(name: &str) -> std::path::PathBuf {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../apps/desktop/src-tauri/tests/fixtures").join(name)
+    }
+
+    #[test]
+    fn jpeg_preview_keeps_the_pixels_and_drops_the_orientation() {
+        let src = fixture("orient_6.jpg");
+        assert_eq!(read_exif_rotation(&src), 90);
+        let out = tempfile::tempdir().unwrap();
+        let dest = out.path().join("p.jpg");
+
+        assert!(extract_preview(&src, &dest));
+
+        assert_eq!(read_exif_rotation(&dest), 0, "el visor aplica la rotación; el archivo no");
+        assert_eq!(std::fs::metadata(&dest).unwrap().len(), std::fs::metadata(&src).unwrap().len(), "sin recodificar");
+        assert_eq!(image::image_dimensions(&dest).unwrap(), image::image_dimensions(&src).unwrap());
+    }
+}
+

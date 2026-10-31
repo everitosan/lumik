@@ -1,14 +1,16 @@
-// Ajustes de la tablet (spec `tablet-settings`): la firma del fotógrafo y
-// cómo se importa, y el nombre con que la tablet aparece en el candado de los
+// Ajustes de la tablet (spec `tablet-settings`): la firma del fotógrafo,
+// cómo se importa, la entrega al aprobar de los proyectos nuevos y el nombre con que la tablet aparece en el candado de los
 // proyectos. Se guardan en la sandbox al tocar "Guardar".
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { DeliveryChoice, defaultDelivery } from './delivery';
 import { renameInstall, thisInstall } from './lock';
 import { importSettings, savePrefs } from './prefs';
 
 export function SettingsScreen() {
   const [settings, setSettings] = useState(importSettings);
+  const [delivery, setDelivery] = useState(defaultDelivery);
   const [installName, setInstallName] = useState(() => thisInstall().name);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +22,7 @@ export function SettingsScreen() {
 
   const save = () => {
     try {
-      savePrefs({ importSettings: settings });
+      savePrefs({ importSettings: settings, defaultDelivery: delivery });
       setInstallName(renameInstall(installName).name);
       setError(null);
       setSaved(true);
@@ -49,6 +51,18 @@ export function SettingsScreen() {
         <Text style={styles.section}>Importación</Text>
         <Toggle label="Firmar las fotos al importar" value={settings.sign} onChange={(sign) => change({ sign })} />
         <Toggle label="Renombrar por fecha de captura al importar" value={settings.rename} onChange={(rename) => change({ rename })} />
+
+        <Text style={styles.section}>Entrega al aprobar en proyectos nuevos</Text>
+        <Text style={styles.muted}>
+          Cada proyecto toma este valor al crearse y después guarda el suyo. Se cambia al importar.
+        </Text>
+        <DeliveryChoice
+          value={delivery}
+          onChange={(mode) => {
+            setDelivery(mode);
+            setSaved(false);
+          }}
+        />
 
         <Text style={styles.section}>Esta tablet</Text>
         <Text style={styles.muted}>Así aparece en el desktop cuando tiene un proyecto abierto.</Text>

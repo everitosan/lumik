@@ -9,8 +9,9 @@ El spike de tablet (`tablet-app-spike`, 4.1) cerró con "seguir": en Android, Re
 - **La app de tablet sale del prototipo.** `apps/tablet-spike` pasa a `apps/tablet`, con su propio id de app. Se quitan las pestañas de experimentos y lo que solo era medición, y se conserva el registro de errores por etapa del import.
 - **El flujo de campo completo en la tablet:**
   - proyectos (inicio, crear, editar, archivar, eliminar), con las mismas reglas que el desktop;
-  - import desde el proyecto, con los ajustes y la firma del fotógrafo;
-  - culling táctil, con la entrega del JPG de cámara al aprobar;
+  - import desde el proyecto en tres pasos, como el desktop: archivos, ajustes (renombrar, firmar y la acción al aprobar del proyecto) e importar;
+  - culling táctil, con la entrega del JPG de cámara al aprobar y rotación (botones, guardada en el `.xmp`), con las fotos verticales bien giradas;
+  - buscador en el inicio que filtra los proyectos (sin búsqueda de fotos);
   - papelera y filtros;
   - discos con nombre;
   - el candado del proyecto.
@@ -23,7 +24,8 @@ El spike de tablet (`tablet-app-spike`, 4.1) cerró con "seguir": en Android, Re
   - ficha y prueba interna;
   - versión ligada a los tags del monorepo.
 - **BREAKING: se retira el build de Android de la app Tauri.** El desktop deja de compilarse para Android: se quitan `gen/android`, su código `#[cfg(target_os = "android")]` y las ramas de Android de la UI. Las specs que hablaban de "Android" pasan a referirse a la app de tablet o pierden ese caso.
-- **Fuera de alcance:** respaldo a la nube, búsqueda, análisis por contenido, álbumes y rotación en la tablet; la app de iPad, que espera la cuenta de Apple; y anunciar Android en la landing.
+- **En las dos apps:** el formulario de crear proyecto dice "Nombre del proyecto" y "Disco destino", y en la tablet la fecha se elige con un selector de fecha. Un proyecto sin portada elegida muestra su primera foto por fecha de captura.
+- **Fuera de alcance:** respaldo a la nube, búsqueda de fotos (texto y contenido; necesita un índice en la tablet), análisis por contenido y álbumes en la tablet; la app de iPad, que espera la cuenta de Apple; y anunciar Android en la landing.
 
 ## Capabilities
 
@@ -40,7 +42,9 @@ El spike de tablet (`tablet-app-spike`, 4.1) cerró con "seguir": en Android, Re
 - `device-detection`: el almacenamiento interno de Android y el refresco de discos pasan a la app de tablet. Se quita "Nombre amigable en Android", que era de la app Tauri.
 - `photo-import`: la firma en sidecar `.xmp` es de la app de tablet, no de "Android".
 - `photo-rating`: el caso "Android" de los sidecars para iPad pasa a la app de tablet.
-- `photo-rotation`: se quita el caso de Android, porque la tablet no rota en esta versión.
+- `photo-rotation`: el caso de Android pasa a la app de tablet, que guarda la orientación en el `.xmp`.
+- `project-management`: portada por defecto (primera foto por fecha de captura) y textos y fecha del formulario de crear proyecto.
+- `photo-search`: en la tablet el buscador del dashboard solo filtra proyectos.
 - `photo-viewer`: los gestos táctiles dejan de citar Android, y "Mostrar en carpeta" existe en la tablet, donde abre la app de Archivos.
 
 ## Impact

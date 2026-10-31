@@ -22,7 +22,8 @@ src/
   Viewer.tsx            # gestos del visor (Gesture Handler + Reanimated)
   GestureGuide.tsx      # guía de gestos con dedos animados
   PhotoInfoPanel.tsx    # histograma y datos de la toma
-  ImportScreen.tsx      # import en dos pasos desde el proyecto
+  Icon.tsx              # íconos Lucide con los mismos nombres que `Icon` de `@lumik/ui`
+  ImportScreen.tsx      # import en tres pasos (archivos, ajustes, importar) desde el proyecto
   SettingsScreen.tsx    # fotógrafo, firmar y renombrar al importar, nombre de la tablet
   importer.ts           # import: tarjeta → sandbox + staging del disco → `_media/`
   session.ts            # proyecto abierto: copia de trabajo, devolución, candado

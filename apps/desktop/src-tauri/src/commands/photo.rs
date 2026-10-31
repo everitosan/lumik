@@ -338,7 +338,7 @@ pub fn get_project_cover_thumbnail(
     use base64::{engine::general_purpose::STANDARD, Engine};
 
     let project_db = state.project_db(&project_id)?;
-    let cover_path = project_db.get_project()?.and_then(|p| p.cover_photo_path);
+    let cover_path = project_db.effective_cover_path()?;
 
     let Some(rel_path) = cover_path else {
         return Ok(None);

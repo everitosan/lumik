@@ -13,6 +13,12 @@ import { lockMessage } from './lock';
 import { type EditForm, ProjectLockedError } from './projectActions';
 import { readPrefs, savePrefs, type SortDirection } from './prefs';
 import type { DiskProject } from './session';
+import { DateField } from './DateField';
+import { Icon } from './Icon';
+
+const COLUMNS = 4;
+const CARD_GAP = 16;
+const PADDING = 24;
 
 export type ProjectMenuActions = {
   archive: (p: DiskProject, archived: boolean, force: boolean) => Promise<void>;
@@ -81,7 +87,19 @@ export function ProjectsDashboard({ trees, labelOf, projects, busy, cards, onOpe
     });
   }, [projects, cards]);
   const archivedCount = unique.filter((p) => cards.get(p.uri)?.card?.archived).length;
-  const shown = unique.filter((p) => showArchived || !cards.get(p.uri)?.card?.archived);
+  // Buscador (spec `photo-search`, "Buscador en la tablet"): nombre o descripción, sin mayúsculas ni acentos.
+  const [query, setQuery] = useState('');
+  // Siempre 4 tarjetas por fila: el ancho sale del de la lista, medido.
+  const [listWidth, setListWidth] = useState(0);
+  const cardWidth = listWidth > 0 ? Math.floor((listWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS) : undefined;
+  const needle = fold(query.trim());
+  const matches = (p: DiskProject) => {
+    if (!needle) return true;
+    const info = cards.get(p.uri);
+    const name = info?.title ?? p.name.split('/').pop() ?? p.name;
+    return fold(`${name} ${info?.card?.description ?? ''}`).includes(needle);
+  };
+  const shown = unique.filter((p) => (showArchived || !cards.get(p.uri)?.card?.archived) && matches(p));
   const totalPhotos = shown.reduce((n, p) => n + (cards.get(p.uri)?.card?.photoCount ?? 0), 0);
 
   // Por año de la sesión (o de creación), como el desktop; mientras llegan los
@@ -135,17 +153,29 @@ export function ProjectsDashboard({ trees, labelOf, projects, busy, cards, onOpe
             <Text style={styles.statValue}>{totalPhotos.toLocaleString('es-MX')}</Text> fotos
           </Text>
         </View>
+        <TextInput
+          style={styles.search}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Buscar proyectos"
+          placeholderTextColor="#777"
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+        />
         <Pressable style={({ pressed }) => [styles.primary, pressed && styles.pressed]} onPress={onNew} disabled={!!busy}>
           <Text style={styles.primaryText}>+ Proyecto</Text>
         </Pressable>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} onLayout={(e) => setListWidth(e.nativeEvent.layout.width - 2 * PADDING)}>
         {busy && <Text style={styles.busy}>{busy}…</Text>}
         {error && <Text style={styles.error}>{error}</Text>}
         {trees.length === 0 && (
           <Pressable onPress={onChooseDisk}>
             <Text style={styles.empty}>Agrega un disco en "Discos" para ver sus proyectos.</Text>
           </Pressable>
+        )}
+        {needle && unique.length > 0 && shown.length === 0 && (
+          <Text style={styles.empty}>Ningún proyecto coincide con "{query.trim()}".</Text>
         )}
         {trees.length > 0 && projects && projects.length === 0 && (
           <Text style={styles.empty}>Los discos conectados no tienen proyectos todavía. Crea uno con "+ Proyecto".</Text>
@@ -161,7 +191,7 @@ export function ProjectsDashboard({ trees, labelOf, projects, busy, cards, onOpe
                 return (
                   <Pressable
                     key={p.uri}
-                    style={({ pressed }) => [styles.card, card?.archived && styles.cardArchived, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.card, { width: cardWidth }, card?.archived && styles.cardArchived, pressed && styles.pressed]}
                     onPress={() => onOpen(p)}
                     onLongPress={() => setMenu(p)}
                     disabled={!!busy}
@@ -180,7 +210,7 @@ export function ProjectsDashboard({ trees, labelOf, projects, busy, cards, onOpe
                         {title}
                       </Text>
                       <Pressable style={styles.menuButton} onPress={() => setMenu(p)} hitSlop={10} disabled={!!busy}>
-                        <Text style={styles.menuButtonText}>⋯</Text>
+                        <Icon name="menu" size={20} color="#c2c6d7" />
                       </Pressable>
                     </View>
                     {card && (
@@ -189,9 +219,12 @@ export function ProjectsDashboard({ trees, labelOf, projects, busy, cards, onOpe
                       </Text>
                     )}
                     {trees.length > 1 && (
-                      <Text style={styles.cardMeta} numberOfLines={1}>
-                        ⛁ {labelOf(p.tree)}
-                      </Text>
+                      <View style={styles.cardDisk}>
+                        <Icon name="drive" size={13} color="#9a9a9a" />
+                        <Text style={styles.cardMeta} numberOfLines={1}>
+                          {labelOf(p.tree)}
+                        </Text>
+                      </View>
                     )}
                     {p.lock?.state === 'foreign' && (
                       <Text style={[styles.lockTag, p.lock.pending && styles.lockTagWarn]} numberOfLines={1}>
@@ -380,14 +413,8 @@ function EditProjectSheet({
           <Text style={styles.label}>Nombre del proyecto</Text>
           <TextInput style={styles.input} value={form.name} onChangeText={(name) => setForm((f) => ({ ...f, name }))} editable={!saving} />
           {tried && !nameOk && <Text style={styles.error}>El nombre del proyecto es requerido</Text>}
-          <Text style={styles.label}>Fecha de sesión (AAAA-MM-DD)</Text>
-          <TextInput
-            style={styles.input}
-            value={form.date}
-            onChangeText={(date) => setForm((f) => ({ ...f, date }))}
-            keyboardType="numbers-and-punctuation"
-            editable={!saving}
-          />
+          <Text style={styles.label}>Fecha de sesión</Text>
+          <DateField value={form.date} onChange={(date) => setForm((f) => ({ ...f, date }))} disabled={saving} />
           {tried && !dateOk && <Text style={styles.error}>La fecha de sesión es requerida</Text>}
           <Text style={styles.label}>Descripción</Text>
           <TextInput
@@ -465,13 +492,14 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 16, gap: 16 },
   headerLeft: { gap: 2 },
   title: { color: '#fff', fontSize: 28, fontWeight: '600' },
+  search: { flex: 1, maxWidth: 420, minHeight: 48, paddingHorizontal: 16, borderRadius: 24, backgroundColor: '#262626', color: '#fff', fontSize: 16 },
   stats: { color: '#9a9a9a', fontSize: 14 },
   statValue: { color: '#fff', fontWeight: '600' },
   primary: { minHeight: 48, paddingHorizontal: 20, justifyContent: 'center', borderRadius: 24, backgroundColor: '#2c3a5c' },
   primaryText: { color: '#c7d6ff', fontSize: 15, fontWeight: '600' },
   pressed: { opacity: 0.7 },
   off: { opacity: 0.4 },
-  content: { paddingHorizontal: 24, paddingBottom: 48, gap: 20 },
+  content: { paddingHorizontal: PADDING, paddingBottom: 48, gap: 20 },
   busy: { color: '#e9c349', fontSize: 15 },
   empty: { color: '#9a9a9a', fontSize: 16, paddingVertical: 24 },
   muted: { color: '#8c8c8c', fontSize: 14 },
@@ -479,10 +507,10 @@ const styles = StyleSheet.create({
   warning: { color: '#e9c349', fontSize: 14 },
   group: { gap: 10 },
   groupTitle: { color: '#9a9a9a', fontSize: 15, fontWeight: '600' },
-  cards: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+  cards: { flexDirection: 'row', flexWrap: 'wrap', gap: CARD_GAP },
   card: { width: 220, gap: 4 },
   cardArchived: { opacity: 0.6 },
-  cardArt: { height: 150, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1f1f1f', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  cardArt: { aspectRatio: 220 / 150, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1f1f1f', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   cover: { width: '100%', height: '100%' },
   cardInitial: { color: '#444', fontSize: 48, fontWeight: '700' },
   status: {
@@ -514,8 +542,8 @@ const styles = StyleSheet.create({
   cardTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
   cardName: { color: '#fff', fontSize: 16, flex: 1 },
   menuButton: { width: 36, height: 28, alignItems: 'center', justifyContent: 'center' },
-  menuButtonText: { color: '#c2c6d7', fontSize: 20, fontWeight: '700' },
   cardMeta: { color: '#9a9a9a', fontSize: 13 },
+  cardDisk: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   lockTag: { color: '#c7d6ff', fontSize: 13 },
   lockTagWarn: { color: '#e9c349' },
   footer: {
@@ -573,3 +601,10 @@ const styles = StyleSheet.create({
   dangerButton: { minHeight: 48, paddingHorizontal: 22, justifyContent: 'center', borderRadius: 24, backgroundColor: '#7f1d1d' },
   dangerButtonText: { color: '#fecaca', fontSize: 15, fontWeight: '600' },
 });
+
+/** Minúsculas y sin acentos, para comparar al buscar. */
+const fold = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();

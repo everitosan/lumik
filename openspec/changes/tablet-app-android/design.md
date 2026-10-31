@@ -17,7 +17,7 @@
 
 **Non-Goals:**
 - iPad: espera la cuenta de Apple. El código queda listo para sumarlo (Expo).
-- Respaldo, búsqueda, análisis por contenido, álbumes y rotación en la tablet.
+- Respaldo, búsqueda de fotos, análisis por contenido y álbumes en la tablet.
 - Cambiar la opción de entrega del proyecto desde la tablet: se respeta la que tiene, y se cambia en el desktop.
 - Idioma inglés en la tablet: la v1 sale en español (ver Riesgos).
 - Anunciar Android en la landing.
@@ -83,6 +83,26 @@ release.yml: job build-tablet-android (ubuntu)
 ### D7. Rama
 
 Se integra `spike/tablet-app` en `release/0.2.0` (avance rápido: `release/0.2.0` no tiene commits propios después del inicio del spike). El trabajo sigue en `release/0.2.0` y la tablet sale con los tags `v0.2.0-beta.N`.
+
+### D8. Paso de ajustes en el import
+
+El import pasa a tres pasos, como el wizard del desktop: archivos → ajustes → importar. Los ajustes de la importación se precargan con `importSettings()` y viven solo en el estado de la pantalla, sin tocar los de la tablet. La opción de entrega del proyecto se lee y se cambia con `ChangeDeliveryMode` del núcleo, expuesto en `lumik-mobile` (`plan_delivery_change` y `set_delivery_mode`) sobre la copia de trabajo y el disco por SAF, como el culling. Si el cambio afecta a fotos ya aprobadas, se pregunta con el mismo texto que el desktop.
+
+### D9. Rotación en la tablet
+
+Botones de rotar en la barra del visor. Llaman a `RotatePhoto` del núcleo desde `lumik-mobile`, sobre la copia de trabajo, con `AndroidMetadata.set_orientation`, que escribe el `.xmp` en la sandbox. La app sube el `.xmp` y la miniatura girada al disco con `replaceFile` y devuelve la base con el debounce de siempre. La miniatura del caché se gira en la sandbox para que la tira la muestre al momento.
+
+### D10. Orientación de los RAW de Canon
+
+`read_exif_rotation` de `lumik-mobile` usa rawler para los RAW. Hay que confirmar con un `.cr2` vertical real si rawler devuelve la orientación. Si no, se lee la etiqueta `Orientation` del IFD0 con `kamadak-exif`, que sí entiende la estructura TIFF del CR2. Se prueba con una muestra de la tarjeta del fotógrafo como test ignorado (`LUMIK_RAW=...`).
+
+### D11. Portada por defecto en el núcleo
+
+`get_project_dashboard_entry` (y la portada del desktop) caen en la primera foto por `capture_date` (y `id` para desempatar) cuando `cover_photo_path` está vacío. Como la tablet lee la portada de `project_card`, que usa esa misma consulta, las dos apps coinciden, y la tablet deja de tomar el primer archivo que lista `.thumbs/`.
+
+### D12. Selector de fecha y textos del formulario
+
+En la tablet, `@react-native-community/datetimepicker` (instalado con `expo install`) en modo diálogo de Android. Los textos "Nombre del proyecto" y "Disco destino" cambian en `es.json`/`en.json` del desktop y en `HomeScreen` de la tablet.
 
 ## Risks / Trade-offs
 

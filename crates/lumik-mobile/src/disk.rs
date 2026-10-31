@@ -4,8 +4,11 @@
 //! TypeScript sobre el módulo de Kotlin). La base es la copia de trabajo de la
 //! sandbox (modo espejado, D2).
 
-use lumik_core::application::ports::{DirFile, FileStore, FinderTagWriter, Fingerprint};
+use lumik_core::application::ports::{DirFile, FileStore, FinderTagWriter, Fingerprint, ImageProcessor};
+use lumik_core::application::use_cases::change_delivery_mode::ChangeDeliveryMode;
 use lumik_core::application::use_cases::cull_photo::CullPhoto;
+use lumik_core::application::use_cases::rotate_photo::RotatePhoto;
+use lumik_core::domain::delivery::DeliveryMode;
 use lumik_core::application::use_cases::trash_photo::{RestorePhoto, TrashPhoto};
 use lumik_core::db::ProjectDatabase;
 use std::path::{Path, PathBuf};
@@ -137,6 +140,103 @@ pub fn cull_photo(mirror_dir: String, photo_id: String, culled: bool, disk: Arc<
     .map_err(MirrorError::Db)
 }
 
+/// Miniaturas del caché de la tablet (`{dir}/{id}.jpg`): lo único que
+/// `RotatePhoto` necesita de las imágenes es girar la miniatura.
+struct CachedThumbs(PathBuf);
+impl ImageProcessor for CachedThumbs {
+    fn cache_thumbnail(&self, _src: &Path, _photo_id: &str, _rotation: Option<i32>) -> Option<i32> {
+        None
+    }
+    fn rotate_thumbnail(&self, _project_dir: &Path, photo_id: &str, delta: i32) {
+        let path = self.0.join(format!("{photo_id}.jpg"));
+        let Ok(img) = image::open(&path) else { return };
+        let rotated = match delta.rem_euclid(360) {
+            90 => img.rotate90(),
+            180 => img.rotate180(),
+            270 => img.rotate270(),
+            _ => return,
+        };
+        let tmp = path.with_extension("tmp.jpg");
+        if rotated.save(&tmp).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+    fn ensure_preview(&self, _src: &Path, _project_dir: &Path, _photo_id: &str) -> Option<PathBuf> {
+        None
+    }
+    fn jpeg_preview_bytes(&self, _src: &Path) -> Result<Vec<u8>, String> {
+        Err("sin vistas previas aquí".into())
+    }
+}
+
+/// Rota la foto con el `RotatePhoto` del desktop sobre la copia de trabajo y
+/// gira su miniatura en `thumbs_dir` (caché de la tablet). Devuelve las rutas,
+/// relativas al proyecto, de los archivos cuya orientación hay que escribir en
+/// su `.xmp` (el original y, en un par, su JPG): la app los sube por SAF.
+#[uniffi::export]
+pub fn rotate_photo(mirror_dir: String, thumbs_dir: String, photo_id: String, rotation: i32) -> Result<Vec<String>, MirrorError> {
+    let db = open(&mirror_dir)?;
+    RotatePhoto { photos: &db, images: &CachedThumbs(PathBuf::from(thumbs_dir)), project_dir: Path::new(DISK_ROOT) }
+        .execute(&photo_id, rotation)
+        .map_err(MirrorError::Db)
+}
+
+/// Escribe la orientación en el `.xmp` junto a `file` (sandbox), creándolo si no existe.
+#[uniffi::export]
+pub fn write_sidecar_orientation(file: String, rotation: i32) -> Result<(), MirrorError> {
+    lumik_core::import::xmp::update_xmp_orientation(Path::new(&file), rotation).map_err(MirrorError::Io)
+}
+
+/// Qué cambiaría al pasar la entrega del proyecto a `mode` (como
+/// `plan_project_delivery_change` del desktop).
+#[derive(uniffi::Record)]
+pub struct DeliveryPlanView {
+    /// Aprobadas cuyo JPG se entregaría ahora.
+    pub deliver: u32,
+    /// JPG entregados que volverían junto a su RAW.
+    pub return_back: u32,
+    /// JPG entregados que se editaron: se quedan como están.
+    pub edits_kept: u32,
+}
+
+/// Opción "Al aprobar, entregar directamente" del proyecto: `none`, `pairs` o `all_camera_jpg`.
+#[uniffi::export]
+pub fn delivery_mode(mirror_dir: String) -> Result<String, MirrorError> {
+    let db = open(&mirror_dir)?;
+    Ok(db.delivery_mode().map_err(|e| MirrorError::Db(e.to_string()))?.as_str().to_string())
+}
+
+#[uniffi::export]
+pub fn plan_delivery_change(mirror_dir: String, mode: String, disk: Arc<dyn DiskFiles>) -> Result<DeliveryPlanView, MirrorError> {
+    let db = open(&mirror_dir)?;
+    let files = SafFileStore(disk);
+    let plan = ChangeDeliveryMode { photos: &db, files: &files, finder_tags: &NoFinderTags, project_dir: Path::new(DISK_ROOT) }
+        .plan(DeliveryMode::parse(&mode))
+        .map_err(MirrorError::Db)?;
+    Ok(DeliveryPlanView { deliver: plan.deliver as u32, return_back: plan.return_back as u32, edits_kept: plan.edits_kept as u32 })
+}
+
+/// Cambia la entrega del proyecto con el `ChangeDeliveryMode` del desktop. Con
+/// `apply_to_approved`, también entrega o regresa los JPG de las ya aprobadas
+/// en el disco por SAF; si no, solo aplica a las siguientes aprobaciones.
+#[uniffi::export]
+pub fn set_delivery_mode(mirror_dir: String, mode: String, apply_to_approved: bool, disk: Arc<dyn DiskFiles>) -> Result<(), MirrorError> {
+    let db = open(&mirror_dir)?;
+    let mode = DeliveryMode::parse(&mode);
+    db.set_delivery_mode(mode).map_err(|e| MirrorError::Db(e.to_string()))?;
+    if !apply_to_approved {
+        return Ok(());
+    }
+    let files = SafFileStore(disk);
+    let outcome = ChangeDeliveryMode { photos: &db, files: &files, finder_tags: &NoFinderTags, project_dir: Path::new(DISK_ROOT) }
+        .apply(mode)
+        .map_err(MirrorError::Db)?;
+    if let Some((file, error)) = outcome.failed.first() {
+        return Err(MirrorError::Io(format!("{} archivos no se pudieron mover; el primero, {file}: {error}", outcome.failed.len())));
+    }
+    Ok(())
+}
+
 /// Mueve la foto a la papelera con el `TrashPhoto` del desktop: aparta sus
 /// archivos en `_trash/` del disco y la marca en la copia de trabajo.
 #[uniffi::export]
@@ -206,6 +306,52 @@ mod tests {
         fn list_files(&self, _rel: String) -> Result<Vec<DiskFile>, DiskError> {
             Ok(vec![])
         }
+    }
+
+    #[test]
+    fn delivery_mode_changes_in_the_working_copy() {
+        let work = tempfile::tempdir().unwrap();
+        let mirror = work.path().display().to_string();
+        crate::project::create_project_db(mirror.clone(), "Boda".into(), None, Some("2026-10-30".into()), "c".into(), "none".into()).unwrap();
+        let disk: Arc<dyn DiskFiles> = Arc::new(MemDisk::default());
+        assert_eq!(delivery_mode(mirror.clone()).unwrap(), "none");
+
+        let plan = plan_delivery_change(mirror.clone(), "pairs".into(), disk.clone()).unwrap();
+        assert_eq!((plan.deliver, plan.return_back, plan.edits_kept), (0, 0, 0), "sin aprobadas no hay nada que mover");
+
+        set_delivery_mode(mirror.clone(), "pairs".into(), true, disk).unwrap();
+        assert_eq!(delivery_mode(mirror).unwrap(), "pairs");
+    }
+
+    #[test]
+    fn rotate_saves_the_rotation_and_turns_the_cached_thumbnail() {
+        let work = tempfile::tempdir().unwrap();
+        let mirror = work.path().display().to_string();
+        crate::project::create_project_db(mirror.clone(), "Boda".into(), None, None, "c".into(), "none".into()).unwrap();
+        let db = open(&mirror).unwrap();
+        let photo = db
+            .create_photos_batch(&[lumik_core::db::models::CreatePhoto {
+                project_id: db.project_id.clone(),
+                dng_path: "_media/A.cr2".into(),
+                device_uuid: String::new(),
+                ..Default::default()
+            }])
+            .unwrap()
+            .remove(0);
+        drop(db);
+        let thumbs = work.path().join("thumbs");
+        std::fs::create_dir_all(&thumbs).unwrap();
+        image::RgbImage::new(320, 213).save(thumbs.join(format!("{}.jpg", photo.id))).unwrap();
+
+        let files = rotate_photo(mirror.clone(), thumbs.display().to_string(), photo.id.clone(), 90).unwrap();
+
+        assert_eq!(files, vec!["_media/A.cr2".to_string()]);
+        assert_eq!(open(&mirror).unwrap().get_photo(&photo.id).unwrap().unwrap().rotation, 90);
+        assert_eq!(image::image_dimensions(thumbs.join(format!("{}.jpg", photo.id))).unwrap(), (213, 320));
+
+        let sidecar = work.path().join("A.cr2");
+        write_sidecar_orientation(sidecar.display().to_string(), 90).unwrap();
+        assert!(std::fs::read_to_string(work.path().join("A.xmp")).unwrap().contains("<tiff:Orientation>6</tiff:Orientation>"));
     }
 
     #[test]

@@ -157,8 +157,9 @@ pub struct NewProject {
 
 /// Crea el `project.db` de un proyecto nuevo en `work_dir` (sandbox), como
 /// `create_project` del desktop: id nuevo, carpeta por la fecha de la sesión
-/// (o la de hoy) y la entrega y el análisis de fábrica (la tablet aún no
-/// tiene ajustes globales). La app sube la base y crea las carpetas en el disco.
+/// (o la de hoy), la entrega al aprobar de los ajustes de la tablet
+/// (`delivery_mode`: `none`, `pairs` o `all_camera_jpg`) y el análisis de
+/// fábrica. La app sube la base y crea las carpetas en el disco.
 #[uniffi::export]
 pub fn create_project_db(
     work_dir: String,
@@ -166,6 +167,7 @@ pub fn create_project_db(
     description: Option<String>,
     session_date: Option<String>,
     creator_id: String,
+    delivery_mode: String,
 ) -> Result<NewProject, ProjectError> {
     use lumik_core::domain::project::ProjectFolder;
     let name = name.trim().to_string();
@@ -186,7 +188,7 @@ pub fn create_project_db(
     let db = ProjectDatabase::create(work.join("project.db"), &id, &name, &creator_id, description.as_deref(), session_date.as_deref(), "", work.clone())
         .map_err(|e| ProjectError::Open(e.to_string()))?;
     let defaults = lumik_core::db::models::AppSettings::default();
-    db.set_delivery_mode(defaults.default_delivery_mode).map_err(|e| ProjectError::Open(e.to_string()))?;
+    db.set_delivery_mode(lumik_core::domain::delivery::DeliveryMode::parse(&delivery_mode)).map_err(|e| ProjectError::Open(e.to_string()))?;
     db.set_analysis_mode(defaults.default_analysis_mode).map_err(|e| ProjectError::Open(e.to_string()))?;
     Ok(NewProject { id, dir })
 }
@@ -198,11 +200,12 @@ mod create_tests {
     #[test]
     fn creates_a_project_like_the_desktop() {
         let work = tempfile::tempdir().unwrap();
-        let p = create_project_db(work.path().display().to_string(), " Boda Ana ".into(), None, Some("2026-10-24".into()), "tablet".into()).unwrap();
+        let p = create_project_db(work.path().display().to_string(), " Boda Ana ".into(), None, Some("2026-10-24".into()), "tablet".into(), "pairs".into()).unwrap();
         assert_eq!(p.dir, "lumik/2026/10/24_Boda Ana");
         let photos = open_project(work.path().display().to_string()).unwrap();
         assert!(photos.is_empty());
         let db = ProjectDatabase::open(work.path().join("project.db"), "", work.path().to_path_buf()).unwrap();
         assert_eq!(db.get_project().unwrap().unwrap().name, "Boda Ana");
+        assert_eq!(db.delivery_mode().unwrap().as_str(), "pairs", "la entrega de los ajustes de la tablet");
     }
 }

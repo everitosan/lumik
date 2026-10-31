@@ -4,6 +4,7 @@
 import { copyPathToFd, createProjectDb } from '@lumik/core-native';
 
 import Saf from '../modules/saf/src/LumikSafModule';
+import { defaultDelivery } from './delivery';
 import { thisInstall } from './lock';
 import { FILES_DIR } from './paths';
 
@@ -23,6 +24,7 @@ export async function createProject(form: ProjectForm): Promise<string> {
     form.description.trim() || undefined,
     form.date.trim() || undefined,
     thisInstall().id,
+    defaultDelivery(),
   );
   // Si se eligió la propia carpeta `lumik/` como disco, la ruta empieza debajo.
   const root = Saf.rootDocument(tree);

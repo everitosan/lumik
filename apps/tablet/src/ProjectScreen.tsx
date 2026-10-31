@@ -10,6 +10,8 @@ import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'r
 
 import type { PhotoInfo } from '@lumik/core-native';
 
+import { Icon } from './Icon';
+
 // Mismos colores que `@lumik/ui` (PhotoCard) y la barra lateral del desktop.
 const LABEL_COLORS = ['#C0392B', '#E9C349', '#27AE60', '#4B7FE8', '#9B59B6'];
 // Como el desktop: tarjetas de al menos 200 de ancho, foto 4:3 y nombre y datos.
@@ -191,7 +193,7 @@ export function ProjectScreen(props: Props) {
           </Text>
           {hasMenu && (
             <Pressable style={styles.menuButton} onPress={() => setMenu(index)} hitSlop={10}>
-              <Text style={styles.menuButtonText}>⋯</Text>
+              <Icon name="menu" size={18} color="#c2c6d7" />
             </Pressable>
           )}
         </View>
@@ -202,10 +204,11 @@ export function ProjectScreen(props: Props) {
         <View style={styles.cardFooter}>
           <View style={styles.footerRow}>
             <Text style={styles.date}>{date}</Text>
-            <Text style={styles.cardStars}>
-              <Text style={styles.cardStarOn}>{'★'.repeat(p.info.stars)}</Text>
-              {'★'.repeat(5 - p.info.stars)}
-            </Text>
+            <View style={styles.cardStars}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <Icon key={n} name="star-filled" size={12} color={n <= p.info.stars ? '#e9c349' : '#424654'} />
+              ))}
+            </View>
           </View>
           <View style={styles.footerRow}>
             <Text style={styles.date}>{time}</Text>
@@ -223,8 +226,9 @@ export function ProjectScreen(props: Props) {
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Pressable style={({ pressed }) => [styles.pill, pressed && styles.pressed]} onPress={onBack} hitSlop={8}>
-          <Text style={styles.pillText}>‹ Proyectos</Text>
+        <Pressable style={({ pressed }) => [styles.pill, styles.pillBack, pressed && styles.pressed]} onPress={onBack} hitSlop={8}>
+          <Icon name="chevron-left" size={18} />
+          <Text style={styles.pillText}>Proyectos</Text>
         </Pressable>
         <Text style={styles.title} numberOfLines={1}>
           {title}
@@ -325,7 +329,7 @@ export function ProjectScreen(props: Props) {
             </Pressable>
             {[1, 2, 3, 4, 5].map((n) => (
               <Pressable key={n} style={styles.mark} onPress={() => set({ minStars: filters.minStars === n ? null : n })}>
-                <Text style={[styles.star, filters.minStars !== null && n <= filters.minStars && styles.starOn]}>★</Text>
+                <Icon name="star-filled" size={24} color={filters.minStars !== null && n <= filters.minStars ? '#e9c349' : '#555'} />
               </Pressable>
             ))}
           </View>
@@ -444,6 +448,7 @@ function Toggle({ label, on, onPress }: { label: string; on: boolean; onPress: (
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#131313' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 16, paddingVertical: 12 },
+  pillBack: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 10 },
   pill: { minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 22, backgroundColor: '#262626' },
   pillText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   title: { color: '#fff', fontSize: 24, fontWeight: '600', flex: 1 },
@@ -480,7 +485,6 @@ const styles = StyleSheet.create({
   cardHeader: { height: CARD_HEADER, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, borderBottomWidth: 1, borderBottomColor: '#424654' },
   fileName: { flex: 1, color: '#c2c6d7', fontSize: 12, fontFamily: 'monospace' },
   menuButton: { width: 36, height: CARD_HEADER, alignItems: 'center', justifyContent: 'center' },
-  menuButtonText: { color: '#c2c6d7', fontSize: 18, fontWeight: '700' },
   thumbFrame: { backgroundColor: '#0e0e0e' },
   thumb: { flex: 1 },
   format: {
@@ -500,8 +504,7 @@ const styles = StyleSheet.create({
   cardFooter: { height: CARD_FOOTER, paddingHorizontal: 8, justifyContent: 'center', gap: 4, borderTopWidth: 1, borderTopColor: '#424654' },
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   date: { color: '#8c90a0', fontSize: 12, fontFamily: 'monospace' },
-  cardStars: { color: '#424654', fontSize: 12, letterSpacing: 1 },
-  cardStarOn: { color: '#e9c349' },
+  cardStars: { flexDirection: 'row', gap: 1 },
   labels: { flexDirection: 'row', gap: 4 },
   label: { width: 12, height: 12, borderRadius: 6 },
   scrim: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
@@ -530,8 +533,6 @@ const styles = StyleSheet.create({
   mode: { width: 32, height: 44, alignItems: 'center', justifyContent: 'center' },
   modeText: { color: '#9a9a9a', fontSize: 18, fontWeight: '700' },
   mark: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
-  star: { color: '#555', fontSize: 22 },
-  starOn: { color: '#e9c349' },
   dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
   filterButton: { minHeight: 48, paddingHorizontal: 22, justifyContent: 'center', borderRadius: 24, backgroundColor: '#262626' },
   filterButtonOn: { backgroundColor: '#2c3a5c' },

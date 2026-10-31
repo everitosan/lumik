@@ -55,3 +55,18 @@ El visor SHALL ofrecer un panel ocultable con el histograma RGB de la foto y sus
 #### Scenario: Abrir el panel
 - **WHEN** el fotógrafo toca el botón de información
 - **THEN** aparece sobre la foto el panel con el histograma y los datos de la toma
+
+### Requirement: Rotar en el visor
+El visor SHALL ofrecer rotar la foto a la izquierda y a la derecha. La rotación SHALL verse al instante en la foto y en su miniatura, guardarse en el proyecto y escribirse en el sidecar `.xmp` de la foto, sin modificar el archivo original (`photo-rotation`).
+
+#### Scenario: Rotar una foto acostada
+- **WHEN** el fotógrafo rota a la derecha una foto que se ve acostada
+- **THEN** la foto y su miniatura se ven derechas, y al abrir el proyecto en el desktop la foto aparece con la misma orientación
+
+### Requirement: Orientación de la cámara
+Las fotos SHALL mostrarse en el visor, en la tira y en el grid con la orientación que guardó la cámara, también en los RAW de Canon (`.cr2`, `.cr3`), igual que en el desktop.
+
+#### Scenario: Foto vertical de una Canon
+- **WHEN** se importa en la tablet un `.cr2` tomado con la cámara en vertical
+- **THEN** la foto se ve vertical en el grid, en la tira y en el visor
+

@@ -158,7 +158,7 @@
       "name": "Nombre del proyecto",
       "namePlaceholder": "Ej. Boda Juan y María",
       "date": "Fecha de sesión",
-      "device": "Dispositivo de destino",
+      "device": "Disco destino",
       "description": "Descripción",
       "descriptionPlaceholder": "Agregar notas sobre el proyecto...",
       "validation": {

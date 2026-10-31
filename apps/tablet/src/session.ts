@@ -11,19 +11,28 @@
 // relee: si otro lo tomó, la tablet deja de escribir.
 import {
   type LockView,
+  copyFdToPath,
   cullPhoto,
+  deliveryMode,
+  type DeliveryPlanView,
+  planDeliveryChange,
+  setDeliveryMode,
   getViewSettings,
   missingFiles,
   openProject,
   openProjectTrash,
   type PhotoInfo,
   ratePhoto,
+  readText,
+  resetDir,
   restorePhoto,
+  rotatePhoto,
   saveViewSettings,
   startCopyToDir,
   startFdToPath,
   trashPhoto,
   type ViewSettings,
+  writeSidecarOrientation,
 } from '@lumik/core-native';
 
 import Saf from '../modules/saf/src/LumikSafModule';
@@ -32,6 +41,7 @@ import { safDiskFiles } from './disk';
 import { pullProjectDb, pushProjectDb } from './projectDb';
 import { readLock, removeLock, writeOwnLock } from './lock';
 import { FILES_DIR } from './paths';
+import { replaceFile, replaceFileFromPath } from './safWrite';
 
 export { FILES_DIR };
 // Tras calificar o etiquetar, cuánto esperar otro cambio antes de devolver.
@@ -202,6 +212,45 @@ export class ProjectSession {
     this.markPending();
   }
 
+  /** Gira la foto `delta` grados (spec `tablet-culling`, "Rotar en el visor"): la
+   *  rotación en la base, la orientación en el `.xmp` del disco y la miniatura,
+   *  girada en el caché y en `.thumbs/` del disco. El original no se toca. */
+  rotate(p: SessionPhoto, delta: number) {
+    if (this.readOnly) throw new Error(`Solo lectura: lo tiene ${this.readOnly.installName}`);
+    this.ensureOwned();
+    const rotation = (((p.info.rotation + delta) % 360) + 360) % 360;
+    const id = p.info.id;
+    const thumbsDir = `${this.cacheDir}/thumbs`;
+    const thumb = `${thumbsDir}/${id}.jpg`;
+    // Una miniatura que aún no llegó al caché se trae del disco para girarla.
+    const diskThumb = Saf.childUri(this.project.uri, `.thumbs/${id}.jpg`);
+    if (missingFiles(thumbsDir, [`${id}.jpg`]).length && Saf.exists(diskThumb)) copyFdToPath(Saf.openFd(diskThumb, 'r'), thumb);
+
+    const files = rotatePhoto(this.mirrorDir, thumbsDir, id, rotation);
+    // `.xmp` de cada archivo: se trae del disco, se le pone la orientación y vuelve sin sobrescribir.
+    const work = `${FILES_DIR}/rotate`;
+    for (const rel of files) {
+      resetDir(work);
+      const parts = rel.split('/');
+      const name = parts.pop()!;
+      const dirUri = Saf.childUri(this.project.uri, parts.join('/'));
+      const xmpName = name.replace(/\.[^.]+$/, '.xmp');
+      const onDisk = Saf.childUri(dirUri, xmpName);
+      if (Saf.exists(onDisk)) copyFdToPath(Saf.openFd(onDisk, 'r'), `${work}/${xmpName}`);
+      writeSidecarOrientation(`${work}/${name}`, rotation);
+      replaceFile(dirUri, xmpName, readText(`${work}/${xmpName}`) ?? '');
+    }
+    if (Saf.exists(Saf.childUri(this.project.uri, '.thumbs')) && missingFiles(thumbsDir, [`${id}.jpg`]).length === 0) {
+      replaceFileFromPath(Saf.childUri(this.project.uri, '.thumbs'), `${id}.jpg`, thumb);
+    }
+
+    p.info = { ...p.info, rotation };
+    // El caché de imágenes no relee un archivo con la misma ruta: se cambia la URI.
+    p.thumb = `file://${thumb}?v=${Date.now()}`;
+    this.onChange();
+    this.markPending();
+  }
+
   /** Guarda los filtros y el modo de vista en el proyecto, como el desktop.
    *  En solo lectura se quedan en memoria. */
   saveView(settings: ViewSettings) {
@@ -267,6 +316,24 @@ export class ProjectSession {
     this.onChange();
     this.log(`${approved ? 'Aprobada' : 'Aprobación quitada'}: ${p.info.dngPath} (${Date.now() - started} ms)`);
     // Se movieron archivos: la base vuelve al disco ya, para que coincidan.
+    this.giveBack();
+  }
+
+  /** Opción "Al aprobar, entregar directamente" del proyecto (`none`, `pairs` o `all_camera_jpg`). */
+  delivery(): string {
+    return deliveryMode(this.mirrorDir);
+  }
+
+  /** Qué fotos ya aprobadas cambiarían con la entrega `mode`. */
+  planDelivery(mode: string): DeliveryPlanView {
+    return planDeliveryChange(this.mirrorDir, mode, safDiskFiles(this.project.uri));
+  }
+
+  /** Cambia la entrega (spec `camera-jpeg-delivery`); con `applyToApproved` mueve
+   *  también los JPG de las ya aprobadas. Puede mover archivos: la base vuelve al disco ya. */
+  setDelivery(mode: string, applyToApproved: boolean) {
+    this.ensureOwned();
+    setDeliveryMode(this.mirrorDir, mode, applyToApproved, safDiskFiles(this.project.uri));
     this.giveBack();
   }
 

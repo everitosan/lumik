@@ -1,7 +1,7 @@
 // Lo que muestran las tarjetas del inicio: los datos del proyecto de su
 // `project.db` (nombre, fecha, fotos, estado, archivado; como `ProjectDashboard`
-// del desktop) y la portada (la elegida en el desktop o,
-// si no hay, la primera miniatura). Se traen en segundo plano, una a la vez.
+// del desktop) y la portada (la elegida o, si no hay, la primera foto por fecha
+// de captura, como el desktop). Se traen en segundo plano, una a la vez.
 import { copyFdToPath, missingFiles, projectCard, type ProjectCard, resetDir, startFdToPath } from '@lumik/core-native';
 
 import Saf from '../modules/saf/src/LumikSafModule';
@@ -38,11 +38,6 @@ export async function fetchCovers(projects: DiskProject[], onReady: (p: DiskProj
       if (!missing.has(`${projectKey(p)}.jpg`)) {
         onReady(p, { id, title, card, cover: true });
         continue;
-      }
-      if (!rel) {
-        const thumbs = p.files.find((f) => f.name === '.thumbs' && f.isDirectory);
-        const first = thumbs && (await Saf.listChildren(thumbs.uri)).find((f) => f.name.endsWith('.jpg'));
-        rel = first ? `.thumbs/${first.name}` : undefined;
       }
       const uri = rel ? Saf.childUri(p.uri, rel) : undefined;
       if (!uri || !Saf.exists(uri)) {

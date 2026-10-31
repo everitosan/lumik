@@ -24,7 +24,7 @@ pub struct ProjectCard {
     /// `imported`, `edited` o `delivered`.
     pub workflow_status: String,
     pub archived: bool,
-    /// Portada elegida en el desktop (`.thumbs/{id}.jpg`, relativa al proyecto).
+    /// Portada (`.thumbs/{id}.jpg`, relativa al proyecto): la elegida o la primera foto por fecha.
     pub cover: Option<String>,
 }
 
@@ -39,6 +39,7 @@ pub fn project_card(db_path: String) -> Result<Option<ProjectCard>, MirrorError>
         return Ok(None);
     };
     let description = db.get_project().map_err(|e| MirrorError::Db(e.to_string()))?.and_then(|p| p.description);
+    let cover = db.effective_cover_path().map_err(|e| MirrorError::Db(e.to_string()))?;
     Ok(Some(ProjectCard {
         id: entry.id,
         name: entry.name,
@@ -48,7 +49,7 @@ pub fn project_card(db_path: String) -> Result<Option<ProjectCard>, MirrorError>
         photo_count: entry.photo_count,
         workflow_status: entry.workflow_status,
         archived: entry.archived,
-        cover: entry.cover_photo_path,
+        cover,
     }))
 }
 

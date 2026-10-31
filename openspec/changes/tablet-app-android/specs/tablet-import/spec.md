@@ -6,8 +6,8 @@ El import de la tarjeta en la app de tablet Android: mismo resultado en el disco
 
 ## ADDED Requirements
 
-### Requirement: Import desde un proyecto en dos pasos
-El import SHALL abrirse solo desde dentro de un proyecto, que es su destino, en dos pasos: elegir los archivos e importar. Los archivos SHALL elegirse con el selector del sistema con selección múltiple, en una lista a la que se pueden agregar más y de la que se pueden quitar, antes de empezar. Un proyecto vacío SHALL abrir el import una vez al abrirse.
+### Requirement: Import desde un proyecto en tres pasos
+El import SHALL abrirse solo desde dentro de un proyecto, que es su destino, en tres pasos: archivos, ajustes e importar. Los archivos SHALL elegirse con el selector del sistema con selección múltiple, en una lista a la que se pueden agregar más y de la que se pueden quitar. Un proyecto vacío SHALL abrir el import una vez al abrirse.
 
 #### Scenario: Agregar y quitar archivos
 - **WHEN** el fotógrafo elige 50 fotos, agrega 20 más y quita 5
@@ -16,6 +16,17 @@ El import SHALL abrirse solo desde dentro de un proyecto, que es su destino, en 
 #### Scenario: Proyecto recién creado
 - **WHEN** el fotógrafo abre un proyecto sin fotos por primera vez
 - **THEN** se abre el import de ese proyecto
+
+### Requirement: Ajustes de la importación
+El paso de ajustes SHALL mostrar, precargados con los ajustes de la tablet, si se renombran las fotos (con un ejemplo del nombre resultante) y si se firman, y SHALL permitir cambiarlos solo para esa importación sin modificar los ajustes de la tablet. En un bloque aparte, del proyecto, SHALL mostrar la opción "Al aprobar, entregar directamente" y permitir cambiarla con las mismas reglas que el desktop (`camera-jpeg-delivery`), incluida la pregunta por las fotos ya aprobadas.
+
+#### Scenario: Sin renombrar solo esta vez
+- **WHEN** el fotógrafo desactiva el renombrado en el paso de ajustes e importa `DSCF0001.RAF`
+- **THEN** la foto queda como `_media/DSCF0001.RAF` y la siguiente importación vuelve a mostrar el renombrado activo
+
+#### Scenario: Cambiar la entrega desde el import
+- **WHEN** el fotógrafo cambia en el paso de ajustes la entrega del proyecto a "el JPG de los pares"
+- **THEN** el proyecto queda con esa opción y los pares que se aprueben después entregan su JPG a `_exported/`
 
 ### Requirement: Espacio libre antes de importar
 El import no SHALL poder iniciarse si el espacio libre del disco del proyecto es menor que el tamaño total de los archivos elegidos. El paso de importar SHALL mostrar el tamaño total y el espacio libre.
@@ -39,7 +50,7 @@ Cada archivo de la tarjeta SHALL leerse una sola vez: lo que se lee SHALL escrib
 - **THEN** el disco no tiene `.import-staging/` y la tablet no conserva copias de esos originales
 
 ### Requirement: Firma del fotógrafo en sidecar
-Si la firma está activa en los ajustes de la tablet, cada foto SHALL llevar en un sidecar `.xmp` junto a ella el autor, el copyright y la URL de contacto del fotógrafo, y la descripción `{descripción}@{año}` si el proyecto tiene descripción. El archivo original no SHALL modificarse.
+Si la firma está activa en los ajustes de la importación, cada foto SHALL llevar en un sidecar `.xmp` junto a ella el autor, el copyright y la URL de contacto del fotógrafo, y la descripción `{descripción}@{año}` si el proyecto tiene descripción. El archivo original no SHALL modificarse.
 
 #### Scenario: Con autor
 - **WHEN** se importa con la firma activa y el autor "Ana López" en los ajustes
