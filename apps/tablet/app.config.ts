@@ -49,5 +49,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   web: {
     favicon: './assets/favicon.png',
   },
-  plugins: ['expo-image', './plugins/withReleaseSigning'],
+  plugins: [
+    'expo-image',
+    './plugins/withReleaseSigning',
+    [
+      // Splash del sistema (spec `app-splash`): el libro cerrado sobre el fondo de
+      // la app. `src/LogoSplash.tsx` arranca la animación en el mismo lugar y tamaño
+      // (`SPLASH_IMAGE_DP`). La imagen es `SPLASH_FRAME` con el libro cerrado.
+      'expo-splash-screen',
+      { image: './assets/splash-book.png', imageWidth: 300, backgroundColor: '#131313', resizeMode: 'contain' },
+    ],
+  ],
 });

@@ -12,7 +12,7 @@ navegación, build y SAF: `AGENTS.md`.
 ## Estructura
 
 ```
-App.tsx                 # raíz: monta AppScreen y la barra de estado (modo limpio)
+App.tsx                 # raíz: monta AppScreen, la barra de estado (modo limpio) y el splash
 src/
   AppScreen.tsx         # navegación por estado: inicio → proyecto → foto, import
   HomeScreen.tsx        # rail (Proyectos, Discos, Ajustes), "Dar acceso", nuevo proyecto
@@ -23,6 +23,7 @@ src/
   GestureGuide.tsx      # guía de gestos con dedos animados
   PhotoInfoPanel.tsx    # histograma y datos de la toma
   Icon.tsx              # íconos Lucide con los mismos nombres que `Icon` de `@lumik/ui`
+  LogoSplash.tsx        # splash de arranque: el libro del logo se abre (Reanimated + SVG)
   ImportScreen.tsx      # import en tres pasos (archivos, ajustes, importar) desde el proyecto
   SettingsScreen.tsx    # fotógrafo, firmar y renombrar al importar, nombre de la tablet
   importer.ts           # import: tarjeta → sandbox + staging del disco → `_media/`
@@ -50,6 +51,13 @@ modules/
 - **Mismas reglas que el desktop:** se importa desde un proyecto, el disco es
   obligatorio al crear, los discos van en el rail y "‹" / atrás regresan un nivel.
 - **Ningún archivo del disco se sobrescribe en su lugar** (`replaceFile`).
+- **De `@lumik/ui` solo se importa `@lumik/ui/brand`** (geometría del logo y línea de
+  tiempo del splash, sin dependencias). La raíz de `@lumik/ui` es React DOM y no
+  funciona en React Native.
+- **Splash** (spec `app-splash`): el del sistema (`expo-splash-screen`) muestra el libro
+  cerrado (`assets/splash-book.png`, generada desde `@lumik/ui/brand`) y `LogoSplash`
+  sigue en el mismo lugar y tamaño (`SPLASH_IMAGE_DP` = `imageWidth` del plugin en
+  `app.config.ts`): si se cambia uno, cambiar el otro.
 - **Errores del import con su etapa** (tarjeta, sandbox o disco), también en logcat.
 - Probar en la tablet con hub: compilar e instalar con cable, `adb logcat -c` y
   `adb logcat -G 16M`, desconectar, probar y leer el log al reconectar.

@@ -21,6 +21,7 @@ Comportamiento esperado por capability: `openspec/specs/` en la raíz del monore
 
 ```
 src/
+  main.tsx                          # Monta App y, encima, LogoSplash (splash de arranque de @lumik/ui)
   App.tsx                           # Raíz: secciones projects / settings / about (useState, sin router)
   lib/
     api.ts                          # Todas las llamadas invoke() a Tauri (una función por comando)
@@ -327,6 +328,18 @@ App
 ```
 
 `App.tsx` maneja el routing con `useState`. No hay React Router.
+
+## Splash de arranque
+
+Spec `app-splash`. `main.tsx` monta `LogoSplash` de `@lumik/ui` junto a `App`. La app
+se dibuja y carga debajo desde el inicio; el libro se abre, el nombre "lumik" sale debajo
+letra por letra, y el splash se quita solo a los ~2 s fijos.
+La geometría del logo (partido en tapa, contratapa y páginas), el nombre como trazos y la línea de tiempo
+están en `@lumik/ui/brand` (`packages/ui/src/brand/logo.ts`), compartidas con la
+tablet. Para que no haya destello blanco, `index.html` y la ventana
+(`backgroundColor` en `tauri.conf.json`) son `#131313` desde el primer cuadro.
+Con `prefers-reduced-motion: reduce` se ve el logo quieto. Se prueba en Storybook
+(`Components/LogoSplash`).
 
 ## Visor de fotos (PhotoDetail / PhotoViewer)
 

@@ -6,6 +6,7 @@ import { StatusBar as RNStatusBar, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import AppScreen from './src/AppScreen';
+import { LogoSplash } from './src/LogoSplash';
 
 export default function App() {
   const [clean, setClean] = useState(false);
@@ -15,6 +16,8 @@ export default function App() {
     <GestureHandlerRootView style={[styles.root, { paddingTop: clean ? 0 : (RNStatusBar.currentHeight ?? 0) }]}>
       <AppScreen onCleanChange={setClean} />
       <StatusBar style="light" hidden={clean} />
+      {/* Splash de arranque (spec `app-splash`): pantalla completa, encima de todo; se quita solo. */}
+      <LogoSplash />
     </GestureHandlerRootView>
   );
 }

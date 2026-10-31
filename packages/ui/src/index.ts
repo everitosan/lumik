@@ -6,6 +6,8 @@ export type { LoaderProps } from './components/Loader';
 
 export { Logo } from './components/Logo';
 export type { LogoProps } from './components/Logo';
+export { LogoSplash } from './components/LogoSplash';
+export type { LogoSplashProps } from './components/LogoSplash';
 
 export { Button } from './components/Button';
 export type { ButtonProps } from './components/Button';
