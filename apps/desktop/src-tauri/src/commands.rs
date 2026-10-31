@@ -20,9 +20,9 @@ pub struct AppState {
     /// Detección/expulsión de dispositivos, detrás del puerto `DeviceScanner`.
     /// La implementación concreta (y su `#[cfg]` de plataforma) se elige en `lib.rs`.
     pub device_scanner: Arc<dyn DeviceScanner>,
-    /// Lectura/escritura de metadata EXIF/XMP (exiftool en desktop, rawler en Android).
+    /// Lectura/escritura de metadata EXIF/XMP (exiftool).
     pub metadata: Arc<dyn MetadataTool>,
-    /// Generación de miniaturas y previews (exiftool+image en desktop, rawler en Android).
+    /// Generación de miniaturas y previews (exiftool + image).
     pub image_processor: Arc<dyn ImageProcessor>,
     /// Escritura de Finder tags (sidecars AppleDouble en desktop, no-op en Android).
     pub finder_tags: Arc<dyn FinderTagWriter>,

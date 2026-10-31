@@ -1,7 +1,6 @@
 //! Implementaciones de `ImageProcessor`: generación de miniaturas y previews.
-//! Desktop usa exiftool (extracción del preview embebido) + el crate `image`;
-//! Android usa rawler vía `crate::exif_android`. El `#[cfg(target_os)]` de
-//! imaging vive aquí, no en `commands.rs`. La selección ocurre en `lib.rs`.
+//! Usa exiftool (extracción del preview embebido) + el crate `image`. La app de
+//! tablet tiene la suya (rawler) en `crates/lumik-mobile`.
 
 use crate::application::ports::ImageProcessor;
 use std::path::{Path, PathBuf};
@@ -115,7 +114,6 @@ fn rotate_cached_thumbnail(project_dir: &Path, photo_id: &str, delta: i32) {
 
 /// Decode a TIFF with JPEG strip compression using the `tiff` crate (pure Rust).
 /// Returns None for unsupported color types or decode errors.
-#[cfg(not(target_os = "android"))]
 fn open_jpeg_tiff(path: &Path) -> Option<image::DynamicImage> {
     use tiff::decoder::{Decoder, DecodingResult};
     use tiff::ColorType;
@@ -157,10 +155,8 @@ fn open_jpeg_tiff(path: &Path) -> Option<image::DynamicImage> {
 }
 
 /// `ImageProcessor` para Linux/Windows/macOS.
-#[cfg(not(target_os = "android"))]
 pub struct DesktopImaging;
 
-#[cfg(not(target_os = "android"))]
 impl ImageProcessor for DesktopImaging {
     fn cache_thumbnail(&self, src: &Path, photo_id: &str, rotation: Option<i32>) -> Option<i32> {
         use crate::application::ports::MetadataTool;
@@ -352,67 +348,13 @@ impl ImageProcessor for DesktopImaging {
 }
 
 /// Alias interno para leer la rotación en desktop sin duplicar la lógica exiftool.
-#[cfg(not(target_os = "android"))]
 use crate::infrastructure::metadata::ExiftoolMetadata as ExiftoolMeta;
-
-// ============================================================================
-// ANDROID (rawler)
-// ============================================================================
-
-/// `ImageProcessor` para Android; delega la extracción en `crate::exif_android`.
-#[cfg(target_os = "android")]
-pub struct AndroidImaging;
-
-#[cfg(target_os = "android")]
-impl ImageProcessor for AndroidImaging {
-    fn cache_thumbnail(&self, src: &Path, photo_id: &str, rotation: Option<i32>) -> Option<i32> {
-        let dest = thumb_dest(src, photo_id)?;
-        if dest.exists() {
-            return None;
-        }
-        crate::exif_android::cache_thumbnail(src, &dest);
-        if dest.exists() {
-            Some(rotation.unwrap_or_else(|| crate::exif_android::read_exif_rotation(src)))
-        } else {
-            None
-        }
-    }
-
-    fn rotate_thumbnail(&self, project_dir: &Path, photo_id: &str, delta: i32) {
-        rotate_cached_thumbnail(project_dir, photo_id, delta);
-    }
-
-    fn ensure_preview(&self, src: &Path, project_dir: &Path, photo_id: &str) -> Option<PathBuf> {
-        let dir = previews_dir_for(project_dir)?;
-        let dest = dir.join(format!("{}.jpg", photo_id));
-        if dest.exists() {
-            return Some(dest);
-        }
-        if crate::exif_android::extract_preview(src, &dest) {
-            Some(dest)
-        } else {
-            None
-        }
-    }
-
-    fn jpeg_preview_bytes(&self, src: &Path) -> Result<Vec<u8>, String> {
-        std::fs::read(src).map_err(|e| format!("Failed to read JPEG: {}", e))
-    }
-
-    fn invalidate_cached_images(&self, project_dir: &Path, photo_id: &str) {
-        remove_cached_images(project_dir, photo_id);
-    }
-
-    fn index_thumbnail(&self, thumb: &Path) -> Option<Vec<u8>> {
-        index_thumbnail_from(thumb)
-    }
-}
 
 // ============================================================================
 // TESTS de caracterización (desktop) contra fixtures reales.
 // ============================================================================
 
-#[cfg(all(test, not(target_os = "android")))]
+#[cfg(test)]
 mod tests {
     #[test]
     fn index_thumbnail_is_small_and_keeps_aspect() {

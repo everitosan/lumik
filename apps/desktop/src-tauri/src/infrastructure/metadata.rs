@@ -1,7 +1,5 @@
-//! Implementaciones de `MetadataTool`. Desktop usa exiftool (sesión persistente);
-//! Android usa rawler/kamadak-exif vía `crate::exif_android`. La selección de cuál
-//! usar ocurre en `lib.rs`. El `#[cfg(target_os)]` de metadata vive aquí, no en
-//! `commands.rs`.
+//! Implementación de `MetadataTool` con exiftool (sesión persistente). La app de
+//! tablet tiene la suya (rawler / kamadak-exif) en `crates/lumik-mobile`.
 
 use crate::application::ports::{FileMetadata, MetadataTool};
 use std::collections::HashMap;
@@ -12,10 +10,8 @@ use std::path::{Path, PathBuf};
 // ============================================================================
 
 /// `MetadataTool` respaldado por exiftool (Linux/Windows/macOS).
-#[cfg(not(target_os = "android"))]
 pub struct ExiftoolMetadata;
 
-#[cfg(not(target_os = "android"))]
 impl MetadataTool for ExiftoolMetadata {
     fn read_rotation(&self, file: &Path) -> i32 {
         use crate::domain::photo::Rotation;
@@ -216,7 +212,6 @@ impl MetadataTool for ExiftoolMetadata {
 }
 
 /// Minimal RFC 4180 CSV line parser (handles double-quoted fields with embedded commas).
-#[cfg(not(target_os = "android"))]
 fn parse_csv_line(line: &str) -> Vec<String> {
     let mut fields = Vec::new();
     let mut current = String::new();
@@ -245,42 +240,11 @@ fn parse_csv_line(line: &str) -> Vec<String> {
 }
 
 // ============================================================================
-// ANDROID (rawler / kamadak-exif)
-// ============================================================================
-
-/// `MetadataTool` respaldado por rawler + kamadak-exif; no depende de exiftool.
-#[cfg(target_os = "android")]
-pub struct AndroidMetadata;
-
-#[cfg(target_os = "android")]
-impl MetadataTool for AndroidMetadata {
-    fn read_rotation(&self, file: &Path) -> i32 {
-        crate::exif_android::read_exif_rotation(file)
-    }
-
-    fn extract_batch(&self, paths: &[PathBuf]) -> HashMap<PathBuf, FileMetadata> {
-        crate::exif_android::extract_exif_metadata_batch(paths)
-    }
-
-    fn set_orientation(&self, file: &Path, rotation: i32) -> Result<(), String> {
-        crate::import::xmp::update_xmp_orientation(file, rotation)
-    }
-
-    fn strip_orientation(&self, _file: &Path) {
-        // En Android el preview se sirve tal cual; no se reescribe la orientación.
-    }
-
-    fn set_image_description(&self, file: &Path, description: Option<&str>) -> Result<(), String> {
-        crate::import::xmp::update_xmp_description(file, description)
-    }
-}
-
-// ============================================================================
 // TESTS de caracterización (desktop) — validan comportamiento contra fixtures
 // reales con EXIF conocido, garantizando idempotencia y correctitud.
 // ============================================================================
 
-#[cfg(all(test, not(target_os = "android")))]
+#[cfg(test)]
 mod tests {
     use super::*;
 

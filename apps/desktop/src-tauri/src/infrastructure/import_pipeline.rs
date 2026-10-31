@@ -7,9 +7,6 @@ use crate::application::ports::{
     ProgressReporter,
 };
 use crate::domain::pairs::{group_shots, stem_of, FileKind, Shot, ShotFile, ShotKey};
-#[cfg(target_os = "android")]
-use crate::infrastructure::import_signing::pipeline_metadata;
-#[cfg(not(target_os = "android"))]
 use crate::infrastructure::import_signing::{exiftool_metadata_args, pipeline_stage_signed};
 use crate::import::{
     error_code_for, is_video_file as _is_video_file, pipeline_copy_videos,
@@ -27,7 +24,6 @@ pub struct StdImportPipeline;
 /// Llamadas de exiftool en paralelo al copiar y firmar (medido en un USB 3:
 /// 32 CR2 en 16.2 s con 1, 6.1 s con 4 y 4.5 s con 8; con 4 el límite pasa a
 /// ser la lectura de la tarjeta).
-#[cfg(not(target_os = "android"))]
 const SIGN_WORKERS: usize = 4;
 
 /// Intervalo mínimo entre eventos de bytes de un mismo archivo.
@@ -287,7 +283,6 @@ impl ImportPipeline for StdImportPipeline {
 
         // Escritorio: copiar y firmar en una pasada (exiftool -o, en paralelo).
         // Sin nada que escribir, o en Android, se copia tal cual.
-        #[cfg(not(target_os = "android"))]
         let ready = {
             let exif_args =
                 exiftool_metadata_args(req.project_name, req.metadata, req.image_description, req.rename);
@@ -311,28 +306,6 @@ impl ImportPipeline for StdImportPipeline {
         };
 
         // Android: copiar al staging y luego renombrar + sidecar XMP por archivo.
-        #[cfg(target_os = "android")]
-        let ready = {
-            t.phase(ImportPhase::Copy);
-            let staged = pipeline_passthrough(req.photos, &workspace, &mut |e| {
-                t.stage_event(e, ImportLogKind::FileCopied)
-            });
-            out.failed.extend(staged.failed);
-            out.skipped.extend(staged.skipped);
-
-            t.phase(ImportPhase::Metadata);
-            let (ready, failed) = pipeline_metadata(
-                staged.staged,
-                req.project_name,
-                req.metadata,
-                req.image_description,
-                req.rename,
-                &mut |i, total, name| t.file(i, total, name),
-            );
-            failed.iter().for_each(|f| t.failed(f));
-            out.failed.extend(failed);
-            ready
-        };
 
         // Fase mover: staging → _media/ con nombre libre; un par RAW+JPEG con
         // el mismo nombre para los dos archivos.

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Logo, SectionButton, DriveInfo, CollapsibleSection, BackupJobCard, Icon } from '@lumik/ui';
-import { useConnectedDevices, usePlatform, useAnalysisJobs, type AnalysisJob } from '../lib/hooks';
+import { useConnectedDevices, useAnalysisJobs, type AnalysisJob } from '../lib/hooks';
 import * as api from '../lib/api';
 import { useBackup } from '../lib/BackupContext';
 import type { Section } from './Layout';
@@ -10,11 +10,9 @@ interface SidebarProps {
   activeSection: Section;
   onSectionChange: (section: Section) => void;
   collapsed?: boolean;
-  onToggle?: () => void;
-  isMobile?: boolean;
 }
 
-const sidebarStyles = (collapsed: boolean, isMobile: boolean): React.CSSProperties => ({
+const sidebarStyles = (collapsed: boolean): React.CSSProperties => ({
   display: 'flex',
   flexDirection: 'column',
   width: collapsed ? '0px' : '260px',
@@ -26,14 +24,6 @@ const sidebarStyles = (collapsed: boolean, isMobile: boolean): React.CSSProperti
   gap: '24px',
   overflow: 'hidden',
   transition: 'width 0.2s ease, min-width 0.2s ease, padding 0.2s ease',
-  // On mobile, sidebar overlays the content
-  ...(isMobile && !collapsed ? {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    zIndex: 50,
-    height: '100vh',
-  } : {}),
 });
 
 const logoContainerStyles: React.CSSProperties = {
@@ -151,29 +141,10 @@ function AnalysisJobCard({ name, job, onStop, onDismiss }: { name: string; job: 
   );
 }
 
-const closeBtnStyles: React.CSSProperties = {
-  alignSelf: 'flex-end',
-  width: '36px',
-  height: '36px',
-  borderRadius: '8px',
-  border: '1px solid var(--lumik-outline-variant, #424654)',
-  background: 'transparent',
-  color: 'var(--lumik-on-surface, #e3e2e9)',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: '18px',
-  flexShrink: 0,
-};
 
-export function Sidebar({ activeSection, onSectionChange, collapsed = false, onToggle, isMobile = false }: SidebarProps) {
+export function Sidebar({ activeSection, onSectionChange, collapsed = false }: SidebarProps) {
   const { t } = useTranslation();
   const { data: devices, loading, eject } = useConnectedDevices();
-  const platform = usePlatform();
-  // Android can't unmount removable storage from an app — the OS owns that.
-  // Showing an "eject" button there would be misleading, so we hide it.
-  const canEject = platform !== 'android';
 
   const { jobs, retryBackup, dismissBackup, userLaunches, openBackupDetail } = useBackup();
 
@@ -263,14 +234,9 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
   };
 
   return (
-    <aside style={sidebarStyles(collapsed, isMobile)}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        <div style={{ ...logoContainerStyles, flex: 1 }}>
-          <Logo size="md" />
-        </div>
-        {isMobile && onToggle && (
-          <button style={closeBtnStyles} onClick={onToggle} aria-label={t('navigation.closeMenu')}>✕</button>
-        )}
+    <aside style={sidebarStyles(collapsed)}>
+      <div style={logoContainerStyles}>
+        <Logo size="md" />
       </div>
 
       <nav style={navStyles}>
@@ -377,7 +343,7 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false, onT
             totalBytes={device.total_bytes ?? 0}
             connected={true}
             readOnly={device.read_only}
-            onEject={canEject ? () => handleEject(device.uuid) : undefined}
+            onEject={() => handleEject(device.uuid)}
           />
         ))}
       </CollapsibleSection>

@@ -856,17 +856,10 @@ pub async fn finalize_backup(
 /// Abre una URL externa (la web del proveedor) en el navegador del SO.
 #[tauri::command]
 pub fn open_external_url(app: tauri::AppHandle, url: String) -> AppResult<()> {
-    #[cfg(not(target_os = "android"))]
-    {
-        use tauri_plugin_opener::OpenerExt;
-        app.opener()
-            .open_url(url, None::<&str>)
-            .map_err(|e| AppError::from(e.to_string()))?;
-    }
-    #[cfg(target_os = "android")]
-    {
-        let _ = (&app, &url);
-    }
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| AppError::from(e.to_string()))?;
     Ok(())
 }
 
@@ -925,7 +918,7 @@ pub fn get_pending_backups(
     Ok(state.global_db.get_pending_backups()?)
 }
 
-#[cfg(all(test, not(target_os = "android")))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::models::CreatePhoto;

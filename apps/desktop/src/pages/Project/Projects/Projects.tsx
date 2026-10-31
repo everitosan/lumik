@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProjectCard, Button, Icon, FilterBar, FilterBarDivider } from '@lumik/ui';
-import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, useDashboardShowArchived, useDashboardSort, matchesKey, usePlatform } from '../../../lib/hooks';
+import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, useDashboardShowArchived, useDashboardSort, matchesKey } from '../../../lib/hooks';
 import { createProject, ensureProjectSynced, setProjectArchived, relocateBackup, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink, takeProjectControl, closeProjectSession } from '../../../lib/api';
 import { TakeControlDialog } from '../../../components/ProjectLockNotice';
 import { SearchBox, looksLikeOperators } from '../../Search/SearchBox';
@@ -341,9 +341,6 @@ export function Projects({ onProjectClick, photoSearch = null, onPhotoSearch }: 
   // se confirme tomar el control (spec project-lock).
   const [lockedAction, setLockedAction] = useState<{ project: ProjectDashboard; run: () => void } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const platform = usePlatform();
-  // Opening a folder in a file manager isn't available on Android.
-  const canOpenFolder = platform !== 'android';
 
   const kb = useContextKeybindings('projects');
   const { sort, setSort } = useDashboardSort();
@@ -628,7 +625,7 @@ export function Projects({ onProjectClick, photoSearch = null, onPhotoSearch }: 
                         .catch(() => openExternalUrl(url));
                     }}
                     onClick={() => handleProjectClick(project)}
-                    onOpenFolder={canOpenFolder ? () => handleOpenFolder(project) : undefined}
+                    onOpenFolder={() => handleOpenFolder(project)}
                     onEdit={() => withControl(project, () => setEditingProject(project))}
                     onToggleArchive={() => withControl(project, () => handleToggleArchive(project))}
                     onDelete={() => withControl(project, () => setDeletingProject(project))}

@@ -6,7 +6,6 @@ use std::path::Path;
 use tauri::AppHandle;
 
 /// Abre `dir` en el explorador de archivos del SO. Desktop only.
-#[cfg(not(target_os = "android"))]
 pub fn open_folder(app: &AppHandle, dir: &Path) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     if !dir.exists() {
@@ -20,15 +19,8 @@ pub fn open_folder(app: &AppHandle, dir: &Path) -> Result<(), String> {
         })
 }
 
-/// En Android no hay forma estándar de abrir una carpeta en un explorador.
-#[cfg(target_os = "android")]
-pub fn open_folder(_app: &AppHandle, _dir: &Path) -> Result<(), String> {
-    Err("Opening the folder is not supported on Android".to_string())
-}
-
 /// Abre el explorador del SO en la carpeta de `file`, con ese archivo seleccionado.
 /// Desktop only.
-#[cfg(not(target_os = "android"))]
 pub fn reveal_file(app: &AppHandle, file: &Path) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     if !file.exists() {
@@ -38,10 +30,4 @@ pub fn reveal_file(app: &AppHandle, file: &Path) -> Result<(), String> {
         log::error!("reveal_file error: {}", e);
         e.to_string()
     })
-}
-
-/// En Android no hay forma estándar de revelar un archivo en un explorador.
-#[cfg(target_os = "android")]
-pub fn reveal_file(_app: &AppHandle, _file: &Path) -> Result<(), String> {
-    Err("Showing a file in its folder is not supported on Android".to_string())
 }

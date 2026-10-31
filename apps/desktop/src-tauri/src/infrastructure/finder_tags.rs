@@ -10,10 +10,8 @@ use std::path::Path;
 // ============================================================================
 
 /// `FinderTagWriter` que materializa Finder tags en el filesystem.
-#[cfg(not(target_os = "android"))]
 pub struct AppleDoubleFinderTags;
 
-#[cfg(not(target_os = "android"))]
 impl FinderTagWriter for AppleDoubleFinderTags {
     fn sync_color(&self, target: &Path, color_label: Option<&str>) -> std::io::Result<()> {
         let colors = color_label
@@ -42,23 +40,3 @@ impl FinderTagWriter for AppleDoubleFinderTags {
 // ============================================================================
 // ANDROID (no-op)
 // ============================================================================
-
-/// `FinderTagWriter` no-op: en Android no se escriben sidecars de Finder.
-#[cfg(target_os = "android")]
-pub struct NoopFinderTags;
-
-#[cfg(target_os = "android")]
-impl FinderTagWriter for NoopFinderTags {
-    fn sync_color(&self, _target: &Path, _color_label: Option<&str>) -> std::io::Result<()> {
-        Ok(())
-    }
-    fn move_sidecar(&self, _from: &Path, _to: &Path) -> std::io::Result<()> {
-        Ok(())
-    }
-    fn spotlight_index_present(&self, _volume_root: &Path) -> bool {
-        false
-    }
-    fn invalidate_spotlight_index(&self, _volume_root: &Path) -> std::io::Result<()> {
-        Ok(())
-    }
-}

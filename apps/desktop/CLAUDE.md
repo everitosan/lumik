@@ -71,7 +71,7 @@ El backend Rust sigue una arquitectura por capas (ver
 `interface → application → domain`, y `infrastructure` implementa los puertos.
 
 El núcleo vive en su propio crate, **`crates/lumik-core`**, compartido con la
-futura app de tablet (`openspec/changes/tablet-app-spike`). No depende de Tauri,
+app de tablet (`apps/tablet`, por `crates/lumik-mobile`). No depende de Tauri,
 de exiftool ni de `#[cfg(target_os)]`; `src-tauri` es el shell del desktop y lo
 reexporta en `lib.rs` (`pub use lumik_core::{application, db, domain, import}`),
 así que `crate::domain::…` sigue valiendo dentro del shell.
@@ -116,9 +116,9 @@ src-tauri/src/                      # shell del desktop
   lib.rs                            # composition root: reexporta el núcleo, arma infra, elige impl por plataforma, registra comandos
 
   infrastructure/                   # implementa los puertos (aquí vive el #[cfg] de plataforma)
-    metadata.rs                     #   ExiftoolMetadata (desktop) / AndroidMetadata (rawler)
-    imaging.rs                      #   DesktopImaging / AndroidImaging (thumbnails/previews)
-    import_signing.rs               #   firma del import: pool de exiftool (desktop) / rawler + XMP (Android)
+    metadata.rs                     #   ExiftoolMetadata
+    imaging.rs                      #   DesktopImaging (thumbnails/previews)
+    import_signing.rs               #   firma del import: pool de exiftool
     lock.rs                         #   FsLockStore (escritura atómica de .lumik-lock), nombre del equipo
     disk_name.rs                    #   FsDiskNameStore: lee y escribe (atómico) lumik/.disk.json
     app_data.rs                     #   ruta de lumik.db por plataforma
@@ -136,7 +136,7 @@ src-tauri/src/                      # shell del desktop
                                     #   vía diskutil (por punto de montaje o, si falla, por disco BSD); read_only
   device_watch.rs                   # watcher nativo de hotplug (Linux mountinfo, Windows WMI, macOS DiskArbitration)
   apple_tags.rs                     # sidecars AppleDouble (desktop-only)
-  exiftool.rs / exif_android.rs     # herramientas EXIF por plataforma
+  exiftool.rs                       # lanzador de exiftool por plataforma
   e2e_tests.rs                      # tests de punta a punta: núcleo + infraestructura real
   tests/fixtures/                   # JPEGs con EXIF conocido para tests de caracterización
 ```
@@ -171,8 +171,7 @@ lista uno.
 
 **Nombre del disco:** se muestra la etiqueta del sistema de archivos
 (`DetectedDevice.label`; en macOS, la carpeta de `/Volumes/`), si no el nombre de
-`lumik/.disk.json` y si no uno genérico (punto de montaje; "SD Card"/"USB Drive" en
-Android). `refresh_open_projects` copia la etiqueta a `lumik/.disk.json` en los discos
+`lumik/.disk.json` y si no uno genérico (el punto de montaje). `refresh_open_projects` copia la etiqueta a `lumik/.disk.json` en los discos
 con escritura y carpeta `lumik/` cuando el archivo falta o tiene otro nombre, para que
 la tablet Android (que no recibe la etiqueta) muestre el mismo nombre. Es el único
 archivo que se escribe en un disco para nombrarlo; los discos sin `lumik/` no se tocan.
@@ -277,7 +276,6 @@ source files
       y renombran con exiftool -o dentro del staging. El origen se lee de a uno: con lectores
       concurrentes un disco mecánico o una tarjeta se desploman
     sin nada que escribir: pipeline_passthrough → staging (copia tal cual, fase copy)
-    Android: pipeline_passthrough + pipeline_metadata (rawler + sidecar XMP, fase metadata)
     (un archivo por subcarpeta del staging, formato original, sin conversión)
   → stage_shots: agrupa en tomas (par RAW+JPEG por nombre de cámara + fecha de captura, o
       unión con una foto suelta del proyecto) → pipeline_move_shots(_media/): free_name() por
@@ -406,13 +404,13 @@ Respaldo — cola: `set_pending_backup`, `clear_pending_backup`, `get_pending_ba
 | Visor canvas (zoom / pan / rotate / histograma) | ✓ Funcional |
 | Rating: estrellas, etiquetas de color, tags | ✓ Funcional |
 | Culling: aprobar (mover a `_culled/`) y quitar aprobación | ✓ Funcional |
-| Menú de la foto: mostrar en carpeta, mover a la papelera (`_trash/`) y restaurar | ✓ Funcional (mostrar en carpeta: no en Android) |
+| Menú de la foto: mostrar en carpeta, mover a la papelera (`_trash/`) y restaurar | ✓ Funcional |
 | Filtros (aprobadas, estrellas, tags, color) y modos de vista | ✓ Funcional |
 | Keybindings configurables en Settings | ✓ Funcional |
 | Metadata XMP del fotógrafo en import | ✓ Funcional |
-| Menú de proyectos (renombrar, eliminar, abrir carpeta) | ✓ Funcional (abrir carpeta: no en Android) |
+| Menú de proyectos (renombrar, eliminar, abrir carpeta) | ✓ Funcional |
 | Respaldo de `_exported` en la nube (cuenta, modal, cola offline) | ✓ Beta |
-| Seguimiento de respaldos en la barra lateral (tarjetas, reintentar, descartar, confirmación al cerrar) | ✓ Beta (en Android la barra empieza colapsada) |
+| Seguimiento de respaldos en la barra lateral (tarjetas, reintentar, descartar, confirmación al cerrar) | ✓ Beta |
 | Archivar proyectos | ✓ Funcional (menú de la tarjeta + botón "Archivados" en el dashboard) |
 | Discos en macOS: detección inmediata (DiskArbitration) y expulsión del disco completo | ✓ Beta |
 | Discos de solo lectura (p. ej. NTFS en macOS): se listan con marca y aviso, sin abrir ni crear proyectos | ✓ Beta |

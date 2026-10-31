@@ -36,11 +36,9 @@ dirs = "5"
 log = "0.4"
 env_logger = "0.11"
 
-# RAW image processing and DNG conversion
-rawler = "0.6"
+# Miniaturas y vistas previas
 image = "0.25"
 tiff = { version = "0.11", features = ["jpeg"] }
-kamadak-exif = "0.5"
 
 # Cross-platform disk info (listing, space)
 sysinfo = "0.31"
@@ -57,9 +55,6 @@ gethostname = "0.5"
 # Paquete del modelo de búsqueda por contenido (semantic-search)
 zip = { version = "2", default-features = false, features = ["deflate"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
-
-[target.'cfg(target_os = "android")'.dependencies]
-libc = "0.2"
 
 # Linux: libc for poll() on /proc/self/mountinfo (native mount/unmount watcher)
 [target.'cfg(target_os = "linux")'.dependencies]

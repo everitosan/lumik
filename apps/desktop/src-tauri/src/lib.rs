@@ -1,20 +1,15 @@
 // Núcleo compartido: se reexporta para que `crate::domain`, `crate::db`… sigan valiendo.
 pub use lumik_core::{application, db, domain, import};
 
-// Sidecars AppleDouble: solo desktop. En Android el FinderTagWriter es no-op y
-// no referencia este módulo, así que no se compila allí.
-#[cfg(not(target_os = "android"))]
+// Sidecars AppleDouble (etiquetas de color visibles en iPad y Mac).
 mod apple_tags;
 mod commands;
 mod infrastructure;
 mod device_watch;
 mod devices;
-#[cfg(not(target_os = "android"))]
 mod exiftool;
-#[cfg(target_os = "android")]
-mod exif_android;
 mod util;
-#[cfg(all(test, not(target_os = "android")))]
+#[cfg(test)]
 mod e2e_tests;
 
 use commands::{AppState, refresh_open_projects};
@@ -84,26 +79,14 @@ pub fn run() {
     let device_scanner: Arc<dyn application::ports::DeviceScanner> =
         Arc::new(infrastructure::devices::SystemDeviceScanner);
 
-    #[cfg(not(target_os = "android"))]
     let metadata: Arc<dyn application::ports::MetadataTool> =
         Arc::new(infrastructure::metadata::ExiftoolMetadata);
-    #[cfg(target_os = "android")]
-    let metadata: Arc<dyn application::ports::MetadataTool> =
-        Arc::new(infrastructure::metadata::AndroidMetadata);
 
-    #[cfg(not(target_os = "android"))]
     let image_processor: Arc<dyn application::ports::ImageProcessor> =
         Arc::new(infrastructure::imaging::DesktopImaging);
-    #[cfg(target_os = "android")]
-    let image_processor: Arc<dyn application::ports::ImageProcessor> =
-        Arc::new(infrastructure::imaging::AndroidImaging);
 
-    #[cfg(not(target_os = "android"))]
     let finder_tags: Arc<dyn application::ports::FinderTagWriter> =
         Arc::new(infrastructure::finder_tags::AppleDoubleFinderTags);
-    #[cfg(target_os = "android")]
-    let finder_tags: Arc<dyn application::ports::FinderTagWriter> =
-        Arc::new(infrastructure::finder_tags::NoopFinderTags);
 
     let file_store: Arc<dyn application::ports::FileStore> =
         Arc::new(infrastructure::fs::StdFileStore);
@@ -302,7 +285,6 @@ pub fn run() {
                 use tauri::Manager;
                 app.state::<AppState>().sessions.release_all();
                 // Exiftool con -stay_open no termina solo al salir Lumik.
-                #[cfg(not(target_os = "android"))]
                 exiftool::shutdown();
             }
         });

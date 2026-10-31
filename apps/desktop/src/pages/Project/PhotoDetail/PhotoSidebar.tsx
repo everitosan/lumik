@@ -4,7 +4,6 @@ import { Icon } from '@lumik/ui';
 import type { ColorLabel } from '@lumik/ui';
 import type { Photo } from '../../../lib/types';
 import type { HistogramBins } from './PhotoViewer';
-import { usePlatform } from '../../../lib/hooks';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -179,10 +178,8 @@ function CameraSpecRow({ label, value, t }: { label: string; value: string | nul
 // ─── Star input ───────────────────────────────────────────────────────────────
 
 function StarInput({ value, onChange, t }: { value: number; onChange: (v: number) => void; t: (key: string, opts?: any) => string }) {
-  const platform = usePlatform();
-  const isMobile = platform === 'android' || platform === 'ios';
-  const btnSize = isMobile ? 44 : 32;
-  const iconSize = isMobile ? 26 : 20;
+  const btnSize = 32;
+  const iconSize = 20;
 
   return (
     <div style={{ display: 'flex', gap: '2px' }}>
@@ -209,14 +206,12 @@ function StarInput({ value, onChange, t }: { value: number; onChange: (v: number
 // ─── Color input ──────────────────────────────────────────────────────────────
 
 function ColorInput({ selected, onChange, t }: { selected: ColorLabel[]; onChange: (v: ColorLabel[]) => void; t: (key: string, opts?: any) => string }) {
-  const platform = usePlatform();
-  const isMobile = platform === 'android' || platform === 'ios';
   const ALL_COLORS = [1, 2, 3, 4, 5] as ColorLabel[];
   const toggle = (label: ColorLabel) => {
     onChange(selected.includes(label) ? selected.filter((l) => l !== label) : [...selected, label]);
   };
-  const dotSize = isMobile ? 28 : 24;
-  const hitSize = isMobile ? 44 : 28;
+  const dotSize = 24;
+  const hitSize = 28;
 
   return (
     <div style={{ display: 'flex', gap: '4px' }}>
@@ -428,12 +423,9 @@ const TagManager = forwardRef<TagManagerHandle, { tags: string[]; suggestions: s
 // ─── Cull input ───────────────────────────────────────────────────────────────
 
 function CullInput({ culled, onChange, t }: { culled: boolean; onChange: (v: boolean) => void; t: (key: string, opts?: any) => string }) {
-  const platform = usePlatform();
-  const isMobile = platform === 'android' || platform === 'ios';
-  // Hit area 44px on mobile; visual circle smaller
-  const hitSize = isMobile ? 44 : 24;
-  const circleSize = isMobile ? 24 : 22;
-  const checkSize = isMobile ? 13 : 12;
+  const hitSize = 24;
+  const circleSize = 22;
+  const checkSize = 12;
 
   return (
     <label onClick={() => onChange(!culled)} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
@@ -462,7 +454,7 @@ function CullInput({ culled, onChange, t }: { culled: boolean; onChange: (v: boo
           )}
         </span>
       </span>
-      <span style={{ fontFamily: 'var(--lumik-font-primary, Inter)', fontSize: isMobile ? '15px' : '13px', color: 'var(--lumik-on-surface, #e5e2e1)' }}>
+      <span style={{ fontFamily: 'var(--lumik-font-primary, Inter)', fontSize: '13px', color: 'var(--lumik-on-surface, #e5e2e1)' }}>
         {t('photo.sidebar.selectPhoto')}
       </span>
     </label>
@@ -484,7 +476,6 @@ export interface PhotoSidebarProps {
   onColorChange: (labels: ColorLabel[]) => void;
   onTagsChange: (tags: string[]) => void;
   onCulledChange: (culled: boolean) => void;
-  onCollapse?: () => void;
 }
 
 export function PhotoSidebar({
@@ -500,31 +491,11 @@ export function PhotoSidebar({
   onColorChange,
   onTagsChange,
   onCulledChange,
-  onCollapse,
 }: PhotoSidebarProps) {
   const { t } = useTranslation();
   return (
     <div style={panelStyle}>
 
-      {/* Collapse button */}
-      {onCollapse && (
-        <button
-          onClick={onCollapse}
-          aria-label={t('photo.sidebar.hidePanel')}
-          style={{
-            alignSelf: 'flex-start',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: '28px', height: '28px', padding: 0, flexShrink: 0,
-            background: 'transparent',
-            border: '1px solid var(--lumik-outline-variant, #424654)',
-            borderRadius: 'var(--lumik-radius, 4px)',
-            color: 'var(--lumik-on-surface-variant, #c2c6d7)',
-            cursor: 'pointer', fontSize: '14px',
-          }}
-        >
-          ›
-        </button>
-      )}
 
       {/* Histogram */}
       <div style={sectionStyle}>

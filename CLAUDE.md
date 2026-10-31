@@ -7,12 +7,12 @@ Permite organizar sesiones en proyectos, seleccionar, etiquetar, calificar y tag
 
 | App | Ubicacion | Stack | Estado |
 |-----|-----------|-------|--------|
-| Desktop (Linux, Windows, Android) | `apps/desktop/` | Tauri v2 (Rust + React) | Beta (v0.2.0) |
+| Desktop (Linux, Windows, macOS) | `apps/desktop/` | Tauri v2 (Rust + React) | Beta (v0.2.0) |
 | Servidor de respaldo | `apps/server/` | Rust + axum + Postgres + rclone | Beta |
 | Portal web de respaldo | `apps/web/` | React 19 + Vite | Beta |
 | Landing | `apps/landing/` | Astro | Publicada |
 | UI kit (Storybook) | `apps/uikit/` | Storybook + Vite | Activo |
-| App de tablet (Android; iPad después) | `apps/tablet-spike/` (pasará a `apps/tablet/`) | Expo / React Native + `lumik-core` por uniffi (`crates/lumik-mobile`) | Prototipo: spike cerrado con "seguir"; el iPad espera la cuenta de Apple y hoy usa el portal web |
+| App de tablet (Android; iPad después) | `apps/tablet/` | Expo / React Native + `lumik-core` por uniffi (`crates/lumik-mobile`) | En desarrollo: primera beta para Google Play; el iPad espera la cuenta de Apple |
 | App iPad nativa | `apps/ios/` | Swift/SwiftUI | Descartada a favor de la app de tablet en React Native (`tablet-app-spike`) |
 
 La especificación de comportamiento de cada capability vive en `openspec/specs/`.
@@ -27,7 +27,7 @@ lumik/
 │   ├── web/          # Portal web de respaldo (tambien para iPad)
 │   ├── landing/      # Sitio publico (Astro)
 │   ├── uikit/        # Storybook de @lumik/ui
-│   ├── tablet-spike/ # App de tablet (Expo/RN), prototipo que pasará a apps/tablet/
+│   ├── tablet/       # App de tablet Android (Expo/RN + núcleo por uniffi)
 │   └── ios/          # App iPad nativa (vacía, descartada a favor de la de tablet)
 ├── packages/
 │   ├── ts-types/     # Tipos compartidos (TS)

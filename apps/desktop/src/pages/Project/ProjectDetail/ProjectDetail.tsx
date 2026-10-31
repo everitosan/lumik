@@ -10,7 +10,6 @@ import {
   useProjectThumbnails,
   useContextKeybindings,
   matchesKey,
-  usePlatform,
   useContentModelInstalled,
   useAnalysisJobs,
 } from '../../../lib/hooks';
@@ -224,9 +223,6 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [selectedColors, setSelectedColors] = useState<Set<number>>(new Set());
   const kb = useContextKeybindings('project');
-  const platform = usePlatform();
-  // Revealing a file in a file manager isn't available on Android.
-  const canRevealInFolder = platform !== 'android';
 
   const handleRevealInFolder = useCallback(async (photoId: string) => {
     try {
@@ -249,11 +245,6 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
       setSelectedColors(s.selected_colors ? new Set(s.selected_colors.split(',').map(Number)) : new Set());
     });
   }, [projectId]);
-
-  const handleSidebarToggle = useCallback((open: boolean) => {
-    setSidebarOpen(open);
-    saveViewSettings({ sidebar_open: open, show_culled: showCulledOnly });
-  }, [projectId, showCulledOnly]);
 
   const handleShowCulledChange = useCallback((value: boolean) => {
     setShowCulledOnly(value);
@@ -625,8 +616,6 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         currentIndex={selectedPhotoIndex}
         projectName={projectName}
         coverPhotoPath={coverPhotoPath}
-        sidebarOpen={sidebarOpen}
-        onSidebarToggle={handleSidebarToggle}
         onClose={() => setSelectedPhotoId(null)}
         onNavigate={(idx) => setSelectedPhotoId(sortedPhotos[idx].id)}
         onThumbnailChanged={(photoIds) => {
@@ -731,7 +720,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
                         hasThumbnail={thumbnailIds.has(photo.id)}
                         cache={thumbnailCache}
                         onClick={() => setSelectedPhotoId(photo.id)}
-                        onRevealInFolder={canRevealInFolder ? () => handleRevealInFolder(photo.id) : undefined}
+                        onRevealInFolder={() => handleRevealInFolder(photo.id)}
                         onTrash={showTrash || readOnly ? undefined : () => { setTrashError(null); setPendingTrash(photo); }}
                         onRestore={showTrash && !readOnly ? () => handleRestore(photo.id) : undefined}
                         onAddToAlbum={showTrash ? undefined : () => setAlbumTarget({ items: [{ kind: 'photo', project_id: projectId, ref_id: photo.id, file_name: fileNameOf(photo.dng_path), project_name: projectName }] })}

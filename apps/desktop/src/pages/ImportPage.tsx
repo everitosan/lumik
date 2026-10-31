@@ -16,35 +16,13 @@ import {
 import { open } from '@tauri-apps/plugin-dialog';
 import { stat } from '@tauri-apps/plugin-fs';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { useConnectedDevices, useProjectsDashboard, useActivePhotographer, useAppSettings, useImport, usePlatform, type ImportRetryStep } from '../lib/hooks';
+import { useConnectedDevices, useProjectsDashboard, useActivePhotographer, useAppSettings, useImport, type ImportRetryStep } from '../lib/hooks';
 import { analyzeImportSelection, getPhotographerMetadata, getProjectDeliveryMode } from '../lib/api';
 import type { DeliveryMode, FailedFile, ImportBreakdown, ImportLogEntry, ImportProgress, ImportResult, ImportSessionSettings, SkippedFile } from '../lib/types';
 import { DeliveryModeSelect } from '../components/DeliveryModeSelect';
 import { useDeliveryChange } from '../components/DeliveryChangeDialog';
 
 const pathBasename = (p: string) => p.replace(/\\/g, '/').split('/').pop() || p;
-
-// Convert an Android content URI to a real file path so the Rust backend can open it.
-// Works for com.android.externalstorage.documents URIs (SD card / USB-OTG):
-//   content://.../document/primary%3ADCIM%2FIMG.CR2  →  /storage/emulated/0/DCIM/IMG.CR2
-//   content://.../document/1234-ABCD%3ADCIM%2FIMG.CR2  →  /storage/1234-ABCD/DCIM/IMG.CR2
-// Returns null for unrecognized URI schemes (caller should keep original path).
-function resolveContentUri(uri: string): string | null {
-  if (!uri.startsWith('content://')) return null;
-  try {
-    const match = uri.match(/\/document\/(.+)$/);
-    if (!match) return null;
-    const docId = decodeURIComponent(match[1]);
-    const colonIdx = docId.indexOf(':');
-    if (colonIdx === -1) return null;
-    const volume = docId.substring(0, colonIdx);
-    const rel = docId.substring(colonIdx + 1);
-    const base = volume === 'primary' ? '/storage/emulated/0' : `/storage/${volume}`;
-    return `${base}/${rel}`;
-  } catch {
-    return null;
-  }
-}
 
 // Misma regla que `sanitize_name` en Rust (import/pipeline.rs): letras y dígitos
 // Unicode, `-` y `_` se conservan; todo lo demás pasa a `_`.
@@ -465,7 +443,6 @@ export function ImportPage({
   const { data: appSettings } = useAppSettings();
   const { status: importStatus, progress, importLog, result, isImporting, error: importError, startImport, retry } = useImport();
   const [showAllFailed, setShowAllFailed] = useState(false);
-  const platform = usePlatform();
 
   // Desglose por tomas de lo seleccionado (pares RAW+JPG, sueltos, uniones).
   const [breakdown, setBreakdown] = useState<ImportBreakdown | null>(null);
@@ -698,23 +675,14 @@ export function ImportPage({
       const selected = await open({
         multiple: true,
         // No filters - GTK on Linux has issues with extension filtering.
-        // On Android, omitting filters forces DocumentsUI (full file browser)
-        // instead of the Photo Picker, which doesn't show RAW files.
       });
 
       if (!selected || selected.length === 0) {
         return;
       }
 
-      // On mobile, the file picker returns content URIs. Resolve them to real paths
-      // so the Rust backend can open them as regular files.
-      const isMobile = platform === 'android' || platform === 'ios';
-      const resolvedPaths = isMobile
-        ? selected.map((p: string) => resolveContentUri(p) ?? p)
-        : selected;
-
       // Filter only valid RAW files and get file info
-      const validPaths = resolvedPaths.filter((filePath: string) => {
+      const validPaths = selected.filter((filePath: string) => {
         const name = pathBasename(filePath);
         return isAllowedRawFile(name);
       });
@@ -749,7 +717,7 @@ export function ImportPage({
     } catch (error) {
       console.error('Error selecting files:', error);
     }
-  }, [platform]);
+  }, []);
 
   const handleRemoveFile = (index: number) => {
     setImportState((s) => ({

@@ -112,15 +112,6 @@ fn os_eject(device_uuid: &str, mount_point: &str) -> Result<(), String> {
         Ok(())
     }
 
-    #[cfg(target_os = "android")]
-    {
-        // En Android el SO gestiona el ciclo de montaje; la app no puede (ni debe)
-        // desmontar el almacenamiento extraíble. Liberar los handles SQLite —que ya
-        // ocurrió antes de esta llamada— es todo lo que se puede y necesita hacer.
-        // El usuario termina la expulsión desde la UI del sistema.
-        Ok(())
-    }
-
     #[cfg(target_os = "macos")]
     {
         // DiskArbitration entrega sus callbacks en el run loop del hilo que espera.
@@ -132,7 +123,7 @@ fn os_eject(device_uuid: &str, mount_point: &str) -> Result<(), String> {
             .map_err(|_| "Eject thread panicked".to_string())?
     }
 
-    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "android", target_os = "macos")))]
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     {
         // Otras plataformas: fuera del alcance. Handles liberados; se trata como ok.
         Ok(())

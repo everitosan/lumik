@@ -34,18 +34,11 @@ impl ProjectLockStore for FsLockStore {
 
 /// Nombre del equipo, para el nombre por defecto de la instalación.
 pub fn device_name() -> String {
-    #[cfg(target_os = "android")]
-    {
-        "Android".to_string()
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let name = gethostname::gethostname().to_string_lossy().trim().to_string();
-        if name.is_empty() || name == "localhost" {
-            "Lumik".to_string()
-        } else {
-            name
-        }
+    let name = gethostname::gethostname().to_string_lossy().trim().to_string();
+    if name.is_empty() || name == "localhost" {
+        "Lumik".to_string()
+    } else {
+        name
     }
 }
 

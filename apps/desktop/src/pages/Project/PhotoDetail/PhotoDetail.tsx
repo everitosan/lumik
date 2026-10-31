@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FormatBadge, Icon, photoFormat } from '@lumik/ui';
 import type { ColorLabel } from '@lumik/ui';
 import type { Photo } from '../../../lib/types';
-import { usePhotoPreview, useContextKeybindings, matchesKey, usePlatform } from '../../../lib/hooks';
+import { usePhotoPreview, useContextKeybindings, matchesKey } from '../../../lib/hooks';
 import * as api from '../../../lib/api';
 import { PhotoViewer, type PhotoViewerHandle, type HistogramBins } from './PhotoViewer';
 import { PhotoSidebar, type TagManagerHandle } from './PhotoSidebar';
@@ -15,8 +15,6 @@ export interface PhotoDetailProps {
   currentIndex: number;
   projectName: string;
   coverPhotoPath: string | null;
-  sidebarOpen?: boolean;
-  onSidebarToggle?: (open: boolean) => void;
   onClose: () => void;
   onNavigate: (index: number) => void;
   onThumbnailChanged?: (photoIds: string[]) => void;
@@ -83,8 +81,6 @@ export function PhotoDetail({
   currentIndex,
   projectName,
   coverPhotoPath,
-  sidebarOpen = true,
-  onSidebarToggle,
   onClose,
   onNavigate,
   onThumbnailChanged,
@@ -93,10 +89,6 @@ export function PhotoDetail({
   readOnly = false,
 }: PhotoDetailProps) {
   const { t } = useTranslation();
-  const platform = usePlatform();
-  const isMobile = platform === 'android' || platform === 'ios';
-  const [infoPanelCollapsed, setInfoPanelCollapsed] = useState(!sidebarOpen);
-  const infoCollapsed = isMobile && infoPanelCollapsed;
 
   const kb = useContextKeybindings('photo_detail');
   const viewerRef = useRef<PhotoViewerHandle>(null);
@@ -121,11 +113,6 @@ export function PhotoDetail({
       }),
     [photo.project_id, photo.id, photo.dng_path, projectName],
   );
-
-  // Sync panel state when the project preference is loaded from DB
-  useEffect(() => {
-    setInfoPanelCollapsed(!sidebarOpen);
-  }, [sidebarOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset editable state and histogram when navigating to a different photo
   useEffect(() => {
@@ -386,52 +373,20 @@ export function PhotoDetail({
           }
         />
 
-        {/* Tab to open info panel when collapsed */}
-        {infoCollapsed && (
-          <button
-            onClick={() => { setInfoPanelCollapsed(false); onSidebarToggle?.(true); }}
-            aria-label={t('photo.detail.showInfo')}
-            style={{
-              position: 'absolute',
-              right: 0,
-              top: '8px',
-              zIndex: 10,
-              width: '20px',
-              height: '56px',
-              border: '1px solid var(--lumik-outline-variant, #424654)',
-              borderRight: 'none',
-              borderRadius: '10px 0 0 10px',
-              background: 'var(--lumik-surface-container-low, #1c1b1b)',
-              color: 'var(--lumik-on-surface, #e3e2e9)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '14px',
-              padding: 0,
-            }}
-          >
-            ‹
-          </button>
-        )}
-
-        {!infoCollapsed && (
-          <PhotoSidebar
-            photo={photo}
-            histogramBins={histogramBins}
-            localStars={localStars}
-            localColorLabels={localColorLabels}
-            localTags={localTags}
-            localCulled={localCulled}
-            tagSuggestions={tagSuggestions}
-            tagManagerRef={tagManagerRef}
-            onStarsChange={handleStarsChange}
-            onColorChange={handleColorChange}
-            onTagsChange={handleTagsChange}
-            onCulledChange={handleCulledChange}
-            onCollapse={isMobile ? () => { setInfoPanelCollapsed(true); onSidebarToggle?.(false); } : undefined}
-          />
-        )}
+        <PhotoSidebar
+          photo={photo}
+          histogramBins={histogramBins}
+          localStars={localStars}
+          localColorLabels={localColorLabels}
+          localTags={localTags}
+          localCulled={localCulled}
+          tagSuggestions={tagSuggestions}
+          tagManagerRef={tagManagerRef}
+          onStarsChange={handleStarsChange}
+          onColorChange={handleColorChange}
+          onTagsChange={handleTagsChange}
+          onCulledChange={handleCulledChange}
+        />
       </div>
       <AddToAlbumDialog target={albumTarget} onClose={() => setAlbumTarget(null)} />
     </div>

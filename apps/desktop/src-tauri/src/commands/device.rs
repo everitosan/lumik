@@ -12,7 +12,7 @@ use tauri::{AppHandle, Emitter, State};
 // ============================================================================
 
 /// Return the current OS/platform identifier.
-/// Values: "linux" | "windows" | "macos" | "android" | "ios"
+/// Values: "linux" | "windows" | "macos"
 #[tauri::command]
 pub fn get_platform() -> &'static str {
     std::env::consts::OS

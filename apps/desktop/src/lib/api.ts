@@ -102,7 +102,7 @@ export async function setInstallName(name: string): Promise<string> {
 // PLATFORM
 // ============================================================================
 
-export type Platform = 'linux' | 'windows' | 'macos' | 'android' | 'ios';
+export type Platform = 'linux' | 'windows' | 'macos';
 
 export const getPlatform = (): Promise<Platform> =>
   invoke<Platform>('get_platform');

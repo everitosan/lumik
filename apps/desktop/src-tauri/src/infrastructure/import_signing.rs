@@ -1,96 +1,27 @@
-//! Firma del import por plataforma, sobre las piezas genéricas de
-//! `import::pipeline`: en desktop, copia y firma solapadas con el pool de
-//! exiftool; en Android, renombrado por fecha (rawler) y sidecar XMP. Vive en
-//! la infraestructura porque depende de herramientas de cada sistema.
+//! Firma del import sobre las piezas genéricas de `import::pipeline`: copia y
+//! firma solapadas con el pool de exiftool. Vive en la infraestructura porque
+//! depende de exiftool.
 
 use crate::db::models::PhotographerMetadata;
 use crate::domain::project::sanitize_file_name;
 use crate::import::pipeline::{file_name_of, StagedFile};
 use crate::import::{FailedFile, ImportErrorCode};
 use log::{info, warn};
-#[cfg(not(target_os = "android"))]
 use crate::import::converter::SUPPORTED_EXTENSIONS;
-#[cfg(not(target_os = "android"))]
 use crate::import::pipeline::{
     classify, copy_with_progress, is_xmp, CopyError, PipelineWorkspace, StageEvent, StageOutcome,
 };
-#[cfg(not(target_os = "android"))]
 use crate::import::IoSide;
-#[cfg(not(target_os = "android"))]
 use log::debug;
 use std::fs;
 use std::path::{Path, PathBuf};
-#[cfg(not(target_os = "android"))]
 use std::sync::{mpsc, Mutex};
 
-#[cfg(not(target_os = "android"))]
 use crate::exiftool;
-#[cfg(target_os = "android")]
-use crate::import::xmp::write_xmp_sidecar;
-#[cfg(target_os = "android")]
-use chrono::Local;
-#[cfg(target_os = "android")]
-use rawler::decoders::RawDecodeParams;
-#[cfg(target_os = "android")]
-use rawler::RawFile;
-
-/// Android, paso 2: renombra por fecha de captura (rawler) y escribe la
-/// metadata del fotógrafo en un sidecar XMP, archivo por archivo, sobre el
-/// staging. Los que fallan salen de la lista y se devuelven como fallidos.
-/// `on_file(index, total, nombre)` avisa del archivo en curso. En escritorio
-/// esto ocurre durante la copia, con `pipeline_stage_signed`.
-#[cfg(target_os = "android")]
-pub fn pipeline_metadata(
-    staged: Vec<StagedFile>,
-    project_name: &str,
-    metadata: &Option<PhotographerMetadata>,
-    image_description: Option<&str>,
-    rename: bool,
-    on_file: &mut dyn FnMut(usize, usize, &str),
-) -> (Vec<StagedFile>, Vec<FailedFile>) {
-    {
-        let sanitized_project = sanitize_file_name(project_name);
-        let total = staged.len();
-        let mut ok = Vec::with_capacity(total);
-        let mut failed = Vec::new();
-
-        for (i, file) in staged.into_iter().enumerate() {
-            on_file(i + 1, total, &file_name_of(&file.source));
-            // Los choques de nombre (ráfagas) se resuelven al mover, con `free_name`.
-            let result = (|| -> Result<PathBuf, String> {
-                let target_path = if rename {
-                    let ext = file.staged.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-                    let datetime = extract_datetime_for_rename(&file.staged);
-                    let new_name = format!("{}__{}.{}", datetime, sanitized_project, ext);
-                    let new_path = file.staged.with_file_name(&new_name);
-                    if new_path != file.staged {
-                        fs::rename(&file.staged, &new_path).map_err(|e| e.to_string())?;
-                    }
-                    new_path
-                } else {
-                    file.staged.clone()
-                };
-                write_xmp_sidecar(&target_path, metadata.as_ref(), image_description)?;
-                Ok(target_path)
-            })();
-            match result {
-                Ok(staged) => ok.push(StagedFile { staged, ..file }),
-                Err(e) => {
-                    warn!("Metadata failed for {}: {}", file.source.display(), e);
-                    failed.push(FailedFile::new(&file.source, ImportErrorCode::MetadataFailed, e));
-                }
-            }
-        }
-
-        info!("Wrote XMP sidecars for {} files (android, rename: {})", ok.len(), rename);
-        (ok, failed)
-    }
-}
 
 /// Desktop: argumentos de exiftool para copiar y firmar con `-o` (sin `-o`
 /// ni la ruta), o `None` si no hay nada que renombrar ni que escribir: entonces
 /// basta con copiar.
-#[cfg(not(target_os = "android"))]
 pub fn exiftool_metadata_args(
     project_name: &str,
     metadata: &Option<PhotographerMetadata>,
@@ -166,7 +97,6 @@ pub fn exiftool_metadata_args(
 /// Si la salida de exiftool (stdout) indica que el archivo no se escribió.
 /// Termina con "N image files created/copied/updated/unchanged"; los fallos
 /// dicen "files weren't updated due to errors" o "files could not be read".
-#[cfg(not(target_os = "android"))]
 fn exiftool_write_failed(out: &str) -> bool {
     let ok = out.lines().any(|l| {
         let l = l.trim();
@@ -183,7 +113,6 @@ fn exiftool_write_failed(out: &str) -> bool {
 
 /// Fotos que pueden esperar firma a la vez: si exiftool se atrasa, la copia
 /// espera, para no ocupar en el destino mucho más que el tamaño del import.
-#[cfg(not(target_os = "android"))]
 const SIGN_QUEUE: usize = 8;
 
 /// Desktop: copia las fotos al staging y las firma/renombra solapando las dos
@@ -193,7 +122,6 @@ const SIGN_QUEUE: usize = 8;
 /// firma con `exiftool -o` dentro del staging (exiftool es Perl de un hilo,
 /// ~0.5 s de CPU por RAW; cada worker usa su sesión del pool). Los bytes se
 /// informan en la copia. Los resultados se devuelven en el orden de la selección.
-#[cfg(not(target_os = "android"))]
 pub fn pipeline_stage_signed(
     source_files: &[PathBuf],
     workspace: &PipelineWorkspace,
@@ -312,7 +240,6 @@ pub fn pipeline_stage_signed(
 /// `worker` del pool y borra la copia sin firmar. Si exiftool falla, una copia de
 /// prueba dentro del destino distingue la falta de espacio de un problema de
 /// metadata. En ambos casos no queda nada en `slot`.
-#[cfg(not(target_os = "android"))]
 fn sign_staged(
     worker: usize,
     src: &Path,
@@ -351,7 +278,6 @@ fn sign_staged(
 }
 
 /// Único archivo (que no sea `.xmp`) dentro de `dir`.
-#[cfg(not(target_os = "android"))]
 fn single_file_in(dir: &Path) -> Option<PathBuf> {
     fs::read_dir(dir)
         .ok()?
@@ -360,28 +286,7 @@ fn single_file_in(dir: &Path) -> Option<PathBuf> {
         .find(|p| p.is_file() && !is_xmp(p))
 }
 
-/// Android only: extract DateTimeOriginal via rawler for use in the renamed filename.
-/// Falls back to current timestamp if the file can't be decoded.
-#[cfg(target_os = "android")]
-fn extract_datetime_for_rename(path: &Path) -> String {
-    let params = RawDecodeParams { image_index: 0 };
-    if let Ok(file) = std::fs::File::open(path) {
-        let reader = std::io::BufReader::new(file);
-        let mut rawfile = RawFile::new(path.to_path_buf(), reader);
-        if let Ok(decoder) = rawler::get_decoder(&mut rawfile) {
-            if let Ok(meta) = decoder.raw_metadata(&mut rawfile, params) {
-                let dt = meta.exif.date_time_original.or(meta.exif.create_date);
-                if let Some(dt) = dt {
-                    // EXIF format: "2025:01:15 14:30:00" → "2025-01-15__14-30-00"
-                    return dt.replacen(':', "-", 2).replace(' ', "__").replacen(':', "-", 2);
-                }
-            }
-        }
-    }
-    Local::now().format("%Y-%m-%d__%H-%M-%S").to_string()
-}
-
-#[cfg(all(test, not(target_os = "android")))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::import::pipeline_move_to_dest;
