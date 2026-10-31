@@ -20,6 +20,8 @@ pub struct MissingDisk {
 pub struct AlbumView {
     pub id: String,
     pub name: String,
+    /// Orden con que se leyó: el pedido o, si no se pidió, el guardado del álbum.
+    pub sort: AlbumOrder,
     pub entries: Vec<AlbumEntry>,
     pub finals: usize,
     pub unedited: usize,
@@ -35,9 +37,14 @@ pub struct ReadAlbum<'a> {
 }
 
 impl ReadAlbum<'_> {
-    pub fn execute(&self, album_id: &str, order: AlbumOrder) -> Result<Option<AlbumView>, String> {
+    /// Lee el álbum en `order`; sin orden, en el modo guardado del álbum.
+    pub fn execute(&self, album_id: &str, order: Option<AlbumOrder>) -> Result<Option<AlbumView>, String> {
         let Some(name) = self.global.album_name(album_id).map_err(|e| e.to_string())? else {
             return Ok(None);
+        };
+        let order = match order {
+            Some(order) => order,
+            None => self.global.album_sort(album_id).map_err(|e| e.to_string())?.unwrap_or_default(),
         };
         let mut entries = self.global.album_entries(album_id, order).map_err(|e| e.to_string())?;
         let mut disks: Vec<MissingDisk> = Vec::new();
@@ -55,6 +62,7 @@ impl ReadAlbum<'_> {
         Ok(Some(AlbumView {
             id: album_id.to_string(),
             name,
+            sort: order,
             finals: count(ItemStatus::Final),
             unedited: count(ItemStatus::Unedited),
             missing: count(ItemStatus::Missing),
@@ -143,7 +151,7 @@ mod tests {
         assert_eq!(add_search_results(&g, &album.id, "tag:calle").unwrap(), 0, "sin repetir");
 
         let is_open = |id: &str| id == "p3";
-        let view = ReadAlbum { global: &g, is_open: &is_open }.execute(&album.id, AlbumOrder::Added).unwrap().unwrap();
+        let view = ReadAlbum { global: &g, is_open: &is_open }.execute(&album.id, Some(AlbumOrder::Custom)).unwrap().unwrap();
         assert_eq!((view.entries.len(), view.unedited, view.finals, view.missing), (4, 4, 0, 0));
         assert_eq!(
             view.missing_disks,
@@ -153,7 +161,12 @@ mod tests {
             ]
         );
         assert!(view.entries.iter().any(|e| e.project_id == "p3" && e.connected));
-        assert!(ReadAlbum { global: &g, is_open: &is_open }.execute("no-existe", AlbumOrder::Added).unwrap().is_none());
+        assert!(ReadAlbum { global: &g, is_open: &is_open }.execute("no-existe", None).unwrap().is_none());
+        // Sin orden pedido, el álbum se lee en su modo guardado.
+        assert_eq!(ReadAlbum { global: &g, is_open: &is_open }.execute(&album.id, None).unwrap().unwrap().sort, AlbumOrder::Custom);
+        g.set_album_sort(&album.id, AlbumOrder::Captured).unwrap();
+        let view = ReadAlbum { global: &g, is_open: &is_open }.execute(&album.id, None).unwrap().unwrap();
+        assert_eq!(view.sort, AlbumOrder::Captured, "recordar el modo");
         let _ = std::fs::remove_dir_all(dir);
     }
 }

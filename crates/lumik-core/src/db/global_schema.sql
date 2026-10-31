@@ -164,13 +164,17 @@ CREATE INDEX IF NOT EXISTS idx_search_photo_date ON search_photo(capture_date);
 -- elemento referencia una foto (kind 'photo', ref_id = photo.id) o un archivo
 -- de _exported/ (kind 'export', ref_id = export_id). file_name y project_name
 -- son copias para mostrar el elemento si su foto ya no existe.
+-- El orden personalizado es album_item.position (0..n-1 por álbum) y el modo
+-- de orden de cada álbum, album.sort. En BDs anteriores las agrega y las
+-- siembra migrate_album_order_columns (db/migrations.rs).
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS album (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
     created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL
+    updated_at  TEXT NOT NULL,
+    sort        TEXT NOT NULL DEFAULT 'custom' CHECK(sort IN ('custom', 'captured'))
 );
 
 CREATE TABLE IF NOT EXISTS album_item (
@@ -182,6 +186,7 @@ CREATE TABLE IF NOT EXISTS album_item (
     file_name    TEXT NOT NULL,
     project_name TEXT NOT NULL,
     added_at     TEXT NOT NULL,
+    position     INTEGER NOT NULL DEFAULT 0,
     UNIQUE(album_id, kind, ref_id)
 );
 

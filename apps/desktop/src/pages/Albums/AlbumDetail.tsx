@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -10,6 +10,7 @@ import { useAlbumThumb } from './AlbumThumb';
 import { AddToAlbumDialog, type AlbumTarget } from './AddToAlbumDialog';
 import { ReplaceDialog } from './ReplaceDialog';
 import { CollectionViewer, type PhotoEdits } from '../Collection/CollectionViewer';
+import { useAlbumDrag } from './useAlbumDrag';
 
 const CARD_MIN_WIDTH = 200;
 const COL_GAP = 16;
@@ -18,6 +19,28 @@ const CARD_H = PHOTO_CARD_HEADER_HEIGHT + PHOTO_CARD_FOOTER_HEIGHT;
 
 const pageStyles: CSSProperties = { display: 'flex', flexDirection: 'column', height: '100%', padding: '24px 32px', gap: '16px', overflow: 'hidden' };
 const mutedStyles: CSSProperties = { fontFamily: 'var(--lumik-font-primary, Inter)', fontSize: '13px', color: 'var(--lumik-on-surface-variant, #c2c6d7)' };
+// Hueco donde caerá la foto arrastrada, y la miniatura que sigue al cursor.
+const dropSlotStyles: CSSProperties = {
+  border: '2px dashed var(--lumik-primary, #b0c6ff)',
+  borderRadius: '8px',
+  background: 'rgba(176, 198, 255, 0.06)',
+};
+const ghostStyles: CSSProperties = {
+  position: 'fixed',
+  width: '140px',
+  borderRadius: '6px',
+  opacity: 0.85,
+  pointerEvents: 'none',
+  zIndex: 1000,
+  transform: 'translate(-50%, -50%) rotate(-2deg)',
+  boxShadow: '0 12px 32px rgba(0, 0, 0, 0.55)',
+};
+
+function DragGhost({ entry, x, y }: { entry: AlbumEntry; x: number; y: number }) {
+  const url = useAlbumThumb(entry.thumb);
+  return url ? <img src={url} alt="" style={{ ...ghostStyles, left: x, top: y }} /> : <div style={{ ...ghostStyles, left: x, top: y, height: '100px', background: 'var(--lumik-surface-container-high, #2a2a2a)' }} />;
+}
+
 const noticeStyles: CSSProperties = {
   ...mutedStyles,
   padding: '10px 14px',
@@ -57,14 +80,19 @@ interface CardProps {
   onReveal: () => void;
   onReplace: () => void;
   onRemove: () => void;
+  /** Solo en el orden personalizado, y no en la primera / la última foto. */
+  onMoveFirst?: () => void;
+  onMoveLast?: () => void;
+  /** Empieza a arrastrar la foto (solo en el orden personalizado). */
+  onPointerDown?: (e: ReactPointerEvent) => void;
 }
 
-function AlbumCard({ entry, onOpen, onAddToAlbum, onReveal, onReplace, onRemove }: CardProps) {
+function AlbumCard({ entry, onOpen, onAddToAlbum, onReveal, onReplace, onRemove, onMoveFirst, onMoveLast, onPointerDown }: CardProps) {
   const { t } = useTranslation();
   const url = useAlbumThumb(entry.thumb);
   const gone = entry.status === 'missing';
   return (
-    <div style={{ position: 'relative', opacity: gone ? 0.55 : entry.connected ? 1 : 0.8 }}>
+    <div style={{ position: 'relative', opacity: gone ? 0.55 : entry.connected ? 1 : 0.8 }} onPointerDown={onPointerDown}>
       <StatusChip entry={entry} />
       <PhotoCard
         filename={entry.file_name}
@@ -78,6 +106,8 @@ function AlbumCard({ entry, onOpen, onAddToAlbum, onReveal, onReplace, onRemove 
         onAddToAlbum={gone ? undefined : onAddToAlbum}
         onRevealInFolder={gone ? undefined : onReveal}
         extraMenuItems={[
+          ...(onMoveFirst ? [{ icon: 'move-to-start' as const, label: t('albums.item.moveFirst'), onSelect: onMoveFirst }] : []),
+          ...(onMoveLast ? [{ icon: 'move-to-end' as const, label: t('albums.item.moveLast'), onSelect: onMoveLast }] : []),
           { icon: 'edit', label: t('albums.item.replace'), onSelect: onReplace },
           { icon: 'x', label: t('albums.item.remove'), onSelect: onRemove, danger: true },
         ]}
@@ -99,7 +129,6 @@ interface Props {
 /** Un álbum: curación de fotos de varios proyectos y discos (spec `photo-albums`). */
 export function AlbumDetail({ albumId, onBack }: Props) {
   const { t } = useTranslation();
-  const [order, setOrder] = useState<AlbumOrder>('added');
   const [view, setView] = useState<AlbumView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string | null>(null);
@@ -117,9 +146,34 @@ export function AlbumDetail({ albumId, onBack }: Props) {
     [],
   );
 
+  // El álbum se lee en su modo de orden guardado (spec `photo-albums`).
   const load = useCallback(() => {
-    api.getAlbum(albumId, order).then(setView).catch((err) => setError(String(err)));
-  }, [albumId, order]);
+    api.getAlbum(albumId).then(setView).catch((err) => setError(String(err)));
+  }, [albumId]);
+  const order: AlbumOrder = view?.sort ?? 'custom';
+  const entryCount = view?.entries.length ?? 0;
+  const changeOrder = (sort: AlbumOrder) => {
+    api.setAlbumSort(albumId, sort).then(load).catch((err) => setError(String(err)));
+  };
+  /** Lleva un elemento al lugar `toIndex` del orden personalizado: se ve al instante y
+   *  se guarda; si no se puede guardar, se recarga el álbum. */
+  const moveTo = useCallback(
+    (itemId: string, toIndex: number) => {
+      setView((v) => {
+        if (!v) return v;
+        const entries = v.entries.filter((e) => e.item_id !== itemId);
+        const moved = v.entries.find((e) => e.item_id === itemId);
+        if (!moved) return v;
+        entries.splice(Math.min(toIndex, entries.length), 0, moved);
+        return { ...v, entries };
+      });
+      api.moveAlbumItem(itemId, toIndex).catch((err) => {
+        setNotice(t('albums.moveFailed', { error: String(err) }));
+        load();
+      });
+    },
+    [load, t],
+  );
   useEffect(() => { load(); }, [load]);
 
   // Al conectar o expulsar un disco: qué se puede abrir y qué discos faltan.
@@ -162,12 +216,28 @@ export function AlbumDetail({ albumId, onBack }: Props) {
   const cols = width > 0 ? Math.max(1, Math.floor((width + COL_GAP) / (CARD_MIN_WIDTH + COL_GAP))) : 4;
   const cardWidth = width > 0 ? (width - (cols - 1) * COL_GAP) / cols : CARD_MIN_WIDTH;
   const rowHeight = cardWidth * 0.75 + CARD_H + ROW_GAP;
+  const { drag, startDrag } = useAlbumDrag({
+    enabled: order === 'custom',
+    scrollEl,
+    cols,
+    cardWidth,
+    colGap: COL_GAP,
+    rowHeight,
+    count: entryCount,
+    onDrop: moveTo,
+  });
+  // Mientras se arrastra: la lista sin la foto arrastrada y un hueco (`null`) donde caerá.
   const rows = useMemo(() => {
-    const entries = (view?.entries ?? []).map((e) => (e.photo_id && edits[e.photo_id] ? { ...e, ...edits[e.photo_id] } : e));
-    const out: AlbumEntry[][] = [];
+    let entries: (AlbumEntry | null)[] = (view?.entries ?? []).map((e) => (e.photo_id && edits[e.photo_id] ? { ...e, ...edits[e.photo_id] } : e));
+    if (drag) {
+      entries = entries.filter((e) => e?.item_id !== drag.itemId);
+      entries.splice(drag.to, 0, null);
+    }
+    const out: (AlbumEntry | null)[][] = [];
     for (let i = 0; i < entries.length; i += cols) out.push(entries.slice(i, i + cols));
     return out;
-  }, [view, edits, cols]);
+  }, [view, edits, cols, drag?.itemId, drag?.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dragged = drag ? view?.entries.find((e) => e.item_id === drag.itemId) : undefined;
   const virtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => scrollEl, estimateSize: () => rowHeight, overscan: 3 });
   useEffect(() => { virtualizer.measure(); }, [rowHeight, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const viewerRefs = useMemo(
@@ -239,9 +309,9 @@ export function AlbumDetail({ albumId, onBack }: Props) {
           <div style={{ width: '200px' }}>
             <Select
               value={order}
-              onChange={(v) => setOrder(v as AlbumOrder)}
+              onChange={(v) => changeOrder(v as AlbumOrder)}
               options={[
-                { value: 'added', label: t('albums.order.added') },
+                { value: 'custom', label: t('albums.order.custom') },
                 { value: 'captured', label: t('albums.order.captured') },
               ]}
               fullWidth
@@ -270,22 +340,31 @@ export function AlbumDetail({ albumId, onBack }: Props) {
                 key={v.key}
                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)`, display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: `${COL_GAP}px`, paddingBottom: `${ROW_GAP}px` }}
               >
-                {rows[v.index]?.map((entry) => (
-                  <AlbumCard
-                    key={entry.item_id}
-                    entry={entry}
-                    onOpen={() => open(entry)}
-                    onAddToAlbum={() => setAddTarget({ items: [asNewItem(entry)] })}
-                    onReveal={() => void reveal(entry)}
-                    onReplace={() => setReplacing(entry)}
-                    onRemove={() => void api.removeAlbumItem(entry.item_id).then(load)}
-                  />
-                ))}
+                {rows[v.index]?.map((entry, j) => {
+                  if (!entry) return <div key="drop-slot" style={{ ...dropSlotStyles, height: cardWidth * 0.75 + CARD_H }} />;
+                  const index = v.index * cols + j;
+                  const custom = order === 'custom';
+                  return (
+                    <AlbumCard
+                      key={entry.item_id}
+                      entry={entry}
+                      onOpen={() => open(entry)}
+                      onAddToAlbum={() => setAddTarget({ items: [asNewItem(entry)] })}
+                      onReveal={() => void reveal(entry)}
+                      onReplace={() => setReplacing(entry)}
+                      onRemove={() => void api.removeAlbumItem(entry.item_id).then(load)}
+                      onMoveFirst={custom && index > 0 ? () => moveTo(entry.item_id, 0) : undefined}
+                      onMoveLast={custom && index < entryCount - 1 ? () => moveTo(entry.item_id, entryCount) : undefined}
+                      onPointerDown={custom ? (e) => startDrag(e, entry.item_id, index) : undefined}
+                    />
+                  );
+                })}
               </div>
             ))}
           </div>
         )}
       </div>
+      {drag && dragged && <DragGhost entry={dragged} x={drag.x} y={drag.y} />}
 
       <Modal title={t('albums.noticeTitle')} open={notice !== null} onClose={() => setNotice(null)} closable style={{ width: '420px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

@@ -54,6 +54,7 @@ impl GlobalDatabase {
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         migrations::reset_old_search_index(&conn)?;
         conn.execute_batch(schema::GLOBAL_SCHEMA)?;
+        migrations::run_global_migrations(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
             index_version: Default::default(),

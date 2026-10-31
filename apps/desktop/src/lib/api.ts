@@ -710,8 +710,19 @@ export async function replaceAlbumItem(itemId: string, withItem: NewAlbumItem): 
   return invoke('replace_album_item', { itemId, with: withItem });
 }
 
-export async function getAlbum(albumId: string, order: AlbumOrder): Promise<AlbumView | null> {
-  return invoke('get_album', { albumId, order });
+/** Lee el álbum en `order`; sin orden, en el modo guardado del álbum. */
+export async function getAlbum(albumId: string, order?: AlbumOrder): Promise<AlbumView | null> {
+  return invoke('get_album', { albumId, order: order ?? null });
+}
+
+/** Lleva un elemento al lugar `toIndex` del orden personalizado (0: al principio; `length`: al final). */
+export async function moveAlbumItem(itemId: string, toIndex: number): Promise<void> {
+  return invoke('move_album_item', { itemId, toIndex });
+}
+
+/** Guarda el modo de orden con que se abre el álbum. */
+export async function setAlbumSort(albumId: string, sort: AlbumOrder): Promise<void> {
+  return invoke('set_album_sort', { albumId, sort });
 }
 
 export async function getReplaceCandidates(projectId: string): Promise<ReplaceCandidate[]> {

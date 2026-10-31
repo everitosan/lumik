@@ -616,7 +616,7 @@
     "connectDiskUnknown": "Esta foto está en un disco que no está conectado. Conéctalo para abrirla.",
     "noticeTitle": "No se puede abrir",
     "order": {
-      "added": "Orden: agregadas",
+      "custom": "Orden: personalizado",
       "captured": "Orden: fecha de captura"
     },
     "status": {
@@ -624,7 +624,10 @@
       "unedited": "Sin editar",
       "missing": "Ya no está"
     },
+    "moveFailed": "No se pudo cambiar el orden: {{error}}",
     "item": {
+      "moveFirst": "Mover al principio",
+      "moveLast": "Mover al final",
       "replace": "Reemplazar por…",
       "remove": "Quitar del álbum",
       "gone": "Esta foto ya no está en su proyecto (se mandó a la papelera o se eliminó el proyecto). Puedes quitarla o reemplazarla.",

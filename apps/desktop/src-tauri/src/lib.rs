@@ -208,6 +208,8 @@ pub fn run() {
             commands::add_search_to_album,
             commands::remove_album_item,
             commands::replace_album_item,
+            commands::move_album_item,
+            commands::set_album_sort,
             commands::get_album,
             commands::get_replace_candidates,
             commands::get_album_thumbnail,

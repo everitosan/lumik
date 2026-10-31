@@ -72,7 +72,7 @@ function AlbumInfoDialog({ album, onClose }: { album: AlbumSummary | null; onClo
   const [view, setView] = useState<AlbumView | null>(null);
   useEffect(() => {
     setView(null);
-    if (album) api.getAlbum(album.id, 'added').then(setView).catch(() => setView(null));
+    if (album) api.getAlbum(album.id, 'custom').then(setView).catch(() => setView(null));
   }, [album]);
 
   // Discos de las fotos que siguen en su proyecto, del que tiene más al que tiene menos.

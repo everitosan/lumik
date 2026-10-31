@@ -34,7 +34,7 @@ src/
     SettingsPage.tsx                # Tabs: Importación, Atajos, Apariencia, Respaldo (`initialTab` para abrir una concreta)
     BackupAccountSection.tsx        # Tab Respaldo: URL del server, login/registro o email + cerrar sesión
     AboutPage.tsx
-    Albums/                         # Álbumes: AlbumsPage, AlbumDetail, AddToAlbumDialog, ReplaceDialog
+    Albums/                         # Álbumes: AlbumsPage, AlbumDetail (orden personalizado; arrastrar con useAlbumDrag), AddToAlbumDialog, ReplaceDialog
     Collection/                     # CollectionViewer: visor encima de la búsqueda o de un álbum que recorre ese conjunto
     Search/                         # Búsqueda de fotos en el buscador del dashboard: SearchBox (filtra proyectos al escribir;
                                     #   Enter o el panel avanzado buscan fotos), PhotoSearchResults, AdvancedSearchPanel
@@ -400,7 +400,7 @@ Ajustes: `get_app_settings`, `update_app_settings`, `get_install_name`, `set_ins
 Búsqueda: `search_photos`, `get_search_thumbnail`, `get_search_index_count`, `parse_search_query`, `format_search_query`
 Búsqueda por contenido — modelo: `get_content_model_state`, `download_content_model`, `cancel_content_model_download`, `delete_content_model` (evento `content-model-state`)
 Búsqueda por contenido — análisis: `get_project_analysis`, `set_project_analysis_mode`, `analyze_project`, `stop_project_analysis`, `get_analysis_queue` (evento `analysis-progress`)
-Álbumes: `list_albums`, `create_album`, `rename_album`, `delete_album`, `add_to_album`, `add_search_to_album`, `remove_album_item`, `replace_album_item`, `get_album`, `get_replace_candidates`, `get_album_thumbnail`, `reveal_album_item`
+Álbumes: `list_albums`, `create_album`, `rename_album`, `delete_album`, `add_to_album`, `add_search_to_album`, `remove_album_item`, `replace_album_item`, `move_album_item`, `set_album_sort`, `get_album`, `get_replace_candidates`, `get_album_thumbnail`, `reveal_album_item`
 Keybindings: `get_keybindings`, `update_keybinding`
 Import: `start_import`, `analyze_import_selection`, `retry_import_register`
 Respaldo — cuenta: `get_backup_server_url`, `set_backup_server_url`, `backup_register`, `backup_login`, `backup_logout`, `get_backup_session`

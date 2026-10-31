@@ -3,7 +3,9 @@ import {
   Aperture,
   Archive,
   ArchiveRestore,
+  ArrowDownToLine,
   ArrowUpDown,
+  ArrowUpToLine,
   Calendar,
   Check,
   ChevronDown,
@@ -73,7 +75,9 @@ export type IconName =
   | 'archive'
   | 'lock'
   | 'album'
-  | 'archive-restore';
+  | 'archive-restore'
+  | 'move-to-start'
+  | 'move-to-end';
 
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
@@ -142,6 +146,8 @@ const icons: Record<IconName, IconComponent> = {
   lock: Lock,
   album: Images,
   'archive-restore': ArchiveRestore,
+  'move-to-start': ArrowUpToLine,
+  'move-to-end': ArrowDownToLine,
 };
 
 export const iconNames = Object.keys(icons) as IconName[];

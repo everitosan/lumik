@@ -495,7 +495,8 @@ export interface SearchSnapshot {
 
 export type AlbumItemKind = 'photo' | 'export';
 export type AlbumItemStatus = 'final' | 'unedited' | 'missing';
-export type AlbumOrder = 'added' | 'captured';
+/** `custom`: el orden propio del álbum; `captured`: solo una vista por fecha de captura. */
+export type AlbumOrder = 'custom' | 'captured';
 
 /** De dónde sale la miniatura de un elemento en el índice. */
 export type AlbumThumbKey = { kind: 'photo' | 'export'; id: string };
@@ -542,6 +543,8 @@ export interface AlbumEntry {
 export interface AlbumView {
   id: string;
   name: string;
+  /** Orden con que se leyó: el pedido o el guardado del álbum. */
+  sort: AlbumOrder;
   entries: AlbumEntry[];
   finals: number;
   unedited: number;

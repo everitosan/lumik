@@ -100,11 +100,29 @@ pub struct AlbumEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AlbumOrder {
-    /// Por fecha en que se agregaron, el primero arriba.
+    /// El orden propio del álbum (`album_item.position`): al principio, el orden
+    /// en que se agregaron; el fotógrafo lo cambia arrastrando o desde el menú.
     #[default]
-    Added,
-    /// Por fecha de captura, la más reciente arriba.
+    Custom,
+    /// Por fecha de captura, la más reciente arriba. Solo una vista: no cambia el orden propio.
     Captured,
+}
+
+impl AlbumOrder {
+    fn as_str(self) -> &'static str {
+        match self {
+            AlbumOrder::Custom => "custom",
+            AlbumOrder::Captured => "captured",
+        }
+    }
+
+    fn parse(value: &str) -> AlbumOrder {
+        if value == "captured" {
+            AlbumOrder::Captured
+        } else {
+            AlbumOrder::Custom
+        }
+    }
 }
 
 /// Una foto o exportado del proyecto, para "Reemplazar por…".
@@ -224,7 +242,7 @@ impl GlobalDatabase {
         };
         let mut out = Vec::with_capacity(ids.len());
         for (id, name, created_at) in ids {
-            let entries = self.album_entries(&id, AlbumOrder::Added)?;
+            let entries = self.album_entries(&id, AlbumOrder::Custom)?;
             out.push(AlbumSummary {
                 items: entries.len() as i64,
                 finals: entries.iter().filter(|e| e.status == ItemStatus::Final).count() as i64,
@@ -244,15 +262,61 @@ impl GlobalDatabase {
             .optional()?)
     }
 
+    /// Modo de orden guardado del álbum (`None` si el álbum no existe).
+    pub fn album_sort(&self, album_id: &str) -> DbResult<Option<AlbumOrder>> {
+        let sort: Option<String> =
+            self.conn().query_row("SELECT sort FROM album WHERE id = ?1", [album_id], |r| r.get(0)).optional()?;
+        Ok(sort.as_deref().map(AlbumOrder::parse))
+    }
+
+    /// Guarda el modo de orden con que se abre el álbum.
+    pub fn set_album_sort(&self, album_id: &str, sort: AlbumOrder) -> DbResult<()> {
+        self.conn().execute("UPDATE album SET sort = ?1 WHERE id = ?2", params![sort.as_str(), album_id])?;
+        Ok(())
+    }
+
+    /// Lleva un elemento al lugar `to_index` del orden personalizado (acotado al
+    /// álbum: 0 es el principio, `usize::MAX` el final) y recorre a los demás.
+    /// Renumera el álbum `0..n-1` en una transacción.
+    pub fn move_album_item(&self, item_id: &str, to_index: usize) -> DbResult<()> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        let album_id: Option<String> =
+            tx.query_row("SELECT album_id FROM album_item WHERE id = ?1", [item_id], |r| r.get(0)).optional()?;
+        let Some(album_id) = album_id else {
+            return Ok(());
+        };
+        let mut ids: Vec<String> = {
+            let mut stmt = tx.prepare("SELECT id FROM album_item WHERE album_id = ?1 ORDER BY position, id")?;
+            let rows = stmt.query_map([&album_id], |r| r.get(0))?.collect::<Result<Vec<_>, _>>()?;
+            rows
+        };
+        let from = ids.iter().position(|id| id == item_id).expect("el elemento es de su álbum");
+        let moved = ids.remove(from);
+        ids.insert(to_index.min(ids.len()), moved);
+        {
+            let mut update = tx.prepare("UPDATE album_item SET position = ?1 WHERE id = ?2")?;
+            for (position, id) in ids.iter().enumerate() {
+                update.execute(params![position as i64, id])?;
+            }
+        }
+        tx.execute("UPDATE album SET updated_at = ?1 WHERE id = ?2", params![now(), album_id])?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Agrega elementos sin repetir los que ya están. Devuelve cuántos entraron.
     pub fn add_album_items(&self, album_id: &str, items: &[NewAlbumItem]) -> DbResult<usize> {
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         let mut added = 0;
         {
+            // Lo nuevo entra al final del orden personalizado.
+            let next: i64 =
+                tx.query_row("SELECT COALESCE(MAX(position) + 1, 0) FROM album_item WHERE album_id = ?1", [album_id], |r| r.get(0))?;
             let mut insert = tx.prepare(
-                "INSERT OR IGNORE INTO album_item (id, album_id, kind, project_id, ref_id, file_name, project_name, added_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                "INSERT OR IGNORE INTO album_item (id, album_id, kind, project_id, ref_id, file_name, project_name, added_at, position)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             )?;
             // Mismo instante para todo el lote, con un sufijo que conserva su orden.
             let base = now();
@@ -266,6 +330,7 @@ impl GlobalDatabase {
                     item.file_name,
                     item.project_name,
                     format!("{base}#{i:06}"),
+                    next + added as i64,
                 ])?;
             }
         }
@@ -279,7 +344,7 @@ impl GlobalDatabase {
         Ok(())
     }
 
-    /// Cambia lo que referencia un elemento, conservando su lugar. Si `with` ya
+    /// Cambia lo que referencia un elemento, conservando su lugar (su `position`). Si `with` ya
     /// está en el álbum, el elemento reemplazado simplemente se quita.
     pub fn replace_album_item(&self, item_id: &str, with: &NewAlbumItem) -> DbResult<()> {
         let mut conn = self.conn();
@@ -309,7 +374,7 @@ impl GlobalDatabase {
     /// Elementos del álbum con su mejor versión (D3 de photo-albums).
     pub fn album_entries(&self, album_id: &str, order: AlbumOrder) -> DbResult<Vec<AlbumEntry>> {
         let conn = self.conn();
-        let mut stmt = conn.prepare(&format!("{ENTRY_SELECT} WHERE i.album_id = ?1 ORDER BY i.added_at, i.id"))?;
+        let mut stmt = conn.prepare(&format!("{ENTRY_SELECT} WHERE i.album_id = ?1 ORDER BY i.position, i.id"))?;
         let mut entries = stmt.query_map([album_id], entry_from_row)?.collect::<Result<Vec<_>, _>>()?;
         if order == AlbumOrder::Captured {
             // Más reciente arriba; sin fecha al final, en el orden en que se agregaron.
@@ -455,6 +520,118 @@ mod tests {
         (dir, g)
     }
 
+    /// Posiciones de un álbum leídas de la base, por `position`.
+    fn positions(g: &GlobalDatabase, album_id: &str) -> Vec<(String, i64)> {
+        let conn = g.conn();
+        let mut stmt = conn.prepare("SELECT ref_id, position FROM album_item WHERE album_id = ?1 ORDER BY position").unwrap();
+        let rows = stmt.query_map([album_id], |r| Ok((r.get(0)?, r.get(1)?))).unwrap().collect::<Result<Vec<_>, _>>().unwrap();
+        rows
+    }
+
+    #[test]
+    fn migration_seeds_the_custom_order_from_when_items_were_added() {
+        let dir = std::env::temp_dir().join(format!("lumik_albums_mig_{}", uuid::Uuid::new_v4().as_simple()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("lumik.db");
+        {
+            // Las tablas de álbumes como eran antes del orden personalizado.
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE album (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+                 CREATE TABLE album_item (id TEXT PRIMARY KEY, album_id TEXT NOT NULL REFERENCES album(id) ON DELETE CASCADE,
+                     kind TEXT NOT NULL, project_id TEXT NOT NULL, ref_id TEXT NOT NULL, file_name TEXT NOT NULL,
+                     project_name TEXT NOT NULL, added_at TEXT NOT NULL, UNIQUE(album_id, kind, ref_id));
+                 INSERT INTO album VALUES ('A', 'Viejo', '2025', '2025'), ('B', 'Otro', '2025', '2025');
+                 INSERT INTO album_item VALUES
+                     ('i3', 'A', 'photo', 'p', 'c', 'c', 'P', '2025-03-01'),
+                     ('i1', 'A', 'photo', 'p', 'a', 'a', 'P', '2025-01-01'),
+                     ('i2', 'A', 'photo', 'p', 'b', 'b', 'P', '2025-02-01#000000'),
+                     ('i2b', 'A', 'photo', 'p', 'b2', 'b2', 'P', '2025-02-01#000001'),
+                     ('j1', 'B', 'photo', 'p', 'z', 'z', 'P', '2025-05-01');",
+            )
+            .unwrap();
+        }
+        let expected = vec![("a".to_string(), 0), ("b".into(), 1), ("b2".into(), 2), ("c".into(), 3)];
+        let g = GlobalDatabase::new(path.clone()).unwrap();
+        assert_eq!(positions(&g, "A"), expected, "el orden en que se agregaron");
+        assert_eq!(positions(&g, "B"), vec![("z".to_string(), 0)], "cada álbum empieza en 0");
+        let sort: String = g.conn().query_row("SELECT sort FROM album WHERE id = 'A'", [], |r| r.get(0)).unwrap();
+        assert_eq!(sort, "custom");
+        drop(g);
+
+        let g = GlobalDatabase::new(path).unwrap();
+        assert_eq!(positions(&g, "A"), expected, "migrar otra vez no cambia nada");
+        drop(g);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn new_items_go_to_the_end_of_the_custom_order() {
+        let (dir, g) = db();
+        let album = g.create_album("A").unwrap();
+        g.add_album_items(&album.id, &[item(ItemKind::Photo, "p1", "a"), item(ItemKind::Photo, "p1", "b")]).unwrap();
+        // Orden a gusto: b antes que a.
+        g.conn().execute("UPDATE album_item SET position = 5 - position WHERE album_id = ?1", [&album.id]).unwrap();
+        let ids = || -> Vec<String> { g.album_entries(&album.id, AlbumOrder::Custom).unwrap().into_iter().map(|e| e.ref_id).collect() };
+        assert_eq!(ids(), ["b", "a"]);
+
+        // Una repetida no ocupa lugar; la nueva queda al final.
+        g.add_album_items(&album.id, &[item(ItemKind::Photo, "p1", "a"), item(ItemKind::Photo, "p2", "c")]).unwrap();
+        assert_eq!(ids(), ["b", "a", "c"]);
+        // Quitar no altera el orden de las demás, y lo siguiente sigue entrando al final.
+        let b = g.album_entries(&album.id, AlbumOrder::Custom).unwrap().remove(0);
+        g.remove_album_item(&b.item_id).unwrap();
+        g.add_album_items(&album.id, &[item(ItemKind::Export, "p1", "xbn")]).unwrap();
+        assert_eq!(ids(), ["a", "c", "xbn"]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn move_inserts_and_shifts_the_others() {
+        let (dir, g) = db();
+        let album = g.create_album("A").unwrap();
+        let refs = ["a", "b", "c", "d", "e"];
+        g.add_album_items(&album.id, &refs.map(|r| item(ItemKind::Photo, "p9", r))).unwrap();
+        let entries = || g.album_entries(&album.id, AlbumOrder::Custom).unwrap();
+        let ids = || -> Vec<String> { entries().into_iter().map(|e| e.ref_id).collect() };
+        let id_of = |r: &str| entries().into_iter().find(|e| e.ref_id == r).unwrap().item_id;
+
+        // Spec: arrastrar `e` entre `a` y `b`.
+        g.move_album_item(&id_of("e"), 1).unwrap();
+        assert_eq!(ids(), ["a", "e", "b", "c", "d"]);
+        // Hacia adelante: `a` a donde está `c`.
+        g.move_album_item(&id_of("a"), 3).unwrap();
+        assert_eq!(ids(), ["e", "b", "c", "a", "d"]);
+        // Mover al principio y al final; un índice de más se acota al final.
+        g.move_album_item(&id_of("d"), 0).unwrap();
+        assert_eq!(ids(), ["d", "e", "b", "c", "a"]);
+        g.move_album_item(&id_of("d"), usize::MAX).unwrap();
+        assert_eq!(ids(), ["e", "b", "c", "a", "d"]);
+        g.move_album_item(&id_of("e"), 99).unwrap();
+        assert_eq!(ids(), ["b", "c", "a", "d", "e"]);
+        // Posiciones densas 0..n-1, y un id que no existe no hace nada.
+        assert_eq!(positions(&g, &album.id).into_iter().map(|(_, p)| p).collect::<Vec<_>>(), [0, 1, 2, 3, 4]);
+        g.move_album_item("no-existe", 0).unwrap();
+        assert_eq!(ids(), ["b", "c", "a", "d", "e"]);
+        // "Fecha de captura" es solo una vista: no toca el orden propio.
+        let _ = g.album_entries(&album.id, AlbumOrder::Captured).unwrap();
+        assert_eq!(ids(), ["b", "c", "a", "d", "e"]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_sort_mode_is_saved_per_album() {
+        let (dir, g) = db();
+        let a = g.create_album("A").unwrap();
+        let b = g.create_album("B").unwrap();
+        assert_eq!(g.album_sort(&a.id).unwrap(), Some(AlbumOrder::Custom), "un álbum nuevo abre en personalizado");
+        g.set_album_sort(&a.id, AlbumOrder::Captured).unwrap();
+        assert_eq!(g.album_sort(&a.id).unwrap(), Some(AlbumOrder::Captured));
+        assert_eq!(g.album_sort(&b.id).unwrap(), Some(AlbumOrder::Custom), "cada álbum guarda el suyo");
+        assert_eq!(g.album_sort("no-existe").unwrap(), None);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn create_rename_delete_and_no_duplicates() {
         let (dir, g) = db();
@@ -492,7 +669,7 @@ mod tests {
             ],
         )
         .unwrap();
-        let entries = g.album_entries(&album.id, AlbumOrder::Added).unwrap();
+        let entries = g.album_entries(&album.id, AlbumOrder::Custom).unwrap();
         let view: Vec<(ItemStatus, &str, Option<ThumbKey>, Option<&str>)> = entries
             .iter()
             .map(|e| (e.status, e.file_name.as_str(), e.thumb.clone(), e.photo_id.as_deref()))
@@ -516,7 +693,7 @@ mod tests {
             &[export("xa", "a.jpg", Some("a")), export("xb", "b.jpg", Some("b")), export("xbn", "b-bn.jpg", None)],
         )
         .unwrap();
-        let b = &g.album_entries(&album.id, AlbumOrder::Added).unwrap()[1];
+        let b = &g.album_entries(&album.id, AlbumOrder::Custom).unwrap()[1];
         assert_eq!((b.status, b.file_name.as_str()), (ItemStatus::Final, "b.jpg"));
 
         assert_eq!(g.album_thumbnail(&ThumbKey::Export("xb".into())).unwrap().as_deref(), Some(&b"edit-xb"[..]));
@@ -530,7 +707,7 @@ mod tests {
         let album = g.create_album("A").unwrap();
         g.add_album_items(&album.id, &[item(ItemKind::Photo, "p2", "c")]).unwrap();
         g.remove_project_index("p2").unwrap();
-        let e = &g.album_entries(&album.id, AlbumOrder::Added).unwrap()[0];
+        let e = &g.album_entries(&album.id, AlbumOrder::Custom).unwrap()[0];
         assert_eq!((e.status, e.file_name.as_str(), e.project_name.as_str()), (ItemStatus::Missing, "c.snap", "Snapshot"));
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -543,19 +720,19 @@ mod tests {
         let ids = |order| -> Vec<String> {
             g.album_entries(&album.id, order).unwrap().into_iter().map(|e| e.ref_id).collect()
         };
-        assert_eq!(ids(AlbumOrder::Added), ["c", "a", "b"]);
+        assert_eq!(ids(AlbumOrder::Custom), ["c", "a", "b"]);
         assert_eq!(ids(AlbumOrder::Captured), ["b", "a", "c"]);
 
-        let entries = g.album_entries(&album.id, AlbumOrder::Added).unwrap();
+        let entries = g.album_entries(&album.id, AlbumOrder::Custom).unwrap();
         // "a" se reemplaza por la variante suelta: queda en el mismo lugar.
         g.replace_album_item(&entries[1].item_id, &item(ItemKind::Export, "p1", "xbn")).unwrap();
-        assert_eq!(ids(AlbumOrder::Added), ["c", "xbn", "b"]);
+        assert_eq!(ids(AlbumOrder::Custom), ["c", "xbn", "b"]);
         // Reemplazar por algo que ya está: el reemplazado se quita.
         g.replace_album_item(&entries[0].item_id, &item(ItemKind::Photo, "p1", "b")).unwrap();
-        assert_eq!(ids(AlbumOrder::Added), ["xbn", "b"]);
+        assert_eq!(ids(AlbumOrder::Custom), ["xbn", "b"]);
 
         g.remove_album_item(&entries[2].item_id).unwrap();
-        assert_eq!(ids(AlbumOrder::Added), ["xbn"]);
+        assert_eq!(ids(AlbumOrder::Custom), ["xbn"]);
         let _ = std::fs::remove_dir_all(dir);
     }
 

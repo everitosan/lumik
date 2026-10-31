@@ -206,6 +206,35 @@ fn migrate_analysis_mode_column(conn: &Connection) -> DbResult<()> {
     Ok(())
 }
 
+/// Migraciones de `lumik.db` que necesitan las tablas del esquema ya creadas.
+pub(super) fn run_global_migrations(conn: &Connection) -> DbResult<()> {
+    migrate_album_order_columns(conn)?;
+    Ok(())
+}
+
+/// Orden personalizado de los álbumes (spec `photo-albums`): agrega
+/// `album_item.position`, sembrada por álbum con el orden en que se agregaron
+/// (así ningún álbum cambia), y `album.sort`, el modo de orden de cada álbum.
+fn migrate_album_order_columns(conn: &Connection) -> DbResult<()> {
+    if !has_column(conn, "album_item", "position") {
+        conn.execute_batch(
+            "ALTER TABLE album_item ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+             UPDATE album_item SET position = (
+                 SELECT COUNT(*) FROM album_item o
+                 WHERE o.album_id = album_item.album_id
+                   AND (o.added_at < album_item.added_at OR (o.added_at = album_item.added_at AND o.id < album_item.id))
+             );",
+        )?;
+    }
+    if !has_column(conn, "album", "sort") {
+        conn.execute(
+            "ALTER TABLE album ADD COLUMN sort TEXT NOT NULL DEFAULT 'custom' CHECK(sort IN ('custom', 'captured'))",
+            [],
+        )?;
+    }
+    Ok(())
+}
+
 /// El índice de búsqueda guardaba la miniatura en `search_photo`; ahora va en
 /// `search_media`. Como el índice es desechable, si queda el esquema anterior
 /// se borran sus tablas y la app lo reconstruye (spec `photo-search`).

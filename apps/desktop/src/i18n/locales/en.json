@@ -616,7 +616,7 @@
     "connectDiskUnknown": "This photo is on a drive that is not connected. Connect it to open the photo.",
     "noticeTitle": "Can't open it",
     "order": {
-      "added": "Order: added",
+      "custom": "Order: custom",
       "captured": "Order: capture date"
     },
     "status": {
@@ -624,7 +624,10 @@
       "unedited": "Unedited",
       "missing": "No longer there"
     },
+    "moveFailed": "Could not change the order: {{error}}",
     "item": {
+      "moveFirst": "Move to start",
+      "moveLast": "Move to end",
       "replace": "Replace with…",
       "remove": "Remove from album",
       "gone": "This photo is no longer in its project (it was moved to the trash or the project was deleted). You can remove or replace it.",

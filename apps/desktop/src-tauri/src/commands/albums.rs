@@ -56,13 +56,27 @@ pub fn replace_album_item(state: State<AppState>, item_id: String, with: NewAlbu
     Ok(state.global_db.replace_album_item(&item_id, &with)?)
 }
 
+/// Lleva un elemento al lugar `to_index` del orden personalizado (0: al
+/// principio; un índice mayor que el álbum: al final) y recorre a los demás.
+#[tauri::command]
+pub fn move_album_item(state: State<AppState>, item_id: String, to_index: usize) -> AppResult<()> {
+    Ok(state.global_db.move_album_item(&item_id, to_index)?)
+}
+
+/// Guarda el modo de orden con que se abre el álbum.
+#[tauri::command]
+pub fn set_album_sort(state: State<AppState>, album_id: String, sort: AlbumOrder) -> AppResult<()> {
+    Ok(state.global_db.set_album_sort(&album_id, sort)?)
+}
+
+/// Lee el álbum en `order`; sin orden, en el modo guardado del álbum.
 #[tauri::command]
 pub async fn get_album(state: State<'_, AppState>, album_id: String, order: Option<AlbumOrder>) -> AppResult<Option<AlbumView>> {
     let state = (*state).clone();
     tauri::async_runtime::spawn_blocking(move || {
         let registry = state.registry.clone();
         let is_open = move |id: &str| registry.contains(id);
-        Ok(ReadAlbum { global: &state.global_db, is_open: &is_open }.execute(&album_id, order.unwrap_or_default())?)
+        Ok(ReadAlbum { global: &state.global_db, is_open: &is_open }.execute(&album_id, order)?)
     })
     .await
     .map_err(|e| AppError::from(format!("tarea de fondo: {e}")))?

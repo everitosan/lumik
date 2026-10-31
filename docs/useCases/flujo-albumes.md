@@ -122,6 +122,44 @@ sequenceDiagram
     end
 ```
 
+## 3. Orden del álbum
+
+Cada álbum tiene un **orden personalizado** (`album_item.position`, `0..n-1`): al principio es el
+orden en que se agregaron sus fotos, lo nuevo entra al final y reemplazar conserva el lugar.
+"Fecha de captura" es solo una vista. El modo elegido se guarda en `album.sort`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Fotógrafo
+    participant AD as AlbumDetail
+    participant DR as useAlbumDrag
+    participant BE as move_album_item
+    participant DB as lumik.db
+
+    alt arrastrar (solo en "Personalizado")
+        U->>AD: pointerdown en una foto y mover más de 6 px
+        AD->>DR: startDrag(item, índice)
+        loop mientras arrastra
+            DR->>DR: celda bajo el puntero por la geometría del grid<br/>(y auto-scroll junto a los bordes)
+            DR-->>AD: hueco en el destino, miniatura en el cursor
+        end
+        U->>DR: soltar dentro del grid
+        DR->>AD: onDrop(item, destino)
+    else menú de la foto
+        U->>AD: Mover al principio / Mover al final
+    end
+    AD-->>U: nuevo orden al instante
+    AD->>BE: item_id, to_index
+    BE->>DB: transacción: sacar, insertar, renumerar 0..n-1
+    alt falla
+        AD->>AD: recargar el álbum y avisar
+    end
+    Note over U,DR: Esc, soltar fuera del grid o pointercancel: el orden no cambia
+    U->>AD: Ordenar por: Fecha de captura
+    AD->>DB: set_album_sort (se guarda por álbum)
+```
+
 ## Código
 
 | Pieza | Archivo |
@@ -133,4 +171,6 @@ sequenceDiagram
 | Leer un álbum, agregar resultados | `crates/lumik-core/src/application/use_cases/albums.rs` |
 | Comandos y mostrar en carpeta | `src-tauri/src/commands/albums.rs` |
 | Lista, detalle, agregar y reemplazar | `src/pages/Albums/` |
+| Reordenar arrastrando | `src/pages/Albums/useAlbumDrag.ts` |
+| Migración del orden personalizado | `crates/lumik-core/src/db/migrations.rs` (`migrate_album_order_columns`) |
 | Visor que recorre el álbum o los resultados | `src/pages/Collection/CollectionViewer.tsx` |
