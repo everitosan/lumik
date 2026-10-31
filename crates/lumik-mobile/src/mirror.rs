@@ -1,9 +1,8 @@
-//! Experimento 2.5 (Android, SAF): copias por descriptor de archivo y el modo
-//! espejado de `project.db` (D2). Con SAF, Rust no abre rutas del disco: la
+//! Copias por descriptor de archivo y la copia de trabajo de `project.db`
+//! (spec `tablet-storage`). Con SAF, Rust no abre rutas del disco: la
 //! app le pasa un fd ya abierto (`ContentResolver.openFileDescriptor` +
 //! `detachFd`) y Rust se queda con él y lo cierra al terminar.
 
-use lumik_core::db::ProjectDatabase;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::os::fd::{FromRawFd, RawFd};
@@ -43,32 +42,11 @@ pub trait CopyListener: Send + Sync {
     fn on_error(&self, message: String);
 }
 
-/// Copia `src_fd` en `dst_fd` en otro hilo y cierra los dos. Vuelve de inmediato.
-///
-/// Con `pipelined`, un hilo lee y otro escribe a la vez, con unos bloques en
-/// cola entre los dos: la tarjeta no espera a que el disco termine cada bloque
-/// y la copia se acerca a la velocidad del más lento de los dos, en lugar de
-/// quedar por debajo de ambos (leer y escribir por turnos).
-#[uniffi::export]
-pub fn start_fd_copy(src_fd: i32, dst_fd: i32, pipelined: bool, listener: Arc<dyn CopyListener>) {
-    // Se toman aquí para que se cierren aunque el hilo falle.
-    let (src, dst) = unsafe { (File::from_raw_fd(src_fd as RawFd), File::from_raw_fd(dst_fd as RawFd)) };
-    std::thread::spawn(move || {
-        let result = if pipelined {
-            copy_pipelined(src, dst, listener.as_ref())
-        } else {
-            copy_files(src, dst, Some(listener.as_ref()))
-        };
-        match result {
-            Ok(result) => listener.on_done(result),
-            Err(e) => listener.on_error(e.to_string()),
-        }
-    });
-}
-
 /// Bloques en vuelo entre el hilo que lee y el que escribe.
 const PIPELINE_DEPTH: usize = 4;
 
+/// Un hilo lee y otro escribe a la vez, con unos bloques en cola entre los dos:
+/// la copia se acerca a la velocidad del más lento de los dos.
 fn copy_pipelined(mut src: File, mut dst: File, listener: &dyn CopyListener) -> Result<CopyResult, MirrorError> {
     let started = Instant::now();
     let (full_tx, full_rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(PIPELINE_DEPTH);
@@ -123,63 +101,6 @@ fn copy_pipelined(mut src: File, mut dst: File, listener: &dyn CopyListener) -> 
     written?;
     read?;
     Ok(CopyResult { bytes, elapsed_ms: started.elapsed().as_millis() as u64 })
-}
-
-/// Diagnóstico de velocidad: lee `src_fd` completo sin escribirlo (cuánto da
-/// la tarjeta por sí sola). Vuelve de inmediato; el resultado llega a `listener`.
-#[uniffi::export]
-pub fn start_fd_read(src_fd: i32, listener: Arc<dyn CopyListener>) {
-    let src = unsafe { File::from_raw_fd(src_fd as RawFd) };
-    std::thread::spawn(move || match copy_files(src, Sink, Some(listener.as_ref())) {
-        Ok(result) => listener.on_done(result),
-        Err(e) => listener.on_error(e.to_string()),
-    });
-}
-
-/// Diagnóstico de velocidad: escribe `bytes` generados en memoria en `dst_fd`
-/// (cuánto da el disco por sí solo), con el mismo `sync_all` final que la copia.
-#[uniffi::export]
-pub fn start_fd_write(dst_fd: i32, bytes: u64, listener: Arc<dyn CopyListener>) {
-    let dst = unsafe { File::from_raw_fd(dst_fd as RawFd) };
-    std::thread::spawn(move || match copy_files(Pattern { left: bytes }, dst, Some(listener.as_ref())) {
-        Ok(result) => listener.on_done(result),
-        Err(e) => listener.on_error(e.to_string()),
-    });
-}
-
-/// Destino que descarta lo que recibe.
-struct Sink;
-impl Write for Sink {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        Ok(buf.len())
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-impl Synced for Sink {
-    fn sync(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
-/// Origen de `left` bytes no comprimibles generados al vuelo.
-struct Pattern {
-    left: u64,
-}
-impl Read for Pattern {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let n = (buf.len() as u64).min(self.left) as usize;
-        let mut x = self.left.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
-        for b in &mut buf[..n] {
-            x ^= x << 13;
-            x ^= x >> 7;
-            x ^= x << 17;
-            *b = x as u8;
-        }
-        self.left -= n as u64;
-        Ok(n)
-    }
 }
 
 /// Lo que `copy_files` necesita del destino para darlo por escrito.
@@ -255,7 +176,7 @@ pub fn write_fd_string(fd: i32, text: String) -> Result<(), MirrorError> {
     Ok(())
 }
 
-/// Texto de un archivo de la sandbox (ajustes del prototipo), o `None` si no hay.
+/// Texto de un archivo de la sandbox (ajustes de la tablet), o `None` si no hay.
 #[uniffi::export]
 pub fn read_text(path: String) -> Option<String> {
     std::fs::read_to_string(path).ok()
@@ -271,31 +192,6 @@ pub fn write_text(path: String, text: String) -> Result<(), MirrorError> {
     std::fs::write(&tmp, text)?;
     std::fs::rename(&tmp, &path)?;
     Ok(())
-}
-
-#[derive(uniffi::Record)]
-pub struct ProjectSummary {
-    /// `project.id`: identifica el proyecto en cualquier disco.
-    pub id: Option<String>,
-    pub name: Option<String>,
-    /// Portada elegida en el desktop (`.thumbs/{id}.jpg`, relativa al proyecto).
-    pub cover: Option<String>,
-}
-
-/// Id, nombre y portada de un proyecto, de una copia de su `project.db`. Se lee
-/// sin migrar: en una base vieja sin la columna de portada, `cover` es `None`.
-#[uniffi::export]
-pub fn project_summary(db_path: String) -> ProjectSummary {
-    let Ok(conn) = rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) else {
-        return ProjectSummary { id: None, name: None, cover: None };
-    };
-    let id = conn.query_row("SELECT id FROM project LIMIT 1", [], |r| r.get::<_, String>(0)).ok();
-    let name = conn.query_row("SELECT name FROM project LIMIT 1", [], |r| r.get::<_, String>(0)).ok();
-    let cover = conn
-        .query_row("SELECT cover_photo_path FROM project LIMIT 1", [], |r| r.get::<_, Option<String>>(0))
-        .ok()
-        .flatten();
-    ProjectSummary { id, name, cover }
 }
 
 /// De `names`, los que no están en `dir` (lo que falta traer al caché).
@@ -413,20 +309,6 @@ pub fn vacuum_into(db_path: String, out_path: String) -> Result<(), MirrorError>
     Ok(())
 }
 
-/// Cambia las estrellas de una foto en la copia de trabajo, conservando su
-/// etiqueta de color y sus tags (como `update_rating` del desktop).
-#[uniffi::export]
-pub fn set_stars(project_dir: String, photo_id: String, stars: i32) -> Result<(), MirrorError> {
-    let dir = std::path::PathBuf::from(&project_dir);
-    let db = ProjectDatabase::open(dir.join("project.db"), "", dir).map_err(|e| MirrorError::Db(e.to_string()))?;
-    let photo = db
-        .get_photo(&photo_id)
-        .map_err(|e| MirrorError::Db(e.to_string()))?
-        .ok_or_else(|| MirrorError::Db(format!("no existe la foto {photo_id}")))?;
-    db.update_photo_rating(&photo_id, stars, photo.color_label.as_deref(), photo.tags.as_deref())
-        .map_err(|e| MirrorError::Db(e.to_string()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -445,27 +327,23 @@ mod tests {
     }
 
     #[test]
-    fn fd_copy_copies_everything() {
+    fn path_to_fd_copies_everything() {
         let dir = tempfile::tempdir().unwrap();
         let (a, b) = (dir.path().join("a"), dir.path().join("b"));
         let data: Vec<u8> = (0..(CHUNK * 2 + 123)).map(|i| (i % 251) as u8).collect();
         std::fs::write(&a, &data).unwrap();
 
         let (tx, rx) = mpsc::channel();
-        for pipelined in [false, true] {
-            let src = File::open(&a).unwrap().into_raw_fd();
-            let dst = File::create(&b).unwrap().into_raw_fd();
-            start_fd_copy(src, dst, pipelined, Arc::new(Recorder(Mutex::new(tx.clone()))));
+        start_path_to_fd(a.display().to_string(), File::create(&b).unwrap().into_raw_fd(), Arc::new(Recorder(Mutex::new(tx))));
 
-            assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), Ok(data.len() as u64));
-            assert_eq!(std::fs::read(&b).unwrap(), data, "pipelined = {pipelined}");
-        }
+        assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), Ok(data.len() as u64));
+        assert_eq!(std::fs::read(&b).unwrap(), data);
     }
 
     /// Destino que falla al escribir: la copia en paralelo debe terminar con
     /// error, no quedarse esperando al hilo lector.
     #[test]
-    fn pipelined_copy_ends_when_the_writer_fails() {
+    fn path_to_fd_ends_when_the_writer_fails() {
         let dir = tempfile::tempdir().unwrap();
         let a = dir.path().join("a");
         std::fs::write(&a, vec![1u8; CHUNK * (PIPELINE_DEPTH + 3)]).unwrap();
@@ -473,29 +351,9 @@ mod tests {
         let dst = File::open(&a).unwrap().into_raw_fd();
 
         let (tx, rx) = mpsc::channel();
-        start_fd_copy(File::open(&a).unwrap().into_raw_fd(), dst, true, Arc::new(Recorder(Mutex::new(tx))));
+        start_path_to_fd(a.display().to_string(), dst, Arc::new(Recorder(Mutex::new(tx))));
 
         assert!(rx.recv_timeout(Duration::from_secs(10)).unwrap().is_err());
-    }
-
-    #[test]
-    fn fd_write_writes_the_requested_bytes() {
-        let dir = tempfile::tempdir().unwrap();
-        let out = dir.path().join("w");
-        let (tx, rx) = mpsc::channel();
-        start_fd_write(File::create(&out).unwrap().into_raw_fd(), 5_000_001, Arc::new(Recorder(Mutex::new(tx))));
-        assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), Ok(5_000_001));
-        assert_eq!(std::fs::metadata(&out).unwrap().len(), 5_000_001);
-    }
-
-    #[test]
-    fn fd_read_reads_everything() {
-        let dir = tempfile::tempdir().unwrap();
-        let src = dir.path().join("r");
-        std::fs::write(&src, vec![7u8; 1234567]).unwrap();
-        let (tx, rx) = mpsc::channel();
-        start_fd_read(File::open(&src).unwrap().into_raw_fd(), Arc::new(Recorder(Mutex::new(tx))));
-        assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), Ok(1234567));
     }
 
     #[test]

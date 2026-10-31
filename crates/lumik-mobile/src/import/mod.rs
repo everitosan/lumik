@@ -1,4 +1,4 @@
-//! Import de la tarjeta en la tablet (experimento 3.1, etapa B). Corre el
+//! Import de la tarjeta en la tablet (spec `tablet-import`). Corre el
 //! `ImportPhotos` del núcleo sin cambios en una carpeta sombra del proyecto en
 //! la sandbox (la copia de trabajo de `project.db` está ahí): la tarjeta se lee
 //! por fd, y renombrar, XMP, pares, registro, miniaturas y vistas previas pasan
@@ -17,13 +17,45 @@ pub use pipeline::CardSource;
 
 use lumik_core::application::ports::{FileStore, ImageProcessor, ProgressReporter};
 use lumik_core::application::use_cases::import_photos::{ImportParams, ImportPhotos};
+use lumik_core::db::models::PhotographerMetadata;
 use lumik_core::db::ProjectDatabase;
+use lumik_core::domain::project::image_description;
 use lumik_core::import::{ImportLogEntry, ImportPhase, ImportProgress};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use crate::mirror::MirrorError;
+
+/// Ajustes de la tablet que usa el import (spec `tablet-settings`).
+#[derive(uniffi::Record, Clone)]
+pub struct ImportSettings {
+    /// Escribir la firma del fotógrafo y la descripción en un `.xmp` junto a cada foto.
+    pub sign: bool,
+    /// Renombrar por fecha de captura.
+    pub rename: bool,
+    pub author: Option<String>,
+    pub copyright: Option<String>,
+    pub url: Option<String>,
+}
+
+impl ImportSettings {
+    /// La firma para el núcleo, o `None` si está apagada.
+    fn metadata(&self) -> Option<PhotographerMetadata> {
+        let clean = |v: &Option<String>| v.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
+        self.sign.then(|| PhotographerMetadata {
+            id: String::new(),
+            photographer_id: String::new(),
+            artist: clean(&self.author),
+            copyright: clean(&self.copyright),
+            contact_email: None,
+            contact_url: clean(&self.url),
+            contact_phone: None,
+            usage_terms: None,
+            custom_tags: None,
+        })
+    }
+}
 
 #[derive(uniffi::Record)]
 pub struct CardFile {
@@ -133,10 +165,11 @@ pub fn make_placeholders(dir: String, names: Vec<String>) -> Result<(), MirrorEr
 pub fn start_card_import(
     shadow_dir: String,
     files: Vec<CardFile>,
+    settings: ImportSettings,
     card: Arc<dyn CardSource>,
     listener: Arc<dyn CardImportListener>,
 ) {
-    std::thread::spawn(move || match run(&shadow_dir, files, card, listener.clone()) {
+    std::thread::spawn(move || match run(&shadow_dir, files, &settings, card, listener.clone()) {
         Ok(result) => listener.on_done(result),
         Err(e) => listener.on_error(e),
     });
@@ -145,6 +178,7 @@ pub fn start_card_import(
 fn run(
     shadow_dir: &str,
     files: Vec<CardFile>,
+    settings: &ImportSettings,
     card: Arc<dyn CardSource>,
     listener: Arc<dyn CardImportListener>,
 ) -> Result<CardImportResult, String> {
@@ -170,11 +204,14 @@ fn run(
         project_dir: dir.clone(),
         dest_folder: dir.join("_media"),
         video_dest_folder: dir.join("_video"),
-        // La tablet todavía no tiene la firma del fotógrafo ni los ajustes globales:
-        // se renombra como el valor por omisión del desktop.
-        metadata: None,
-        image_description: project.description.clone(),
-        rename_on_import: true,
+        // Sin firma no se escribe nada en el `.xmp`, ni siquiera la descripción (como el desktop).
+        metadata: settings.metadata(),
+        image_description: if settings.sign {
+            image_description(project.description.as_deref(), project.session_date.as_deref(), &project.created_at)
+        } else {
+            None
+        },
+        rename_on_import: settings.rename,
         delivery,
     };
     let reporter = Reporter(listener.clone());
@@ -284,6 +321,58 @@ mod tests {
         }
     }
 
+    fn settings(sign: bool, rename: bool) -> ImportSettings {
+        ImportSettings { sign, rename, author: Some("Ana López".into()), copyright: Some("© Ana".into()), url: None }
+    }
+
+    /// Importa el JPEG de los fixtures del desktop a un proyecto nuevo en la sandbox.
+    fn import_fixture(settings: ImportSettings) -> (tempfile::TempDir, tempfile::TempDir, CardImportResult, Vec<u8>) {
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../apps/desktop/src-tauri/tests/fixtures/orient_1.jpg");
+        let original = std::fs::read(&fixture).unwrap();
+        let shadow = tempfile::tempdir().unwrap();
+        crate::project::create_project_db(
+            shadow.path().display().to_string(),
+            "Boda".into(),
+            Some("Boda de Ana".into()),
+            Some("2026-10-30".into()),
+            "c".into(),
+        )
+        .unwrap();
+        let disk = tempfile::tempdir().unwrap();
+        let files = vec![CardFile { name: "DSCF0001.JPG".into(), size: original.len() as u64 }];
+        let (tx, rx) = mpsc::channel();
+        start_card_import(
+            shadow.path().display().to_string(),
+            files,
+            settings,
+            Arc::new(Files(vec![fixture], disk.path().to_path_buf())),
+            Arc::new(Done(Mutex::new(tx))),
+        );
+        let r = rx.recv_timeout(std::time::Duration::from_secs(60)).unwrap().unwrap();
+        assert_eq!((r.imported, r.failed), (1, 0), "{:?}", r.errors);
+        (shadow, disk, r, original)
+    }
+
+    #[test]
+    fn signed_import_writes_the_author_in_a_sidecar() {
+        let (shadow, disk, r, original) = import_fixture(settings(true, true));
+        let xmp = r.uploads.iter().find(|u| u.ends_with(".xmp")).expect("sube el .xmp");
+        let text = std::fs::read_to_string(shadow.path().join(xmp)).unwrap();
+        assert!(text.contains("Ana López") && text.contains("Boda de Ana@2026"), "{text}");
+        // El original va al disco desde el staging (`moves`) tal como vino de la tarjeta.
+        assert_eq!(r.moves.len(), 1);
+        assert!(r.moves[0].to.starts_with("_media/2"), "renombrado por fecha: {}", r.moves[0].to);
+        let staged = std::fs::read_dir(disk.path()).unwrap().next().unwrap().unwrap().path();
+        assert_eq!(std::fs::read(staged).unwrap(), original);
+    }
+
+    #[test]
+    fn unsigned_import_without_rename_keeps_the_camera_name() {
+        let (_shadow, _disk, r, _) = import_fixture(settings(false, false));
+        assert_eq!(r.moves[0].to, "_media/DSCF0001.JPG");
+        assert!(!r.uploads.iter().any(|u| u.ends_with(".xmp")), "sin firma no hay .xmp");
+    }
+
     /// Con un proyecto real: `LUMIK_PROJECT=/ruta cargo test import -- --ignored`.
     /// "Importa" 3 RAW del propio `_media/` a una sombra con su `project.db` y
     /// marcadores de los nombres del disco: no debe pisar ninguno.
@@ -303,7 +392,7 @@ mod tests {
 
         let disk = tempfile::tempdir().unwrap();
         let (tx, rx) = mpsc::channel();
-        start_card_import(shadow.path().display().to_string(), files, Arc::new(Files(raws.clone(), disk.path().to_path_buf())), Arc::new(Done(Mutex::new(tx))));
+        start_card_import(shadow.path().display().to_string(), files, settings(false, true), Arc::new(Files(raws.clone(), disk.path().to_path_buf())), Arc::new(Done(Mutex::new(tx))));
         let r = rx.recv_timeout(std::time::Duration::from_secs(120)).unwrap().unwrap();
 
         eprintln!("importadas {} · fallidas {} · {:?} · {} ms\nmover: {:#?}\nsubir: {:#?}", r.imported, r.failed, r.errors, r.elapsed_ms,

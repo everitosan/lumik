@@ -43,6 +43,19 @@ pub fn install_identity(path: String, default_name: String) -> Result<InstallInf
     Ok(InstallInfo { id, name: default_name })
 }
 
+/// Cambia el nombre de esta instalación (el que ven los otros dispositivos en
+/// el candado), conservando su identidad.
+#[uniffi::export]
+pub fn set_install_name(path: String, default_name: String, name: String) -> Result<InstallInfo, MirrorError> {
+    let current = install_identity(path.clone(), default_name)?;
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Ok(current);
+    }
+    std::fs::write(&path, format!("{}\n{name}\n", current.id))?;
+    Ok(InstallInfo { id: current.id, name })
+}
+
 /// Interpreta el contenido de `.lumik-lock` (o `None` si no hay). Uno ilegible
 /// cuenta como libre, como en el núcleo.
 #[uniffi::export]
@@ -69,6 +82,19 @@ pub fn own_lock_json(install: InstallInfo, mirror_dir: String, pending: bool) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn install_name_changes_and_keeps_the_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("install-id").display().to_string();
+        let first = install_identity(path.clone(), "Tablet DBR-W09".into()).unwrap();
+
+        let renamed = set_install_name(path.clone(), "Tablet DBR-W09".into(), "  Tablet de Ana ".into()).unwrap();
+        assert_eq!((renamed.id.as_str(), renamed.name.as_str()), (first.id.as_str(), "Tablet de Ana"));
+        assert_eq!(install_identity(path.clone(), "Tablet DBR-W09".into()).unwrap().name, "Tablet de Ana");
+        // Un nombre vacío no cambia nada.
+        assert_eq!(set_install_name(path, "x".into(), " ".into()).unwrap().name, "Tablet de Ana");
+    }
 
     #[test]
     fn identity_is_created_once_and_kept() {

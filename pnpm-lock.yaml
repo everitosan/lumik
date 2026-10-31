@@ -76,7 +76,7 @@ importers:
         specifier: ^6.4.8
         version: 6.4.8(@types/node@26.6.5)(lightningcss@1.33.0)(rollup@4.60.4)(terser@5.51.2)
 
-  apps/tablet-spike:
+  apps/tablet:
     dependencies:
       '@lumik/core-native':
         specifier: workspace:*
@@ -119,7 +119,7 @@ importers:
         specifier: ~6.0.3
         version: 6.0.3
 
-  apps/tablet-spike/modules/core-native:
+  apps/tablet/modules/core-native:
     dependencies:
       '@ubjs/core':
         specifier: 0.31.0-6
@@ -6605,7 +6605,7 @@ snapshots:
       '@expo/spawn-async': 1.8.0
       '@jridgewell/gen-mapping': 0.3.13
       '@jridgewell/remapping': 2.3.5
-      '@jridgewell/sourcemap-codec': 1.5.5
+      '@jridgewell/sourcemap-codec': 1.6.0
       '@jridgewell/trace-mapping': 0.3.31
       '@react-native/js-polyfills': 0.88.0
       browserslist: 4.29.5

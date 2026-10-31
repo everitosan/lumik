@@ -1,5 +1,4 @@
-//! Lectura de un proyecto de Lumik (su `project.db`) con el núcleo, y la
-//! preparación de las fotos del grid del experimento 2.4.
+//! Lectura y creación de un proyecto de Lumik (su `project.db`) con el núcleo.
 
 use lumik_core::db::ProjectDatabase;
 use std::path::{Path, PathBuf};
@@ -146,29 +145,6 @@ pub fn save_view_settings(project_dir: String, settings: ViewSettings) -> Result
     s.selected_colors = settings.selected_colors;
     s.view_mode = settings.view_mode;
     db.update_project_settings(&s).map_err(|e| ProjectError::Files(e.to_string()))
-}
-
-/// Copia las miniaturas y vistas previas de `photos` a `out_dir/{thumbs,previews}/{n}.jpg`
-/// hasta `count`, repitiéndolas en orden, para probar el grid con muchas fotos
-/// sin que el caché de imágenes las reutilice. No repite lo que ya existe.
-#[uniffi::export]
-pub fn prepare_grid(thumbs: Vec<String>, previews: Vec<String>, out_dir: String, count: u32) -> Result<(), ProjectError> {
-    let out = Path::new(&out_dir);
-    let files = |e: std::io::Error| ProjectError::Files(e.to_string());
-    for (sub, sources) in [("thumbs", &thumbs), ("previews", &previews)] {
-        if sources.is_empty() {
-            return Err(ProjectError::Files("sin fotos".into()));
-        }
-        let dir = out.join(sub);
-        std::fs::create_dir_all(&dir).map_err(files)?;
-        for n in 0..count as usize {
-            let dst = dir.join(format!("{n}.jpg"));
-            if !dst.exists() {
-                std::fs::copy(&sources[n % sources.len()], &dst).map_err(files)?;
-            }
-        }
-    }
-    Ok(())
 }
 
 #[derive(uniffi::Record)]

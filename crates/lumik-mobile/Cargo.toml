@@ -1,7 +1,7 @@
 [package]
 name = "lumik-mobile"
 version = "0.0.0"
-description = "Puente uniffi de lumik-core para la app de tablet (spike)"
+description = "Puente uniffi de lumik-core para la app de tablet"
 edition = "2021"
 publish = false
 
