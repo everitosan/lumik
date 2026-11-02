@@ -2,8 +2,8 @@
 
 ## 1. El motor como paquete
 
-- [ ] 1.1 Tomar `libonnxruntime.1.31.0.dylib` de la distribución oficial `onnxruntime-osx-arm64-1.31.0` (la versión de `ort` 2.0.0-rc.15, API 31), comprobar que es `arm64` y su versión mínima de macOS, empacarla en un zip y publicarla en un release del repo `ort-runtime-macos-<versión>` (con permiso del usuario antes de publicar). Verificar descargando el zip del release y comparando su sha256.
-- [ ] 1.3 Lo mismo para Linux: `libonnxruntime.so.1.31.0` de `onnxruntime-linux-x64-1.31.0` (comprobar con `objdump -T` que pide glibc 2.28 o menos), en un zip con su licencia, publicado en el release `ort-runtime-linux-1.31.0` (con permiso del usuario), y `ORT_RUNTIME_LINUX` en `domain/embedding.rs`. Verificar como la 1.1 y con `cargo test -p lumik-core --features embeddings`.
+- [x] 1.1 Tomar `libonnxruntime.1.31.0.dylib` de la distribución oficial `onnxruntime-osx-arm64-1.31.0` (la versión de `ort` 2.0.0-rc.15, API 31), comprobar que es `arm64` y su versión mínima de macOS, empacarla en un zip y publicarla en un release del repo `ort-runtime-macos-<versión>` (con permiso del usuario antes de publicar). Verificar descargando el zip del release y comparando su sha256.
+- [x] 1.3 Lo mismo para Linux: `libonnxruntime.so.1.31.0` de `onnxruntime-linux-x64-1.31.0` (comprobar con `objdump -T` que pide glibc 2.28 o menos), en un zip con su licencia, publicado en el release `ort-runtime-linux-1.31.0` (con permiso del usuario), y `ORT_RUNTIME_LINUX` en `domain/embedding.rs`. Verificar como la 1.1 y con `cargo test -p lumik-core --features embeddings`.
 - [x] 1.2 `ORT_RUNTIME_MACOS: RuntimePackage` en `crates/lumik-core/src/domain/embedding.rs` (id, URL, tamaño, sha256 y nombre de la librería). Verificar con `cargo test -p lumik-core --features embeddings`.
 
 ## 2. `ort` dinámico en macOS
