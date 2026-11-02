@@ -374,6 +374,10 @@
       "title": "Búsqueda por contenido",
       "description": "Encuentra fotos por lo que muestran, describiéndolas en español o en inglés (por ejemplo, \"novia en la playa\"), aunque no tengan tags. Necesita un modelo que se descarga una vez.",
       "notInstalled": "El modelo no está instalado. Pesa {{size}} MB.",
+      "unsupported": {
+        "apple-silicon": "Requiere una Mac con Apple Silicon. El resto de Lumik funciona igual en este equipo.",
+        "macos-14": "Requiere macOS 14 Sonoma o posterior. El resto de Lumik funciona igual en este equipo."
+      },
       "download": "Descargar modelo",
       "retry": "Reintentar descarga",
       "downloading": "Descargando… {{done}} de {{total}} MB",

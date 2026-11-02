@@ -129,6 +129,8 @@ pub fn run() {
         index_queue: Arc::new(application::index_queue::IndexQueue::new()),
         content_model: Arc::new(infrastructure::content_model::ContentModel::new(
             domain::embedding::CLIP_MULTILINGUAL,
+            // En macOS y Linux el motor de ONNX Runtime se descarga con el modelo.
+            domain::embedding::platform_runtime(),
             models_dir,
         )),
         analysis_queue: Arc::new(application::analysis_queue::AnalysisQueue::new()),

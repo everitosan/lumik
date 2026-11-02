@@ -34,11 +34,11 @@
 
 ## 7. Correcciones del fotógrafo
 
-- [ ] 7.1 Formulario de crear proyecto: "Nombre del proyecto" y "Disco destino" en el desktop (`es.json`/`en.json`) y en la tablet; selector de fecha de Android en la tablet (`@react-native-community/datetimepicker` con `expo install`). Verificar con `pnpm --filter @lumik/desktop build`, `typecheck` y en la tablet eligiendo la fecha.
-- [ ] 7.2 Buscador en el inicio de la tablet que filtra proyectos por nombre o descripción, sin distinguir mayúsculas ni acentos. Verificar en la tablet escribiendo parte de un nombre.
-- [ ] 7.3 Portada por defecto en el núcleo: la primera foto por fecha de captura cuando no hay portada elegida, en `get_project_dashboard_entry` y en la portada del desktop; la tablet deja de listar `.thumbs/`. Test en `lumik-core`. Verificar con `cargo test` y viendo la misma portada en el desktop y en la tablet.
-- [ ] 7.4 Import en tres pasos con el paso de ajustes (renombrar con ejemplo, firmar, entrega del proyecto con `ChangeDeliveryMode` expuesto en `lumik-mobile`). Tests en `lumik-mobile` del cambio de entrega. Verificar en la tablet: importar sin renombrar solo esa vez y cambiar la entrega desde el import.
-- [ ] 7.5 Rotar en el visor (D9): botones, `RotatePhoto` en `lumik-mobile`, `.xmp` y miniatura al disco. Verificar en la tablet y abriendo el proyecto en el desktop con la misma orientación.
+- [x] 7.1 Formulario de crear proyecto: "Nombre del proyecto" y "Disco destino" en el desktop (`es.json`/`en.json`) y en la tablet; selector de fecha de Android en la tablet (`@react-native-community/datetimepicker` con `expo install`). Verificar con `pnpm --filter @lumik/desktop build`, `typecheck` y en la tablet eligiendo la fecha.
+- [x] 7.2 Buscador en el inicio de la tablet que filtra proyectos por nombre o descripción, sin distinguir mayúsculas ni acentos. Verificar en la tablet escribiendo parte de un nombre.
+- [x] 7.3 Portada por defecto en el núcleo: la primera foto por fecha de captura cuando no hay portada elegida, en `get_project_dashboard_entry` y en la portada del desktop; la tablet deja de listar `.thumbs/`. Test en `lumik-core`. Verificar con `cargo test` y viendo la misma portada en el desktop y en la tablet.
+- [x] 7.4 Import en tres pasos con el paso de ajustes (renombrar con ejemplo, firmar, entrega del proyecto con `ChangeDeliveryMode` expuesto en `lumik-mobile`). Tests en `lumik-mobile` del cambio de entrega. Verificar en la tablet: importar sin renombrar solo esa vez y cambiar la entrega desde el import.
+- [x] 7.5 Rotar en el visor (D9): botones, `RotatePhoto` en `lumik-mobile`, `.xmp` y miniatura al disco. Verificar en la tablet y abriendo el proyecto en el desktop con la misma orientación.
 - [ ] 7.6 Orientación de los `.cr2` verticales (D10): reproducir con una muestra real, corregir `read_exif_rotation` si hace falta, con test ignorado. Verificar importando una foto vertical de Canon en la tablet.
 
 ## 6. Integración

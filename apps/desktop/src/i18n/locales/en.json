@@ -374,6 +374,10 @@
       "title": "Content search",
       "description": "Find photos by what they show, describing them in English or Spanish (for example, \"bride on the beach\"), even without tags. It needs a model that is downloaded once.",
       "notInstalled": "The model is not installed. It is {{size}} MB.",
+      "unsupported": {
+        "apple-silicon": "Requires a Mac with Apple Silicon. The rest of Lumik works the same on this computer.",
+        "macos-14": "Requires macOS 14 Sonoma or later. The rest of Lumik works the same on this computer."
+      },
       "download": "Download model",
       "retry": "Retry download",
       "downloading": "Downloading… {{done}} of {{total}} MB",

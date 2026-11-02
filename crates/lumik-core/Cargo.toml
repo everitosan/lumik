@@ -23,6 +23,12 @@ ort = { version = "=2.0.0-rc.15", optional = true }
 tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"], optional = true }
 image = { version = "0.25", default-features = false, features = ["jpeg"], optional = true }
 
+# En macOS y Linux, ONNX Runtime no se enlaza: se carga del motor descargado con
+# el modelo (`load-dynamic`, change `ort-dynamic-macos`). El precompilado que trae
+# `ort` pide macOS 13.4 (y no hay para Mac Intel) y glibc 2.38 en Linux.
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+ort = { version = "=2.0.0-rc.15", optional = true, features = ["load-dynamic"] }
+
 [features]
 default = []
 embeddings = ["dep:ort", "dep:tokenizers", "dep:image"]

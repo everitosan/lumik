@@ -134,7 +134,9 @@ export interface AppSettings {
 export type ContentModelState =
   | { state: 'not_installed'; size: number; error: string | null }
   | { state: 'downloading'; downloaded: number; total: number }
-  | { state: 'installed'; size: number };
+  | { state: 'installed'; size: number }
+  /** Este equipo no puede usarla: Mac Intel (`apple-silicon`) o macOS anterior a 14 (`macos-14`). */
+  | { state: 'unsupported'; requires: 'apple-silicon' | 'macos-14' };
 
 /** Cuándo se calculan los vectores de las fotos de un proyecto (semantic-search). */
 export type AnalysisMode = 'on_import' | 'on_demand';

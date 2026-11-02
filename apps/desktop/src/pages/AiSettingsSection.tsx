@@ -99,6 +99,10 @@ export function AiSettingsSection() {
         <div style={cardStyles}>
           {model === null && <p style={mutedStyles}>{t('common.loading')}</p>}
 
+          {model?.state === 'unsupported' && (
+            <p style={textStyles}>{t(`settings.contentSearch.unsupported.${model.requires}`)}</p>
+          )}
+
           {model?.state === 'not_installed' && (
             <>
               <p style={textStyles}>{t('settings.contentSearch.notInstalled', { size: mb(model.size) })}</p>

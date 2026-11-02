@@ -55,6 +55,53 @@ pub const CLIP_MULTILINGUAL: ModelPackage = ModelPackage {
     sha256: "41f471b7108ac953b25a9917050c8ce862c7857a243cbc93209af997bb2d6877",
 };
 
+/// Motor de ONNX Runtime que se descarga junto con el modelo donde no viene en
+/// la app (macOS y Linux, change `ort-dynamic-macos`): el paquete y la librería que trae.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuntimePackage {
+    pub package: ModelPackage,
+    /// Nombre de la librería dentro del paquete.
+    pub library: &'static str,
+}
+
+/// ONNX Runtime 1.31.0 para Mac con Apple Silicon (la versión que usa `ort`
+/// 2.0.0-rc.15): `libonnxruntime.1.31.0.dylib` de la distribución oficial
+/// `onnxruntime-osx-arm64-1.31.0`, con su licencia, publicada en el release
+/// `ort-runtime-macos-1.31.0` del repo. Requiere macOS 14.
+pub const ORT_RUNTIME_MACOS: RuntimePackage = RuntimePackage {
+    package: ModelPackage {
+        id: "ort-runtime-macos-arm64-1.31.0",
+        url: "https://github.com/everitosan/lumik/releases/download/ort-runtime-macos-1.31.0/lumik-ort-runtime-macos-arm64-1.31.0.zip",
+        size: 12_612_112,
+        sha256: "639e15cc24a455e2e71ec4d463a7ad5ef65242a7f6f402e4965164a8d150c516",
+    },
+    library: "libonnxruntime.1.31.0.dylib",
+};
+
+/// ONNX Runtime 1.31.0 para Linux x86_64: `libonnxruntime.so.1.31.0` de la
+/// distribución oficial `onnxruntime-linux-x64-1.31.0` (pide glibc 2.28), con su
+/// licencia, publicada en el release `ort-runtime-linux-1.31.0` del repo.
+pub const ORT_RUNTIME_LINUX: RuntimePackage = RuntimePackage {
+    package: ModelPackage {
+        id: "ort-runtime-linux-x64-1.31.0",
+        url: "https://github.com/everitosan/lumik/releases/download/ort-runtime-linux-1.31.0/lumik-ort-runtime-linux-x64-1.31.0.zip",
+        size: 11_193_898,
+        sha256: "b345a76a27e2ad8e8d5660073563c0dff2d1178a80b73b1ccd249cfcc13faf8c",
+    },
+    library: "libonnxruntime.so.1.31.0",
+};
+
+/// Motor que se descarga con el modelo en esta plataforma; `None` donde viene en la app (Windows).
+pub fn platform_runtime() -> Option<RuntimePackage> {
+    if cfg!(target_os = "macos") {
+        Some(ORT_RUNTIME_MACOS)
+    } else if cfg!(target_os = "linux") {
+        Some(ORT_RUNTIME_LINUX)
+    } else {
+        None
+    }
+}
+
 /// Vector → bytes para la BD: `f32` little-endian, 4 bytes por valor.
 pub fn vector_to_bytes(v: &[f32]) -> Vec<u8> {
     v.iter().flat_map(|x| x.to_le_bytes()).collect()

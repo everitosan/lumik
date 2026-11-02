@@ -64,10 +64,20 @@ pub struct ClipModel {
 
 impl ClipModel {
     /// Carga el paquete de `dir`. `threads` es cuántos hilos usa cada
-    /// inferencia (con 4, una foto tarda ~20 ms en un escritorio).
-    pub fn load(dir: &Path, threads: usize) -> Result<Self, String> {
+    /// inferencia (con 4, una foto tarda ~20 ms en un escritorio). `runtime` es
+    /// la librería de ONNX Runtime descargada: la exigen macOS y Linux, donde no
+    /// viene en la app; en Windows se ignora.
+    pub fn load(dir: &Path, threads: usize, runtime: Option<&Path>) -> Result<Self, String> {
         let manifest = read_manifest(dir)?;
-        let env = ort::environment::init()
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        let builder = ort::environment::init_from(runtime.ok_or("falta el motor de ONNX Runtime")?)
+            .map_err(|e| format!("ONNX Runtime: {e}"))?;
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        let builder = {
+            let _ = runtime;
+            ort::environment::init()
+        };
+        let env = builder
             .with_name("lumik")
             .build()
             .map_err(|e| format!("ONNX Runtime: {e}"))?;
@@ -235,12 +245,24 @@ mod tests {
         for f in ["image.onnx", "text.onnx", "tokenizer.json"] {
             std::fs::write(dir.join(f), b"no es un modelo").unwrap();
         }
-        let err = ClipModel::load(&dir, 1).err().expect("no debe cargar");
-        assert!(err.contains("image.onnx"), "{err}");
+        // En macOS y Linux hace falta el motor: con `LUMIK_ORT_LIB` se prueba que carga.
+        let runtime = test_runtime();
+        let err = ClipModel::load(&dir, 1, runtime.as_deref()).err().expect("no debe cargar");
+        if cfg!(any(target_os = "macos", target_os = "linux")) && runtime.is_none() {
+            assert!(err.contains("motor"), "{err}");
+        } else {
+            assert!(err.contains("image.onnx"), "el motor cargó y falló el modelo falso: {err}");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Con el paquete real (unos 235 MB, fuera del repo). Correr con:
+    /// Librería de ONNX Runtime para los tests, de `LUMIK_ORT_LIB` (la del motor
+    /// descargado, p. ej. `libonnxruntime.so.1.31.0`).
+    fn test_runtime() -> Option<PathBuf> {
+        std::env::var("LUMIK_ORT_LIB").ok().map(PathBuf::from)
+    }
+
+    /// Con el paquete real (unos 235 MB, fuera del repo) y, en macOS y Linux, `LUMIK_ORT_LIB`. Correr con:
     /// `LUMIK_MODEL_DIR=<paquete> LUMIK_MODEL_IMAGES=<carpeta con las fotos de COCO
     /// del spike> cargo test -p lumik-core --features embeddings -- --ignored`
     #[test]
@@ -248,7 +270,7 @@ mod tests {
     fn real_model_matches_photos_in_both_languages() {
         let dir = PathBuf::from(std::env::var("LUMIK_MODEL_DIR").expect("LUMIK_MODEL_DIR"));
         let images = PathBuf::from(std::env::var("LUMIK_MODEL_IMAGES").expect("LUMIK_MODEL_IMAGES"));
-        let model = ClipModel::load(&dir, 4).unwrap();
+        let model = ClipModel::load(&dir, 4, test_runtime().as_deref()).unwrap();
         assert_eq!(model.id(), "clip-multilingual-v1");
 
         // Foto de COCO → (frase que le corresponde, frase de otra foto).
