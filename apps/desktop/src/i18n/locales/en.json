@@ -704,7 +704,11 @@
     "detail": {
       "setCover": "Set as project cover",
       "removeCover": "Remove as project cover",
-      "showInfo": "Show info"
+      "showInfo": "Show info",
+      "saveError": {
+        "corruptDb": "the project database is damaged",
+        "locked": "the project is open on {{name}}"
+      }
     }
   },
   "components": {

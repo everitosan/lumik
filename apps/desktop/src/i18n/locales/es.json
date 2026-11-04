@@ -704,7 +704,11 @@
     "detail": {
       "setCover": "Usar como portada del proyecto",
       "removeCover": "Quitar como portada del proyecto",
-      "showInfo": "Mostrar info"
+      "showInfo": "Mostrar info",
+      "saveError": {
+        "corruptDb": "la base del proyecto está dañada",
+        "locked": "el proyecto está abierto en {{name}}"
+      }
     }
   },
   "components": {

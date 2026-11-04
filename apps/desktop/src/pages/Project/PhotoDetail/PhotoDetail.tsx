@@ -26,6 +26,27 @@ export interface PhotoDetailProps {
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
+/** Texto del error de un comando de Tauri (llega como string). */
+function errorText(err: unknown): string {
+  if (typeof err === 'string') return err;
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+/**
+ * Razón de un error al guardar, para mostrarla junto a "Error al guardar":
+ * traduce los casos conocidos y deja tal cual el mensaje del backend en el resto.
+ */
+function saveErrorReason(err: unknown, t: (key: string, opts?: Record<string, unknown>) => string): string {
+  const holder = api.projectLockHolder(err);
+  if (holder !== null) return t('photo.detail.saveError.locked', { name: holder });
+  const text = errorText(err);
+  if (/database disk image is malformed|file is not a database/i.test(text)) {
+    return t('photo.detail.saveError.corruptDb');
+  }
+  return text;
+}
+
 function parseColorLabels(raw: string | null): ColorLabel[] {
   if (!raw) return [];
   return raw
@@ -94,6 +115,7 @@ export function PhotoDetail({
   const viewerRef = useRef<PhotoViewerHandle>(null);
   const tagManagerRef = useRef<TagManagerHandle>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveError, setSaveError] = useState<unknown>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const thumbnailDirtyRef = useRef(new Set<string>());
   const onThumbnailChangedRef = useRef(onThumbnailChanged);
@@ -165,6 +187,12 @@ export function PhotoDetail({
     if (hasNext) onNavigate(currentIndex + 1);
   }, [hasNext, currentIndex, onNavigate]);
 
+  const failSave = useCallback((err: unknown) => {
+    console.error('Error al guardar', err);
+    setSaveError(err);
+    setSaveState('error');
+  }, []);
+
   const handleRotationChange = useCallback(
     (rotation: number) => {
       setSaveState('saving');
@@ -176,9 +204,9 @@ export function PhotoDetail({
           thumbnailDirtyRef.current.add(photo.id);
           onPhotoChanged?.(photo.id, { rotation });
         })
-        .catch(() => setSaveState('error'));
+        .catch(failSave);
     },
-    [photo.id, photo.project_id, onPhotoChanged],
+    [photo.id, photo.project_id, onPhotoChanged, failSave],
   );
 
   const saveRating = (stars: number, colorLabels: ColorLabel[], tags: string[]) => {
@@ -193,7 +221,7 @@ export function PhotoDetail({
         saveTimerRef.current = setTimeout(() => setSaveState('idle'), 2000);
         onPhotoChanged?.(photo.id, { stars, color_label, tags: tagsStr });
       })
-      .catch(() => setSaveState('error'));
+      .catch(failSave);
   };
 
   const handleStarsChange = (stars: number) => {
@@ -225,8 +253,8 @@ export function PhotoDetail({
         // Refleja la nueva portada en el catálogo/dashboard web (fire-and-forget).
         api.syncProjectCover(photo.project_id).catch(() => undefined);
       })
-      .catch(() => setSaveState('error'));
-  }, [readOnly, isCover, photo.id, photo.project_id, onCoverPhotoChange]);
+      .catch(failSave);
+  }, [readOnly, isCover, photo.id, photo.project_id, onCoverPhotoChange, failSave]);
 
   const handleCulledChange = useCallback((culled: boolean) => {
     // Una foto en la papelera no se aprueba (el backend también lo rechaza): sin
@@ -241,11 +269,11 @@ export function PhotoDetail({
         saveTimerRef.current = setTimeout(() => setSaveState('idle'), 2000);
         onPhotoChanged?.(photo.id, { culled });
       })
-      .catch(() => {
+      .catch((err) => {
         setLocalCulled(!culled);
-        setSaveState('error');
+        failSave(err);
       });
-  }, [photo.id, photo.project_id, photo.deleted, readOnly, onPhotoChanged]);
+  }, [photo.id, photo.project_id, photo.deleted, readOnly, onPhotoChanged, failSave]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -335,15 +363,19 @@ export function PhotoDetail({
           {currentIndex + 1} / {photos.length}
         </span>
         {saveState !== 'idle' && (
-          <span style={{
+          <span
+            title={saveState === 'error' ? errorText(saveError) : undefined}
+            style={{
             fontFamily: 'var(--lumik-font-mono, "JetBrains Mono", monospace)',
             fontSize: '11px',
             color: saveState === 'error' ? 'var(--lumik-error, #ffb4ab)' : saveState === 'saved' ? '#27AE60' : saveState === 'saving' ? 'var(--lumik-secondary, #e9c349)' : 'var(--lumik-outline, #8c90a0)',
-            flexShrink: 0,
+            ...(saveState === 'error'
+              ? { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+              : { flexShrink: 0 }),
           }}>
             {saveState === 'saving' && t('photo.saving')}
             {saveState === 'saved'  && t('photo.saved')}
-            {saveState === 'error'  && t('photo.errorSaving')}
+            {saveState === 'error'  && `${t('photo.errorSaving')}: ${saveErrorReason(saveError, t)}`}
           </span>
         )}
       </div>
