@@ -282,6 +282,14 @@ mod tests {
         tool.set_image_description(&f, Some("Boda Ana@2024")).unwrap();
         assert_eq!(read(&f), "Boda Ana@2024");
 
+        // Varias líneas: el valor llega entero, con `$`, `@` y saltos de línea.
+        let multiline = "Prueba de fotos.\nFuji $6D\ncel@2026";
+        tool.set_image_description(&f, Some(multiline)).unwrap();
+        let json = crate::exiftool::run_text(&["-j".into(), "-ImageDescription".into(), f.to_string_lossy().to_string()])
+            .unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed[0]["ImageDescription"], multiline);
+
         tool.set_image_description(&f, None).unwrap();
         assert_eq!(read(&f), "");
 

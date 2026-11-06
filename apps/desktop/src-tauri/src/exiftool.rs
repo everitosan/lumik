@@ -109,8 +109,11 @@ impl ExifToolSession {
     }
 
     fn run(&mut self, args: &[String]) -> Result<String, String> {
-        for arg in args {
-            writeln!(self.stdin, "{}", arg).map_err(|e| format!("write: {}", e))?;
+        // Vive hasta que exiftool contesta: ahí ya leyó los valores.
+        let mut value_files = ValueFiles::default();
+        let lines = argfile_lines(args, &mut value_files)?;
+        for line in &lines {
+            writeln!(self.stdin, "{}", line).map_err(|e| format!("write: {}", e))?;
         }
         writeln!(self.stdin, "-execute").map_err(|e| format!("write: {}", e))?;
         self.stdin.flush().map_err(|e| format!("flush: {}", e))?;
@@ -130,6 +133,61 @@ impl ExifToolSession {
         }
         Ok(out)
     }
+}
+
+/// Archivos temporales con los valores de varias líneas de una llamada. Se
+/// borran al soltarse.
+#[derive(Default)]
+struct ValueFiles(Vec<PathBuf>);
+
+impl ValueFiles {
+    fn write(&mut self, value: &str) -> Result<PathBuf, String> {
+        let path = std::env::temp_dir().join(format!("lumik-exiftool-{}.txt", uuid::Uuid::new_v4().as_simple()));
+        std::fs::write(&path, value).map_err(|e| format!("write value file: {}", e))?;
+        self.0.push(path.clone());
+        Ok(path)
+    }
+}
+
+impl Drop for ValueFiles {
+    fn drop(&mut self) {
+        for path in &self.0 {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+/// Líneas que se mandan a la sesión, una por argumento. Con `-@` cada línea es
+/// un argumento, así que un valor con saltos de línea (p. ej. una descripción
+/// de varios renglones) se partiría y exiftool tomaría los pedazos por nombres
+/// de archivo. `-TAG=VALOR` con saltos de línea se cambia por `-TAG<=ARCHIVO`,
+/// que exiftool lee byte por byte. (`#[CSTR]` no sirve: le agrega una `\` a
+/// cada `$` y `@` del valor.) Cualquier otro argumento con saltos de línea se
+/// rechaza en vez de mandarlo partido.
+fn argfile_lines(args: &[String], files: &mut ValueFiles) -> Result<Vec<String>, String> {
+    args.iter()
+        .map(|arg| {
+            if !arg.contains(['\n', '\r']) {
+                return Ok(arg.clone());
+            }
+            let (tag, value) = plain_assignment(arg)
+                .ok_or_else(|| format!("exiftool argument with a line break: {:?}", arg))?;
+            let path = files.write(value)?;
+            // En el nombre del archivo exiftool expande códigos `%`; `%%` es un `%`.
+            Ok(format!("{}<={}", tag, path.to_string_lossy().replace('%', "%%")))
+        })
+        .collect()
+}
+
+/// `-TAG=VALOR` → (`-TAG`, `VALOR`). `None` para cualquier otra forma (opciones,
+/// rutas, `+=`, `-=`, `<`).
+fn plain_assignment(arg: &str) -> Option<(&str, &str)> {
+    let (tag, value) = arg.split_once('=')?;
+    let name = tag.strip_prefix('-')?;
+    let valid = !name.is_empty()
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | ':' | '-' | '#'))
+        && !name.ends_with(['-', '+']);
+    valid.then_some((tag, value))
 }
 
 /// Lanza el proceso de una sesión. Exiftool con `-stay_open` no termina cuando
@@ -252,6 +310,37 @@ fn run_in(slot: &Mutex<Option<ExifToolSession>>, args: &[String]) -> Result<Stri
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn multiline_values_go_through_a_file() {
+        let mut files = ValueFiles::default();
+        let args: Vec<String> = vec![
+            "-Artist=eleve".into(),
+            "-ImageDescription=Prueba $x\ncel@2026\r\nfin".into(),
+            "-XMP-dc:Description=a\nb".into(),
+            "/fotos/a b.jpg".into(),
+        ];
+        let lines = argfile_lines(&args, &mut files).unwrap();
+
+        assert_eq!(lines[0], "-Artist=eleve");
+        assert_eq!(lines[3], "/fotos/a b.jpg");
+        assert!(lines.iter().all(|l| !l.contains(['\n', '\r'])));
+        let (tag, path) = lines[1].split_once("<=").unwrap();
+        assert_eq!(tag, "-ImageDescription");
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "Prueba $x\ncel@2026\r\nfin");
+        assert!(lines[2].starts_with("-XMP-dc:Description<="));
+
+        let written = files.0.clone();
+        drop(files);
+        assert!(written.iter().all(|p| !p.exists()), "los temporales se borran");
+    }
+
+    #[test]
+    fn multiline_args_that_are_not_assignments_are_rejected() {
+        for arg in ["/fotos/a\nb.jpg", "-Keywords+=a\nb", "-FileName<a\nb"] {
+            assert!(argfile_lines(&[arg.to_string()], &mut ValueFiles::default()).is_err(), "{:?}", arg);
+        }
+    }
 
     fn existing(paths: &[&str]) -> impl Fn(&Path) -> bool {
         let set: HashSet<PathBuf> = paths.iter().map(PathBuf::from).collect();

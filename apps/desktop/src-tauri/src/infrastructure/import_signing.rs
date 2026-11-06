@@ -388,6 +388,32 @@ mod tests {
     }
 
     #[test]
+    fn multiline_description_signs_the_photo() {
+        // Antes, cada renglón de la descripción llegaba a exiftool como un
+        // archivo más y la foto se marcaba como fallida.
+        let dir = std::env::temp_dir().join(format!("lumik_desc_ml_{}", uuid::Uuid::new_v4().as_simple()));
+        let src = dir.join("src");
+        fs::create_dir_all(&src).unwrap();
+        fs::copy(fixture("orient_6.jpg"), src.join("a.jpg")).unwrap();
+
+        let description = "Prueba de fotos de orientación.\nFuji\n6D\ncel@2026";
+        let args = exiftool_metadata_args("Prueba", &None, Some(description), true).unwrap();
+        let ws = PipelineWorkspace::create(&dir.join("project"), "s1").unwrap();
+        let out = pipeline_stage_signed(&[src.join("a.jpg")], &ws, &args, 1, &mut |_| {});
+
+        assert!(out.failed.is_empty(), "{:?}", out.failed.iter().map(|f| &f.name).collect::<Vec<_>>());
+        let staged = out.staged[0].staged.to_string_lossy().to_string();
+        let json = crate::exiftool::run_text(&["-j".into(), "-ImageDescription".into(), "-XMP-dc:Description".into(), staged])
+            .unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed[0]["ImageDescription"], description);
+        assert_eq!(parsed[0]["Description"], description);
+
+        drop(ws);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn nothing_to_write_means_plain_copy() {
         assert!(exiftool_metadata_args("Boda", &None, None, false).is_none());
         assert!(exiftool_metadata_args("Boda", &None, Some(""), false).is_none());
