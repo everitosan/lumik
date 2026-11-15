@@ -535,5 +535,5 @@ const styles = StyleSheet.create({
   // Encima del pie del inicio (archivados y orden).
   log: { position: 'absolute', left: 112, bottom: 76, right: 180, gap: 2 },
   logText: { color: '#777', fontSize: 12 },
-  logError: { color: '#f87171' },
+  logError: { color: '#ffb4ab' },
 });

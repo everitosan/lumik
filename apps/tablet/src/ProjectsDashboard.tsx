@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   busy: { color: '#e9c349', fontSize: 15 },
   empty: { color: '#9a9a9a', fontSize: 16, paddingVertical: 24 },
   muted: { color: '#8c8c8c', fontSize: 14 },
-  error: { color: '#f87171', fontSize: 14 },
+  error: { color: '#ffb4ab', fontSize: 14 },
   warning: { color: '#e9c349', fontSize: 14 },
   group: { gap: 10 },
   groupTitle: { color: '#9a9a9a', fontSize: 15, fontWeight: '600' },
@@ -584,7 +584,8 @@ const styles = StyleSheet.create({
   menuTitle: { color: '#9a9a9a', fontSize: 13, paddingHorizontal: 20, paddingVertical: 10 },
   menuItem: { minHeight: 52, paddingHorizontal: 20, justifyContent: 'center' },
   menuItemText: { color: '#fff', fontSize: 16 },
-  danger: { color: '#f87171' },
+  // #ffb4ab sobre #1d1d1d = 9.93:1 (AAA); #f87171 daba 6.09:1.
+  danger: { color: '#ffb4ab' },
   sheet: { width: 560, padding: 24, gap: 8, borderRadius: 16, backgroundColor: '#1d1d1d' },
   sheetTitle: { color: '#fff', fontSize: 22, fontWeight: '600', marginBottom: 8 },
   sheetText: { color: '#ddd', fontSize: 15 },

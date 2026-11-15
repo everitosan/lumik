@@ -47,7 +47,8 @@ const variantStyles: Record<string, CSSProperties> = {
   },
   danger: {
     backgroundColor: 'var(--lumik-error-container, #93000a)',
-    color: 'var(--lumik-error, #ffb4ab)',
+    // #ffdad6 sobre #93000a = 7.24:1 (AAA); #ffb4ab daba 5.51:1.
+    color: 'var(--lumik-on-error-container, #ffdad6)',
     borderColor: 'transparent',
   },
 };

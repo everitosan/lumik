@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 24, paddingBottom: 48, gap: 12, maxWidth: 720 },
   section: { color: '#fff', fontSize: 18, fontWeight: '600', marginTop: 16 },
   muted: { color: '#777', fontSize: 14 },
-  error: { color: '#f87171', fontSize: 14 },
+  error: { color: '#ffb4ab', fontSize: 14 },
   field: { gap: 6 },
   label: { color: '#9a9a9a', fontSize: 14 },
   input: { minHeight: 48, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#262626', color: '#fff', fontSize: 16 },

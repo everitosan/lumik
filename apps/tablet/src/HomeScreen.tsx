@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
   label: { color: '#9a9a9a', fontSize: 14, marginTop: 8 },
   input: { minHeight: 48, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#262626', color: '#fff', fontSize: 16 },
   multiline: { minHeight: 80, paddingTop: 12, textAlignVertical: 'top' },
-  error: { color: '#f87171', fontSize: 14, marginTop: 8 },
+  error: { color: '#ffb4ab', fontSize: 14, marginTop: 8 },
   sheetButtons: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginTop: 16 },
   textButton: { minHeight: 48, paddingHorizontal: 16, justifyContent: 'center' },
   textButtonText: { color: '#9a9a9a', fontSize: 16 },

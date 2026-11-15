@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
   text: { color: '#ddd', fontSize: 16 },
   muted: { color: '#9a9a9a', fontSize: 15 },
   warn: { color: '#e9c349', fontSize: 14 },
-  error: { color: '#f87171', fontSize: 14 },
+  error: { color: '#ffb4ab', fontSize: 14 },
   item: { minHeight: 56, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 10, backgroundColor: '#1f1f1f' },
   pressed: { opacity: 0.7 },
   off: { opacity: 0.4 },
