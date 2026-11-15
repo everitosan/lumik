@@ -8,9 +8,9 @@
 
 ## 2. `ort` dinámico en macOS
 
-- [ ] 2.1 `crates/lumik-core/Cargo.toml`: `ort` con `load-dynamic` en macOS y Linux (D1), y `ClipModel::load` con la ruta opcional del motor (`init_from` en macOS y Linux, `init` en Windows). Verificar con `cargo test -p lumik-core --features embeddings` y con los jobs `build-macos` y `build-linux` (2.3).
+- [x] 2.1 `crates/lumik-core/Cargo.toml`: `ort` con `load-dynamic` en macOS y Linux (D1), y `ClipModel::load` con la ruta opcional del motor (`init_from` en macOS y Linux, `init` en Windows). Verificar con `cargo test -p lumik-core --features embeddings` y con los jobs `build-macos` y `build-linux` (2.3).
 - [x] 2.2 `ContentModel` en el desktop (D2): en macOS, descarga, verificación e instalación del motor como paquete junto al modelo, antes que él,, con un solo progreso; `is_installed` exige los dos; borrar el modelo borra el motor. Pasar la ruta del dylib a `ClipModel::load`. Tests de `content_model.rs` con un paquete `file://` falso para el motor: instalar, sha256 incorrecto y borrar. Verificar con `cargo test` en `src-tauri`.
-- [ ] 2.3 Comprobar que el `.dmg` universal y los paquetes de Linux compilan: lanzar el workflow con `v0.2.0-beta.5` (con permiso del usuario), y revisar que `build-macos` pasa sin `___isPlatformVersionAtLeast` y `build-linux` sin `__isoc23_strtoll`.
+- [x] 2.3 Comprobar que el `.dmg` universal y los paquetes de Linux compilan: lanzar el workflow con `v0.2.0-beta.5` (con permiso del usuario), y revisar que `build-macos` pasa sin `___isPlatformVersionAtLeast` y `build-linux` sin `__isoc23_strtoll`.
 
 ## 3. Mac Intel o macOS anterior a 14
 
