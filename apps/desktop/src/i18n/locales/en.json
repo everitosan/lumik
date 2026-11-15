@@ -202,11 +202,11 @@
         "close": "Close"
       }
     },
-    "delete": {
-      "title": "Delete project",
-      "message": "Are you sure you want to delete \"{{name}}\"?",
-      "warning": "This permanently deletes the project folder and all its files (photos, videos and metadata). This action cannot be undone.",
-      "confirm": "Delete everything"
+    "trash": {
+      "title": "Move project to trash",
+      "message": "\"{{name}}\" will be moved to its disk's trash (lumik/_trash/). No files are deleted.",
+      "hint": "You can restore it or delete it permanently from the \"Trash\" section.",
+      "confirm": "Move to trash"
     },
     "openFolderError": "Could not open the folder: {{error}}",
     "delivery": {
@@ -409,6 +409,7 @@
     "management": "Management",
     "projects": "Projects",
     "albums": "Albums",
+    "trash": "Trash",
     "settings": "Settings",
     "about": "About",
     "storage": "Storage",
@@ -530,13 +531,19 @@
     "trashPhoto": {
       "title": "Move photo to trash",
       "message": "\"{{name}}\" will be moved to the project's trash (_trash/).",
-      "hint": "You can restore it from the \"Trash\" filter.",
+      "hint": "You can restore it or delete it permanently from the \"Trash\" section.",
       "cancel": "Cancel",
       "confirm": "Move to trash",
       "error": "Could not move the photo to the trash: {{error}}"
     },
-    "restoreError": "Could not restore the photo: {{error}}",
-    "showTrash": "Trash ({{count}})"
+    "marked": {
+      "addToAlbum": "Add to album",
+      "trash": "Move to trash",
+      "moving": "Moving…",
+      "trashTitle": "Move photos to trash",
+      "trashMessage_one": "The marked photo will be moved to its project's trash (_trash/).",
+      "trashMessage_other": "The {{count}} marked photos will be moved to their project's trash (_trash/)."
+    }
   },
   "search": {
     "clear": "Clear search",
@@ -717,5 +724,59 @@
     "createProjectModal": {
       "datePlaceholder": "Select date..."
     }
+  },
+  "trash": {
+    "title": "Trash",
+    "subtitle": "What you moved to the trash on the connected disks. Nothing is deleted until you delete it permanently.",
+    "projects": "Projects ({{count}})",
+    "photos": "Photos ({{count}})",
+    "emptyDisk": "Empty trash on {{disk}}",
+    "photoOf": "From \"{{project}}\"",
+    "actionError": "Couldn't complete it: {{error}}",
+    "locked": "The project is in use on {{device}}.",
+    "purge": {
+      "title": "Delete permanently",
+      "projectMessage": "The project \"{{name}}\" will be deleted forever, with all its photos and files.",
+      "photoMessage": "\"{{name}}\" will be deleted forever from the project \"{{project}}\".",
+      "warning": "This can't be undone.",
+      "backupNote": "The cloud backup is not touched. If you also want to delete it, do it from the web portal.",
+      "cancel": "Cancel",
+      "confirm": "Delete permanently"
+    },
+    "empty": {
+      "title": "Empty trash on {{disk}}",
+      "message": "{{projects}} and {{photos}} will be deleted forever from the trash on {{disk}}.",
+      "projects_one": "{{count}} project",
+      "projects_other": "{{count}} projects",
+      "photos_one": "{{count}} photo",
+      "photos_other": "{{count}} photos",
+      "confirm": "Empty trash",
+      "failed_one": "{{count}} item couldn't be deleted:",
+      "failed_other": "{{count}} items couldn't be deleted:"
+    },
+    "collision": {
+      "title": "Something is already there",
+      "projectMessage": "The folder \"{{target}}\" already exists where \"{{name}}\" would go back. Choose another name to restore it.",
+      "photoMessage": "\"{{target}}\" already exists where \"{{name}}\" would go back. Choose another file name to restore it.",
+      "projectLabel": "Project name",
+      "photoLabel": "File name (without extension)",
+      "taken": "\"{{target}}\" is taken too.",
+      "emptyName": "Type a name.",
+      "cancel": "Cancel",
+      "confirm": "Restore"
+    },
+    "marked": {
+      "restore": "Restore",
+      "restoring": "Restoring…",
+      "purging": "Deleting…",
+      "purgeMessage": "{{projects}} and {{photos}} marked will be deleted forever.",
+      "reportTitle": "Some items are still in the trash",
+      "reportHint": "Items whose place is taken can be restored one by one with another name from their menu."
+    }
+  },
+  "batch": {
+    "collision": "its place is taken",
+    "failed_one": "{{count}} item couldn't be done:",
+    "failed_other": "{{count}} items couldn't be done:"
   }
 }

@@ -39,6 +39,11 @@ import type {
   AlbumView,
   NewAlbumItem,
   ReplaceCandidate,
+  DiskTrash,
+  RestoreCheck,
+  EmptyTrashReport,
+  BatchReport,
+  TrashItemRef,
 } from './types';
 
 // ============================================================================
@@ -180,19 +185,21 @@ export async function getProjectPhotos(projectId: string): Promise<Photo[]> {
   return invoke('get_project_photos', { projectId });
 }
 
-/// Photos in the trash (logical delete), for the "Trash" filter.
-export async function getProjectTrashedPhotos(projectId: string): Promise<Photo[]> {
-  return invoke('get_project_trashed_photos', { projectId });
-}
-
 /// Logical delete: moves the photo (and its export) to the project's trash, `_trash/`.
 export async function trashPhoto(projectId: string, photoId: string): Promise<void> {
-  return invoke('trash_photo', { projectId, photoId });
+  return changingTrash(invoke('trash_photo', { projectId, photoId }));
 }
 
 /// Moves a trashed photo back to `_media/`/`_culled/` (and its export to `_exported/`).
-export async function restorePhoto(projectId: string, photoId: string): Promise<void> {
-  return invoke('restore_photo', { projectId, photoId });
+/// With `newStem`, every file comes back with that base name. Fails with
+/// `restore_collision:{file}` (see `restoreCollision`) if a target is taken.
+export async function restorePhoto(projectId: string, photoId: string, newStem?: string): Promise<void> {
+  return changingTrash(invoke('restore_photo', { projectId, photoId, newStem: newStem ?? null }));
+}
+
+/// Whether the targets of restoring a photo (with `newStem` or its own name) are free.
+export async function checkPhotoRestore(projectId: string, photoId: string, newStem?: string): Promise<RestoreCheck> {
+  return invoke('check_photo_restore', { projectId, photoId, newStem: newStem ?? null });
 }
 
 export async function getProjectThumbnails(projectId: string): Promise<string[]> {
@@ -325,8 +332,84 @@ export async function setSidebarSectionCollapsed(
   return invoke('set_sidebar_section_collapsed', { section, collapsed });
 }
 
-export async function deleteProject(id: string): Promise<void> {
-  return invoke('delete_project', { id });
+// ============================================================================
+// PAPELERA (spec trash-bin)
+// ============================================================================
+
+/** Evento de ventana: cambió lo que hay en la papelera (la entrada del menú se recalcula). */
+export const TRASH_CHANGED_EVENT = 'lumik:trash-changed';
+
+function notifyTrashChanged() {
+  window.dispatchEvent(new CustomEvent(TRASH_CHANGED_EVENT));
+}
+
+/** Corre `op` y, si sale bien, avisa que la papelera cambió. */
+async function changingTrash<T>(op: Promise<T>): Promise<T> {
+  const out = await op;
+  notifyTrashChanged();
+  return out;
+}
+
+/** Prefijo del error de un destino ocupado al restaurar. */
+const RESTORE_COLLISION_PREFIX = 'restore_collision:';
+
+/** Nombre de lo que ocupa el lugar, si `err` es el error de colisión al restaurar. */
+export function restoreCollision(err: unknown): string | null {
+  const text = typeof err === 'string' ? err : err instanceof Error ? err.message : '';
+  return text.startsWith(RESTORE_COLLISION_PREFIX) ? text.slice(RESTORE_COLLISION_PREFIX.length) : null;
+}
+
+/** Mueve la carpeta del proyecto a `lumik/_trash/` del mismo disco. No borra nada. */
+export async function trashProject(id: string): Promise<void> {
+  return changingTrash(invoke('trash_project', { id }));
+}
+
+/** Lo que hay en la papelera de cada disco conectado (solo los que tienen algo). */
+export async function listTrash(): Promise<DiskTrash[]> {
+  return invoke('list_trash');
+}
+
+export async function getTrashedProjectCover(deviceUuid: string, relPath: string): Promise<string | null> {
+  return invoke('get_trashed_project_cover', { deviceUuid, relPath });
+}
+
+export async function checkRestoreTarget(deviceUuid: string, relPath: string, newName?: string): Promise<RestoreCheck> {
+  return invoke('check_restore_target', { deviceUuid, relPath, newName: newName ?? null });
+}
+
+/** Devuelve el proyecto al dashboard; con `newName`, con ese nombre. */
+export async function restoreProject(deviceUuid: string, relPath: string, newName?: string): Promise<Project> {
+  return changingTrash(invoke('restore_project', { deviceUuid, relPath, newName: newName ?? null }));
+}
+
+/** Borra para siempre un proyecto de la papelera. No toca el respaldo en la nube. */
+export async function purgeProject(deviceUuid: string, relPath: string): Promise<void> {
+  return changingTrash(invoke('purge_project', { deviceUuid, relPath }));
+}
+
+/** Borra para siempre una foto de la papelera. No toca el respaldo en la nube. */
+export async function purgePhoto(projectId: string, photoId: string): Promise<void> {
+  return changingTrash(invoke('purge_photo', { projectId, photoId }));
+}
+
+/** Manda a la papelera las fotos marcadas de un proyecto (una sola sesión). */
+export async function trashPhotos(projectId: string, photoIds: string[]): Promise<BatchReport> {
+  return changingTrash(invoke('trash_photos', { projectId, photoIds }));
+}
+
+/** Restaura los elementos marcados de la papelera; los que chocan se reportan con `collision`. */
+export async function restoreTrashItems(items: TrashItemRef[]): Promise<BatchReport> {
+  return changingTrash(invoke('restore_trash_items', { items }));
+}
+
+/** Elimina definitivamente los elementos marcados de la papelera. */
+export async function purgeTrashItems(items: TrashItemRef[]): Promise<BatchReport> {
+  return changingTrash(invoke('purge_trash_items', { items }));
+}
+
+/** Elimina definitivamente todo lo que hay en la papelera de un disco. */
+export async function emptyTrash(deviceUuid: string): Promise<EmptyTrashReport> {
+  return changingTrash(invoke('empty_trash', { deviceUuid }));
 }
 
 /// Edita nombre, fecha y descripción; mueve la carpeta si hace falta y, si se

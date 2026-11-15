@@ -23,7 +23,7 @@ pub fn get_project_photos(state: State<AppState>, project_id: String) -> AppResu
     Ok(photos)
 }
 
-/// Fotos en la papelera (borrado lógico) del proyecto, para el filtro "Papelera".
+/// Fotos en la papelera (borrado lógico) del proyecto.
 #[tauri::command]
 pub fn get_project_trashed_photos(state: State<AppState>, project_id: String) -> AppResult<Vec<Photo>> {
     let project_db = state.project_db(&project_id)?;
@@ -291,9 +291,16 @@ pub fn trash_photo(state: State<AppState>, project_id: String, photo_id: String)
     Ok(())
 }
 
-/// Restaura una foto de la papelera a `_media/` o `_culled/` (y su exportado a `_exported/`).
+/// Restaura una foto de la papelera a `_media/` o `_culled/` (y su exportado a
+/// `_exported/`). Con `new_stem`, todos sus archivos vuelven con ese nombre base.
+/// Si el destino está ocupado falla con `restore_collision:{archivo}` sin mover nada.
 #[tauri::command]
-pub fn restore_photo(state: State<AppState>, project_id: String, photo_id: String) -> AppResult<()> {
+pub fn restore_photo(
+    state: State<AppState>,
+    project_id: String,
+    photo_id: String,
+    new_stem: Option<String>,
+) -> AppResult<()> {
     let session = state.write_session(&project_id)?;
     let project_db = session.db()?;
     RestorePhoto {
@@ -302,10 +309,30 @@ pub fn restore_photo(state: State<AppState>, project_id: String, photo_id: Strin
         finder_tags: state.finder_tags.as_ref(),
         project_dir: &project_db.project_dir,
     }
-    .execute(&photo_id)?;
+    .execute_as(&photo_id, new_stem.as_deref())?;
 
-    info!("restore_photo: photo={} project={}", photo_id, project_id);
+    info!("restore_photo: photo={} project={} new_stem={:?}", photo_id, project_id, new_stem);
     Ok(())
+}
+
+/// ¿Están libres los destinos al restaurar la foto (con `new_stem` o con su nombre)?
+/// Solo lee: no toma el candado.
+#[tauri::command]
+pub fn check_photo_restore(
+    state: State<AppState>,
+    project_id: String,
+    photo_id: String,
+    new_stem: Option<String>,
+) -> AppResult<super::trash::RestoreCheck> {
+    let project_db = state.project_db(&project_id)?;
+    let occupied = RestorePhoto {
+        photos: project_db.as_ref(),
+        files: state.file_store.as_ref(),
+        finder_tags: state.finder_tags.as_ref(),
+        project_dir: &project_db.project_dir,
+    }
+    .check(&photo_id, new_stem.as_deref())?;
+    Ok(super::trash::RestoreCheck { free: occupied.is_none(), target: occupied.unwrap_or_default() })
 }
 
 #[tauri::command]

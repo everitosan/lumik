@@ -29,10 +29,12 @@ const mutedStyles: CSSProperties = { color: 'var(--lumik-on-surface-variant, #c2
 interface Props {
   target: AlbumTarget | null;
   onClose: () => void;
+  /** Se llamó a agregar con éxito (p. ej. para quitar las marcas del grid). */
+  onAdded?: () => void;
 }
 
 /** Elegir (o crear) el álbum al que se agregan fotos (spec `photo-albums`). */
-export function AddToAlbumDialog({ target, onClose }: Props) {
+export function AddToAlbumDialog({ target, onClose, onAdded }: Props) {
   const { t } = useTranslation();
   const [albums, setAlbums] = useState<AlbumSummary[] | null>(null);
   const [newName, setNewName] = useState('');
@@ -61,6 +63,7 @@ export function AddToAlbumDialog({ target, onClose }: Props) {
           ? t('albums.add.done', { count: added, album: album.name })
           : t('albums.add.doneSomeThere', { count: added, there: total - added, album: album.name }),
       );
+      onAdded?.();
     } catch (err) {
       setError(String(err));
     } finally {

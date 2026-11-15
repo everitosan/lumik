@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { ProjectCard } from '@lumik/ui';
 
@@ -61,7 +62,7 @@ export const Archived: Story = {
     onEdit: () => {},
     onToggleArchive: () => {},
     onDeleteBackup: () => {},
-    onDelete: () => {},
+    onTrash: () => {},
   },
 };
 
@@ -87,7 +88,59 @@ export const LockedByOtherDevice: Story = {
     lockedBy: 'iPad de Ana',
     thumbnailUrl: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=400&h=300&fit=crop',
     onEdit: () => {},
-    onDelete: () => {},
+    onTrash: () => {},
+  },
+};
+
+/** En la sección "Papelera": fecha en que se mandó, restaurar y eliminar definitivamente. */
+export const InTrash: Story = {
+  args: {
+    name: 'Risespray',
+    photoCount: 3,
+    date: '2026-09-18',
+    driveName: 'KINGSTON',
+    status: 'delivered',
+    trashedAt: '2026-11-10T19:54:03',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=400&h=300&fit=crop',
+    onRestore: () => console.log('[ProjectCard] restore'),
+    onPurge: () => console.log('[ProjectCard] purge'),
+  },
+};
+
+/** Marcable en la sección "Papelera" (spec photo-marking). */
+export const Markable: Story = {
+  render: function Render() {
+    const [marked, setMarked] = useState(false);
+    return (
+      <div style={{ width: 280 }}>
+        <ProjectCard
+          name="Risespray"
+          photoCount={3}
+          date="2026-09-18"
+          driveName="KINGSTON"
+          status="delivered"
+          trashedAt="2026-11-10T19:54:03"
+          marked={marked}
+          onToggleMark={() => setMarked((m) => !m)}
+          onRestore={() => {}}
+          onPurge={() => {}}
+        />
+      </div>
+    );
+  },
+};
+
+/** Marcado: borde primario y casilla visible. */
+export const Marked: Story = {
+  args: {
+    name: 'Sony a600',
+    photoCount: 19,
+    date: '2026-09-18',
+    driveName: 'KINGSTON',
+    status: 'edited',
+    trashedAt: '2026-11-10T19:54:03',
+    marked: true,
+    onToggleMark: () => {},
   },
 };
 

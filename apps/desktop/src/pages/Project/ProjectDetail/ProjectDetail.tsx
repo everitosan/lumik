@@ -2,22 +2,24 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CSSProperties } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT, photoFormat, type ColorLabel } from '@lumik/ui';
-import type { Photo, ProjectAccess, ProjectSettings } from '../../../lib/types';
+import { MarkedBar, PhotoCard, PHOTO_CARD_HEADER_HEIGHT, PHOTO_CARD_FOOTER_HEIGHT, photoFormat, type ColorLabel } from '@lumik/ui';
+import type { BatchFailure, Photo, ProjectAccess, ProjectSettings } from '../../../lib/types';
+import { clickIntent, markRange, toggleMark } from '../../../lib/marking';
 import {
   useProjectPhotos,
-  useProjectTrashedPhotos,
   useProjectThumbnails,
   useContextKeybindings,
   matchesKey,
   useContentModelInstalled,
   useAnalysisJobs,
+  hasPlatformModifier,
 } from '../../../lib/hooks';
 import * as api from '../../../lib/api';
 import { ProjectDetailHeader } from './ProjectDetailHeader';
 import { ProjectDetailFooter } from './ProjectDetailFooter';
 import { useBackup } from '../../../lib/BackupContext';
 import { TrashPhotoModal } from './TrashPhotoModal';
+import { TrashPhotosModal } from './TrashPhotosModal';
 import { ImportPage } from '../../ImportPage';
 import { PhotoDetail } from '../PhotoDetail';
 import { ProjectLockBanner } from '../../../components/ProjectLockNotice';
@@ -77,14 +79,15 @@ interface LazyPhotoCardProps {
   photo: Photo;
   hasThumbnail: boolean;
   cache: { current: Map<string, string> };
-  onClick: () => void;
+  onClick: (e: React.MouseEvent | React.KeyboardEvent) => void;
   onRevealInFolder?: () => void;
   onTrash?: () => void;
-  onRestore?: () => void;
   onAddToAlbum?: () => void;
+  marked: boolean;
+  onToggleMark: () => void;
 }
 
-function LazyPhotoCard({ projectId, photo, hasThumbnail, cache, onClick, onRevealInFolder, onTrash, onRestore, onAddToAlbum }: LazyPhotoCardProps) {
+function LazyPhotoCard({ projectId, photo, hasThumbnail, cache, onClick, onRevealInFolder, onTrash, onAddToAlbum, marked, onToggleMark }: LazyPhotoCardProps) {
   const cached = cache.current.get(photo.id) ?? null;
   const [url, setUrl] = useState<string | null>(cached);
 
@@ -113,7 +116,8 @@ function LazyPhotoCard({ projectId, photo, hasThumbnail, cache, onClick, onRevea
       onAddToAlbum={onAddToAlbum}
       onRevealInFolder={onRevealInFolder}
       onTrash={onTrash}
-      onRestore={onRestore}
+      marked={marked}
+      onToggleMark={onToggleMark}
     />
   );
 }
@@ -216,6 +220,17 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   // Fotos por agregar a un álbum (spec photo-albums), desde el menú de la tarjeta.
   const [albumTarget, setAlbumTarget] = useState<AlbumTarget | null>(null);
+  // Fotos marcadas (spec photo-marking) y la última marcada, ancla de Shift+clic.
+  // No se guardan: se vacían al cambiar filtros, orden, vista o proyecto.
+  const [marks, setMarks] = useState<Set<string>>(() => new Set());
+  const [markAnchor, setMarkAnchor] = useState<string | null>(null);
+  const [batchTrashOpen, setBatchTrashOpen] = useState(false);
+  const marksRef = useRef(marks);
+  marksRef.current = marks;
+  const clearMarks = useCallback(() => {
+    setMarks(new Set());
+    setMarkAnchor(null);
+  }, []);
   const [showCulledOnly, setShowCulledOnly] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [minStars, setMinStars] = useState<number | null>(null);
@@ -319,7 +334,7 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
 
   // Grid-level keyboard shortcuts (only active when grid is visible)
   useEffect(() => {
-    if (selectedPhotoId !== null || showImport || albumTarget !== null) return;
+    if (selectedPhotoId !== null || showImport || albumTarget !== null || batchTrashOpen) return;
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (matchesKey(e, kb['project.show_culled'])) {
@@ -332,7 +347,9 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
       }
       if (matchesKey(e, kb['project.back'])) {
         e.preventDefault();
-        onBack?.();
+        // Con fotos marcadas, el primer Esc solo quita las marcas.
+        if (marksRef.current.size > 0) clearMarks();
+        else onBack?.();
       }
       if (matchesKey(e, kb['project.import'])) {
         e.preventDefault();
@@ -341,16 +358,13 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [selectedPhotoId, showImport, albumTarget, kb, onBack, projectId, sidebarOpen]);
+  }, [selectedPhotoId, showImport, albumTarget, batchTrashOpen, kb, onBack, projectId, sidebarOpen, clearMarks]);
 
   const photosState = useProjectPhotos(projectId);
   const { data: photos, refetch: refetchPhotos } = photosState;
-  // Fotos en la papelera (borrado lógico): fuente del grid con el filtro "Papelera".
-  // El filtro no se guarda en project_settings: al abrir el proyecto empieza apagado.
-  const trashState = useProjectTrashedPhotos(projectId);
-  const { data: trashedPhotos, refetch: refetchTrash } = trashState;
-  const [showTrash, setShowTrash] = useState(false);
-  const { loading, error } = showTrash ? trashState : photosState;
+  // Las fotos en la papelera no se ven aquí: se restauran o eliminan desde la
+  // sección "Papelera" de la app (spec trash-bin).
+  const { loading, error } = photosState;
   const { thumbnailIds, refetch: refetchThumbnails } = useProjectThumbnails(projectId);
   const thumbnailCache = useRef<Map<string, string>>(new Map());
   const autoRedirectedToImport = useRef(false);
@@ -411,13 +425,9 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
     () => applyOverrides(photos)?.filter((p) => !p.deleted) ?? null,
     [photos, applyOverrides],
   );
-  const trashWithOverrides = useMemo(
-    () => applyOverrides(trashedPhotos)?.filter((p) => p.deleted) ?? null,
-    [trashedPhotos, applyOverrides],
-  );
-  const photosWithOverrides = showTrash ? trashWithOverrides : activePhotos;
+  const photosWithOverrides = activePhotos;
 
-  // ── Papelera / restaurar ────────────────────────────────────────────────────
+  // ── Papelera ────────────────────────────────────────────────────────────────
   const [pendingTrash, setPendingTrash] = useState<Photo | null>(null);
   const [trashing, setTrashing] = useState(false);
   const [trashError, setTrashError] = useState<string | null>(null);
@@ -433,23 +443,11 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
       if (selectedPhotoId === photoId) setSelectedPhotoId(null);
       if (coverPhotoPath === `.thumbs/${photoId}.jpg`) onCoverPhotoChange?.(null);
       setPendingTrash(null);
-      refetchTrash();
     } catch (err) {
       console.error('trash photo failed', err);
       setTrashError(t('projectDetail.trashPhoto.error', { error: String(err) }));
     } finally {
       setTrashing(false);
-    }
-  };
-
-  const handleRestore = async (photoId: string) => {
-    try {
-      await api.restorePhoto(projectId, photoId);
-      handlePhotoChanged(photoId, { deleted: false });
-      refetchPhotos();
-    } catch (err) {
-      console.error('restore photo failed', err);
-      alert(t('projectDetail.restoreError', { error: String(err) }));
     }
   };
 
@@ -583,6 +581,63 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
     }
     return items;
   }, [sortedPhotos, colCount, viewMode, t, i18n.language]);
+
+  // Las marcas no sobreviven a un cambio de lo que se ve.
+  useEffect(() => {
+    clearMarks();
+  }, [projectId, sortBy, viewMode, showCulledOnly, minStars, starsFilterMode, selectedTags, selectedColors, clearMarks]);
+
+  // Orden en que se ve el grid (agrupado por día o no), para los rangos de Shift+clic.
+  const markOrder = useMemo(
+    () => flatList.flatMap((item) => (item.type === 'row' ? item.photos.map((p) => p.id) : [])),
+    [flatList],
+  );
+
+  const handleCardClick = (photoId: string, e: React.MouseEvent | React.KeyboardEvent) => {
+    switch (clickIntent(e, hasPlatformModifier(e), marks.size > 0)) {
+      case 'range':
+        setMarks((m) => markRange(m, markOrder, markAnchor, photoId));
+        setMarkAnchor(photoId);
+        break;
+      case 'toggle':
+        setMarks((m) => toggleMark(m, photoId));
+        setMarkAnchor(photoId);
+        break;
+      default:
+        setSelectedPhotoId(photoId);
+    }
+  };
+
+  // ── Acciones sobre las marcadas ────────────────────────────────────────────
+  // El diálogo de álbum se abrió desde la barra: al agregar, se quitan las marcas.
+  const [albumFromMarks, setAlbumFromMarks] = useState(false);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchError, setBatchError] = useState<string | null>(null);
+  const [batchFailed, setBatchFailed] = useState<BatchFailure[] | undefined>(undefined);
+
+  const markedItems = () =>
+    (activePhotos ?? [])
+      .filter((p) => marks.has(p.id))
+      .map((p) => ({ kind: 'photo' as const, project_id: projectId, ref_id: p.id, file_name: fileNameOf(p.dng_path), project_name: projectName }));
+
+  const handleConfirmBatchTrash = async () => {
+    const ids = [...marks];
+    setBatchBusy(true);
+    setBatchError(null);
+    try {
+      const report = await api.trashPhotos(projectId, ids);
+      for (const id of report.done) handlePhotoChanged(id, { deleted: true });
+      if (selectedPhotoId && report.done.includes(selectedPhotoId)) setSelectedPhotoId(null);
+      if (report.done.some((id) => coverPhotoPath === `.thumbs/${id}.jpg`)) onCoverPhotoChange?.(null);
+      clearMarks();
+      if (report.failed.length > 0) setBatchFailed(report.failed);
+      else setBatchTrashOpen(false);
+    } catch (err) {
+      setBatchError(t('projectDetail.trashPhoto.error', { error: String(err) }));
+    } finally {
+      setBatchBusy(false);
+    }
+  };
 
   const rowVirtualizer = useVirtualizer({
     count: flatList.length,
@@ -719,11 +774,15 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
                         photo={photo}
                         hasThumbnail={thumbnailIds.has(photo.id)}
                         cache={thumbnailCache}
-                        onClick={() => setSelectedPhotoId(photo.id)}
+                        onClick={(e) => handleCardClick(photo.id, e)}
+                        marked={marks.has(photo.id)}
+                        onToggleMark={() => {
+                          setMarks((m) => toggleMark(m, photo.id));
+                          setMarkAnchor(photo.id);
+                        }}
                         onRevealInFolder={() => handleRevealInFolder(photo.id)}
-                        onTrash={showTrash || readOnly ? undefined : () => { setTrashError(null); setPendingTrash(photo); }}
-                        onRestore={showTrash && !readOnly ? () => handleRestore(photo.id) : undefined}
-                        onAddToAlbum={showTrash ? undefined : () => setAlbumTarget({ items: [{ kind: 'photo', project_id: projectId, ref_id: photo.id, file_name: fileNameOf(photo.dng_path), project_name: projectName }] })}
+                        onTrash={readOnly ? undefined : () => { setTrashError(null); setPendingTrash(photo); }}
+                        onAddToAlbum={() => setAlbumTarget({ items: [{ kind: 'photo', project_id: projectId, ref_id: photo.id, file_name: fileNameOf(photo.dng_path), project_name: projectName }] })}
                       />
                     );
                   })}
@@ -733,6 +792,32 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
           </div>
         )}
       </div>
+
+      {marks.size > 0 && (
+        <MarkedBar
+          count={marks.size}
+          noun="photos"
+          busy={batchBusy ? t('projectDetail.marked.moving') : null}
+          onClear={clearMarks}
+          actions={[
+            { icon: 'album', label: t('projectDetail.marked.addToAlbum'), onClick: () => { setAlbumFromMarks(true); setAlbumTarget({ items: markedItems() }); } },
+            ...(readOnly
+              ? []
+              : [
+                  {
+                    icon: 'trash' as const,
+                    label: t('projectDetail.marked.trash'),
+                    danger: true,
+                    onClick: () => {
+                      setBatchError(null);
+                      setBatchFailed(undefined);
+                      setBatchTrashOpen(true);
+                    },
+                  },
+                ]),
+          ]}
+        />
+      )}
 
       <ProjectDetailFooter
         totalPhotos={activePhotos?.length ?? 0}
@@ -748,12 +833,24 @@ export function ProjectDetail({ projectId, projectName, deviceUuid, coverPhotoPa
         onSelectedTagsChange={handleSelectedTagsChange}
         selectedColors={selectedColors}
         onSelectedColorsChange={handleSelectedColorsChange}
-        trashCount={trashWithOverrides?.length ?? 0}
-        showTrash={showTrash}
-        onShowTrashChange={setShowTrash}
       />
 
-      <AddToAlbumDialog target={albumTarget} onClose={() => setAlbumTarget(null)} />
+      <AddToAlbumDialog
+        target={albumTarget}
+        onClose={() => { setAlbumTarget(null); setAlbumFromMarks(false); }}
+        // Las fotos marcadas que se agregaron dejan de estar marcadas (spec photo-marking).
+        onAdded={() => { if (albumFromMarks) clearMarks(); }}
+      />
+
+      <TrashPhotosModal
+        open={batchTrashOpen}
+        count={marks.size}
+        onClose={() => { setBatchTrashOpen(false); setBatchFailed(undefined); }}
+        onConfirm={() => void handleConfirmBatchTrash()}
+        loading={batchBusy}
+        error={batchError}
+        failed={batchFailed}
+      />
 
       <TrashPhotoModal
         open={pendingTrash !== null}

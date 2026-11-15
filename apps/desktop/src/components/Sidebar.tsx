@@ -4,6 +4,7 @@ import { Logo, SectionButton, DriveInfo, CollapsibleSection, BackupJobCard, Icon
 import { useConnectedDevices, useAnalysisJobs, type AnalysisJob } from '../lib/hooks';
 import * as api from '../lib/api';
 import { useBackup } from '../lib/BackupContext';
+import { useTrashCount } from '../lib/TrashContext';
 import type { Section } from './Layout';
 
 interface SidebarProps {
@@ -147,6 +148,7 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false }: S
   const { data: devices, loading, eject } = useConnectedDevices();
 
   const { jobs, retryBackup, dismissBackup, userLaunches, openBackupDetail } = useBackup();
+  const trashItems = useTrashCount();
 
   // Análisis de fotos (semantic-search): nombres de los proyectos que aparecen.
   const { jobs: analysisJobs, dismiss: dismissAnalysis } = useAnalysisJobs();
@@ -261,6 +263,16 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false }: S
           active={activeSection === 'albums'}
           onClick={() => onSectionChange('albums')}
         />
+        {/* La papelera solo existe si hay algo en ella (spec trash-bin), justo antes de Configuración. */}
+        {trashItems > 0 && (
+          <SectionButton
+            icon="trash"
+            label={t('navigation.trash')}
+            badge={trashItems}
+            active={activeSection === 'trash'}
+            onClick={() => onSectionChange('trash')}
+          />
+        )}
         <SectionButton
           icon="settings"
           label={t('navigation.settings')}

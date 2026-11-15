@@ -202,11 +202,11 @@
         "close": "Cerrar"
       }
     },
-    "delete": {
-      "title": "Eliminar proyecto",
-      "message": "¿Seguro que quieres eliminar «{{name}}»?",
-      "warning": "Se eliminarán de forma permanente la carpeta del proyecto y todos sus archivos (fotos, videos y metadatos). Esta acción no se puede deshacer.",
-      "confirm": "Eliminar todo"
+    "trash": {
+      "title": "Mover proyecto a la papelera",
+      "message": "«{{name}}» se moverá a la papelera de su disco (lumik/_trash/). No se borra ningún archivo.",
+      "hint": "Podrás restaurarlo o eliminarlo definitivamente desde la sección «Papelera».",
+      "confirm": "Mover a la papelera"
     },
     "openFolderError": "No se pudo abrir la carpeta: {{error}}",
     "delivery": {
@@ -409,6 +409,7 @@
     "management": "Gestión",
     "projects": "Proyectos",
     "albums": "Álbumes",
+    "trash": "Papelera",
     "settings": "Configuración",
     "about": "Acerca de",
     "storage": "Almacenamiento",
@@ -530,13 +531,19 @@
     "trashPhoto": {
       "title": "Mover foto a la papelera",
       "message": "«{{name}}» se moverá a la papelera del proyecto (_trash/).",
-      "hint": "Podrás restaurarla desde el filtro «Papelera».",
+      "hint": "Podrás restaurarla o eliminarla definitivamente desde la sección «Papelera».",
       "cancel": "Cancelar",
       "confirm": "Mover a la papelera",
       "error": "No se pudo mover la foto a la papelera: {{error}}"
     },
-    "restoreError": "No se pudo restaurar la foto: {{error}}",
-    "showTrash": "Papelera ({{count}})"
+    "marked": {
+      "addToAlbum": "Agregar a álbum",
+      "trash": "Mover a la papelera",
+      "moving": "Moviendo…",
+      "trashTitle": "Mover fotos a la papelera",
+      "trashMessage_one": "La foto marcada se moverá a la papelera de su proyecto (_trash/).",
+      "trashMessage_other": "Las {{count}} fotos marcadas se moverán a la papelera de su proyecto (_trash/)."
+    }
   },
   "search": {
     "clear": "Borrar búsqueda",
@@ -717,5 +724,59 @@
     "createProjectModal": {
       "datePlaceholder": "Selecciona una fecha..."
     }
+  },
+  "trash": {
+    "title": "Papelera",
+    "subtitle": "Lo que mandaste a la papelera en los discos conectados. Nada se borra hasta que lo elimines definitivamente.",
+    "projects": "Proyectos ({{count}})",
+    "photos": "Fotos ({{count}})",
+    "emptyDisk": "Vaciar papelera de {{disk}}",
+    "photoOf": "De «{{project}}»",
+    "actionError": "No se pudo completar: {{error}}",
+    "locked": "El proyecto está en uso en {{device}}.",
+    "purge": {
+      "title": "Eliminar definitivamente",
+      "projectMessage": "Se borrará para siempre el proyecto «{{name}}» con todas sus fotos y archivos.",
+      "photoMessage": "Se borrará para siempre «{{name}}» del proyecto «{{project}}».",
+      "warning": "Esta acción no se puede deshacer.",
+      "backupNote": "El respaldo en la nube no se toca. Si también quieres borrarlo, hazlo desde el portal web.",
+      "cancel": "Cancelar",
+      "confirm": "Eliminar definitivamente"
+    },
+    "empty": {
+      "title": "Vaciar papelera de {{disk}}",
+      "message": "Se eliminarán para siempre {{projects}} y {{photos}} de la papelera de {{disk}}.",
+      "projects_one": "{{count}} proyecto",
+      "projects_other": "{{count}} proyectos",
+      "photos_one": "{{count}} foto",
+      "photos_other": "{{count}} fotos",
+      "confirm": "Vaciar papelera",
+      "failed_one": "No se pudo eliminar {{count}} elemento:",
+      "failed_other": "No se pudieron eliminar {{count}} elementos:"
+    },
+    "collision": {
+      "title": "Ya hay algo en ese lugar",
+      "projectMessage": "Ya existe la carpeta «{{target}}» donde volvería «{{name}}». Elige otro nombre para restaurarlo.",
+      "photoMessage": "Ya existe «{{target}}» donde volvería «{{name}}». Elige otro nombre de archivo para restaurarla.",
+      "projectLabel": "Nombre del proyecto",
+      "photoLabel": "Nombre del archivo (sin extensión)",
+      "taken": "«{{target}}» también está ocupado.",
+      "emptyName": "Escribe un nombre.",
+      "cancel": "Cancelar",
+      "confirm": "Restaurar"
+    },
+    "marked": {
+      "restore": "Restaurar",
+      "restoring": "Restaurando…",
+      "purging": "Eliminando…",
+      "purgeMessage": "Se eliminarán para siempre {{projects}} y {{photos}} marcados.",
+      "reportTitle": "Algunos elementos siguen en la papelera",
+      "reportHint": "Los que tienen el lugar ocupado se pueden restaurar uno por uno con otro nombre desde su menú."
+    }
+  },
+  "batch": {
+    "collision": "su lugar está ocupado",
+    "failed_one": "No se pudo con {{count}} elemento:",
+    "failed_other": "No se pudo con {{count}} elementos:"
   }
 }

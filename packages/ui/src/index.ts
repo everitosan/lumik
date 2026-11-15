@@ -74,3 +74,8 @@ export type { ProviderIconProps, ProviderMeta } from './components/ProviderIcon'
 
 // i18n for UI components
 export { default as i18n } from './i18n/config';
+
+export { MarkedBar } from './components/MarkedBar';
+export type { MarkedBarProps, MarkedBarAction } from './components/MarkedBar';
+export { MarkToggle } from './components/MarkToggle';
+export type { MarkToggleProps } from './components/MarkToggle';

@@ -29,8 +29,11 @@
         "archive": "Archive",
         "unarchive": "Unarchive",
         "deleteBackup": "Delete backup",
-        "delete": "Delete"
-      }
+        "restore": "Restore",
+        "trash": "Move to trash",
+        "purge": "Delete permanently"
+      },
+      "trashedAt": "In the trash since {{date}}"
     },
     "photoCard": {
       "menu": {
@@ -38,7 +41,8 @@
         "addToAlbum": "Add to album",
         "revealInFolder": "Show in folder",
         "trash": "Move to trash",
-        "restore": "Restore"
+        "restore": "Restore",
+        "purge": "Delete permanently"
       }
     },
     "dropzone": {
@@ -71,6 +75,17 @@
     "formatBadge": {
       "showRaw": "Show the RAW of this pair",
       "showJpg": "Show the JPG of this pair"
+    },
+    "mark": {
+      "mark": "Mark",
+      "unmark": "Unmark"
+    },
+    "markedBar": {
+      "photos_one": "{{count}} photo marked",
+      "photos_other": "{{count}} photos marked",
+      "items_one": "{{count}} item marked",
+      "items_other": "{{count}} items marked",
+      "clear": "Clear marks"
     }
   },
   "dashboard": {

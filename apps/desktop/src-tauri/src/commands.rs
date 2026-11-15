@@ -428,6 +428,12 @@ pub(crate) use project::relocate_project_folder;
 mod photo;
 pub use photo::*;
 
+mod trash;
+pub use trash::*;
+
+mod trash_batch;
+pub use trash_batch::*;
+
 mod settings;
 pub use settings::*;
 

@@ -209,3 +209,14 @@ mod create_tests {
         assert_eq!(db.delivery_mode().unwrap().as_str(), "pairs", "la entrega de los ajustes de la tablet");
     }
 }
+
+/// Deja lista para el visor una copia de un JPG original (el desktop no crea
+/// `.previews/` para los JPG): pone su orientación EXIF en 1, como
+/// `extract_preview` del import, porque el visor aplica la rotación y el
+/// cargador de imágenes de Android la aplicaría otra vez.
+#[uniffi::export]
+pub fn prepare_jpeg_view(path: String) -> Result<(), ProjectError> {
+    let mut bytes = std::fs::read(&path).map_err(|e| ProjectError::Read(format!("{path}: {e}")))?;
+    crate::import::exif::reset_jpeg_orientation(&mut bytes);
+    std::fs::write(&path, bytes).map_err(|e| ProjectError::Read(format!("{path}: {e}")))
+}

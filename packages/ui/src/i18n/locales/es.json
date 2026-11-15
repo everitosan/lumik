@@ -29,8 +29,11 @@
         "archive": "Archivar",
         "unarchive": "Desarchivar",
         "deleteBackup": "Borrar respaldo",
-        "delete": "Eliminar"
-      }
+        "restore": "Restaurar",
+        "trash": "Mover a la papelera",
+        "purge": "Eliminar definitivamente"
+      },
+      "trashedAt": "En la papelera desde {{date}}"
     },
     "photoCard": {
       "menu": {
@@ -38,7 +41,8 @@
         "addToAlbum": "Agregar a álbum",
         "revealInFolder": "Mostrar en carpeta",
         "trash": "Mover a la papelera",
-        "restore": "Restaurar"
+        "restore": "Restaurar",
+        "purge": "Eliminar definitivamente"
       }
     },
     "dropzone": {
@@ -71,6 +75,17 @@
     "formatBadge": {
       "showRaw": "Ver el RAW de este par",
       "showJpg": "Ver el JPG de este par"
+    },
+    "mark": {
+      "mark": "Marcar",
+      "unmark": "Quitar marca"
+    },
+    "markedBar": {
+      "photos_one": "{{count}} foto marcada",
+      "photos_other": "{{count}} fotos marcadas",
+      "items_one": "{{count}} elemento marcado",
+      "items_other": "{{count}} elementos marcados",
+      "clear": "Quitar las marcas"
     }
   },
   "dashboard": {

@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Layout, type Section } from './components';
-import { Projects, SettingsPage, ProjectDetail, AboutPage, AlbumsPage, AlbumDetail, type SettingsTab } from './pages';
+import { Projects, SettingsPage, ProjectDetail, AboutPage, AlbumsPage, AlbumDetail, TrashPage, type SettingsTab } from './pages';
 import { useConnectedDevices } from './lib/hooks';
 import { BackupProvider } from './lib/BackupContext';
 import { BackupSessionProvider } from './lib/BackupSessionContext';
 import { BackupModalHost } from './components/BackupModalHost';
 import { BackupCloseGuard } from './components/BackupCloseGuard';
+import { TrashProvider, useTrash } from './lib/TrashContext';
 import type { ProjectDashboard, SearchSnapshot } from './lib/types';
 
-function App() {
+function AppContent() {
   const [activeSection, setActiveSection] = useState<Section>('projects');
   const [selectedProject, setSelectedProject] = useState<ProjectDashboard | null>(null);
   // Álbum abierto en la sección Álbumes.
@@ -26,6 +27,12 @@ function App() {
     const stillConnected = devices.some((d) => d.uuid === selectedProject.device_uuid);
     if (!stillConnected) setSelectedProject(null);
   }, [devices, selectedProject]);
+
+  // La papelera solo existe si hay algo: al vaciarse estando en ella, se vuelve a Proyectos.
+  const { disks: trashDisks, count: trashItems } = useTrash();
+  useEffect(() => {
+    if (activeSection === 'trash' && trashDisks !== null && trashItems === 0) setActiveSection('projects');
+  }, [activeSection, trashDisks, trashItems]);
 
   const handleSectionChange = (section: Section) => {
     setActiveSection(section);
@@ -65,6 +72,8 @@ function App() {
         ) : (
           <AlbumsPage onOpenAlbum={setSelectedAlbumId} />
         );
+      case 'trash':
+        return <TrashPage />;
       case 'settings':
         return <SettingsPage initialTab={settingsTab} />;
       case 'about':
@@ -75,13 +84,23 @@ function App() {
   };
 
   return (
+    <>
+      <Layout activeSection={activeSection} onSectionChange={handleSectionChange}>
+        {renderPage}
+      </Layout>
+      <BackupModalHost onOpenBackupSettings={() => openSettings('backup')} />
+      <BackupCloseGuard />
+    </>
+  );
+}
+
+function App() {
+  return (
     <BackupSessionProvider>
       <BackupProvider>
-        <Layout activeSection={activeSection} onSectionChange={handleSectionChange}>
-          {renderPage}
-        </Layout>
-        <BackupModalHost onOpenBackupSettings={() => openSettings('backup')} />
-        <BackupCloseGuard />
+        <TrashProvider>
+          <AppContent />
+        </TrashProvider>
       </BackupProvider>
     </BackupSessionProvider>
   );

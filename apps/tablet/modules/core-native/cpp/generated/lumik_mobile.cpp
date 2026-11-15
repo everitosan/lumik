@@ -603,6 +603,10 @@ extern "C" {
         RustBuffer project_dir, 
         RustCallStatus *uniffi_out_err
     );
+    void uniffi_lumik_mobile_fn_func_prepare_jpeg_view(
+        RustBuffer path, 
+        RustCallStatus *uniffi_out_err
+    );
     void uniffi_lumik_mobile_fn_func_save_view_settings(
         RustBuffer project_dir, 
         RustBuffer settings, 
@@ -629,6 +633,40 @@ extern "C" {
     void uniffi_lumik_mobile_fn_func_set_project_archived(
         RustBuffer mirror_dir, 
         int8_t archived, 
+        RustCallStatus *uniffi_out_err
+    );
+    RustBuffer uniffi_lumik_mobile_fn_func_check_photo_restore(
+        RustBuffer mirror_dir, 
+        RustBuffer photo_id, 
+        /*handle*/ uint64_t disk, 
+        RustBuffer new_stem, 
+        RustCallStatus *uniffi_out_err
+    );
+    RustBuffer uniffi_lumik_mobile_fn_func_project_restore_rel(
+        RustBuffer rel_in_trash, 
+        RustBuffer new_name, 
+        RustCallStatus *uniffi_out_err
+    );
+    RustBuffer uniffi_lumik_mobile_fn_func_project_trash_rel(
+        RustBuffer rel_under_lumik, 
+        RustBuffer now, 
+        RustCallStatus *uniffi_out_err
+    );
+    RustBuffer uniffi_lumik_mobile_fn_func_project_trashed_at(
+        RustBuffer rel_in_trash, 
+        RustCallStatus *uniffi_out_err
+    );
+    void uniffi_lumik_mobile_fn_func_purge_photo(
+        RustBuffer mirror_dir, 
+        RustBuffer photo_id, 
+        /*handle*/ uint64_t disk, 
+        RustCallStatus *uniffi_out_err
+    );
+    void uniffi_lumik_mobile_fn_func_restore_photo_as(
+        RustBuffer mirror_dir, 
+        RustBuffer photo_id, 
+        /*handle*/ uint64_t disk, 
+        RustBuffer new_stem, 
         RustCallStatus *uniffi_out_err
     );
     RustBuffer ffi_lumik_mobile_rustbuffer_alloc(
@@ -900,6 +938,8 @@ extern "C" {
     );
     uint16_t uniffi_lumik_mobile_checksum_func_open_project_trash(
     );
+    uint16_t uniffi_lumik_mobile_checksum_func_prepare_jpeg_view(
+    );
     uint16_t uniffi_lumik_mobile_checksum_func_save_view_settings(
     );
     uint16_t uniffi_lumik_mobile_checksum_func_edit_project_details(
@@ -909,6 +949,18 @@ extern "C" {
     uint16_t uniffi_lumik_mobile_checksum_func_project_card(
     );
     uint16_t uniffi_lumik_mobile_checksum_func_set_project_archived(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_check_photo_restore(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_project_restore_rel(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_project_trash_rel(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_project_trashed_at(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_purge_photo(
+    );
+    uint16_t uniffi_lumik_mobile_checksum_func_restore_photo_as(
     );
     uint16_t uniffi_lumik_mobile_checksum_method_diskfiles_create_dir_all(
     );
@@ -6691,6 +6743,14 @@ NativeLumikMobile::NativeLumikMobile(
             return this->cpp_uniffi_lumik_mobile_fn_func_open_project_trash(rt, thisVal, args, count);
         }
     );
+    props["ubrn_uniffi_lumik_mobile_fn_func_prepare_jpeg_view"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_prepare_jpeg_view"),
+        1,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_prepare_jpeg_view(rt, thisVal, args, count);
+        }
+    );
     props["ubrn_uniffi_lumik_mobile_fn_func_save_view_settings"] = jsi::Function::createFromHostFunction(
         rt,
         jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_save_view_settings"),
@@ -6729,6 +6789,54 @@ NativeLumikMobile::NativeLumikMobile(
         2,
         [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_uniffi_lumik_mobile_fn_func_set_project_archived(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_check_photo_restore"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_check_photo_restore"),
+        4,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_check_photo_restore(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_project_restore_rel"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_project_restore_rel"),
+        2,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_project_restore_rel(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_project_trash_rel"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_project_trash_rel"),
+        2,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_project_trash_rel(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_project_trashed_at"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_project_trashed_at"),
+        1,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_project_trashed_at(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_purge_photo"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_purge_photo"),
+        3,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_purge_photo(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_fn_func_restore_photo_as"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_fn_func_restore_photo_as"),
+        4,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_fn_func_restore_photo_as(rt, thisVal, args, count);
         }
     );
     props["ubrn_uniffi_lumik_mobile_checksum_func_cull_photo"] = jsi::Function::createFromHostFunction(
@@ -7019,6 +7127,14 @@ NativeLumikMobile::NativeLumikMobile(
             return this->cpp_uniffi_lumik_mobile_checksum_func_open_project_trash(rt, thisVal, args, count);
         }
     );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_prepare_jpeg_view"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_prepare_jpeg_view"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_prepare_jpeg_view(rt, thisVal, args, count);
+        }
+    );
     props["ubrn_uniffi_lumik_mobile_checksum_func_save_view_settings"] = jsi::Function::createFromHostFunction(
         rt,
         jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_save_view_settings"),
@@ -7057,6 +7173,54 @@ NativeLumikMobile::NativeLumikMobile(
         0,
         [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_uniffi_lumik_mobile_checksum_func_set_project_archived(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_check_photo_restore"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_check_photo_restore"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_check_photo_restore(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_project_restore_rel"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_project_restore_rel"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_project_restore_rel(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_project_trash_rel"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_project_trash_rel"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_project_trash_rel(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_project_trashed_at"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_project_trashed_at"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_project_trashed_at(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_purge_photo"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_purge_photo"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_purge_photo(rt, thisVal, args, count);
+        }
+    );
+    props["ubrn_uniffi_lumik_mobile_checksum_func_restore_photo_as"] = jsi::Function::createFromHostFunction(
+        rt,
+        jsi::PropNameID::forAscii(rt, "ubrn_uniffi_lumik_mobile_checksum_func_restore_photo_as"),
+        0,
+        [this](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lumik_mobile_checksum_func_restore_photo_as(rt, thisVal, args, count);
         }
     );
     props["ubrn_uniffi_lumik_mobile_checksum_method_diskfiles_create_dir_all"] = jsi::Function::createFromHostFunction(
@@ -8181,6 +8345,16 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_open_project_trash
         
         return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
 }
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_prepare_jpeg_view(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        uniffi_lumik_mobile_fn_func_prepare_jpeg_view(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return jsi::Value::undefined();
+}
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_save_view_settings(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
         uniffi_lumik_mobile_fn_func_save_view_settings(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]), 
@@ -8224,6 +8398,66 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_project_card(jsi::
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_set_project_archived(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
         uniffi_lumik_mobile_fn_func_set_project_archived(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi_jsi::Bridging<int8_t>::fromJs(rt, callInvoker, args[1]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return jsi::Value::undefined();
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_check_photo_restore(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        auto value = uniffi_lumik_mobile_fn_func_check_photo_restore(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]), uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker, args[2]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[3]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_project_restore_rel(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        auto value = uniffi_lumik_mobile_fn_func_project_restore_rel(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_project_trash_rel(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        auto value = uniffi_lumik_mobile_fn_func_project_trash_rel(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_project_trashed_at(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        auto value = uniffi_lumik_mobile_fn_func_project_trashed_at(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return uniffi::lumik_mobile::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_purge_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        uniffi_lumik_mobile_fn_func_purge_photo(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]), uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker, args[2]), 
+            &status
+        );
+        uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
+
+        
+        return jsi::Value::undefined();
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_fn_func_restore_photo_as(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        RustCallStatus status = uniffi::lumik_mobile::Bridging<RustCallStatus>::rustSuccess(rt);
+        uniffi_lumik_mobile_fn_func_restore_photo_as(uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]), uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker, args[2]), uniffi::lumik_mobile::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[3]), 
             &status
         );
         uniffi::lumik_mobile::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status, args[count - 1]);
@@ -8483,6 +8717,13 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_open_project
         
         return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_prepare_jpeg_view(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_prepare_jpeg_view(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_save_view_settings(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         auto value = uniffi_lumik_mobile_checksum_func_save_view_settings(
         );
@@ -8513,6 +8754,48 @@ jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_project_card
 }
 jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_set_project_archived(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
         auto value = uniffi_lumik_mobile_checksum_func_set_project_archived(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_check_photo_restore(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_check_photo_restore(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_project_restore_rel(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_project_restore_rel(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_project_trash_rel(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_project_trash_rel(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_project_trashed_at(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_project_trashed_at(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_purge_photo(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_purge_photo(
+        );
+
+        
+        return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLumikMobile::cpp_uniffi_lumik_mobile_checksum_func_restore_photo_as(jsi::Runtime& rt, const jsi::Value& thisVal, const jsi::Value* args, size_t count) {
+        auto value = uniffi_lumik_mobile_checksum_func_restore_photo_as(
         );
 
         

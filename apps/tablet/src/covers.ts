@@ -15,9 +15,19 @@ export const coverPath = (p: DiskProject) => `${DIR}/${projectKey(p)}.jpg`;
 export type CardInfo = { id?: string; title?: string; card?: ProjectCard; cover: boolean };
 
 /** Trae nombre y portada de cada proyecto; avisa cada uno con `onReady`. */
-export async function fetchCovers(projects: DiskProject[], onReady: (p: DiskProject, info: CardInfo) => void) {
+export async function fetchCovers(
+  projects: DiskProject[],
+  onReady: (p: DiskProject, info: CardInfo) => void,
+  /** Avance para el aviso "Analizando disco…": cuántos proyectos ya se leyeron. */
+  onProgress?: (done: number, total: number) => void,
+) {
   const missing = new Set(missingFiles(DIR, projects.map((p) => `${projectKey(p)}.jpg`)));
+  let done = 0;
+  onProgress?.(0, projects.length);
   for (const p of projects) {
+    // Cede el hilo de JS entre proyectos: la copia de cada base es síncrona y,
+    // sin esto, la pantalla (y el contador) no se pintan hasta el final.
+    await new Promise((r) => setTimeout(r, 0));
     try {
       const db = p.files.find((f) => f.name === 'project.db');
       let rel: string | undefined;
@@ -54,6 +64,8 @@ export async function fetchCovers(projects: DiskProject[], onReady: (p: DiskProj
       onReady(p, { id, title, card, cover: true });
     } catch (e) {
       console.warn('portada de', p.name, e);
+    } finally {
+      onProgress?.(++done, projects.length);
     }
   }
 }

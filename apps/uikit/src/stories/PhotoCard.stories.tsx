@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { PhotoCard } from '@lumik/ui';
 
@@ -151,6 +152,40 @@ export const InTrash: Story = {
     onClick: () => console.log('[PhotoCard] open viewer'),
     onRevealInFolder: () => console.log('[PhotoCard] reveal in folder'),
     onRestore: () => console.log('[PhotoCard] restore'),
+    onPurge: () => console.log('[PhotoCard] purge'),
+  },
+  decorators: [(Story) => <div style={{ width: 220 }}><Story /></div>],
+};
+
+/** Marcable (spec photo-marking): la casilla aparece al pasar el ratón; pulsarla no abre el visor. */
+export const Markable: Story = {
+  render: function Render() {
+    const [marked, setMarked] = useState(false);
+    return (
+      <div style={{ width: 220 }}>
+        <PhotoCard
+          filename="IMG_0101.dng"
+          thumbnailUrl="https://images.unsplash.com/photo-1519741497674-611481863552?w=400&h=300&fit=crop"
+          stars={3}
+          captureDate="2024-03-15T14:22:09"
+          marked={marked}
+          onToggleMark={() => setMarked((m) => !m)}
+          onClick={() => console.log('[PhotoCard] open viewer')}
+        />
+      </div>
+    );
+  },
+};
+
+/** Marcada: borde primario y casilla visible. */
+export const Marked: Story = {
+  args: {
+    filename: 'IMG_0102.dng',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=400&h=300&fit=crop',
+    stars: 4,
+    captureDate: '2024-03-15T14:25:00',
+    marked: true,
+    onToggleMark: () => console.log('[PhotoCard] toggle mark'),
   },
   decorators: [(Story) => <div style={{ width: 220 }}><Story /></div>],
 };

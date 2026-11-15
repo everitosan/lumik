@@ -15,6 +15,8 @@ import { readPrefs, savePrefs, type SortDirection } from './prefs';
 import type { DiskProject } from './session';
 import { DateField } from './DateField';
 import { Icon } from './Icon';
+import { MoveSheet } from './MoveSheet';
+import { ScanBanner } from './ScanBanner';
 
 const COLUMNS = 4;
 const CARD_GAP = 16;
@@ -23,7 +25,8 @@ const PADDING = 24;
 export type ProjectMenuActions = {
   archive: (p: DiskProject, archived: boolean, force: boolean) => Promise<void>;
   edit: (p: DiskProject, form: EditForm, force: boolean) => Promise<{ renamed: number }>;
-  remove: (p: DiskProject, force: boolean) => Promise<void>;
+  /** Mandar a la papelera (no borra nada). */
+  trash: (p: DiskProject, force: boolean) => Promise<void>;
   /** Abre la carpeta del proyecto en la app de Archivos. */
   openFolder: (p: DiskProject) => void;
 };
@@ -34,6 +37,8 @@ type Props = {
   projects: DiskProject[] | null;
   busy: string | null;
   cards: Map<string, CardInfo>;
+  /** Proyectos ya leídos del disco mientras se analiza, o `null`. */
+  reading?: { done: number; total: number } | null;
   onOpen: (p: DiskProject) => void;
   onNew: () => void;
   onChooseDisk: () => void;
@@ -54,9 +59,9 @@ function shortDate(raw?: string): string {
 /** Como `sanitizeProjectName` del desktop, para la pista de "Renombrar también los archivos". */
 const sanitize = (name: string) => name.replace(/[^\p{L}\p{N}_-]/gu, '_');
 
-type Pending = { kind: 'edit' | 'archive' | 'delete'; project: DiskProject };
+type Pending = { kind: 'edit' | 'archive' | 'delete'; project: DiskProject; force?: boolean };
 
-export function ProjectsDashboard({ trees, labelOf, projects, busy, cards, onOpen, onNew, onChooseDisk, actions }: Props) {
+export function ProjectsDashboard({ trees, labelOf, projects, busy, cards, reading, onOpen, onNew, onChooseDisk, actions }: Props) {
   const [sort, setSortState] = useState(() => readPrefs().dashboardSort ?? { years: 'desc' as SortDirection, projects: 'desc' as SortDirection });
   const [showArchived, setShowArchivedState] = useState(() => readPrefs().showArchived ?? false);
   const [showSort, setShowSort] = useState(false);
@@ -168,6 +173,8 @@ export function ProjectsDashboard({ trees, labelOf, projects, busy, cards, onOpe
       </View>
       <ScrollView contentContainerStyle={styles.content} onLayout={(e) => setListWidth(e.nativeEvent.layout.width - 2 * PADDING)}>
         {busy && <Text style={styles.busy}>{busy}…</Text>}
+        {/* Al conectar un disco, leer cada proyecto (base y portada) tarda: se avisa. */}
+        {reading && <ScanBanner done={reading.done} total={reading.total} />}
         {error && <Text style={styles.error}>{error}</Text>}
         {trees.length === 0 && (
           <Pressable onPress={onChooseDisk}>
@@ -295,7 +302,7 @@ export function ProjectsDashboard({ trees, labelOf, projects, busy, cards, onOpe
                   ['Abrir carpeta', () => actions.openFolder(menu)],
                   ['Editar', () => setPending({ kind: 'edit', project: menu })],
                   [cards.get(menu.uri)?.card?.archived ? 'Desarchivar' : 'Archivar', () => archive(menu)],
-                  ['Eliminar', () => setPending({ kind: 'delete', project: menu })],
+                  ['Mover a la papelera', () => setPending({ kind: 'delete', project: menu })],
                 ] as const
               ).map(([label, run]) => (
                 <Pressable
@@ -306,7 +313,7 @@ export function ProjectsDashboard({ trees, labelOf, projects, busy, cards, onOpe
                     run();
                   }}
                 >
-                  <Text style={[styles.menuItemText, label === 'Eliminar' && styles.danger]}>{label}</Text>
+                  <Text style={[styles.menuItemText, label === 'Mover a la papelera' && styles.danger]}>{label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -328,10 +335,23 @@ export function ProjectsDashboard({ trees, labelOf, projects, busy, cards, onOpe
       )}
 
       {pending?.kind === 'delete' && (
-        <DeleteProjectSheet
+        <MoveSheet
+          direction="trash"
           name={cards.get(pending.project.uri)?.title ?? pending.project.name}
+          // Después de tomar el control ya se confirmó: va directo a mover.
+          confirm={!pending.force}
           onClose={() => setPending(null)}
-          onConfirm={() => attempt((force) => actions.remove(pending.project, force))}
+          run={async () => {
+            const project = pending.project;
+            try {
+              await actions.trash(project, !!pending.force);
+              return true;
+            } catch (e) {
+              if (!(e instanceof ProjectLockedError)) throw e;
+              setLocked({ lock: e.lock, retry: () => setPending({ kind: 'delete', project, force: true }) });
+              return false;
+            }
+          }}
         />
       )}
 
@@ -453,41 +473,6 @@ function EditProjectSheet({
   );
 }
 
-function DeleteProjectSheet({ name, onClose, onConfirm }: { name: string; onClose: () => void; onConfirm: () => Promise<boolean> }) {
-  const [deleting, setDeleting] = useState(false);
-  return (
-    <Modal transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.scrim}>
-        <View style={styles.sheet}>
-          <Text style={styles.sheetTitle}>Eliminar proyecto</Text>
-          <Text style={styles.sheetText}>¿Seguro que quieres eliminar «{name}»?</Text>
-          <Text style={styles.warning}>
-            Se eliminarán de forma permanente la carpeta del proyecto y todos sus archivos (fotos, videos y metadatos). Esta acción no se puede
-            deshacer.
-          </Text>
-          <View style={styles.sheetButtons}>
-            <Pressable style={styles.textButton} onPress={onClose} disabled={deleting}>
-              <Text style={styles.textButtonText}>Cancelar</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.dangerButton, pressed && styles.pressed, deleting && styles.off]}
-              disabled={deleting}
-              onPress={async () => {
-                setDeleting(true);
-                const ok = await onConfirm();
-                setDeleting(false);
-                if (ok) onClose();
-              }}
-            >
-              <Text style={styles.dangerButtonText}>{deleting ? 'Eliminando…' : 'Eliminar todo'}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 16, gap: 16 },
   headerLeft: { gap: 2 },
@@ -599,8 +584,7 @@ const styles = StyleSheet.create({
   textButtonText: { color: '#9a9a9a', fontSize: 16 },
   create: { minHeight: 48, paddingHorizontal: 24, justifyContent: 'center', borderRadius: 24, backgroundColor: '#e9c349' },
   createText: { color: '#131313', fontSize: 16, fontWeight: '700' },
-  dangerButton: { minHeight: 48, paddingHorizontal: 22, justifyContent: 'center', borderRadius: 24, backgroundColor: '#7f1d1d' },
-  dangerButtonText: { color: '#fecaca', fontSize: 15, fontWeight: '600' },
+  // Blanco sobre #7f1d1d = 10.02:1 (AAA); #fecaca daba 6.93:1.
 });
 
 /** Minúsculas y sin acentos, para comparar al buscar. */

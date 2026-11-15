@@ -272,13 +272,13 @@ pub fn rate_photo(mirror_dir: String, photo_id: String, stars: i32, color_label:
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::sync::Mutex;
 
     /// Disco en memoria: el conjunto de rutas relativas que existen.
     #[derive(Default)]
-    struct MemDisk(Mutex<Vec<String>>);
+    pub(crate) struct MemDisk(pub(crate) Mutex<Vec<String>>);
     impl DiskFiles for MemDisk {
         fn create_dir_all(&self, _rel: String) -> Result<(), DiskError> {
             Ok(())

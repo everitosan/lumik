@@ -6,3 +6,4 @@ export type { SettingsTab } from './SettingsPage';
 export { AboutPage } from './AboutPage';
 export { AlbumsPage } from './Albums/AlbumsPage';
 export { AlbumDetail } from './Albums/AlbumDetail';
+export { TrashPage } from './Trash/TrashPage';

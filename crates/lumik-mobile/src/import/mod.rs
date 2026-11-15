@@ -10,7 +10,7 @@
 //! mueve a su nombre (`moves`) en lugar de copiarlo otra vez.
 
 mod adapters;
-mod exif;
+pub(crate) mod exif;
 mod pipeline;
 
 pub use pipeline::CardSource;

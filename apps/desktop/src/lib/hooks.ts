@@ -174,30 +174,6 @@ export function useProjectPhotos(projectId: string) {
   return { ...state, refetch };
 }
 
-export function useProjectTrashedPhotos(projectId: string) {
-  const [state, setState] = useState<AsyncState<Photo[]>>({
-    data: null,
-    loading: true,
-    error: null,
-  });
-
-  const refetch = useCallback(async () => {
-    setState((s) => ({ ...s, loading: true, error: null }));
-    try {
-      const data = await api.getProjectTrashedPhotos(projectId);
-      setState({ data, loading: false, error: null });
-    } catch (err) {
-      setState({ data: null, loading: false, error: String(err) });
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { ...state, refetch };
-}
-
 export function useProjectThumbnails(projectId: string) {
   const [thumbnailIds, setThumbnailIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -468,7 +444,8 @@ export const IS_MAC = typeof navigator !== 'undefined'
  * its own: Alt and the other platform's modifier must be up. On macOS
  * Ctrl+click is a secondary click, so Ctrl never stands in for Cmd.
  */
-export function hasPlatformModifier(e: KeyboardEvent): boolean {
+/** También sirve para clics (Ctrl/Cmd+clic de photo-marking). */
+export function hasPlatformModifier(e: { metaKey: boolean; ctrlKey: boolean; altKey: boolean }): boolean {
   const mod = IS_MAC ? e.metaKey : e.ctrlKey;
   const foreign = IS_MAC ? e.ctrlKey : e.metaKey;
   return mod && !foreign && !e.altKey;

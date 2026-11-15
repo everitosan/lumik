@@ -220,6 +220,11 @@ pub trait PhotoRepository {
         jpg_path: Option<&str>,
         camera_jpg_path: Option<&str>,
     ) -> Result<(), String>;
+    /// Borra para siempre el registro de una foto en la papelera y todo lo que
+    /// cuelga de ella (embeddings). No toca fotos fuera de la papelera.
+    fn purge(&self, _id: &str) -> Result<(), String> {
+        Err("purge no soportado".to_string())
+    }
     /// Inserta un lote de fotos en una sola transacción; devuelve las creadas.
     fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String>;
     /// De las rutas dadas (relativas al proyecto), las que ya están registradas.
@@ -347,7 +352,9 @@ pub trait FileStore: Send + Sync {
         Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "copy"))
     }
 
-    /// Borra un archivo (solo la copia de entrega de un JPG suelto, sin cambios).
+    /// Borra un archivo: la copia de entrega de un JPG suelto, o los archivos de
+    /// una foto que se elimina definitivamente de la papelera (`PurgePhoto`, que
+    /// tolera `NotFound`).
     fn remove_file(&self, _path: &Path) -> std::io::Result<()> {
         Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "remove_file"))
     }

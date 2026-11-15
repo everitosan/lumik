@@ -134,9 +134,208 @@ pub fn trashed_exported_for(trashed_rel: &str, jpg_filename: &str) -> Result<Str
     Ok(join_rel(&project, &["_trash", "_exported"], jpg_filename))
 }
 
+// ============================================================================
+// PAPELERA DE PROYECTOS
+// Un proyecto está en la papelera si y solo si su carpeta está bajo
+// `lumik/_trash/`. Va a `lumik/_trash/{AAAA-MM-DD_HH-MM-SS}/{ruta}` (fecha y hora
+// locales en que se mandó; guiones: exFAT no acepta `:`). Como el nombre de la
+// carpeta no cambia, mandarla y restaurarla es un solo movimiento: en Android
+// cada operación sobre una carpeta cuesta tiempo por cada archivo que contiene.
+//
+// Formato anterior, que se sigue leyendo y restaurando:
+// `lumik/_trash/{ruta}__{AAAA-MM-DD_HH-MM-SS}`.
+// Las rutas de estas funciones son relativas a `lumik/`, con `/`.
+// ============================================================================
+
+/// Carpeta de la papelera de proyectos, relativa a `lumik/`.
+pub const PROJECT_TRASH_DIR: &str = "_trash";
+
+const TRASHED_AT_FORMAT: &str = "%Y-%m-%d_%H-%M-%S";
+/// Largo de `AAAA-MM-DD_HH-MM-SS`.
+const TRASHED_AT_LEN: usize = 19;
+
+fn rel_segments(rel: &str) -> Vec<&str> {
+    rel.split(['/', '\\']).filter(|s| !s.is_empty() && *s != ".").collect()
+}
+
+fn parse_stamp(s: &str) -> Option<chrono::NaiveDateTime> {
+    if s.len() != TRASHED_AT_LEN {
+        return None;
+    }
+    chrono::NaiveDateTime::parse_from_str(s, TRASHED_AT_FORMAT).ok()
+}
+
+/// `lumik/{ruta}` → `lumik/_trash/{fecha}/{ruta}`, con la fecha en que se manda.
+pub fn project_trash_destination(rel_under_lumik: &str, now: chrono::NaiveDateTime) -> Result<String, DomainError> {
+    let parts = rel_segments(rel_under_lumik);
+    if parts.is_empty() || parts.contains(&"..") {
+        return Err(DomainError::InvalidPhotoPath(format!("Ruta de proyecto inválida: {}", rel_under_lumik)));
+    }
+    if parts[0] == PROJECT_TRASH_DIR {
+        return Err(DomainError::InvalidPhotoPath("El proyecto ya está en la papelera".to_string()));
+    }
+    let stamp = now.format(TRASHED_AT_FORMAT).to_string();
+    let mut out = vec![PROJECT_TRASH_DIR, stamp.as_str()];
+    out.extend(parts);
+    Ok(out.join("/"))
+}
+
+/// Separa el sufijo de fecha del formato anterior (`{nombre}__{fecha}`), si lo tiene.
+fn split_trashed_suffix(name: &str) -> (&str, Option<chrono::NaiveDateTime>) {
+    if let Some(idx) = name.rfind("__") {
+        if let Some(dt) = parse_stamp(&name[idx + 2..]) {
+            if idx > 0 {
+                return (&name[..idx], Some(dt));
+            }
+        }
+    }
+    (name, None)
+}
+
+/// Ruta original y fecha de un elemento de la papelera (`_trash/...`), en
+/// cualquiera de los dos formatos. `None` si no queda dentro de la papelera.
+fn split_trashed(rel_in_trash: &str) -> Option<(Vec<&str>, Option<chrono::NaiveDateTime>)> {
+    let parts = rel_segments(rel_in_trash);
+    if parts.len() < 2 || parts[0] != PROJECT_TRASH_DIR || parts.contains(&"..") {
+        return None;
+    }
+    if parts.len() >= 3 {
+        if let Some(dt) = parse_stamp(parts[1]) {
+            return Some((parts[2..].to_vec(), Some(dt)));
+        }
+    }
+    let mut out: Vec<&str> = parts[1..].to_vec();
+    let last = out.pop().unwrap();
+    let (name, dt) = split_trashed_suffix(last);
+    out.push(name);
+    Some((out, dt))
+}
+
+/// Fecha en que se mandó a la papelera, leída de la ruta del elemento
+/// (`_trash/{fecha}/...` o, del formato anterior, `_trash/.../{nombre}__{fecha}`).
+pub fn parse_trashed_at(rel_in_trash: &str) -> Option<chrono::NaiveDateTime> {
+    split_trashed(rel_in_trash)?.1
+}
+
+/// `lumik/_trash/{fecha}/{ruta}` (o `_trash/{ruta}__{fecha}`) → `lumik/{ruta}`.
+/// Sin fecha reconocible solo se quita `_trash/`.
+pub fn project_restore_destination(rel_in_trash: &str) -> Result<String, DomainError> {
+    split_trashed(rel_in_trash)
+        .map(|(parts, _)| parts.join("/"))
+        .ok_or_else(|| DomainError::InvalidPhotoPath(format!("No está en la papelera: {}", rel_in_trash)))
+}
+
+/// ¿Queda `path` dentro de `{mount}/lumik/_trash/` (y no es esa carpeta)?
+/// Guarda de los borrados definitivos de proyectos: nunca se borra uno activo.
+/// Compara componentes léxicos y rechaza `..`, así que no depende de que la ruta exista.
+pub fn is_inside_project_trash(mount_point: &Path, path: &Path) -> bool {
+    use std::path::Component;
+    if path.components().any(|c| matches!(c, Component::ParentDir)) {
+        return false;
+    }
+    let trash = mount_point.join("lumik").join(PROJECT_TRASH_DIR);
+    match path.strip_prefix(&trash) {
+        Ok(rest) => rest.components().any(|c| matches!(c, Component::Normal(_))),
+        Err(_) => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn at(s: &str) -> chrono::NaiveDateTime {
+        chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S").unwrap()
+    }
+
+    // ---- Papelera de proyectos ----------------------------------------------
+
+    #[test]
+    fn project_trash_by_date_structure() {
+        assert_eq!(
+            project_trash_destination("2026/09/18_Risespray", at("2026-11-10 19:54:03")).unwrap(),
+            "_trash/2026-11-10_19-54-03/2026/09/18_Risespray"
+        );
+    }
+
+    #[test]
+    fn project_trash_keeps_folder_name() {
+        // Un solo movimiento: el nombre de la carpeta no cambia.
+        let dest = project_trash_destination("2026/09/18_X", at("2026-11-10 08:00:00")).unwrap();
+        assert_eq!(dest.rsplit('/').next(), Some("18_X"));
+    }
+
+    #[test]
+    fn project_trash_flat_path() {
+        assert_eq!(
+            project_trash_destination("Emma Arenas", at("2026-11-10 08:00:00")).unwrap(),
+            "_trash/2026-11-10_08-00-00/Emma Arenas"
+        );
+    }
+
+    #[test]
+    fn project_trash_rejects_bad_paths() {
+        assert!(project_trash_destination("", at("2026-11-10 08:00:00")).is_err());
+        assert!(project_trash_destination("../x", at("2026-11-10 08:00:00")).is_err());
+        assert!(project_trash_destination("_trash/2026-11-10_08-00-00/x", at("2026-11-10 08:00:00")).is_err());
+    }
+
+    #[test]
+    fn project_trash_differs_by_second() {
+        let a = project_trash_destination("2026/09/18_X", at("2026-11-10 08:00:00")).unwrap();
+        let b = project_trash_destination("2026/09/18_X", at("2026-11-10 08:00:01")).unwrap();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn restore_strips_trash_and_date() {
+        let trashed = "_trash/2026-11-10_19-54-03/2026/09/18_Risespray";
+        assert_eq!(project_restore_destination(trashed).unwrap(), "2026/09/18_Risespray");
+        assert_eq!(parse_trashed_at(trashed), Some(at("2026-11-10 19:54:03")));
+        assert_eq!(project_restore_destination("_trash/2026-11-10_08-00-00/Emma Arenas").unwrap(), "Emma Arenas");
+    }
+
+    #[test]
+    fn restore_reads_previous_format() {
+        let old = "_trash/2026/09/18_Risespray__2026-11-10_19-54-03";
+        assert_eq!(project_restore_destination(old).unwrap(), "2026/09/18_Risespray");
+        assert_eq!(parse_trashed_at(old), Some(at("2026-11-10 19:54:03")));
+        assert_eq!(project_restore_destination("_trash/Emma Arenas__2026-11-10_08-00-00").unwrap(), "Emma Arenas");
+    }
+
+    #[test]
+    fn restore_without_valid_date_only_strips_trash() {
+        assert_eq!(project_restore_destination("_trash/2026/09/18_Boda").unwrap(), "2026/09/18_Boda");
+        assert_eq!(parse_trashed_at("_trash/2026/09/18_Boda"), None);
+        assert_eq!(project_restore_destination("_trash/18_Boda__2026-13-40_99-00-00").unwrap(), "18_Boda__2026-13-40_99-00-00");
+        // Una carpeta con forma de fecha como único segmento es la ruta, no la fecha.
+        assert_eq!(project_restore_destination("_trash/2026-11-10_08-00-00").unwrap(), "2026-11-10_08-00-00");
+    }
+
+    #[test]
+    fn name_with_double_underscore_round_trips() {
+        let trashed = project_trash_destination("2026/01/05_Boda__Ana", at("2026-11-10 08:00:00")).unwrap();
+        assert_eq!(trashed, "_trash/2026-11-10_08-00-00/2026/01/05_Boda__Ana");
+        assert_eq!(project_restore_destination(&trashed).unwrap(), "2026/01/05_Boda__Ana");
+    }
+
+    #[test]
+    fn restore_rejects_paths_outside_trash() {
+        assert!(project_restore_destination("2026/09/18_X").is_err());
+        assert!(project_restore_destination("_trash").is_err());
+        assert!(project_restore_destination("_trash/../2026/x").is_err());
+        assert!(project_restore_destination("_trash/2026-11-10_08-00-00/../x").is_err());
+    }
+
+    #[test]
+    fn trash_guard() {
+        let mount = Path::new("/media/u/KINGSTON");
+        assert!(is_inside_project_trash(mount, &mount.join("lumik/_trash/2026/09/18_X__2026-11-10_08-00-00")));
+        assert!(!is_inside_project_trash(mount, &mount.join("lumik/2026/09/18_X")));
+        assert!(!is_inside_project_trash(mount, &mount.join("lumik/_trash")));
+        assert!(!is_inside_project_trash(mount, &mount.join("lumik/_trash/../2026/x")));
+        assert!(!is_inside_project_trash(mount, Path::new("/home/u/lumik/_trash/x")));
+    }
 
     #[test]
     fn exported_destination_and_subdir() {

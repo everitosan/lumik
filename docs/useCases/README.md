@@ -14,7 +14,9 @@ precedidos de una **vista general** que cabe en una pantalla. Cada sección se p
 | [Editar proyecto](flujo-editar-proyecto.md) | Nombre, fecha y descripción; carpeta, renombrado de archivos y descripción embebida opcionales | 3 |
 | [Importar imágenes](flujo-importar-imagenes.md) | Wizard de 3 pasos, pipeline de copia, metadatos, pares RAW+JPG y uniones, EXIF, miniaturas | 7 |
 | [Culling](flujo-culling.md) | Toggle `culled`, movimiento de archivo entre `_media/` y `_culled/`, entrega del JPG de cámara a `_exported/`, rollback | 4 |
-| [Papelera y restaurar foto](flujo-papelera-foto.md) | Menú de la card, borrado lógico a la papelera (`_trash/`), restaurar, mostrar en carpeta, rollback | 3 |
+| [Papelera de fotos](flujo-papelera-foto.md) | Mover a la papelera (`_trash/`), restaurar (con otro nombre si choca), eliminar definitivamente, rollback | 3 |
+| [Papelera de proyectos](flujo-papelera-proyecto.md) | Mandar un proyecto a `lumik/_trash/`, sección "Papelera" por disco, restaurar con colisión, eliminar y vaciar | 3 |
+| [Marcar fotos y actuar en lote](flujo-marcar-fotos.md) | Ctrl/Cmd/Shift+clic, toque largo en la tablet, barra de acciones, papelera y álbum en lote, reporte de fallidos | 3 |
 | [Rating de estrellas](flujo-rating-estrellas.md) | Estrellas, color labels, tags y el sidecar AppleDouble para iPad | 2 |
 | [Rotación](flujo-rotacion.md) | Rotación optimista en canvas, regeneración de miniatura, escritura EXIF/XMP | 3 |
 | [Álbumes](flujo-albumes.md) | Agrupar fotos de varios proyectos y discos, mejor versión de cada elemento, discos faltantes, abrir y mostrar en carpeta | 3 |

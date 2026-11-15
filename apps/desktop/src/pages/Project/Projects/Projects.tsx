@@ -2,14 +2,14 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProjectCard, Button, Icon, FilterBar, FilterBarDivider } from '@lumik/ui';
 import { useProjectsDashboard, useActivePhotographer, useConnectedDevices, useCoverThumbnails, useContextKeybindings, useDashboardShowArchived, useDashboardSort, matchesKey } from '../../../lib/hooks';
-import { createProject, ensureProjectSynced, setProjectArchived, relocateBackup, deleteProject, openProjectFolder, openExternalUrl, getBackupFolderLink, takeProjectControl, closeProjectSession } from '../../../lib/api';
+import { createProject, ensureProjectSynced, setProjectArchived, relocateBackup, trashProject, openProjectFolder, openExternalUrl, getBackupFolderLink, takeProjectControl, closeProjectSession } from '../../../lib/api';
 import { TakeControlDialog } from '../../../components/ProjectLockNotice';
 import { SearchBox, looksLikeOperators } from '../../Search/SearchBox';
 import { PhotoSearchResults } from '../../Search/PhotoSearchResults';
 import { searchPhotos } from '../../../lib/api';
 import { CreateProjectModal, type ProjectFormData } from '../../../components/CreateProjectModal';
 import { EditProjectModal } from './EditProjectModal';
-import { DeleteProjectModal } from './DeleteProjectModal';
+import { TrashProjectModal } from './TrashProjectModal';
 import type { DashboardSort, ProjectDashboard, SearchSnapshot, SortDirection } from '../../../lib/types';
 
 const containerStyles: React.CSSProperties = {
@@ -504,7 +504,7 @@ export function Projects({ onProjectClick, photoSearch = null, onPhotoSearch }: 
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      await deleteProject(deletingProject.id);
+      await trashProject(deletingProject.id);
       setDeletingProject(null);
       refetch();
     } catch (err) {
@@ -628,7 +628,7 @@ export function Projects({ onProjectClick, photoSearch = null, onPhotoSearch }: 
                     onOpenFolder={() => handleOpenFolder(project)}
                     onEdit={() => withControl(project, () => setEditingProject(project))}
                     onToggleArchive={() => withControl(project, () => handleToggleArchive(project))}
-                    onDelete={() => withControl(project, () => setDeletingProject(project))}
+                    onTrash={() => withControl(project, () => setDeletingProject(project))}
                     lockedBy={project.locked_by?.name}
                     archived={project.archived}
                   />
@@ -684,7 +684,7 @@ export function Projects({ onProjectClick, photoSearch = null, onPhotoSearch }: 
         onTakeControl={handleTakeControl}
       />
 
-      <DeleteProjectModal
+      <TrashProjectModal
         open={deletingProject !== null}
         projectName={deletingProject?.name ?? ''}
         onClose={() => { setDeletingProject(null); setDeleteError(null); }}

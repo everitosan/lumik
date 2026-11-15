@@ -10,13 +10,15 @@ mod lock;
 mod mirror;
 mod project;
 mod projects;
+mod trash;
 
 pub use disk::{cull_photo, delivery_mode, plan_delivery_change, rate_photo, rotate_photo, set_delivery_mode, write_sidecar_orientation, DeliveryPlanView, DiskError, DiskFile, DiskFiles, DiskFingerprint};
 pub use import::{make_placeholders, start_card_import, CardFile, CardImportListener, CardImportResult, CardSource, ImportSettings, ImportStatus};
 pub use lock::{install_identity, lock_view, own_lock_json, set_install_name, InstallInfo, LockView};
 pub use histogram::{start_histogram, Histogram, HistogramListener};
 pub use mirror::{read_text, write_text, read_fd_string, write_fd_string, missing_files, start_path_to_fd, copy_fd_to_fd, copy_fd_to_path, copy_path_to_fd, fingerprint_fd, start_copy_to_dir, start_fd_to_path, reset_dir, vacuum_into, CopyListener, CopyResult, MirrorError};
-pub use project::{create_project_db, open_project, open_project_trash, NewProject, PhotoInfo, ProjectError};
+pub use trash::{check_photo_restore, project_restore_rel, project_trash_rel, project_trashed_at, purge_photo, restore_photo_as};
+pub use project::{create_project_db, open_project, open_project_trash, prepare_jpeg_view, NewProject, PhotoInfo, ProjectError};
 
 uniffi::setup_scaffolding!();
 

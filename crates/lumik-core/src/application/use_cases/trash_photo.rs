@@ -177,17 +177,90 @@ pub struct RestorePhoto<'a> {
     pub project_dir: &'a Path,
 }
 
+/// Prefijo del error de colisión al restaurar: `restore_collision:{archivo ocupado}`.
+/// El frontend lo reconoce y abre el modal que pide otro nombre (spec `photo-trash`).
+pub const RESTORE_COLLISION: &str = "restore_collision:";
+
+/// Destinos calculados de una restauración, antes de mover nada.
+struct RestorePlan {
+    dng_from: PathBuf,
+    dng_to: PathBuf,
+    new_dng: String,
+    /// (desde, hacia, ruta relativa nueva)
+    exported: Option<(PathBuf, PathBuf, String)>,
+    camera: Option<(PathBuf, PathBuf, String)>,
+    keep_jpg: Option<String>,
+    delivered: bool,
+    camera_jpg_path: Option<String>,
+}
+
+/// Cambia el nombre base de la ruta relativa `rel`, conservando su extensión.
+fn with_stem(rel: &str, stem: Option<&str>) -> String {
+    let Some(stem) = stem else { return rel.to_string() };
+    let (dir, name) = match rel.rsplit_once('/') {
+        Some((d, n)) => (Some(d), n),
+        None => (None, rel),
+    };
+    let renamed = match name.rsplit_once('.') {
+        Some((_, ext)) => format!("{}.{}", stem, ext),
+        None => stem.to_string(),
+    };
+    match dir {
+        Some(d) => format!("{}/{}", d, renamed),
+        None => renamed,
+    }
+}
+
+/// Valida el nombre nuevo que pide el modal de colisión.
+fn clean_stem(stem: Option<&str>) -> Result<Option<&str>, String> {
+    match stem.map(str::trim) {
+        None => Ok(None),
+        Some("") => Err("El nombre no puede estar vacío".to_string()),
+        Some(s) if s.contains(['/', '\\']) || s == "." || s == ".." => {
+            Err(format!("Nombre de archivo inválido: {}", s))
+        }
+        Some(s) => Ok(Some(s)),
+    }
+}
+
 impl RestorePhoto<'_> {
     pub fn execute(&self, photo_id: &str) -> Result<(), String> {
+        self.execute_as(photo_id, None)
+    }
+
+    /// El primer archivo que ocuparía el lugar al restaurar con `new_stem`
+    /// (o con su nombre actual), o `None` si todos los destinos están libres.
+    pub fn check(&self, photo_id: &str, new_stem: Option<&str>) -> Result<Option<String>, String> {
         let photo = self
             .photos
             .get(photo_id)?
             .ok_or_else(|| format!("Photo {} not found", photo_id))?;
         if !photo.deleted {
-            return Ok(());
+            return Ok(None);
         }
+        let plan = self.plan(&photo, clean_stem(new_stem)?)?;
+        Ok(self.first_occupied(&plan))
+    }
 
-        let new_dng = restore_destination(&photo.dng_path, photo.culled).map_err(|e| e.to_string())?;
+    fn first_occupied(&self, plan: &RestorePlan) -> Option<String> {
+        let mut targets: Vec<PathBuf> = vec![plan.dng_to.clone()];
+        if self.files.exists(&plan.dng_from.with_extension("xmp")) {
+            targets.push(plan.dng_to.with_extension("xmp"));
+        }
+        for (_, to, _) in plan.exported.iter().chain(plan.camera.iter()) {
+            targets.push(to.clone());
+        }
+        targets
+            .into_iter()
+            .find(|t| self.files.exists(t))
+            .map(|t| t.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
+    }
+
+    fn plan(&self, photo: &crate::db::models::Photo, stem: Option<&str>) -> Result<RestorePlan, String> {
+        let new_dng = with_stem(
+            &restore_destination(&photo.dng_path, photo.culled).map_err(|e| e.to_string())?,
+            stem,
+        );
         let dng_from = self.project_dir.join(&photo.dng_path);
         let dng_to = self.project_dir.join(&new_dng);
 
@@ -200,12 +273,15 @@ impl RestorePhoto<'_> {
             let expected =
                 trashed_exported_for(&photo.dng_path, file_name(jpg)).map_err(|e| e.to_string())?;
             if self.files.exists(&self.project_dir.join(&expected)) {
-                let new_jpg = restore_exported_destination(&expected).map_err(|e| e.to_string())?;
+                let new_jpg = with_stem(
+                    &restore_exported_destination(&expected).map_err(|e| e.to_string())?,
+                    stem,
+                );
                 exported = Some((self.project_dir.join(&expected), self.project_dir.join(&new_jpg), new_jpg));
             } else if self.files.exists(&self.project_dir.join(jpg)) {
                 keep_jpg = Some(jpg.to_string());
             } else {
-                warn!("restore: el exportado {} de la foto {} no está en disco", jpg, photo_id);
+                warn!("restore: el exportado {} de la foto {} no está en disco", jpg, photo.id);
             }
         }
 
@@ -214,17 +290,39 @@ impl RestorePhoto<'_> {
         let delivered = photo.camera_jpg_path.is_some() && photo.camera_jpg_path == photo.jpg_path;
         let camera = match photo.camera_jpg_path.as_deref() {
             Some(jpg) if !delivered && self.files.exists(&self.project_dir.join(jpg)) => {
-                let new_jpg = restore_destination(jpg, photo.culled).map_err(|e| e.to_string())?;
+                let new_jpg = with_stem(&restore_destination(jpg, photo.culled).map_err(|e| e.to_string())?, stem);
                 Some((self.project_dir.join(jpg), self.project_dir.join(&new_jpg), new_jpg))
             }
             _ => None,
         };
+        Ok(RestorePlan {
+            dng_from,
+            dng_to,
+            new_dng,
+            exported,
+            camera,
+            keep_jpg,
+            delivered,
+            camera_jpg_path: photo.camera_jpg_path.clone(),
+        })
+    }
 
-        let mut targets: Vec<&Path> = vec![&dng_to];
-        for (_, to, _) in exported.iter().chain(camera.iter()) {
-            targets.push(to);
+    /// Restaura la foto; con `new_stem`, todos sus archivos vuelven con ese nombre
+    /// base. Si algún destino está ocupado no mueve nada y falla con
+    /// `restore_collision:{archivo}`.
+    pub fn execute_as(&self, photo_id: &str, new_stem: Option<&str>) -> Result<(), String> {
+        let photo = self
+            .photos
+            .get(photo_id)?
+            .ok_or_else(|| format!("Photo {} not found", photo_id))?;
+        if !photo.deleted {
+            return Ok(());
         }
-        ensure_free(self.files, &targets)?;
+        let plan = self.plan(&photo, clean_stem(new_stem)?)?;
+        if let Some(occupied) = self.first_occupied(&plan) {
+            return Err(format!("{}{}", RESTORE_COLLISION, occupied));
+        }
+        let RestorePlan { dng_from, dng_to, new_dng, exported, camera, keep_jpg, delivered, camera_jpg_path } = plan;
 
         let mut mover = Mover::new(self.files, self.finder_tags);
         mover.move_with_sidecars(&dng_from, &dng_to)?;
@@ -242,13 +340,93 @@ impl RestorePhoto<'_> {
         let camera_jpg_path = match &camera {
             Some((_, _, new_jpg)) => Some(new_jpg.as_str()),
             None if delivered => jpg_path,
-            None => photo.camera_jpg_path.as_deref(),
+            None => camera_jpg_path.as_deref(),
         };
         if let Err(e) = self.photos.set_deleted(photo_id, false, &new_dng, jpg_path, camera_jpg_path) {
             mover.rollback();
             return Err(e);
         }
         Ok(())
+    }
+}
+
+/// Elimina definitivamente una foto de la papelera (spec `photo-trash`): borra
+/// del disco su original, sidecars, JPG del par, exportado, miniatura y preview,
+/// y después su registro. Archivos primero: si se interrumpe, la foto sigue en la
+/// papelera y repetirlo termina el trabajo; los archivos que ya no están se ignoran.
+pub struct PurgePhoto<'a> {
+    pub photos: &'a dyn PhotoRepository,
+    pub files: &'a dyn FileStore,
+    /// Carpeta del proyecto: `dng_path` y `jpg_path` son relativos a ella.
+    pub project_dir: &'a Path,
+}
+
+impl PurgePhoto<'_> {
+    pub fn execute(&self, photo_id: &str) -> Result<(), String> {
+        let photo = self
+            .photos
+            .get(photo_id)?
+            .ok_or_else(|| format!("Photo {} not found", photo_id))?;
+        if !photo.deleted {
+            return Err("Solo se puede eliminar definitivamente una foto que está en la papelera".to_string());
+        }
+
+        let mut files: Vec<PathBuf> = Vec::new();
+        let mut with_sidecars = |rel: &str| {
+            let path = self.project_dir.join(rel);
+            files.push(path.with_extension("xmp"));
+            files.push(path.with_file_name(format!("._{}", file_name(rel))));
+            files.push(path);
+        };
+        with_sidecars(&photo.dng_path);
+        if let Some(camera) = photo.camera_jpg_path.as_deref() {
+            with_sidecars(camera);
+        }
+        if let Some(jpg) = photo.jpg_path.as_deref() {
+            with_sidecars(jpg);
+            // Por si `jpg_path` quedó viejo: el exportado vive junto al original en la papelera.
+            if let Ok(expected) = trashed_exported_for(&photo.dng_path, file_name(jpg)) {
+                with_sidecars(&expected);
+            }
+        }
+        files.push(self.project_dir.join(".thumbs").join(format!("{}.jpg", photo.id)));
+        files.push(self.project_dir.join(".previews").join(format!("{}.jpg", photo.id)));
+        files.push(self.project_dir.join(".previews").join(format!("{}-raw.jpg", photo.id)));
+        files.dedup();
+
+        for file in &files {
+            // Nunca un archivo fuera de la papelera del proyecto ni de sus cachés.
+            if !self.removable(file) {
+                warn!("purge: se omite {} (fuera de la papelera)", file.display());
+                continue;
+            }
+            // Muchos de estos archivos no existen (sidecars, la preview del RAW): se
+            // pregunta antes, porque en Android cada borrado fallido es una llamada a
+            // SAF que termina en excepción.
+            if !self.files.exists(file) {
+                continue;
+            }
+            match self.files.remove_file(file) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) if !self.files.exists(file) => warn!("purge: {}: {}", file.display(), e),
+                Err(e) => return Err(format!("No se pudo borrar {}: {}", file.display(), e)),
+            }
+        }
+        self.photos.purge(photo_id)
+    }
+
+    /// Solo se borra lo que está en `_trash/` o en `.thumbs/`/`.previews/` del proyecto.
+    fn removable(&self, file: &Path) -> bool {
+        use std::path::Component;
+        let Ok(rel) = file.strip_prefix(self.project_dir) else { return false };
+        if rel.components().any(|c| matches!(c, Component::ParentDir)) {
+            return false;
+        }
+        matches!(
+            rel.components().next(),
+            Some(Component::Normal(first)) if first == "_trash" || first == ".thumbs" || first == ".previews"
+        )
     }
 }
 
@@ -314,13 +492,20 @@ mod tests {
     struct FakeRepo {
         photo: Photo,
         fail_set: bool,
+        purged: RefCell<Vec<String>>,
         calls: RefCell<Vec<SetDeletedCall>>,
         /// `camera_jpg_path` de cada `set_deleted`.
         camera_calls: RefCell<Vec<Option<String>>>,
     }
     impl FakeRepo {
         fn new(photo: Photo) -> Self {
-            Self { photo, fail_set: false, calls: RefCell::new(Vec::new()), camera_calls: RefCell::new(Vec::new()) }
+            Self {
+                photo,
+                fail_set: false,
+                purged: RefCell::new(Vec::new()),
+                calls: RefCell::new(Vec::new()),
+                camera_calls: RefCell::new(Vec::new()),
+            }
         }
     }
     impl PhotoRepository for FakeRepo {
@@ -357,6 +542,10 @@ mod tests {
                 .borrow_mut()
                 .push((deleted, dng_path.into(), jpg_path.map(String::from)));
             self.camera_calls.borrow_mut().push(camera_jpg_path.map(String::from));
+            Ok(())
+        }
+        fn purge(&self, id: &str) -> Result<(), String> {
+            self.purged.borrow_mut().push(id.to_string());
             Ok(())
         }
         fn create_batch(&self, _p: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
@@ -405,6 +594,13 @@ mod tests {
         }
         fn exists(&self, path: &Path) -> bool {
             self.existing.lock().unwrap().contains(path)
+        }
+        fn remove_file(&self, path: &Path) -> std::io::Result<()> {
+            if self.existing.lock().unwrap().remove(path) {
+                Ok(())
+            } else {
+                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "missing"))
+            }
         }
     }
     impl FinderTagWriter for FakeFs {
@@ -684,7 +880,7 @@ mod tests {
 
         let err = restore(&repo, &fs).unwrap_err();
 
-        assert!(err.contains("Ya existe"));
+        assert_eq!(err, format!("{}IMG_0014.cr2", RESTORE_COLLISION));
         assert!(fs.has(&abs("_trash/IMG_0014.cr2")));
         assert!(fs.has(&abs("_trash/_exported/IMG_0014.jpg")));
         assert!(repo.calls.borrow().is_empty());
@@ -707,5 +903,139 @@ mod tests {
         assert!(fs.has(&abs("_trash/_exported/IMG_0015.jpg")));
         assert!(!fs.has(&abs("_media/IMG_0015.cr2")));
         assert!(!fs.has(&abs("_exported/IMG_0015.jpg")));
+    }
+
+    // ---- Restaurar con otro nombre --------------------------------------------
+
+    fn restore_as(repo: &FakeRepo, fs: &FakeFs, stem: &str) -> Result<(), String> {
+        RestorePhoto { photos: repo, files: fs, finder_tags: fs, project_dir: Path::new(P) }.execute_as("p1", Some(stem))
+    }
+
+    #[test]
+    fn restore_with_new_name_renames_original_sidecars_and_export() {
+        let fs = FakeFs::with(&[
+            abs("_trash/IMG_0001.cr2"),
+            abs("_trash/IMG_0001.xmp"),
+            abs("_trash/_exported/IMG_0001.jpg"),
+            abs("_media/IMG_0001.cr2"),
+        ]);
+        let repo = FakeRepo::new(make_photo("_trash/IMG_0001.cr2", Some("_trash/_exported/IMG_0001.jpg"), false, true));
+
+        restore_as(&repo, &fs, "IMG_0001_b").unwrap();
+
+        assert!(fs.has(&abs("_media/IMG_0001_b.cr2")));
+        assert!(fs.has(&abs("_media/IMG_0001_b.xmp")));
+        assert!(fs.has(&abs("_exported/IMG_0001_b.jpg")));
+        assert!(fs.has(&abs("_media/IMG_0001.cr2")), "el archivo que ocupaba el lugar no se toca");
+        assert_eq!(
+            *repo.calls.borrow(),
+            vec![(false, rel("_media/IMG_0001_b.cr2"), Some(rel("_exported/IMG_0001_b.jpg")))]
+        );
+    }
+
+    #[test]
+    fn collision_only_on_export_is_reported() {
+        let fs = FakeFs::with(&[
+            abs("_trash/IMG_0002.cr2"),
+            abs("_trash/_exported/IMG_0002.jpg"),
+            abs("_exported/IMG_0002.jpg"),
+        ]);
+        let repo = FakeRepo::new(make_photo("_trash/IMG_0002.cr2", Some("_trash/_exported/IMG_0002.jpg"), false, true));
+        let use_case = RestorePhoto { photos: &repo, files: &fs, finder_tags: &fs, project_dir: Path::new(P) };
+
+        assert_eq!(use_case.check("p1", None).unwrap(), Some("IMG_0002.jpg".to_string()));
+        assert_eq!(use_case.execute("p1").unwrap_err(), format!("{}IMG_0002.jpg", RESTORE_COLLISION));
+        assert!(fs.has(&abs("_trash/IMG_0002.cr2")));
+        assert_eq!(use_case.check("p1", Some("IMG_0002_b")).unwrap(), None);
+    }
+
+    #[test]
+    fn restore_pair_with_new_name_keeps_both_together() {
+        let fs = FakeFs::with(&[abs("_trash/IMG.raf"), abs("_trash/IMG.jpg"), abs("_culled/IMG.raf")]);
+        let repo = FakeRepo::new(pair("_trash/IMG.raf", "_trash/IMG.jpg", None, true, true));
+
+        restore_as(&repo, &fs, "IMG_b").unwrap();
+
+        assert!(fs.has(&abs("_culled/IMG_b.raf")));
+        assert!(fs.has(&abs("_culled/IMG_b.jpg")));
+        assert_eq!(*repo.camera_calls.borrow(), vec![Some(rel("_culled/IMG_b.jpg"))]);
+    }
+
+    #[test]
+    fn invalid_new_names_are_rejected() {
+        let fs = FakeFs::with(&[abs("_trash/IMG.cr2")]);
+        let repo = FakeRepo::new(make_photo("_trash/IMG.cr2", None, false, true));
+        assert!(restore_as(&repo, &fs, "  ").is_err());
+        assert!(restore_as(&repo, &fs, "../x").is_err());
+        assert!(fs.has(&abs("_trash/IMG.cr2")));
+    }
+
+    // ---- Eliminar definitivamente ---------------------------------------------
+
+    fn purge(repo: &FakeRepo, fs: &FakeFs) -> Result<(), String> {
+        PurgePhoto { photos: repo, files: fs, project_dir: Path::new(P) }.execute("p1")
+    }
+
+    #[test]
+    fn purge_removes_every_file_and_the_record() {
+        let fs = FakeFs::with(&[
+            abs("_trash/IMG_0001.cr2"),
+            abs("_trash/IMG_0001.xmp"),
+            abs("_trash/._IMG_0001.cr2"),
+            abs("_trash/_exported/IMG_0001.jpg"),
+            abs("_trash/_exported/._IMG_0001.jpg"),
+            abs(".thumbs/p1.jpg"),
+            abs(".previews/p1.jpg"),
+            abs(".previews/p1-raw.jpg"),
+        ]);
+        let repo = FakeRepo::new(make_photo("_trash/IMG_0001.cr2", Some("_trash/_exported/IMG_0001.jpg"), false, true));
+
+        purge(&repo, &fs).unwrap();
+
+        assert!(fs.existing.lock().unwrap().is_empty(), "quedó: {:?}", fs.existing.lock().unwrap());
+        assert_eq!(*repo.purged.borrow(), vec!["p1".to_string()]);
+    }
+
+    #[test]
+    fn purge_pair_removes_both_files() {
+        let fs = FakeFs::with(&[abs("_trash/IMG.raf"), abs("_trash/IMG.jpg"), abs("_trash/._IMG.jpg")]);
+        let repo = FakeRepo::new(pair("_trash/IMG.raf", "_trash/IMG.jpg", None, false, true));
+
+        purge(&repo, &fs).unwrap();
+
+        assert!(fs.existing.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn purge_tolerates_missing_files() {
+        let fs = FakeFs::with(&[abs(".thumbs/p1.jpg")]);
+        let repo = FakeRepo::new(make_photo("_trash/IMG.cr2", None, false, true));
+
+        purge(&repo, &fs).unwrap();
+
+        assert!(!fs.has(&abs(".thumbs/p1.jpg")));
+        assert_eq!(repo.purged.borrow().len(), 1);
+    }
+
+    #[test]
+    fn purge_refuses_a_photo_outside_the_trash() {
+        let fs = FakeFs::with(&[abs("_media/IMG.cr2")]);
+        let repo = FakeRepo::new(make_photo("_media/IMG.cr2", None, false, false));
+
+        assert!(purge(&repo, &fs).is_err());
+        assert!(fs.has(&abs("_media/IMG.cr2")));
+        assert!(repo.purged.borrow().is_empty());
+    }
+
+    #[test]
+    fn purge_never_touches_files_outside_trash_even_if_paths_point_there() {
+        // Un jpg_path viejo que apunta a `_exported/` no se borra.
+        let fs = FakeFs::with(&[abs("_trash/IMG.cr2"), abs("_exported/IMG.jpg")]);
+        let repo = FakeRepo::new(make_photo("_trash/IMG.cr2", Some("_exported/IMG.jpg"), false, true));
+
+        purge(&repo, &fs).unwrap();
+
+        assert!(fs.has(&abs("_exported/IMG.jpg")));
+        assert!(!fs.has(&abs("_trash/IMG.cr2")));
     }
 }

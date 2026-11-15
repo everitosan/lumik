@@ -20,6 +20,30 @@ const uniffiIsDebug =
 // Public interface members begin here.
 
 /**
+ * El primer archivo que ocuparía el lugar al restaurar (con `new_stem` o con su
+ * nombre), o `None` si está libre. Solo lee.
+ */
+export function checkPhotoRestore(mirrorDir: string, photoId: string, disk: DiskFiles, newStem: string | undefined): string | undefined /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_check_photo_restore(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(photoId, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeDiskFiles.lower(disk, nativeModule().rustbuffer_alloc),
+        FfiConverterOptionalString.lower(newStem, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterOptionalString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * Copia `src_fd` en `dst_fd` en este hilo y cierra los dos.
  */
 export function copyFdToFd(srcFd: number, dstFd: number): CopyResult /*throws*/ {
@@ -408,6 +432,22 @@ export function planDeliveryChange(mirrorDir: string, mode: string, disk: DiskFi
     }
 
 /**
+ * Deja lista para el visor una copia de un JPG original (el desktop no crea
+ * `.previews/` para los JPG): pone su orientación EXIF en 1, como
+ * `extract_preview` del import, porque el visor aplica la rotación y el
+ * cargador de imágenes de Android la aplicaría otra vez.
+ */
+export function prepareJpegView(path: string): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeProjectError.lift.bind(FfiConverterTypeProjectError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_prepare_jpeg_view(
+        FfiConverterString.lower(path, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
  * Tarjeta del proyecto de una copia de su `project.db` (la copia puede
  * migrarse; el original del disco no se toca). `None` si está borrado.
  */
@@ -426,6 +466,86 @@ export function projectCard(dbPath: string): ProjectCard | undefined /*throws*/ 
     } finally {
         nativeModule().rustbuffer_free(__rb);
     }
+    }
+
+/**
+ * Ruta (relativa a `lumik/`) a la que vuelve un proyecto de la papelera; con
+ * `new_name`, con ese nombre.
+ */
+export function projectRestoreRel(relInTrash: string, newName: string | undefined): string /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_project_restore_rel(
+        FfiConverterString.lower(relInTrash, nativeModule().rustbuffer_alloc),
+        FfiConverterOptionalString.lower(newName, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
+ * `{ruta}` (relativa a `lumik/`) → `_trash/{fecha}/{ruta}`. `now` es la hora
+ * local del dispositivo, `AAAA-MM-DD HH:MM:SS` (la da la app).
+ */
+export function projectTrashRel(relUnderLumik: string, now: string): string /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_project_trash_rel(
+        FfiConverterString.lower(relUnderLumik, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(now, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
+ * Cuándo se mandó a la papelera (`AAAA-MM-DDTHH:MM:SS`), leído de su ruta
+ * relativa a `lumik/` (`_trash/{fecha}/...` o, del formato anterior, `..._{fecha}`).
+ */
+export function projectTrashedAt(relInTrash: string): string | undefined {
+    const __rb: Uint8Array = uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().ubrn_uniffi_lumik_mobile_fn_func_project_trashed_at(
+        FfiConverterString.lower(relInTrash, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterOptionalString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
+ * Elimina definitivamente una foto de la papelera: sus archivos del disco y su
+ * registro en la copia de trabajo.
+ */
+export function purgePhoto(mirrorDir: string, photoId: string, disk: DiskFiles): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_purge_photo(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(photoId, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeDiskFiles.lower(disk, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
     }
 
 /**
@@ -507,6 +627,23 @@ export function restorePhoto(mirrorDir: string, photoId: string, disk: DiskFiles
         FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
         FfiConverterString.lower(photoId, nativeModule().rustbuffer_alloc),
         FfiConverterTypeDiskFiles.lower(disk, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    }
+
+/**
+ * Restaura una foto; con `new_stem`, todos sus archivos vuelven con ese nombre
+ * base. Si el destino está ocupado falla con `restore_collision:{archivo}`.
+ */
+export function restorePhotoAs(mirrorDir: string, photoId: string, disk: DiskFiles, newStem: string | undefined): void /*throws*/ {uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeMirrorError.lift.bind(FfiConverterTypeMirrorError),
+            /*caller:*/ (callStatus) => { nativeModule().ubrn_uniffi_lumik_mobile_fn_func_restore_photo_as(
+        FfiConverterString.lower(mirrorDir, nativeModule().rustbuffer_alloc),
+        FfiConverterString.lower(photoId, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeDiskFiles.lower(disk, nativeModule().rustbuffer_alloc),
+        FfiConverterOptionalString.lower(newStem, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
@@ -3718,6 +3855,9 @@ function uniffiEnsureInitialized() {
     if (bindingsContractVersion !== scaffoldingContractVersion) {
         throw new UniffiInternalError.ContractVersionMismatch(scaffoldingContractVersion, bindingsContractVersion);
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_check_photo_restore() !== 28162) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_check_photo_restore");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_copy_fd_to_fd() !== 63965) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_copy_fd_to_fd");
     }
@@ -3775,8 +3915,23 @@ function uniffiEnsureInitialized() {
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_plan_delivery_change() !== 57340) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_plan_delivery_change");
     }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_prepare_jpeg_view() !== 58585) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_prepare_jpeg_view");
+    }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_project_card() !== 28475) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_project_card");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_project_restore_rel() !== 3035) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_project_restore_rel");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_project_trash_rel() !== 23094) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_project_trash_rel");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_project_trashed_at() !== 3003) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_project_trashed_at");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_purge_photo() !== 21582) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_purge_photo");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_rate_photo() !== 8190) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_rate_photo");
@@ -3792,6 +3947,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_restore_photo() !== 23714) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_restore_photo");
+    }
+    if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_restore_photo_as() !== 40386) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_restore_photo_as");
     }
     if (nativeModule().ubrn_uniffi_lumik_mobile_checksum_func_rotate_photo() !== 38028) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_lumik_mobile_checksum_func_rotate_photo");

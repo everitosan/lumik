@@ -25,7 +25,6 @@ import {
   ratePhoto,
   readText,
   resetDir,
-  restorePhoto,
   rotatePhoto,
   saveViewSettings,
   startCopyToDir,
@@ -33,6 +32,7 @@ import {
   trashPhoto,
   type ViewSettings,
   writeSidecarOrientation,
+  prepareJpegView,
 } from '@lumik/core-native';
 
 import Saf from '../modules/saf/src/LumikSafModule';
@@ -70,7 +70,8 @@ const safeName = (s: string) => s.replace(/[^\w.-]+/g, '_');
 
 export class ProjectSession {
   photos: SessionPhoto[];
-  /** Fotos en la papelera (`_trash/`), para el filtro "Papelera". */
+  /** Fotos en la papelera (`_trash/`): su caché de miniaturas se conserva; se
+   *  restauran o eliminan desde la sección «Papelera» del inicio. */
   trash: SessionPhoto[];
   /** Filtros y modo de vista guardados en el proyecto (`project_settings`), como los deja el desktop. */
   readonly viewSettings: ViewSettings;
@@ -176,11 +177,23 @@ export class ProjectSession {
     if (!p || p.previewReady || this.fetching.has(p.info.id)) return;
     const id = p.info.id;
     this.fetching.add(id);
-    const uri = Saf.childUri(this.project.uri, `.previews/${p.info.id}.jpg`);
-    if (!Saf.exists(uri)) return; // Sin vista previa en el disco: se queda la miniatura.
+    let uri = Saf.childUri(this.project.uri, `.previews/${p.info.id}.jpg`);
+    // El desktop no crea `.previews/` para los JPG: muestra el original. Aquí
+    // igual, con su orientación EXIF en 1 (el visor aplica la rotación).
+    const fromOriginal = !Saf.exists(uri) && /\.jpe?g$/i.test(p.info.dngPath);
+    if (fromOriginal) uri = Saf.childUri(this.project.uri, p.info.dngPath);
+    // Sin vista previa ni JPG original: se queda la miniatura (y no se vuelve a buscar).
+    if (!Saf.exists(uri)) return;
     startFdToPath(Saf.openFd(uri, 'r'), p.previewPath, {
       onProgress: () => {},
       onDone: () => {
+        if (fromOriginal) {
+          try {
+            prepareJpegView(p.previewPath);
+          } catch (e) {
+            this.log(`Vista previa de ${p.info.fileName}: ${String(e)}`, true);
+          }
+        }
         p.previewReady = true;
         this.fetching.delete(id);
         this.onChange();
@@ -269,21 +282,32 @@ export class ProjectSession {
     this.scheduleGiveBack();
   }
 
+  /** Manda varias fotos a la papelera sobre la misma copia de trabajo (spec
+   *  photo-trash): una sola recarga y una sola devolución al final. Si una falla,
+   *  sigue con las demás y devuelve las fallidas. */
+  trashPhotos(list: SessionPhoto[]): { name: string; reason: string }[] {
+    this.ensureOwned();
+    const failed: { name: string; reason: string }[] = [];
+    const disk = safDiskFiles(this.project.uri);
+    for (const p of list) {
+      try {
+        trashPhoto(this.mirrorDir, p.info.id, disk);
+      } catch (e) {
+        failed.push({ name: p.info.fileName, reason: String(e instanceof Error ? e.message : e) });
+      }
+    }
+    this.reload();
+    this.log(`A la papelera: ${list.length - failed.length} fotos${failed.length ? ` · ${failed.length} sin mover` : ''}`, failed.length > 0);
+    this.giveBack();
+    return failed;
+  }
+
   /** Mueve la foto a la papelera con el `TrashPhoto` del núcleo (sus archivos van a `_trash/`). */
   trashPhoto(p: SessionPhoto) {
     this.ensureOwned();
     trashPhoto(this.mirrorDir, p.info.id, safDiskFiles(this.project.uri));
     this.reload();
     this.log(`A la papelera: ${p.info.fileName}`);
-    this.giveBack();
-  }
-
-  /** Restaura la foto de la papelera con el `RestorePhoto` del núcleo. */
-  restorePhoto(p: SessionPhoto) {
-    this.ensureOwned();
-    restorePhoto(this.mirrorDir, p.info.id, safDiskFiles(this.project.uri));
-    this.reload();
-    this.log(`Restaurada: ${p.info.fileName}`);
     this.giveBack();
   }
 

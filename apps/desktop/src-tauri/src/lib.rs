@@ -179,6 +179,20 @@ pub fn run() {
             // Flujo: Papelera / restaurar foto   → use_cases::TrashPhoto / RestorePhoto
             commands::trash_photo,
             commands::restore_photo,
+            commands::check_photo_restore,
+            // Flujo: Papelera (sección)          → application::project_trash + use_cases::PurgePhoto
+            commands::trash_project,
+            commands::list_trash,
+            commands::get_trashed_project_cover,
+            commands::check_restore_target,
+            commands::restore_project,
+            commands::purge_project,
+            commands::purge_photo,
+            commands::empty_trash,
+            // Flujo: Marcar fotos (lotes)       → TrashPhoto / RestorePhoto / PurgePhoto por elemento
+            commands::trash_photos,
+            commands::restore_trash_items,
+            commands::purge_trash_items,
 
             // ── Dispositivos ────────────────────────────────────────────────
             commands::get_platform,
@@ -221,7 +235,6 @@ pub fn run() {
             commands::close_project_session,
             commands::take_project_control,
             commands::set_project_archived,
-            commands::delete_project,
             commands::edit_project,
             commands::open_project_folder,
 

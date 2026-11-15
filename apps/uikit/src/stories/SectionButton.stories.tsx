@@ -37,6 +37,15 @@ export const Active: Story = {
   },
 };
 
+/** Con número al final (la papelera indica cuántos elementos tiene). */
+export const WithBadge: Story = {
+  args: {
+    icon: 'trash',
+    label: 'Papelera',
+    badge: 4,
+  },
+};
+
 export const WithoutIcon: Story = {
   args: {
     label: 'Solo texto',
@@ -48,6 +57,7 @@ export const Navigation: Story = {
     <div style={{ width: '240px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
       <SectionButton icon="projects" label="Proyectos" active />
       <SectionButton icon="import" label="Importar" />
+      <SectionButton icon="trash" label="Papelera" badge={4} />
       <SectionButton icon="settings" label="Configuración" />
     </div>
   ),

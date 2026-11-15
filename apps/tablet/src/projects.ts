@@ -48,7 +48,22 @@ async function walk(tree: string, dirUri: string, path: string, depth: number, o
     out.push({ tree, name: path || 'raíz', uri: dirUri, files, lock });
     return;
   }
-  for (const dir of files.filter((f) => f.isDirectory && !f.name.startsWith('.'))) {
+  // Como el desktop: ni ocultas ni internas (`_trash/` es la papelera, `_media/`…).
+  for (const dir of files.filter((f) => f.isDirectory && !f.name.startsWith('.') && !f.name.startsWith('_'))) {
     await walk(tree, dir.uri, path ? `${path}/${dir.name}` : dir.name, depth + 1, out, note);
   }
+}
+
+/** Proyectos en la papelera de un disco (`lumik/_trash/`), con `name` relativo a
+ *  `lumik/` (`_trash/2026-11-10_19-54-03/2026/09/18_X`), como `list_trash` del desktop. */
+export async function discoverTrashed(tree: string, note: (text: string) => void): Promise<DiskProject[]> {
+  const root = Saf.rootDocument(tree);
+  const lumik = (await Saf.listChildren(root)).find((e) => e.isDirectory && e.name === 'lumik');
+  if (!lumik) return [];
+  const trash = (await Saf.listChildren(lumik.uri)).find((e) => e.isDirectory && e.name === '_trash');
+  if (!trash) return [];
+  const found: DiskProject[] = [];
+  const children = (await Saf.listChildren(trash.uri)).filter((f) => f.isDirectory && !f.name.startsWith('.') && !f.name.startsWith('_'));
+  for (const dir of children) await walk(tree, dir.uri, `_trash/${dir.name}`, 1, found, note);
+  return found;
 }

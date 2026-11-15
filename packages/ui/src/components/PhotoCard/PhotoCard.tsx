@@ -1,8 +1,9 @@
-import { type CSSProperties, type MouseEvent } from 'react';
+import { useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CardMenu, type CardMenuItem } from '../CardMenu';
 import { Icon } from '../Icon';
 import { FormatBadge, type PhotoFormat } from '../FormatBadge';
+import { MarkToggle } from '../MarkToggle';
 
 export type ColorLabel = 1 | 2 | 3 | 4 | 5;
 
@@ -15,7 +16,8 @@ export interface PhotoCardProps {
   colorLabels?: ColorLabel[];
   /** Formato de la foto (`RAW+JPG`, `RAW`, `JPG`), en la esquina superior derecha de la miniatura. */
   format?: PhotoFormat | null;
-  onClick?: () => void;
+  /** Recibe el evento para distinguir Ctrl/Cmd/Shift (spec photo-marking). */
+  onClick?: (e: MouseEvent | KeyboardEvent) => void;
   onStarClick?: (value: number, e: MouseEvent) => void;
   /** Each handler, when provided, adds its item to the 3-dot menu in the header.
    *  Omit one to hide that option (e.g. onRevealInFolder on Android). If none are
@@ -25,6 +27,12 @@ export interface PhotoCardProps {
   onRevealInFolder?: () => void;
   onTrash?: () => void;
   onRestore?: () => void;
+  /** En la sección "Papelera": borrarla para siempre. */
+  onPurge?: () => void;
+  /** Marcada (spec photo-marking): borde primario y casilla marcada. */
+  marked?: boolean;
+  /** Si viene, la tarjeta muestra la casilla de marcar al pasar el ratón (y siempre si está marcada). */
+  onToggleMark?: () => void;
   /** Opciones propias de quien usa la tarjeta (p. ej. reemplazar o quitar de un álbum), al final del menú. */
   extraMenuItems?: CardMenuItem[];
   className?: string;
@@ -254,11 +262,15 @@ export function PhotoCard({
   onRevealInFolder,
   onTrash,
   onRestore,
+  onPurge,
   extraMenuItems,
+  marked = false,
+  onToggleMark,
   className,
   style,
 }: PhotoCardProps) {
   const { t } = useTranslation();
+  const [hovered, setHovered] = useState(false);
   const clampedStars = Math.max(0, Math.min(MAX_STARS, Math.round(stars)));
   const { date: captureDay, time: captureTime } = captureDate
     ? parseCaptureDate(captureDate)
@@ -277,6 +289,9 @@ export function PhotoCard({
   if (onTrash) {
     menuItems.push({ icon: 'trash', label: t('components.photoCard.menu.trash'), onSelect: onTrash, danger: true });
   }
+  if (onPurge) {
+    menuItems.push({ icon: 'trash', label: t('components.photoCard.menu.purge'), onSelect: onPurge, danger: true });
+  }
   if (extraMenuItems) menuItems.push(...extraMenuItems);
 
   return (
@@ -284,11 +299,14 @@ export function PhotoCard({
       style={{
         ...cardStyles,
         ...(culled && { border: '2px solid var(--lumik-primary-container, #3a4a6b)' }),
+        ...(marked && { border: '2px solid var(--lumik-primary, #b0c6ff)', boxShadow: '0 0 0 2px rgba(176, 198, 255, 0.25)' }),
         ...style,
       }}
       className={className}
       onClick={onClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(e); } }}
       role="button"
       tabIndex={0}
     >
@@ -306,6 +324,9 @@ export function PhotoCard({
           </div>
         )}
         {format && <FormatBadge format={format} style={formatBadgePosition} />}
+        {onToggleMark && (hovered || marked) && (
+          <MarkToggle marked={marked} onToggle={onToggleMark} style={{ position: 'absolute', top: '6px', left: '6px' }} />
+        )}
       </div>
 
       <div style={footerStyles}>

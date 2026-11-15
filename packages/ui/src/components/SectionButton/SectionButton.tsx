@@ -5,6 +5,8 @@ export interface SectionButtonProps extends ButtonHTMLAttributes<HTMLButtonEleme
   icon?: IconName;
   label: string;
   active?: boolean;
+  /** Número al final de la entrada (p. ej. elementos en la papelera). */
+  badge?: number;
 }
 
 const baseStyles: CSSProperties = {
@@ -25,6 +27,19 @@ const baseStyles: CSSProperties = {
   transition: 'var(--lumik-transition-fast, 150ms ease)',
 };
 
+const badgeStyles: CSSProperties = {
+  marginLeft: 'auto',
+  minWidth: '20px',
+  padding: '0 6px',
+  fontFamily: 'var(--lumik-font-mono, monospace)',
+  fontSize: '11px',
+  lineHeight: '18px',
+  textAlign: 'center',
+  color: 'var(--lumik-on-surface-variant, #c2c6d7)',
+  backgroundColor: 'var(--lumik-surface-container-high, #2a2a2a)',
+  borderRadius: '9px',
+};
+
 const activeStyles: CSSProperties = {
   color: 'var(--lumik-primary, #b0c6ff)',
   backgroundColor: 'rgba(176, 198, 255, 0.1)',
@@ -34,6 +49,7 @@ export function SectionButton({
   icon,
   label,
   active = false,
+  badge,
   style,
   ...props
 }: SectionButtonProps) {
@@ -47,6 +63,7 @@ export function SectionButton({
     <button style={combinedStyles} {...props}>
       {icon && <Icon name={icon} size="lg" />}
       <span>{label}</span>
+      {badge !== undefined && <span style={badgeStyles}>{badge}</span>}
     </button>
   );
 }

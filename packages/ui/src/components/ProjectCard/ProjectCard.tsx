@@ -1,6 +1,7 @@
-import { useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CardMenu, type CardMenuItem } from '../CardMenu';
+import { MarkToggle } from '../MarkToggle';
 import { Icon, type IconName } from '../Icon';
 import { ProviderIcon } from '../ProviderIcon';
 
@@ -17,7 +18,8 @@ export interface ProjectCardProps {
   providers?: string[];
   /** Si se pasa, los iconos de proveedor son clickeables (abrir su web). */
   onProviderOpen?: (url: string, provider: string) => void;
-  onClick?: () => void;
+  /** Recibe el evento para distinguir Ctrl/Cmd/Shift (spec photo-marking). */
+  onClick?: (e: MouseEvent | KeyboardEvent) => void;
   /** Each handler, when provided, adds its item to the 3-dot menu. Omit one to hide
    *  that option (e.g. leave out onOpenFolder on Android). If none are provided the
    *  menu button is hidden entirely. */
@@ -27,7 +29,18 @@ export interface ProjectCardProps {
   onToggleArchive?: () => void;
   /** Borrar el respaldo del proyecto en la nube (solo si está respaldado). */
   onDeleteBackup?: () => void;
-  onDelete?: () => void;
+  /** Mandar el proyecto a la papelera (no borra nada). */
+  onTrash?: () => void;
+  /** En la sección "Papelera": devolverlo al dashboard. */
+  onRestore?: () => void;
+  /** En la sección "Papelera": borrarlo para siempre. */
+  onPurge?: () => void;
+  /** Cuándo se mandó a la papelera (fecha ISO): muestra la etiqueta "En la papelera desde…". */
+  trashedAt?: string;
+  /** Marcado (spec photo-marking): borde primario y casilla marcada. */
+  marked?: boolean;
+  /** Si viene, la tarjeta muestra la casilla de marcar al pasar el ratón (y siempre si está marcada). */
+  onToggleMark?: () => void;
   /** Proyecto archivado: se muestra atenuado y con la etiqueta "Archivado". */
   archived?: boolean;
   /** Nombre del dispositivo que tiene el proyecto abierto (candado), si es otro. */
@@ -201,8 +214,13 @@ export function ProjectCard({
   onEdit,
   onToggleArchive,
   onDeleteBackup,
-  onDelete,
+  onTrash,
+  onRestore,
+  onPurge,
+  trashedAt,
   archived = false,
+  marked = false,
+  onToggleMark,
   lockedBy,
   className,
   style,
@@ -232,8 +250,14 @@ export function ProjectCard({
       danger: true,
     });
   }
-  if (onDelete) {
-    menuItems.push({ icon: 'trash', label: t('components.projectCard.menu.delete'), onSelect: onDelete, danger: true });
+  if (onRestore) {
+    menuItems.push({ icon: 'archive-restore', label: t('components.projectCard.menu.restore'), onSelect: onRestore });
+  }
+  if (onTrash) {
+    menuItems.push({ icon: 'trash', label: t('components.projectCard.menu.trash'), onSelect: onTrash, danger: true });
+  }
+  if (onPurge) {
+    menuItems.push({ icon: 'trash', label: t('components.projectCard.menu.purge'), onSelect: onPurge, danger: true });
   }
 
   const statusLabels = {
@@ -248,13 +272,14 @@ export function ProjectCard({
         ...cardStyles,
         // Archivado: atenuado, pero legible al pasar el ratón.
         ...(archived ? { opacity: hovered ? 0.85 : 0.55 } : null),
+        ...(marked ? { border: '2px solid var(--lumik-primary, #b0c6ff)', boxShadow: '0 0 0 2px rgba(176, 198, 255, 0.25)' } : null),
         ...style,
       }}
       className={className}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } }}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(e); } }}
       role="button"
       tabIndex={0}
     >
@@ -271,6 +296,15 @@ export function ProjectCard({
             <Icon name="archive" size="sm" aria-hidden="true" />
             {t('components.projectCard.archived')}
           </span>
+        )}
+        {trashedAt && (
+          <span style={archivedLabelStyles}>
+            <Icon name="trash" size="sm" aria-hidden="true" />
+            {t('components.projectCard.trashedAt', { date: formatDate(trashedAt) })}
+          </span>
+        )}
+        {onToggleMark && (hovered || marked) && (
+          <MarkToggle marked={marked} onToggle={onToggleMark} style={{ position: 'absolute', bottom: '8px', right: '8px' }} />
         )}
         {lockedBy && (
           <span style={lockedLabelStyles} title={t('components.projectCard.lockedBy', { name: lockedBy })}>

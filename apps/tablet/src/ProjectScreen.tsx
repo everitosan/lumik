@@ -1,11 +1,12 @@
 // Vista del proyecto (como `ProjectDetail` del desktop): las fotos agrupadas
 // por día o en cuadrícula, con las tarjetas del desktop (nombre, formato, fecha,
-// estrellas y colores) y su menú (mostrar en carpeta, papelera o restaurar), "Importar" y, abajo a
-// la derecha, "Filtros" (aprobadas, papelera, estrellas ≥/=, colores y tags).
+// estrellas y colores) y su menú (mostrar en carpeta, mover a la papelera), "Importar" y, abajo a
+// la derecha, "Filtros" (aprobadas, estrellas ≥/=, colores y tags). Las fotos en la
+// papelera están en la sección «Papelera» del inicio.
 // Tocar una foto abre el visor, que recorre solo las que pasan los filtros.
 import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import type { PhotoInfo } from '@lumik/core-native';
@@ -29,14 +30,13 @@ export type ViewMode = 'by-date' | 'grid';
 export type Filters = {
   approvedOnly: boolean;
   /** Ver la papelera en lugar de las fotos del proyecto (como el desktop). */
-  trash: boolean;
   minStars: number | null;
   starsMode: 'inclusive' | 'exact';
   colors: Set<number>;
   tags: Set<string>;
 };
 
-export const NO_FILTERS: Filters = { approvedOnly: false, trash: false, minStars: null, starsMode: 'inclusive', colors: new Set(), tags: new Set() };
+export const NO_FILTERS: Filters = { approvedOnly: false, minStars: null, starsMode: 'inclusive', colors: new Set(), tags: new Set() };
 
 const splitList = (v?: string) =>
   (v ?? '')
@@ -60,7 +60,7 @@ export function applyFilters(photos: GridPhoto[], f: Filters): number[] {
 
 /** Cuántos filtros de visualización hay puestos. */
 const activeCount = (f: Filters) =>
-  Number(f.approvedOnly) + Number(f.trash) + Number(f.minStars !== null) + Number(f.colors.size > 0) + Number(f.tags.size > 0);
+  Number(f.approvedOnly) + Number(f.minStars !== null) + Number(f.colors.size > 0) + Number(f.tags.size > 0);
 
 /** Formato de la foto, como `photoFormat` de `@lumik/ui`. */
 function photoFormat(info: PhotoInfo): string | null {
@@ -125,20 +125,19 @@ function buildRows(source: GridPhoto[], visible: number[], columns: number, mode
 type Props = {
   title: string;
   photos: GridPhoto[];
-  /** Fotos en la papelera. */
-  trash: GridPhoto[];
   filters: Filters;
   onFilters: (f: Filters) => void;
   viewMode: ViewMode;
   onViewMode: (mode: ViewMode) => void;
-  /** Abre el visor en la foto `position` de la lista filtrada (de las fotos o de la papelera). */
-  onOpenPhoto: (fromTrash: boolean, visible: number[], position: number) => void;
+  /** Abre el visor en la foto `position` de la lista filtrada. */
+  onOpenPhoto: (visible: number[], position: number) => void;
   /** Mover a la papelera (índice en `photos`); sin él (solo lectura), la tarjeta no lo ofrece. */
   onTrash?: (index: number) => void;
-  /** Restaurar (índice en `trash`). */
-  onRestore?: (index: number) => void;
   /** Mostrar en carpeta: abre en la app de Archivos la carpeta de la foto (índice en la lista que se ve). */
-  onReveal?: (fromTrash: boolean, index: number) => void;
+  onReveal?: (index: number) => void;
+  /** Mandar a la papelera las fotos marcadas (índices en `photos`); devuelve las que
+   *  fallaron. Sin él (solo lectura) no hay modo marcar (spec photo-marking). */
+  onTrashMany?: (indices: number[]) => Promise<{ name: string; reason: string }[]>;
   onBack: () => void;
   onImport?: () => void;
   /** Miniaturas que aún se copian al caché (`done/total`), o `null`. */
@@ -148,13 +147,14 @@ type Props = {
 };
 
 export function ProjectScreen(props: Props) {
-  const { title, photos, trash, filters, onFilters, viewMode, onViewMode, onOpenPhoto, onTrash, onRestore, onReveal, onBack, onImport, fetching, lock } =
+  const { title, photos, filters, onFilters, viewMode, onViewMode, onOpenPhoto, onTrash, onReveal, onTrashMany, onBack, onImport, fetching, lock } =
     props;
   const { width } = useWindowDimensions();
   const inner = width - 2 * 16;
   const columns = Math.max(2, Math.floor((inner + GAP) / (CARD_MIN + GAP)));
   const cardWidth = (inner - (columns - 1) * GAP) / columns;
-  const source = filters.trash ? trash : photos;
+  // Las fotos en la papelera no se ven aquí: están en la sección «Papelera» del inicio.
+  const source = photos;
   const visible = useMemo(() => applyFilters(source, filters), [source, filters]);
   const rows = useMemo(() => buildRows(source, visible, columns, viewMode), [source, visible, columns, viewMode]);
   // Como el desktop: las aprobadas de lo que se ve, y los tags de la lista que se ve.
@@ -163,6 +163,22 @@ export function ProjectScreen(props: Props) {
   const [showPanel, setShowPanel] = useState(false);
   // Menú de la tarjeta y confirmación de la papelera.
   const [menu, setMenu] = useState<number | null>(null);
+  // Modo marcar (spec photo-marking): `null` fuera del modo; si no, los índices marcados.
+  const [marked, setMarked] = useState<Set<number> | null>(null);
+  const [confirmMany, setConfirmMany] = useState(false);
+  const [manyBusy, setManyBusy] = useState(false);
+  const [manyFailed, setManyFailed] = useState<{ name: string; reason: string }[] | null>(null);
+  // Las marcas no sobreviven a un cambio de filtros o de vista, ni a que cambie
+  // el número de fotos (los índices dejarían de valer). Las miniaturas que llegan
+  // al caché cambian `photos` sin cambiar su largo: esas no las borran.
+  useEffect(() => setMarked(null), [filters, viewMode, photos.length]);
+  const toggleMarked = (index: number) =>
+    setMarked((m) => {
+      const next = new Set(m ?? []);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
   const [confirmTrash, setConfirmTrash] = useState<number | null>(null);
   const active = activeCount(filters);
   const set = (change: Partial<Filters>) => onFilters({ ...filters, ...change });
@@ -172,7 +188,7 @@ export function ProjectScreen(props: Props) {
     else next.add(v);
     return next;
   };
-  const hasMenu = !!onReveal || (filters.trash ? !!onRestore : !!onTrash);
+  const hasMenu = !!onReveal || !!onTrash;
   const menuPhoto = menu !== null ? source[menu] : null;
 
   const renderCard = (index: number, position: number) => {
@@ -183,9 +199,16 @@ export function ProjectScreen(props: Props) {
     return (
       <Pressable
         key={p.info.id}
-        style={({ pressed }) => [styles.card, { width: cardWidth }, p.info.culled && styles.cardApproved, pressed && styles.pressed]}
-        onPress={() => onOpenPhoto(filters.trash, visible, position)}
-        onLongPress={hasMenu ? () => setMenu(index) : undefined}
+        style={({ pressed }) => [
+          styles.card,
+          { width: cardWidth },
+          p.info.culled && styles.cardApproved,
+          marked?.has(index) && styles.cardMarked,
+          pressed && styles.pressed,
+        ]}
+        onPress={() => (marked ? toggleMarked(index) : onOpenPhoto(visible, position))}
+        // El toque largo entra al modo marcar; el menú queda en el botón ⋮.
+        onLongPress={onTrashMany ? () => setMarked((m) => m ?? new Set([index])) : hasMenu ? () => setMenu(index) : undefined}
       >
         <View style={styles.cardHeader}>
           <Text style={styles.fileName} numberOfLines={1}>
@@ -200,6 +223,11 @@ export function ProjectScreen(props: Props) {
         <View style={[styles.thumbFrame, { height: cardWidth * 0.75 }]}>
           <Image source={{ uri: p.thumb }} recyclingKey={p.info.id} style={styles.thumb} contentFit="contain" transition={0} />
           {format && <Text style={styles.format}>{format}</Text>}
+          {marked && (
+            <View style={[styles.markBox, marked.has(index) && styles.markBoxOn]}>
+              {marked.has(index) && <Icon name="check" size={16} color="#002d6f" />}
+            </View>
+          )}
         </View>
         <View style={styles.cardFooter}>
           <View style={styles.footerRow}>
@@ -268,11 +296,7 @@ export function ProjectScreen(props: Props) {
       <View style={styles.grid}>
         {visible.length === 0 ? (
           <Text style={styles.empty}>
-            {filters.trash
-              ? 'La papelera está vacía.'
-              : photos.length
-                ? 'Ninguna foto pasa los filtros.'
-                : 'Este proyecto no tiene fotos aún.'}
+            {photos.length ? 'Ninguna foto pasa los filtros.' : 'Este proyecto no tiene fotos aún.'}
           </Text>
         ) : (
           <FlashList
@@ -293,12 +317,35 @@ export function ProjectScreen(props: Props) {
         )}
       </View>
 
+      {/* En el modo marcar, la barra de acciones ocupa el lugar del pie. */}
+      {marked && (
+        <View style={styles.footer}>
+          <Text style={styles.markedCount}>
+            {marked.size === 1 ? '1 foto marcada' : `${marked.size} fotos marcadas`}
+          </Text>
+          <View style={styles.spacer} />
+          <Pressable
+            style={({ pressed }) => [styles.dangerButton, pressed && styles.pressed, marked.size === 0 && styles.off]}
+            disabled={marked.size === 0}
+            onPress={() => {
+              setManyFailed(null);
+              setConfirmMany(true);
+            }}
+          >
+            <Text style={styles.dangerButtonText}>Mover a la papelera</Text>
+          </Pressable>
+          <Pressable style={({ pressed }) => [styles.filterButton, pressed && styles.pressed]} onPress={() => setMarked(null)}>
+            <Text style={styles.filterButtonText}>Listo</Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Pie: contadores a la izquierda; los filtros, abajo a la derecha. */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, marked && styles.hidden]}>
         <Text style={styles.stats}>
           <Text style={styles.statValue}>{photos.length.toLocaleString('es-MX')}</Text> fotos ·{' '}
           <Text style={styles.statApproved}>{approved}</Text> aprobadas
-          {filters.trash ? `  ·  papelera (${trash.length})` : visible.length !== photos.length ? `  ·  ${visible.length} visibles` : ''}
+          {visible.length !== photos.length ? `  ·  ${visible.length} visibles` : ''}
         </Text>
         <View style={styles.spacer} />
         <Pressable
@@ -315,7 +362,6 @@ export function ProjectScreen(props: Props) {
         <View style={styles.panel}>
           <View style={styles.panelRow}>
             <Toggle label="Aprobadas" on={filters.approvedOnly} onPress={() => set({ approvedOnly: !filters.approvedOnly })} />
-            <Toggle label={`Papelera (${trash.length})`} on={filters.trash} onPress={() => set({ trash: !filters.trash })} />
           </View>
 
           <Text style={styles.panelLabel}>Estrellas</Text>
@@ -374,24 +420,13 @@ export function ProjectScreen(props: Props) {
                   style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
                   onPress={() => {
                     setMenu(null);
-                    onReveal(filters.trash, menu);
+                    onReveal(menu);
                   }}
                 >
                   <Text style={styles.menuItemText}>Mostrar en carpeta</Text>
                 </Pressable>
               )}
-              {filters.trash && onRestore && (
-                <Pressable
-                  style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
-                  onPress={() => {
-                    setMenu(null);
-                    onRestore(menu);
-                  }}
-                >
-                  <Text style={styles.menuItemText}>Restaurar</Text>
-                </Pressable>
-              )}
-              {!filters.trash && onTrash && (
+              {onTrash && (
                 <Pressable
                   style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
                   onPress={() => {
@@ -407,13 +442,68 @@ export function ProjectScreen(props: Props) {
         </Modal>
       )}
 
+      {confirmMany && (
+        <Modal transparent animationType="fade" onRequestClose={() => {
+          if (!manyBusy) setConfirmMany(false);
+        }}>
+          <View style={styles.scrim}>
+            <View style={styles.sheet}>
+              <Text style={styles.sheetTitle}>Mover fotos a la papelera</Text>
+              {manyFailed ? (
+                <>
+                  <Text style={styles.sheetText}>
+                    {manyFailed.length === 1 ? 'No se pudo mover 1 foto:' : `No se pudieron mover ${manyFailed.length} fotos:`}
+                  </Text>
+                  {manyFailed.map((f, i) => (
+                    <Text key={i} style={styles.muted}>
+                      {f.name}: {f.reason}
+                    </Text>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <Text style={styles.sheetText}>
+                    {marked?.size === 1
+                      ? 'La foto marcada se moverá a la papelera del proyecto (_trash/).'
+                      : `Las ${marked?.size ?? 0} fotos marcadas se moverán a la papelera del proyecto (_trash/).`}
+                  </Text>
+                  <Text style={styles.muted}>Podrás restaurarlas o eliminarlas definitivamente desde la sección «Papelera» del inicio.</Text>
+                </>
+              )}
+              <View style={styles.sheetButtons}>
+                <Pressable style={styles.textButton} onPress={() => setConfirmMany(false)} disabled={manyBusy}>
+                  <Text style={styles.textButtonText}>{manyFailed ? 'Cerrar' : 'Cancelar'}</Text>
+                </Pressable>
+                {!manyFailed && (
+                  <Pressable
+                    style={({ pressed }) => [styles.dangerButton, pressed && styles.pressed, manyBusy && styles.off]}
+                    disabled={manyBusy}
+                    onPress={async () => {
+                      if (!onTrashMany || !marked) return;
+                      setManyBusy(true);
+                      const failed = await onTrashMany([...marked]);
+                      setManyBusy(false);
+                      setMarked(null);
+                      if (failed.length > 0) setManyFailed(failed);
+                      else setConfirmMany(false);
+                    }}
+                  >
+                    <Text style={styles.dangerButtonText}>{manyBusy ? 'Moviendo…' : 'Mover a la papelera'}</Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
       {confirmTrash !== null && photos[confirmTrash] && (
         <Modal transparent animationType="fade" onRequestClose={() => setConfirmTrash(null)}>
           <View style={styles.scrim}>
             <View style={styles.sheet}>
               <Text style={styles.sheetTitle}>Mover foto a la papelera</Text>
               <Text style={styles.sheetText}>«{photos[confirmTrash].info.fileName}» se moverá a la papelera del proyecto (_trash/).</Text>
-              <Text style={styles.muted}>Podrás restaurarla desde el filtro «Papelera».</Text>
+              <Text style={styles.muted}>Podrás restaurarla o eliminarla definitivamente desde la sección «Papelera» del inicio.</Text>
               <View style={styles.sheetButtons}>
                 <Pressable style={styles.textButton} onPress={() => setConfirmTrash(null)}>
                   <Text style={styles.textButtonText}>Cancelar</Text>
@@ -482,6 +572,24 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: GAP, paddingBottom: GAP },
   card: { borderRadius: 8, borderWidth: 1, borderColor: '#424654', backgroundColor: '#201f1f', overflow: 'hidden' },
   cardApproved: { borderWidth: 2, borderColor: '#3a4a6b' },
+  cardMarked: { borderWidth: 2, borderColor: '#b0c6ff' },
+  markBox: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markBoxOn: { backgroundColor: '#b0c6ff', borderColor: '#b0c6ff' },
+  markedCount: { color: '#b0c6ff', fontSize: 16, fontWeight: '600' },
+  hidden: { display: 'none' },
+  off: { opacity: 0.4 },
   cardHeader: { height: CARD_HEADER, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, borderBottomWidth: 1, borderBottomColor: '#424654' },
   fileName: { flex: 1, color: '#c2c6d7', fontSize: 12, fontFamily: 'monospace' },
   menuButton: { width: 36, height: CARD_HEADER, alignItems: 'center', justifyContent: 'center' },
@@ -521,7 +629,8 @@ const styles = StyleSheet.create({
   textButton: { minHeight: 48, paddingHorizontal: 16, justifyContent: 'center' },
   textButtonText: { color: '#c7d6ff', fontSize: 15 },
   dangerButton: { minHeight: 48, paddingHorizontal: 22, justifyContent: 'center', borderRadius: 24, backgroundColor: '#7f1d1d' },
-  dangerButtonText: { color: '#fecaca', fontSize: 15, fontWeight: '600' },
+  // Blanco sobre #7f1d1d = 10.02:1 (AAA); #fecaca daba 6.93:1.
+  dangerButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 16, minHeight: 64, borderTopWidth: 1, borderTopColor: '#262626' },
   stats: { color: '#9a9a9a', fontSize: 14, marginRight: 12 },
   statValue: { color: '#fff', fontWeight: '600' },

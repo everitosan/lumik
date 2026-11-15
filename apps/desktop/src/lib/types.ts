@@ -559,3 +559,69 @@ export interface ReplaceCandidate {
   capture_date: string | null;
   thumb: AlbumThumbKey;
 }
+
+// ============================================================================
+// PAPELERA (spec trash-bin)
+// ============================================================================
+
+/** Un proyecto en `lumik/_trash/` de un disco. */
+export interface TrashedProject {
+  id: string;
+  name: string;
+  session_date: string | null;
+  created_at: string;
+  photo_count: number;
+  workflow_status: WorkflowStatus;
+  /** Ruta relativa a `lumik/`; identifica al elemento en los comandos de la papelera. */
+  rel_path: string;
+  /** Cuándo se mandó a la papelera (`AAAA-MM-DDTHH:MM:SS`, hora local), si se sabe. */
+  trashed_at: string | null;
+}
+
+/** Una foto suelta en la papelera de su proyecto. */
+export interface TrashedPhoto {
+  project_id: string;
+  project_name: string;
+  photo: Photo;
+}
+
+/** La papelera de un disco conectado. */
+export interface DiskTrash {
+  device_uuid: string;
+  device_name: string;
+  projects: TrashedProject[];
+  photos: TrashedPhoto[];
+}
+
+export interface RestoreCheck {
+  free: boolean;
+  /** Carpeta o archivo destino (el ocupado, si no está libre). */
+  target: string;
+}
+
+export interface EmptyTrashReport {
+  projects_deleted: number;
+  photos_deleted: number;
+  failed: { name: string; reason: string }[];
+}
+
+// ============================================================================
+// LOTES (spec photo-marking)
+// ============================================================================
+
+/** Un elemento de la papelera, para los lotes. */
+export type TrashItemRef =
+  | { kind: 'photo'; project_id: string; photo_id: string }
+  | { kind: 'project'; device_uuid: string; rel_path: string };
+
+export interface BatchFailure {
+  id: string;
+  name: string;
+  /** `collision`, `project_locked:{dispositivo}` o el mensaje del error. */
+  reason: string;
+}
+
+export interface BatchReport {
+  done: string[];
+  failed: BatchFailure[];
+}

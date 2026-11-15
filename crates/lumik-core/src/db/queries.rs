@@ -798,6 +798,22 @@ impl ProjectDatabase {
 
     /// Mete o saca una foto de la papelera (columna `deleted`) y fija sus rutas, en
     /// una sola transacción. Al meterla, si era la portada (`.thumbs/{id}.jpg`), la quita.
+    /// Borra para siempre una foto en la papelera (`deleted = 1`) y sus embeddings,
+    /// en una transacción. Una foto fuera de la papelera no se toca.
+    pub fn purge_trashed_photo(&self, id: &str) -> DbResult<()> {
+        let conn = self.conn();
+        let tx = conn.unchecked_transaction()?;
+        let trashed: Option<i32> = tx
+            .query_row("SELECT deleted FROM photo WHERE id = ?1", params![id], |r| r.get(0))
+            .optional()?;
+        if trashed == Some(1) {
+            tx.execute("DELETE FROM photo_embedding WHERE photo_id = ?1", params![id])?;
+            tx.execute("DELETE FROM photo WHERE id = ?1", params![id])?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn set_photo_deleted(
         &self,
         id: &str,

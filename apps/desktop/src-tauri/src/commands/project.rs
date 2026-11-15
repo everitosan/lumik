@@ -230,40 +230,6 @@ pub fn set_project_archived(state: State<AppState>, id: String, archived: bool) 
     Ok(session.db()?.set_archived(archived)?)
 }
 
-/// Permanently delete a project: removes its folder and all files from disk.
-/// The SQLite handle is closed first (taken out of the open map) so the directory
-/// can be removed on Windows, where an open file blocks folder removal.
-#[tauri::command]
-pub fn delete_project(state: State<AppState>, id: String) -> AppResult<()> {
-    info!("delete_project called: {}", id);
-    state.ensure_not_locked(&id)?;
-    // La carpeta (con su candado) desaparece: se olvidan sus sesiones.
-    state.sessions.release(std::slice::from_ref(&id));
-    // Y sale de la búsqueda.
-    if let Err(e) = state.global_db.remove_project_index(&id) {
-        warn!("delete_project: no se pudo quitar del índice: {}", e);
-    }
-
-    let project_db = state
-        .registry
-        .remove(&id)
-        .ok_or_else(|| format!("Project '{}' not available — device may not be mounted", id))?;
-
-    let dir = project_db.project_dir.clone();
-    // Drop the only remaining handle so the SQLite connection closes before removal.
-    drop(project_db);
-
-    if dir.exists() {
-        // The project is already out of the open map; a future device scan will
-        // re-discover it if the files are still there.
-        std::fs::remove_dir_all(&dir)
-            .map_err(|e| AppError::Message(format!("Failed to delete project folder: {}", e)))?;
-    }
-
-    info!("delete_project: removed {}", dir.display());
-    Ok(())
-}
-
 /// Move a project's folder on disk to `new_dir` and rewrite every photo's
 /// `dng_path` so it points at the new location. Closes the project's SQLite
 /// handle before the move (Windows can't rename a directory containing open
@@ -308,23 +274,13 @@ pub(crate) fn relocate_project_folder(
         reinsert_at(&old_dir);
         return Err(format!("A project folder already exists at: {}", new_dir.display()));
     }
-    if let Some(parent) = new_dir.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Err(e) = std::fs::rename(&old_dir, new_dir) {
-        error!("relocate_project_folder: rename failed: {}", e);
+    // Mueve y quita las carpetas vacías que quedan, sin subir de `lumik/`.
+    if let Err(e) = crate::application::project_trash::move_project_dir(&old_dir, new_dir, &mount_point.join("lumik")) {
+        error!("relocate_project_folder: {}", e);
         reinsert_at(&old_dir);
         return Err(format!("Failed to move project folder: {}", e));
     }
     state.sessions.relocate(project_id, new_dir);
-
-    // Remove empty ancestor dirs left behind, but never go above the mount point.
-    let mut ancestor = old_dir.parent();
-    while let Some(d) = ancestor {
-        if d == mount_point.as_path() { break; }
-        if std::fs::remove_dir(d).is_err() { break; }
-        ancestor = d.parent();
-    }
 
     let reopened = ProjectDatabase::open(new_dir.join("project.db"), &device_uuid, mount_point.clone())
         .map_err(|e| format!("Failed to reopen project at new location: {}", e))?;

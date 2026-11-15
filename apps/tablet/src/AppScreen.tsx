@@ -11,7 +11,22 @@ import { type CardInfo, fetchCovers } from './covers';
 import { createProject, type ProjectForm } from './createProject';
 import { type DiskInfo, genericName, readDiskInfo, volumeOf, writeUserDiskName } from './diskName';
 import { HomeScreen } from './HomeScreen';
-import { deleteProject, editProject, toggleArchived } from './projectActions';
+import {
+  checkProjectRestore,
+  checkTrashedPhoto,
+  editProject,
+  ProjectLockedError,
+  purgeProject,
+  purgeTrashedPhoto,
+  purgeTrashedPhotos,
+  RestoreCollisionError,
+  restoreTrashedPhotos,
+  restoreProject,
+  restoreTrashedPhoto,
+  toggleArchived,
+  trashProject,
+} from './projectActions';
+import { type DiskTrash, loadTrash, type TrashedPhotoItem } from './trash';
 import { ImportScreen } from './ImportScreen';
 import { lockMessage } from './lock';
 import { type Filters, NO_FILTERS, ProjectScreen, type ViewMode } from './ProjectScreen';
@@ -20,8 +35,8 @@ import type { ViewSettings } from '@lumik/core-native';
 import { type DiskProject, ProjectSession } from './session';
 
 type Log = { at: string; text: string; error?: boolean };
-/** Visor abierto: índices (en `session.photos` o en la papelera) que recorre y dónde empieza. */
-type ViewerState = { fromTrash: boolean; visible: number[]; position: number };
+/** Visor abierto: índices (en `session.photos`) que recorre y dónde empieza. */
+type ViewerState = { visible: number[]; position: number };
 
 export default function AppScreen({ onCleanChange }: { onCleanChange: (clean: boolean) => void }) {
   // Discos conectados con permiso; el inicio lista los proyectos de todos, como el desktop.
@@ -34,6 +49,10 @@ export default function AppScreen({ onCleanChange }: { onCleanChange: (clean: bo
   ejectedRef.current = ejected;
   const [cards, setCards] = useState<Map<string, CardInfo>>(new Map());
   const [projects, setProjects] = useState<DiskProject[] | null>(null);
+  // Papelera de los discos conectados (spec trash-bin); `null` mientras se busca.
+  const [trash, setTrash] = useState<DiskTrash[] | null>(null);
+  // Proyectos ya leídos del disco (nombre, datos, portada): "Analizando disco… N de M".
+  const [reading, setReading] = useState<{ done: number; total: number } | null>(null);
   const [session, setSession] = useState<ProjectSession | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const [fetching, setFetching] = useState<{ done: number; total: number } | null>(null);
@@ -79,7 +98,15 @@ export default function AppScreen({ onCleanChange }: { onCleanChange: (clean: bo
         const found = await discoverAll(list, note);
         setProjects(found);
         // Nombres y portadas llegan después, sin frenar la lista.
-        fetchCovers(found, (p, info) => setCards((c) => new Map(c).set(p.uri, info)));
+        fetchCovers(
+          found,
+          (p, info) => setCards((c) => new Map(c).set(p.uri, info)),
+          (done, total) => setReading(done < total ? { done, total } : null),
+        );
+        // La papelera también, sin frenar la lista: decide si el rail la muestra.
+        loadTrash(list, found, note)
+          .then(setTrash)
+          .catch((e) => note(`Papelera: ${String(e)}`, true));
       }),
     [note, run],
   );
@@ -177,6 +204,32 @@ export default function AppScreen({ onCleanChange }: { onCleanChange: (clean: bo
     refreshDisks();
   };
 
+  // Motivo de un fallo de lote para el reporte de la papelera.
+  const batchReason = (e: unknown) => (e instanceof ProjectLockedError ? lockMessage(e.lock) : String(e instanceof Error ? e.message : e));
+
+  /** Agrupa las fotos por proyecto y corre `fn` con una sola copia de su base;
+   *  si el proyecto lo tiene otro dispositivo, todas sus fotos fallan con ese motivo. */
+  const perProject = async (
+    items: TrashedPhotoItem[],
+    failed: { name: string; reason: string }[],
+    fn: (p: DiskProject, list: { id: string; name: string }[]) => Promise<{ name: string; reason: string }[]>,
+  ) => {
+    const groups = new Map<string, { project: DiskProject; list: { id: string; name: string }[] }>();
+    for (const it of items) {
+      const g = groups.get(it.project.uri) ?? { project: it.project, list: [] };
+      g.list.push({ id: it.info.id, name: it.info.fileName });
+      groups.set(it.project.uri, g);
+    }
+    for (const g of groups.values()) {
+      try {
+        failed.push(...(await fn(g.project, g.list)));
+      } catch (e) {
+        const reason = batchReason(e);
+        for (const ph of g.list) failed.push({ name: ph.name, reason });
+      }
+    }
+  };
+
   const titleOf = (p: DiskProject) => cards.get(p.uri)?.title ?? p.name.split('/').pop() ?? p.name;
 
   // Abrir: la base y el candado, y a la vista; las miniaturas que falten se
@@ -224,12 +277,11 @@ export default function AppScreen({ onCleanChange }: { onCleanChange: (clean: bo
     saveView(filters, mode);
   };
 
-  const trashOrRestore = (restore: boolean, i: number) =>
-    run(restore ? 'Restaurando' : 'Moviendo a la papelera', async () => {
+  const moveToTrash = (i: number) =>
+    run('Moviendo a la papelera', async () => {
       const s = sessionRef.current;
       if (!s) return;
-      if (restore) s.restorePhoto(s.trash[i]);
-      else s.trashPhoto(s.photos[i]);
+      s.trashPhoto(s.photos[i]);
     });
 
   const closeViewer = () => {
@@ -294,12 +346,7 @@ export default function AppScreen({ onCleanChange }: { onCleanChange: (clean: bo
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session, version],
   );
-  const trashGrid = useMemo(
-    () => (session?.trash ?? []).map((p) => ({ info: p.info, thumb: p.thumb })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session, version],
-  );
-  const viewerList = session && viewer ? (viewer.fromTrash ? session.trash : session.photos) : [];
+  const viewerList = session && viewer ? session.photos : [];
 
   const items: CullItem[] = useMemo(() => {
     if (!session || !viewer) return [];
@@ -321,7 +368,7 @@ export default function AppScreen({ onCleanChange }: { onCleanChange: (clean: bo
   // El visor habla en posiciones de su lista; la sesión, en índices de todas.
   const backend: CullingBackend | undefined = useMemo(() => {
     if (!session || !viewer) return undefined;
-    const list = viewer.fromTrash ? session.trash : session.photos;
+    const list = session.photos;
     const at = (j: number) => list[viewer.visible[j]];
     return {
       rate: (j, stars, labels) => session.rate(at(j), stars, labels),
@@ -388,17 +435,32 @@ export default function AppScreen({ onCleanChange }: { onCleanChange: (clean: bo
       <ProjectScreen
         title={titleOf(session.project)}
         photos={grid}
-        trash={trashGrid}
         filters={filters}
         onFilters={setFilters}
         viewMode={viewMode}
         onViewMode={setViewMode}
-        onOpenPhoto={(fromTrash, visible, position) => setViewer({ fromTrash, visible, position })}
-        onTrash={lock ? undefined : (i) => trashOrRestore(false, i)}
-        onRestore={lock ? undefined : (i) => trashOrRestore(true, i)}
-        onReveal={(fromTrash, i) => {
+        onOpenPhoto={(visible, position) => setViewer({ visible, position })}
+        onTrash={lock ? undefined : moveToTrash}
+        onTrashMany={
+          lock
+            ? undefined
+            : async (indices) => {
+                const s = sessionRef.current;
+                if (!s) return [];
+                setBusy('Moviendo a la papelera');
+                try {
+                  return s.trashPhotos(indices.map((i) => s.photos[i]).filter(Boolean));
+                } catch (e) {
+                  note(`Mover a la papelera: ${String(e)}`, true);
+                  return [];
+                } finally {
+                  setBusy(null);
+                }
+              }
+        }
+        onReveal={(i) => {
           const s = sessionRef.current;
-          const p = s && (fromTrash ? s.trash : s.photos)[i];
+          const p = s && s.photos[i];
           if (!s || !p) return;
           // La carpeta donde está el archivo (`_media/`, `_culled/` o `_trash/`).
           const dir = p.info.dngPath.split('/').slice(0, -1).join('/');
@@ -455,10 +517,80 @@ export default function AppScreen({ onCleanChange }: { onCleanChange: (clean: bo
           openFolder: (p) => {
             if (!Saf.openFolder(p.uri)) note('Ninguna app de archivos puede abrir la carpeta', true);
           },
-          remove: async (p, force) => {
-            deleteProject(p, force);
-            note(`${titleOf(p)}: eliminado`);
+          trash: async (p, force) => {
+            const timing = await trashProject(p, force);
+            note(`${titleOf(p)}: en la papelera en ${timing}`);
             refreshProjects(trees);
+          },
+        }}
+        trash={trash}
+        reading={reading}
+        trashActions={{
+          restoreProject: async (item, newName) => {
+            await restoreProject(item.project, newName);
+            note(`${newName ?? item.card?.name ?? item.project.name}: restaurado`);
+            refreshProjects(trees);
+          },
+          checkProject: (item, newName) => checkProjectRestore(item.project, newName),
+          purgeProject: async (item) => {
+            await purgeProject(item.project);
+            note(`${item.card?.name ?? item.project.name}: eliminado definitivamente`);
+            refreshProjects(trees);
+          },
+          restorePhoto: async (item, newStem, force) => {
+            await restoreTrashedPhoto(item.project, item.info.id, newStem, force);
+            note(`${item.info.fileName}: restaurada en «${item.projectName}»`);
+            refreshProjects(trees);
+          },
+          checkPhoto: (item, newStem) => checkTrashedPhoto(item.project, item.info.id, newStem),
+          purgePhoto: async (item, force) => {
+            await purgeTrashedPhoto(item.project, item.info.id, force);
+            note(`${item.info.fileName}: eliminada definitivamente`);
+            refreshProjects(trees);
+          },
+          restoreMany: async (projectItems, photoItems) => {
+            const failed: { name: string; reason: string }[] = [];
+            for (const item of projectItems) {
+              try {
+                await restoreProject(item.project);
+              } catch (e) {
+                failed.push({ name: item.card?.name ?? item.project.name, reason: e instanceof RestoreCollisionError ? 'collision' : batchReason(e) });
+              }
+            }
+            await perProject(photoItems, failed, (p, list) => restoreTrashedPhotos(p, list));
+            note(`Restaurados ${projectItems.length + photoItems.length - failed.length}${failed.length ? ` · ${failed.length} siguen en la papelera` : ''}`, failed.length > 0);
+            refreshProjects(trees);
+            return failed;
+          },
+          purgeMany: async (projectItems, photoItems) => {
+            const failed: { name: string; reason: string }[] = [];
+            for (const item of projectItems) {
+              try {
+                await purgeProject(item.project);
+              } catch (e) {
+                failed.push({ name: item.card?.name ?? item.project.name, reason: batchReason(e) });
+              }
+            }
+            await perProject(photoItems, failed, (p, list) => purgeTrashedPhotos(p, list));
+            note(`Eliminados ${projectItems.length + photoItems.length - failed.length}${failed.length ? ` · ${failed.length} sin eliminar` : ''}`, failed.length > 0);
+            refreshProjects(trees);
+            return failed;
+          },
+          emptyDisk: async (disk) => {
+            const failed: { name: string; reason: string }[] = [];
+            const reason = (e: unknown) => (e instanceof ProjectLockedError ? lockMessage(e.lock) : String(e));
+            for (const item of disk.projects) {
+              try {
+                await purgeProject(item.project);
+              } catch (e) {
+                failed.push({ name: item.card?.name ?? item.project.name, reason: reason(e) });
+              }
+            }
+            // Una sola ida y vuelta de `project.db` por proyecto, como el lote de marcadas.
+            await perProject(disk.photos, failed, (p, list) => purgeTrashedPhotos(p, list));
+            note(`Papelera de ${diskLabel(disk.tree)} vaciada${failed.length ? ` · ${failed.length} sin eliminar` : ''}`, failed.length > 0);
+            refreshProjects(trees);
+            return failed;
           },
         }}
         onPickDisk={pickDisk}
@@ -496,7 +628,6 @@ const list = (v?: string) => (v ?? '').split(',').map((x) => x.trim()).filter(Bo
 function fromSettings(s: ViewSettings): Filters {
   return {
     approvedOnly: s.showCulled,
-    trash: false,
     minStars: s.minStars ?? null,
     starsMode: s.starsFilterMode === 'exact' ? 'exact' : 'inclusive',
     colors: new Set(list(s.selectedColors).map(Number)),

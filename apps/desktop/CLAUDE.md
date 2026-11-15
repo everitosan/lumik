@@ -22,33 +22,39 @@ Comportamiento esperado por capability: `openspec/specs/` en la raíz del monore
 ```
 src/
   main.tsx                          # Monta App y, encima, LogoSplash (splash de arranque de @lumik/ui)
-  App.tsx                           # Raíz: secciones projects / settings / about (useState, sin router)
+  App.tsx                           # Raíz: secciones projects / albums / trash / settings / about (useState, sin router)
   lib/
     api.ts                          # Todas las llamadas invoke() a Tauri (una función por comando)
     hooks.ts                        # Custom hooks async para datos + useImport + useKeybindings
     types.ts                        # Tipos TypeScript que espeja los modelos Rust
     BackupContext.tsx               # Estado global de respaldos en segundo plano (progreso por archivo, cola, reintentar/descartar, modal de detalle)
     BackupSessionContext.tsx        # Sesión de la cuenta de respaldo compartida (Ajustes, aviso sin sesión, reanudación de la cola)
+    marking.ts                      # Reglas de marcas (toggleMark, markRange, clickIntent) del grid y de la papelera
+    batch.ts                        # describeBatchReason: motivos de los elementos que fallan en un lote
+    TrashContext.tsx                # Papelera de los discos conectados (list_trash): conteo de la entrada del menú y datos de la página
   pages/
     ImportPage.tsx                  # Wizard de importación: origen → ajustes de la importación → confirmar (solo desde un proyecto)
     SettingsPage.tsx                # Tabs: Importación, Atajos, Apariencia, Respaldo (`initialTab` para abrir una concreta)
     BackupAccountSection.tsx        # Tab Respaldo: URL del server, login/registro o email + cerrar sesión
     AboutPage.tsx
+    Trash/                          # Sección Papelera (solo existe si hay algo): TrashPage agrupada por disco, TrashModals
+                                    #   (eliminar definitivamente, vaciar, colisión al restaurar)
     Albums/                         # Álbumes: AlbumsPage, AlbumDetail (orden personalizado; arrastrar con useAlbumDrag), AddToAlbumDialog, ReplaceDialog
     Collection/                     # CollectionViewer: visor encima de la búsqueda o de un álbum que recorre ese conjunto
     Search/                         # Búsqueda de fotos en el buscador del dashboard: SearchBox (filtra proyectos al escribir;
                                     #   Enter o el panel avanzado buscan fotos), PhotoSearchResults, AdvancedSearchPanel
     Project/
       Projects/
-        Projects.tsx                # Dashboard: proyectos por año, menú (editar, eliminar, abrir carpeta), iconos de proveedor
+        Projects.tsx                # Dashboard: proyectos por año, menú (editar, archivar, mover a la papelera, abrir carpeta), iconos de proveedor
         EditProjectModal.tsx          # Editar nombre, fecha y descripción (+ renombrar archivos / reescribir descripción)
-        DeleteProjectModal.tsx
+        TrashProjectModal.tsx       # Confirmación de mandar el proyecto a lumik/_trash/ (se restaura desde la sección Papelera)
       ProjectDetail/
         ProjectDetail.tsx           # Grid virtual de fotos (TanStack Virtualizer), agrupadas por día o en cuadrícula
         ProjectDetailHeader.tsx     # Barra superior: orden, filtros, modo de vista
         FilterPopovers.tsx          # Filtros por estrellas, tags y color
-        ProjectDetailFooter.tsx     # Contador de fotos/aprobadas, filtros de aprobadas y papelera
+        ProjectDetailFooter.tsx     # Contador de fotos/aprobadas y filtro de aprobadas
         TrashPhotoModal.tsx         # Confirmación de mover foto a la papelera (borrado lógico a _trash/)
+        TrashPhotosModal.tsx        # Confirmación de mover las fotos marcadas a la papelera, con reporte de fallidas
         BackupModal.tsx             # Modal de respaldo de _exported (proveedores, calidad, progreso, reintentar); lo monta BackupModalHost
       PhotoDetail/
         PhotoDetail.tsx             # Visor: atajos, aprobación, navegación
@@ -81,7 +87,7 @@ así que `crate::domain::…` sigue valiendo dentro del shell.
 crates/lumik-core/src/              # núcleo compartido (desktop y tablet)
   domain/                           # núcleo puro (sin SQLite/exiftool/Tauri/fs), 100% testeable
     photo.rs                        #   VOs: Rotation, Stars, normalize_tags
-    paths.rs                        #   cull_destination (_media↔_culled), destinos de _trash/ y _exported/, path_to_slash
+    paths.rs                        #   cull_destination (_media↔_culled), destinos de _trash/ y _exported/, papelera de proyectos (lumik/_trash/…__fecha), path_to_slash
     pairs.rs                        #   pares RAW+JPEG: ShotKey (nombre de cámara + fecha), group_shots
     delivery.rs                     #   DeliveryMode (nada / pares / todo JPG de cámara), delivery_for
     lock.rs                         #   candado del proyecto (.lumik-lock): ProjectLock, LockState
@@ -98,6 +104,7 @@ crates/lumik-core/src/              # núcleo compartido (desktop y tablet)
                                     #   FileStore, PhotoRepository, ImportPipeline, ProgressReporter, ProjectLockStore
     registry.rs                     #   ProjectRegistry (proyectos abiertos, ejecting, rotation-gen)
     project_session.rs              #   ProjectSessions: sesiones por proyecto y su candado
+    project_trash.rs                #   papelera de proyectos en disco: mover, listar lumik/_trash/, restaurar, borrar
     index_queue.rs                  #   IndexQueue: proyectos por reindexar en la búsqueda (debounce)
     analysis_queue.rs               #   AnalysisQueue: proyectos por analizar (uno a la vez), cancelación, fotos fallidas
     use_cases/                      #   cull_photo, trash_photo, rate_photo, rotate_photo, import_photos,
@@ -177,6 +184,12 @@ con escritura y carpeta `lumik/` cuando el archivo falta o tiene otro nombre, pa
 la tablet Android (que no recibe la etiqueta) muestre el mismo nombre. Es el único
 archivo que se escribe en un disco para nombrarlo; los discos sin `lumik/` no se tocan.
 
+**Disco ocupado al expulsar (Linux):** si `udisksctl unmount` falla con "target is busy",
+`os_eject` busca en `/proc` qué procesos tienen su carpeta actual, un archivo abierto o un mapa de
+memoria dentro del disco (`busy_holders`) y devuelve `device_busy:Dolphin,bash`; la barra lateral
+lo muestra con `navigation.ejectBusy`. Caso típico: la ventana de Dolphin que abrió "Mostrar en
+carpeta" fija la carpeta actual de su proceso en el disco, y cerrar solo la pestaña no la suelta.
+
 **Discos de solo lectura:** `DetectedDevice.read_only` (`statvfs`/`ST_RDONLY` en
 Linux y macOS, `GetVolumeInformationW` en Windows). Se registran y se listan con
 la marca "Solo lectura", pero `refresh_open_projects` no abre sus `project.db`
@@ -197,13 +210,14 @@ comando devuelve error "device not mounted".
 abren una sesión del proyecto; la primera escribe `.lumik-lock` en su carpeta y la
 última lo quita. Todo comando que cambia archivos o la base empieza con
 `state.write_session(&project_id)?` (falla con `AppError::ProjectLocked`, que viaja
-como `project_locked:<dispositivo>`); `delete_project` y `edit_project` usan
+como `project_locked:<dispositivo>`); `trash_project` y `edit_project` usan
 `ensure_not_locked` porque cierran la base. Ver `docs/useCases/flujo-candado-proyecto.md`.
 
 ## Estructura de carpetas en disco externo
 
 ```
 {mount_point}/lumik/.disk.json  # nombre del disco (etiqueta copiada o puesto en la tablet)
+{mount_point}/lumik/_trash/{AAAA-MM-DD_HH-MM-SS}/{año}/{mes}/{día}_{nombre}/  # proyecto en la papelera (la carpeta completa, con su nombre; el escaneo se salta `_`; antes `…/{día}_{nombre}__{fecha}`, se sigue leyendo)
 {mount_point}/lumik/{año}/{mes}/{día}_{nombre-proyecto}/
   project.db
   _media/
@@ -211,7 +225,7 @@ como `project_locked:<dispositivo>`); `delete_project` y `edit_project` usan
     IMG_0002.dng
   _culled/
     IMG_0047.dng
-  _trash/                    # papelera: fotos apartadas (borrado lógico), restaurables
+  _trash/                    # papelera de fotos: apartadas (borrado lógico), se restauran o eliminan desde la sección Papelera
     IMG_0003.dng
     _exported/               # exportados de fotos en la papelera
   _video/
@@ -317,12 +331,13 @@ total de la sesión. Los dos comandos cierran con `finish_import()` (fecha infer
 ```
 App
 ├── Projects (dashboard por año, renderizado normal con .map())
-│     ├── menú de proyecto → editar / eliminar / abrir carpeta
+│     ├── menú de proyecto → editar / archivar / mover a la papelera / abrir carpeta
 │     ├── icono de proveedor → carpeta del proyecto en la nube
 │     └── click proyecto → ProjectDetail
 │           ├── click foto → PhotoDetail
 │           ├── botón respaldo → BackupModal (sin sesión: aviso → Settings/Respaldo)
 │           └── botón importar → ImportPage (origen → ajustes → confirmar)
+├── Trash (solo si hay algo en la papelera de los discos conectados)
 ├── Settings (Importación · Atajos · Apariencia · Respaldo)
 └── About
 ```
@@ -377,7 +392,9 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 | Editar Proyecto          | `edit_project`         | `RenameProjectFiles` (con rollback), `RewriteProjectDescription` |
 | Culling de imagen        | `save_photo_culled`    | `CullPhoto` (con rollback y entrega del JPG de cámara) |
 | Entrega al aprobar       | `plan_project_delivery_change`, `set_project_delivery_mode` | `ChangeDeliveryMode` |
-| Papelera / restaurar foto | `trash_photo`, `restore_photo` | `TrashPhoto` / `RestorePhoto` (con rollback) |
+| Papelera de fotos        | `trash_photo`, `restore_photo`, `check_photo_restore`, `purge_photo` | `TrashPhoto` / `RestorePhoto` (con rollback y otro nombre) / `PurgePhoto` |
+| Marcar fotos (lotes)     | `trash_photos`, `restore_trash_items`, `purge_trash_items` | `TrashPhoto` / `RestorePhoto` / `PurgePhoto` por elemento (`commands/trash_batch.rs`) |
+| Papelera de proyectos    | `trash_project`, `list_trash`, `restore_project`, `check_restore_target`, `purge_project`, `empty_trash` | `application::project_trash` (lógica de movimientos en el núcleo; orquestación en `commands/trash.rs`) |
 | Rating de estrellas      | `save_photo_rating`    | `RatePhoto`                  |
 | Rotación de imagen       | `save_photo_rotation`  | `RotatePhoto`                |
 | Búsqueda de fotos        | `search_photos`        | `SearchPhotos` (+ `IndexProject` en el hilo `search-index`) |
@@ -392,8 +409,8 @@ de `lib.rs` está agrupado por flujo para reflejar esto.
 
 Plataforma: `get_platform`, `open_external_url`
 Dispositivos: `scan_connected_devices`, `eject_device`, `get_known_devices`
-Proyectos: `get_projects_dashboard`, `get_project`, `open_project_session`, `close_project_session`, `take_project_control`, `create_project`, `edit_project`, `set_project_archived`, `delete_project`, `open_project_folder`, `get_project_cover_thumbnail`, `set_project_cover_photo`, `get_project_settings`, `update_project_settings`, `get_project_delivery_mode`, `plan_project_delivery_change`, `set_project_delivery_mode`
-Fotos: `get_project_photos`, `get_project_trashed_photos`, `trash_photo`, `restore_photo`, `reveal_photo`, `get_project_thumbnails`, `get_thumbnail`, `get_photo_preview`, `save_photo_rotation`, `save_photo_rating`, `save_photo_culled`, `regenerate_project_thumbnails`
+Proyectos: `get_projects_dashboard`, `get_project`, `open_project_session`, `close_project_session`, `take_project_control`, `create_project`, `edit_project`, `set_project_archived`, `trash_project`, `open_project_folder`, `get_project_cover_thumbnail`, `set_project_cover_photo`, `get_project_settings`, `update_project_settings`, `get_project_delivery_mode`, `plan_project_delivery_change`, `set_project_delivery_mode`
+Fotos: `get_project_photos`, `get_project_trashed_photos`, `trash_photo`, `restore_photo`, `check_photo_restore`, `reveal_photo`, `get_project_thumbnails`, `get_thumbnail`, `get_photo_preview`, `save_photo_rotation`, `save_photo_rating`, `save_photo_culled`, `regenerate_project_thumbnails`
 Fotógrafo: `get_active_photographer`, `ensure_default_photographer`
 Metadata: `get_photographer_metadata`, `update_photographer_metadata`
 Ajustes: `get_app_settings`, `update_app_settings`, `get_install_name`, `set_install_name`, `get_dashboard_sort`, `update_dashboard_sort`, `get_dashboard_show_archived`, `set_dashboard_show_archived`, `get_sidebar_sections`, `set_sidebar_section_collapsed`
@@ -407,6 +424,8 @@ Respaldo — cuenta: `get_backup_server_url`, `set_backup_server_url`, `backup_r
 Respaldo — catálogo: `ensure_project_synced`, `sync_exported`, `sync_project_cover`
 Respaldo — subida: `list_exported_backup`, `list_backup_providers`, `prepare_backup`, `backup_exported_file`, `finalize_backup`, `relocate_backup`, `get_backup_folder_link`
 Respaldo — cola: `set_pending_backup`, `clear_pending_backup`, `get_pending_backups`
+Papelera: `trash_project`, `list_trash`, `get_trashed_project_cover`, `check_restore_target`, `restore_project`, `purge_project`, `purge_photo`, `empty_trash`
+Lotes (fotos marcadas): `trash_photos`, `restore_trash_items`, `purge_trash_items`
 
 ## Estado (v0.1.3-beta) — qué está implementado
 
@@ -417,18 +436,19 @@ Respaldo — cola: `set_pending_backup`, `clear_pending_backup`, `get_pending_ba
 | Visor canvas (zoom / pan / rotate / histograma) | ✓ Funcional |
 | Rating: estrellas, etiquetas de color, tags | ✓ Funcional |
 | Culling: aprobar (mover a `_culled/`) y quitar aprobación | ✓ Funcional |
-| Menú de la foto: mostrar en carpeta, mover a la papelera (`_trash/`) y restaurar | ✓ Funcional |
+| Menú de la foto: mostrar en carpeta y mover a la papelera (`_trash/`) | ✓ Funcional |
+| Sección Papelera: proyectos (`lumik/_trash/`) y fotos por disco; restaurar, eliminar definitivamente, vaciar | ✓ Beta |
 | Filtros (aprobadas, estrellas, tags, color) y modos de vista | ✓ Funcional |
 | Keybindings configurables en Settings | ✓ Funcional |
 | Metadata XMP del fotógrafo en import | ✓ Funcional |
-| Menú de proyectos (renombrar, eliminar, abrir carpeta) | ✓ Funcional |
+| Menú de proyectos (renombrar, archivar, mover a la papelera, abrir carpeta) | ✓ Funcional |
 | Respaldo de `_exported` en la nube (cuenta, modal, cola offline) | ✓ Beta |
 | Seguimiento de respaldos en la barra lateral (tarjetas, reintentar, descartar, confirmación al cerrar) | ✓ Beta |
 | Archivar proyectos | ✓ Funcional (menú de la tarjeta + botón "Archivados" en el dashboard) |
 | Discos en macOS: detección inmediata (DiskArbitration) y expulsión del disco completo | ✓ Beta |
 | Discos de solo lectura (p. ej. NTFS en macOS): se listan con marca y aviso, sin abrir ni crear proyectos | ✓ Beta |
 | Paquete de macOS: `.dmg` universal (Intel + Apple Silicon, macOS 12+), firma ad hoc, exiftool incluido | ✓ Beta (sin notarizar) |
-| Operaciones en lote desde el grid | ✗ No implementado |
+| Marcar fotos en el grid y en la papelera: papelera, álbum, restaurar y eliminar en lote | ✓ Beta |
 | App iPad nativa | ✗ Planificado |
 
 ## Convenciones de código

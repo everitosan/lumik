@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Sidebar } from './Sidebar';
 
-export type Section = 'projects' | 'albums' | 'settings' | 'about';
+export type Section = 'projects' | 'albums' | 'trash' | 'settings' | 'about';
 
 interface LayoutProps {
   children: ReactNode | ((section: Section) => ReactNode);

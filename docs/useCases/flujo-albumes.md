@@ -9,11 +9,15 @@ referencian por id: una **foto** (`photo.id`) o un **exportado** de `_exported/`
 versión, que se resuelve al leer el álbum contra el índice de búsqueda: un álbum armado con
 originales pasa solo a mostrar las ediciones cuando se exportan.
 
+Desde el grid de un proyecto también se agregan de una vez las fotos marcadas (ver
+[Marcar fotos y actuar en lote](flujo-marcar-fotos.md)): el diálogo es el mismo, y al agregar se
+quitan las marcas.
+
 ## Vista general
 
 ```mermaid
 flowchart LR
-    A["Visor (tecla A),<br/>menú de una foto<br/>o 'Agregar todas'"]
+    A["Visor (tecla A),<br/>menú de una foto,<br/>fotos marcadas<br/>o 'Agregar todas'"]
     B["AddToAlbumDialog<br/>elegir o crear álbum"]
     C["album_item<br/>(kind, ref_id + nombres copiados)"]
     D["ReadAlbum<br/>mejor versión + discos"]

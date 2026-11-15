@@ -56,6 +56,10 @@ impl PhotoRepository for ProjectDatabase {
             .map_err(|e| e.to_string())
     }
 
+    fn purge(&self, id: &str) -> Result<(), String> {
+        self.purge_trashed_photo(id).map_err(|e| e.to_string())
+    }
+
     fn create_batch(&self, photos: &[CreatePhoto]) -> Result<Vec<Photo>, String> {
         self.create_photos_batch(photos).map_err(|e| e.to_string())
     }

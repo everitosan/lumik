@@ -15,9 +15,13 @@ navegación, build y SAF: `AGENTS.md`.
 App.tsx                 # raíz: monta AppScreen, la barra de estado (modo limpio) y el splash
 src/
   AppScreen.tsx         # navegación por estado: inicio → proyecto → foto, import
-  HomeScreen.tsx        # rail (Proyectos, Discos, Ajustes), "Dar acceso", nuevo proyecto
+  HomeScreen.tsx        # rail (Proyectos, Discos, Papelera si hay algo, Ajustes), "Dar acceso", nuevo proyecto
   ProjectsDashboard.tsx # tarjetas por año, orden, archivados, menú del proyecto
-  ProjectScreen.tsx     # grid del proyecto con filtros y papelera
+  ProjectScreen.tsx     # grid del proyecto con filtros (sin fotos en la papelera); toque largo = modo marcar
+  TrashScreen.tsx       # sección Papelera por disco: restaurar (colisión → otro nombre), eliminar, vaciar, lotes marcados
+  MoveSheet.tsx         # hoja animada al mandar un proyecto a la papelera y al restaurarlo
+  ScanBanner.tsx        # aviso animado "Analizando disco" al leer los proyectos de un disco
+  trash.ts              # lee la papelera: proyectos de lumik/_trash/ y fotos sueltas, de copias de project.db
   CullingScreen.tsx     # visor: tira, estrellas, colores, deshacer, guía
   Viewer.tsx            # gestos del visor (Gesture Handler + Reanimated)
   GestureGuide.tsx      # guía de gestos con dedos animados
@@ -29,8 +33,8 @@ src/
   importer.ts           # import: tarjeta → sandbox + staging del disco → `_media/`
   session.ts            # proyecto abierto: copia de trabajo, devolución, candado
   projectDb.ts          # traer y devolver `project.db` (VACUUM INTO + renombrado)
-  projects.ts           # buscar proyectos en los discos (como el desktop)
-  projectActions.ts     # editar, archivar, eliminar
+  projects.ts           # buscar proyectos en los discos (como el desktop; se salta `_`) y los de lumik/_trash/
+  projectActions.ts     # editar, archivar, mandar a la papelera; restaurar y eliminar definitivamente
   createProject.ts      # crear proyecto (`lumik/{año}/{mes}/{día}_{nombre}/`)
   covers.ts             # datos y portadas de las tarjetas, en segundo plano
   disk.ts               # `DiskFiles` del núcleo sobre SAF

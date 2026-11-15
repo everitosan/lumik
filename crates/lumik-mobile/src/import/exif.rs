@@ -262,7 +262,7 @@ pub fn extract_preview(src: &Path, dest: &Path) -> bool {
 
 /// Sets the EXIF orientation tag of IFD0 to 1 (normal) in place, without
 /// re-encoding. Leaves the bytes untouched if there is no EXIF or no tag.
-fn reset_jpeg_orientation(bytes: &mut [u8]) {
+pub(crate) fn reset_jpeg_orientation(bytes: &mut [u8]) {
     let mut i = 2; // after SOI
     while i + 4 <= bytes.len() && bytes[i] == 0xFF {
         let marker = bytes[i + 1];

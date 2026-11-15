@@ -1,8 +1,8 @@
 // Inicio (Android): rail de navegación con Proyectos (los de
 // todos los discos conectados, como el dashboard del desktop), Discos (como
-// "Almacenamiento" en la barra del desktop) y Ajustes. Importar no va aquí:
+// "Almacenamiento" en la barra del desktop), Papelera (solo si hay algo) y Ajustes. Importar no va aquí:
 // como en el desktop, se importa desde dentro de un proyecto.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { SafVolume } from '../modules/saf/src/LumikSafModule';
@@ -13,8 +13,10 @@ import { Icon, type IconName } from './Icon';
 import { type ProjectMenuActions, ProjectsDashboard } from './ProjectsDashboard';
 import { SettingsScreen } from './SettingsScreen';
 import type { DiskProject } from './session';
+import { type DiskTrash, trashCount } from './trash';
+import { type TrashActions, TrashScreen } from './TrashScreen';
 
-type Section = 'projects' | 'disks' | 'settings';
+type Section = 'projects' | 'disks' | 'trash' | 'settings';
 
 type Props = {
   trees: string[];
@@ -46,8 +48,13 @@ type Props = {
   cards: Map<string, CardInfo>;
   /** Crea el proyecto; si falla, lanza y el formulario muestra el error. */
   onCreate: (form: ProjectForm) => Promise<void>;
-  /** Menú de las tarjetas: editar, archivar y eliminar. */
+  /** Menú de las tarjetas: editar, archivar y mandar a la papelera. */
   actions: ProjectMenuActions;
+  /** Papelera de los discos conectados; `null` mientras se busca. */
+  trash: DiskTrash[] | null;
+  trashActions: TrashActions;
+  /** Proyectos ya leídos del disco mientras se analiza, o `null`. */
+  reading: { done: number; total: number } | null;
 };
 
 const RAIL: { key: Section | 'backup'; label: string; icon: IconName }[] = [
@@ -64,11 +71,20 @@ export function HomeScreen(props: Props) {
   const { trees, projects, busy, labelOf, pendingVolumes, onGrant, onPickDisk, onOpen, cards, onCreate } = props;
   const [section, setSection] = useState<Section>('projects');
   const [creating, setCreating] = useState(false);
+  // La papelera solo está en el rail si hay algo (spec trash-bin), justo antes de Ajustes.
+  const trashItems = trashCount(props.trash);
+  const rail = RAIL.flatMap((item) =>
+    item.key === 'settings' && trashItems > 0 ? [{ key: 'trash' as const, label: `Papelera (${trashItems})`, icon: 'trash' as IconName }, item] : [item],
+  );
+  // Si se vacía estando en ella, se vuelve a Proyectos.
+  useEffect(() => {
+    if (section === 'trash' && props.trash !== null && trashItems === 0) setSection('projects');
+  }, [section, props.trash, trashItems]);
 
   return (
     <View style={styles.root}>
       <View style={styles.rail}>
-        {RAIL.map((item) => {
+        {rail.map((item) => {
           // El respaldo todavía no está en la tablet.
           const enabled = item.key !== 'backup';
           const on = item.key === section;
@@ -105,11 +121,14 @@ export function HomeScreen(props: Props) {
             projects={projects}
             busy={busy}
             cards={cards}
+            reading={props.reading}
             onOpen={onOpen}
             onNew={() => setCreating(true)}
             onChooseDisk={() => setSection('disks')}
             actions={props.actions}
           />
+        ) : section === 'trash' ? (
+          <TrashScreen disks={props.trash} labelOf={labelOf} busy={busy} actions={props.trashActions} />
         ) : section === 'settings' ? (
           <SettingsScreen />
         ) : (
