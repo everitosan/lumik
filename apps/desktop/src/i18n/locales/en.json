@@ -417,6 +417,8 @@
     "closeMenu": "Close menu",
     "openMenu": "Open menu",
     "ejectError": "Could not eject the drive: {{error}}",
+    "ejectBusy_one": "Can't eject {{disk}}: {{programs}} has a folder or file on the disk open. Close its window (closing only the tab isn't enough) and try again.",
+    "ejectBusy_other": "Can't eject {{disk}}: {{programs}} have folders or files on the disk open. Close their windows (closing only the tabs isn't enough) and try again.",
     "backups": {
       "title": "Backups",
       "summaryRunning": "{{count}} · {{done}}/{{total}}",

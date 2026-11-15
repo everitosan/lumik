@@ -57,6 +57,53 @@ fn macos_devices_on_same_disk(devices: &[DetectedDevice], device_uuid: &str) -> 
 /// Expulsión de volumen específica de plataforma. Cierra/desmonta el volumen en
 /// `mount_point`. Los handles SQLite deben liberarse antes de llamar.
 #[allow(unused_variables)]
+/// Prefijo del error de expulsión cuando otros programas tienen el disco ocupado:
+/// `device_busy:{nombre},{nombre}`. El frontend lo reconoce y lo explica.
+pub const DEVICE_BUSY: &str = "device_busy:";
+
+/// Programas que tienen algo dentro de `mount_point`: su carpeta actual, un
+/// archivo abierto o un archivo mapeado en memoria. Se leen de `/proc`; los
+/// procesos de otros usuarios que no se pueden leer se saltan. Nombres sin
+/// repetir, en el orden en que aparecen. Solo Linux.
+#[cfg(target_os = "linux")]
+pub(crate) fn busy_holders(mount_point: &std::path::Path) -> Vec<String> {
+    use std::path::Path;
+    let inside = |p: &Path| p.starts_with(mount_point);
+    let mut names: Vec<String> = Vec::new();
+    let Ok(procs) = std::fs::read_dir("/proc") else { return names };
+    for entry in procs.flatten() {
+        let pid = entry.file_name();
+        let Some(pid) = pid.to_str().filter(|p| p.chars().all(|c| c.is_ascii_digit())) else { continue };
+        let base = Path::new("/proc").join(pid);
+        let holds = std::fs::read_link(base.join("cwd")).map(|p| inside(&p)).unwrap_or(false)
+            || std::fs::read_dir(base.join("fd"))
+                .map(|fds| fds.flatten().any(|fd| std::fs::read_link(fd.path()).map(|p| inside(&p)).unwrap_or(false)))
+                .unwrap_or(false)
+            || std::fs::read_to_string(base.join("maps"))
+                .map(|maps| maps.lines().any(|l| l.split_whitespace().nth(5).map(|f| inside(Path::new(f))).unwrap_or(false)))
+                .unwrap_or(false);
+        if !holds {
+            continue;
+        }
+        let comm = std::fs::read_to_string(base.join("comm")).unwrap_or_default();
+        let name = display_name(comm.trim());
+        if !name.is_empty() && !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names
+}
+
+/// `dolphin` → `Dolphin`: el nombre del proceso con mayúscula inicial.
+#[cfg(target_os = "linux")]
+fn display_name(comm: &str) -> String {
+    let mut chars = comm.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
 fn os_eject(device_uuid: &str, mount_point: &str) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
@@ -75,8 +122,17 @@ fn os_eject(device_uuid: &str, mount_point: &str) -> Result<(), String> {
             .map_err(|e| format!("Failed to run udisksctl unmount: {}", e))?;
         if !unmount.status.success() {
             let stderr = String::from_utf8_lossy(&unmount.stderr);
+            let lower = stderr.to_lowercase();
             // "Not mounted" es aceptable — el volumen puede ya estar desmontado.
-            if !stderr.to_lowercase().contains("not mounted") {
+            if !lower.contains("not mounted") {
+                // "target is busy": otro programa tiene el disco ocupado. Se dice cuál
+                // (`device_busy:Dolphin,bash`) para que la app lo explique.
+                if lower.contains("busy") {
+                    let holders = busy_holders(std::path::Path::new(mount_point));
+                    if !holders.is_empty() {
+                        return Err(format!("{}{}", DEVICE_BUSY, holders.join(",")));
+                    }
+                }
                 return Err(format!("Could not unmount device: {}", stderr.trim()));
             }
         }
@@ -170,4 +226,34 @@ fn eject_macos(mount_point: &str) -> Result<(), String> {
         other => log::warn!("eject_macos: unmounted {} but eject failed: {:?}", mount_point, other),
     }
     Ok(())
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod busy_tests {
+    use super::*;
+
+    /// Un proceso con su carpeta actual dentro del "disco" aparece; uno fuera, no.
+    #[test]
+    fn finds_a_process_whose_cwd_is_inside() {
+        let mount = std::env::temp_dir().join(format!("lumik_busy_{}", std::process::id()));
+        let inner = mount.join("lumik/2026/11/06_Prueba");
+        std::fs::create_dir_all(&inner).unwrap();
+        let mut child = std::process::Command::new("sleep").arg("30").current_dir(&inner).spawn().unwrap();
+        // Que el proceso ya exista en /proc.
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        let holders = busy_holders(&mount);
+        assert!(holders.contains(&"Sleep".to_string()), "{holders:?}");
+        assert!(busy_holders(&std::env::temp_dir().join("lumik_busy_nadie")).is_empty());
+
+        child.kill().unwrap();
+        let _ = child.wait();
+        let _ = std::fs::remove_dir_all(&mount);
+    }
+
+    #[test]
+    fn capitalizes_names() {
+        assert_eq!(display_name("dolphin"), "Dolphin");
+        assert_eq!(display_name(""), "");
+    }
 }

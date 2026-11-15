@@ -143,7 +143,7 @@ function AnalysisJobCard({ name, job, onStop, onDismiss }: { name: string; job: 
 
 
 export function Sidebar({ activeSection, onSectionChange, collapsed = false }: SidebarProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { data: devices, loading, eject } = useConnectedDevices();
 
   const { jobs, retryBackup, dismissBackup, userLaunches, openBackupDetail } = useBackup();
@@ -195,6 +195,14 @@ export function Sidebar({ activeSection, onSectionChange, collapsed = false }: S
     } catch (err) {
       // Surface the failure; the device stays listed so the user can retry.
       console.error('eject failed', err);
+      // Otro programa (p. ej. una ventana de Dolphin) tiene el disco ocupado: se dice cuál.
+      const holders = api.deviceBusyHolders(err);
+      if (holders && holders.length > 0) {
+        const disk = devices?.find((d) => d.uuid === uuid)?.name ?? uuid;
+        const programs = new Intl.ListFormat(i18n.language, { style: 'long', type: 'conjunction' }).format(holders);
+        alert(t('navigation.ejectBusy', { count: holders.length, disk, programs }));
+        return;
+      }
       alert(t('navigation.ejectError', { error: String(err) }));
     }
   };

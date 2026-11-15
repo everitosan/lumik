@@ -74,6 +74,16 @@ async function invoke<T>(cmd: string, args?: Parameters<typeof tauriInvoke>[1]):
   }
 }
 
+/** Prefijo del error de expulsión cuando otros programas tienen el disco ocupado (Linux). */
+const DEVICE_BUSY_PREFIX = 'device_busy:';
+
+/** Programas que tienen el disco ocupado, si `err` es ese error de expulsión. */
+export function deviceBusyHolders(err: unknown): string[] | null {
+  const text = typeof err === 'string' ? err : err instanceof Error ? err.message : '';
+  if (!text.startsWith(DEVICE_BUSY_PREFIX)) return null;
+  return text.slice(DEVICE_BUSY_PREFIX.length).split(',').map((s) => s.trim()).filter(Boolean);
+}
+
 /** Abre la vista de un proyecto: toma su candado o la abre en solo lectura. */
 export async function openProjectSession(projectId: string): Promise<ProjectAccess> {
   return invoke('open_project_session', { projectId });

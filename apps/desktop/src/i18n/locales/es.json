@@ -417,6 +417,8 @@
     "closeMenu": "Cerrar menú",
     "openMenu": "Abrir menú",
     "ejectError": "No se pudo expulsar el disco: {{error}}",
+    "ejectBusy_one": "No se puede expulsar {{disk}}: {{programs}} tiene abierta una carpeta o un archivo del disco. Cierra su ventana (cerrar solo la pestaña no basta) y vuelve a intentarlo.",
+    "ejectBusy_other": "No se puede expulsar {{disk}}: {{programs}} tienen abiertos carpetas o archivos del disco. Cierra sus ventanas (cerrar solo las pestañas no basta) y vuelve a intentarlo.",
     "backups": {
       "title": "Respaldos",
       "summaryRunning": "{{count}} · {{done}}/{{total}}",

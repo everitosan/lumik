@@ -105,6 +105,21 @@ Expulsar un dispositivo SHALL cerrar primero todas las bases de datos de proyect
 - **WHEN** el usuario expulsa un disco cuyo disco físico tiene otra partición montada
 - **THEN** se intenta desmontar todas las particiones del disco físico y, si alguna no se puede desmontar, se informa el error y el disco sigue listado
 
+### Requirement: Programas que bloquean la expulsión en Linux
+En Linux, si el sistema rechaza el desmontaje porque el disco está ocupado, el sistema SHALL averiguar qué programas tienen dentro del disco su carpeta actual o algún archivo abierto, incluida la propia app, y SHALL informarlos por nombre, con la indicación de cerrar su ventana y volver a intentarlo. Si no encuentra ninguno, SHALL informar el error del sistema como en cualquier otro fallo. El disco SHALL seguir listado.
+
+#### Scenario: Ventana de Dolphin abierta en el disco
+- **WHEN** el usuario cerró la pestaña de Dolphin que abrió "Mostrar en carpeta", pero la ventana sigue abierta, e intenta expulsar el disco
+- **THEN** se informa que Dolphin tiene abierta una carpeta o un archivo del disco y que hay que cerrar su ventana, y el disco sigue listado
+
+#### Scenario: Varios programas
+- **WHEN** Dolphin y una terminal con su carpeta actual dentro del disco impiden el desmontaje
+- **THEN** el aviso nombra a los dos
+
+#### Scenario: Sin programas identificados
+- **WHEN** el desmontaje falla por disco ocupado y no se encuentra ningún programa que lo tenga
+- **THEN** se informa el error del sistema
+
 ### Requirement: Discos de solo lectura
 En escritorio, el sistema SHALL marcar como de solo lectura cada dispositivo que el sistema operativo monte sin permiso de escritura. Un dispositivo de solo lectura SHALL listarse con una marca y un aviso de que Lumik no puede abrir ni crear proyectos en él. Sus proyectos no SHALL descubrirse ni abrirse, y el sistema no SHALL escribir en él. Expulsarlo SHALL seguir disponible.
 
